@@ -1,0 +1,995 @@
+<title>Killing the Crown Jewel — Energy Tracker v2 Session Ledger</title>
+<style>
+  /* ============ TOKENS ============
+     Deliberate single-world palette: a basement meter room at night,
+     lit by one warm filament bulb. Committed dark-first — the whole
+     point is one lit window in the dark, so it does not switch with
+     the viewer's OS theme. Background and every color are painted
+     explicitly so the page holds its look on any host ground.
+  */
+  :root{
+    --bg:        #121009;
+    --bg-panel:  #1a160e;
+    --bg-panel-2:#211a10;
+    --bg-raised: #262013;
+    --line:      #4a3f2a;
+    --line-soft: #302a1c;
+    --ink:       #ece3d0;
+    --ink-soft:  #b7a988;
+    --ink-faint: #7d715a;
+    --amber:     #e8963f;
+    --amber-glow:#ffb15c;
+    --amber-dim: #8a5f2e;
+    --teal:      #4fae93;
+    --teal-glow: #7fd6ba;
+    --copper:    #b5502c;
+    --copper-dim:#7a3d29;
+    --brass:     #ad8a4a;
+
+    --font-display: 'Arial Narrow', 'Helvetica Neue Condensed', 'Roboto Condensed', 'Segoe UI Semibold', Arial, sans-serif;
+    --font-body: Charter, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+    --font-mono: 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Consolas, 'Liberation Mono', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  html{ color-scheme: dark; }
+
+  body{
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(232,150,63,0.10), transparent 60%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: no-preference){
+    .flicker{ animation: flicker 6s ease-in-out infinite; }
+  }
+  @keyframes flicker{
+    0%, 92%, 100% { opacity: 1; }
+    93% { opacity: 0.82; }
+    94% { opacity: 1; }
+    95% { opacity: 0.7; }
+    96% { opacity: 1; }
+  }
+
+  ::selection{ background: var(--amber-dim); color: var(--ink); }
+
+  a{ color: var(--teal-glow); }
+
+  h1, h2, h3{ text-wrap: balance; margin: 0; }
+
+  .page{
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 4.5rem 1.5rem 6rem;
+  }
+
+  /* ============ COVER ============ */
+  .cover{
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+    padding-bottom: 3rem;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .cover .eyebrow{
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .cover h1{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    font-size: clamp(2.2rem, 6vw, 3.4rem);
+    line-height: 1.04;
+    color: var(--ink);
+  }
+  .cover h1 .glow{
+    color: var(--amber-glow);
+    text-shadow: 0 0 22px rgba(255,177,92,0.45);
+  }
+  .cover .dek{
+    font-size: 1.05rem;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+  .meta-strip{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line-soft);
+    margin-top: 0.5rem;
+  }
+  .meta-strip div{
+    background: var(--bg-panel);
+    padding: 0.7rem 0.9rem;
+  }
+  .meta-strip .k{
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.25rem;
+  }
+  .meta-strip .v{
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .meta-strip .v.status{
+    color: var(--teal-glow);
+  }
+
+  /* ============ LEGEND ============ */
+  .legend{
+    margin-top: 2.6rem;
+    padding: 1.1rem 1.3rem;
+    background: var(--bg-panel);
+    border: 1px dashed var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.6rem;
+    align-items: center;
+  }
+  .legend .legend-title{
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    width: 100%;
+  }
+  .legend-item{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+  .who-dot{
+    width: 9px; height: 9px; border-radius: 50%;
+    flex: none;
+  }
+  .who-dot.user{ background: var(--amber); box-shadow: 0 0 6px rgba(232,150,63,0.8); }
+  .who-dot.coach{ background: transparent; border: 2px solid var(--teal); }
+  .kind-sample{
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+  }
+  .kind-sample.decision{ border-color: var(--amber-dim); color: var(--amber-glow); }
+  .kind-sample.insight{ border-color: var(--teal); color: var(--teal-glow); font-style: italic; }
+
+  /* ============ MAIN / CONDUIT ============ */
+  main{
+    position: relative;
+    margin-top: 3.2rem;
+    margin-left: 10px;
+    padding-left: 34px;
+    border-left: 3px solid var(--line);
+  }
+  section.panel{
+    position: relative;
+    margin-bottom: 4.2rem;
+  }
+  section.panel:last-child{ margin-bottom: 0; }
+  .node{
+    position: absolute;
+    left: -49px;
+    top: 0;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+  }
+  section.panel.lit .node{
+    border-color: var(--amber);
+    color: var(--amber-glow);
+    box-shadow: 0 0 10px rgba(232,150,63,0.55);
+  }
+
+  .panel-head{
+    margin-bottom: 1.6rem;
+  }
+  .panel-head .technique{
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.35rem;
+  }
+  .panel-head h2{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    font-size: clamp(1.4rem, 3.4vw, 1.9rem);
+    letter-spacing: 0.015em;
+    color: var(--ink);
+  }
+  .panel-head .desc{
+    margin-top: 0.5rem;
+    color: var(--ink-soft);
+    font-size: 0.96rem;
+    max-width: 58ch;
+  }
+
+  /* ============ ENTRY (idea/decision/insight) ============ */
+  .entry{
+    border-left: 2px solid var(--line-soft);
+    padding: 0.15rem 0 0.15rem 1rem;
+    margin-bottom: 1.15rem;
+  }
+  .entry:last-child{ margin-bottom: 0; }
+  .entry .tag-row{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.3rem;
+  }
+  .entry .tag-row .kind{ color: var(--ink-faint); }
+  .entry p{ margin: 0; color: var(--ink); }
+  .entry.decision{
+    border-left-color: var(--amber-dim);
+    background: linear-gradient(90deg, rgba(232,150,63,0.07), transparent 60%);
+    padding-top: 0.5rem; padding-bottom: 0.5rem;
+  }
+  .entry.decision .tag-row .kind{ color: var(--amber-glow); }
+  .entry.insight{
+    border-left-color: var(--teal);
+    background: linear-gradient(90deg, rgba(79,174,147,0.08), transparent 60%);
+    padding-top: 0.5rem; padding-bottom: 0.5rem;
+  }
+  .entry.insight .tag-row .kind{ color: var(--teal-glow); }
+  .entry.insight p{ font-style: italic; color: var(--ink-soft); }
+
+  /* ============ SECTION 1: KILL THE CROWN JEWEL ============ */
+  .jewel-box{
+    background: var(--bg-panel-2);
+    border: 1px solid var(--copper-dim);
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 1.8rem;
+    display: flex;
+    align-items: center;
+    gap: 1.3rem;
+    flex-wrap: wrap;
+  }
+  .switch{
+    flex: none;
+    width: 58px; height: 30px;
+    border-radius: 15px;
+    background: #2a1712;
+    border: 1px solid var(--copper-dim);
+    position: relative;
+  }
+  .switch .knob{
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--copper);
+    box-shadow: 0 0 8px rgba(181,80,44,0.7) inset;
+    transition: none;
+  }
+  .jewel-text{ flex: 1; min-width: 220px; }
+  .jewel-label{
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--copper);
+    margin-bottom: 0.25rem;
+  }
+  .jewel-name{
+    font-family: var(--font-display);
+    font-stretch: condensed;
+    font-weight: 700;
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--copper);
+    text-decoration-thickness: 2px;
+  }
+  .jewel-sub{
+    font-size: 0.88rem;
+    color: var(--ink-faint);
+    margin-top: 0.3rem;
+  }
+  .stamp{
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--copper);
+    border: 2px solid var(--copper-dim);
+    padding: 0.3rem 0.6rem;
+    transform: rotate(-4deg);
+    opacity: 0.9;
+  }
+
+  .relit-label{
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 1.6rem 0 0.9rem;
+  }
+  .bulb-row{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(2px, 1fr));
+    gap: 0;
+  }
+  .bulb-item{
+    display: flex;
+    gap: 0.7rem;
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  .bulb-item:first-child{ border-top: none; }
+  .bulb{
+    flex: none;
+    width: 9px; height: 9px;
+    margin-top: 0.45rem;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 7px rgba(232,150,63,0.75);
+  }
+  .bulb-item.coach .bulb{
+    background: transparent;
+    border: 2px solid var(--teal);
+    box-shadow: 0 0 6px rgba(79,174,147,0.6);
+  }
+  .bulb-body .tag-row{
+    display:flex; gap:0.5rem; align-items:center;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.2rem;
+  }
+  .bulb-body p{ margin: 0; }
+
+  /* ============ SECTION 2: JOB TO BE DONE ============ */
+  .ticket{
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    position: relative;
+    padding: 1.3rem 1.5rem;
+    margin-bottom: 1.6rem;
+  }
+  .ticket::before, .ticket::after{
+    content: "";
+    position: absolute;
+    top: -1px; bottom: -1px;
+    width: 14px;
+    background:
+      radial-gradient(circle 7px at center, var(--bg) 99%, transparent 100%) 0 0/14px 20px repeat-y;
+  }
+  .ticket::before{ left: -7px; }
+  .ticket::after{ right: -7px; }
+  .ticket-head{
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.4rem;
+  }
+  .ticket-job{
+    font-family: var(--font-display);
+    font-stretch: condensed;
+    font-weight: 700;
+    font-size: 1.15rem;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    color: var(--amber-glow);
+    margin-bottom: 0.9rem;
+  }
+
+  .gauge-row{
+    display: flex;
+    gap: 1.6rem;
+    flex-wrap: wrap;
+    margin: 1rem 0 1.3rem;
+  }
+  .gauge{
+    text-align: center;
+    width: 92px;
+  }
+  .gauge svg{ display:block; margin: 0 auto; }
+  .gauge .glabel{
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 0.3rem;
+  }
+  .gauge.relief .glabel{ color: var(--amber-glow); }
+  .gauge.delight .glabel{ color: var(--teal-glow); }
+  .gauge.worry .glabel{ color: var(--copper); }
+
+  /* ============ SECTION 3: ROLE PLAYING ============ */
+  .badge-wrap{
+    display: flex;
+    gap: 1.8rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .id-badge{
+    flex: none;
+    width: 168px;
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    padding: 1rem;
+    position: relative;
+  }
+  .id-badge::before{
+    content: "";
+    position: absolute;
+    top: -10px; left: 50%;
+    transform: translateX(-50%);
+    width: 46px; height: 12px;
+    background: var(--line);
+    border-radius: 0 0 3px 3px;
+  }
+  .id-photo{
+    width: 100%; height: 92px;
+    background: var(--bg-raised);
+    border: 1px solid var(--line-soft);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 0.7rem;
+  }
+  .id-role{
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .id-name{
+    font-family: var(--font-display);
+    font-stretch: condensed;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 1.05rem;
+    color: var(--ink);
+    margin-top: 0.15rem;
+  }
+  .id-tags{
+    margin-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    color: var(--ink-faint);
+  }
+  .role-quotes{ flex: 1; min-width: 240px; }
+  .quote{
+    margin-bottom: 1.1rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--teal);
+  }
+  .quote:last-child{ margin-bottom: 0; }
+  .quote .tag-row{
+    display:flex; gap:0.5rem; align-items:center;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.25rem;
+  }
+  .quote p{ margin: 0; font-style: italic; color: var(--ink-soft); }
+
+  /* ============ SECTION 4: SCI-FI ARTIFACT ============ */
+  .artifact-wrap{
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 1.5rem 0;
+  }
+  .phone{
+    flex: none;
+    width: 190px;
+    height: 340px;
+    background: #080704;
+    border: 6px solid #2a2416;
+    border-radius: 28px;
+    position: relative;
+    box-shadow: 0 0 50px rgba(0,0,0,0.6), 0 0 90px rgba(232,150,63,0.08);
+    display: flex;
+    align-items: center;
+    padding: 0.9rem;
+  }
+  .phone::before{
+    content: "";
+    position: absolute;
+    top: 10px; left: 50%; transform: translateX(-50%);
+    width: 46px; height: 5px;
+    border-radius: 3px;
+    background: #2a2416;
+  }
+  .notif{
+    width: 100%;
+    background: rgba(232,150,63,0.12);
+    border: 1px solid rgba(232,150,63,0.35);
+    border-radius: 12px;
+    padding: 0.85rem 0.8rem;
+  }
+  .notif .app{
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--amber-glow);
+    margin-bottom: 0.35rem;
+  }
+  .notif .body{
+    font-family: var(--font-body);
+    font-size: 0.86rem;
+    line-height: 1.4;
+    color: var(--ink);
+    text-shadow: 0 0 14px rgba(255,177,92,0.35);
+  }
+  .artifact-caption{
+    flex: 1;
+    min-width: 220px;
+  }
+  .artifact-caption .tag-row{
+    display:flex; gap:0.5rem; align-items:center;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.4rem;
+  }
+  .artifact-caption p{ margin: 0 0 1rem; color: var(--ink-soft); }
+  .artifact-caption p:last-child{ margin-bottom: 0; }
+
+  /* ============ SECTION 5: CONVERGENCE ============ */
+  .cluster-strip{
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    margin-bottom: 0.9rem;
+  }
+  .cluster-strip strong{ color: var(--amber-glow); }
+  .cluster-bins{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 1.6rem;
+  }
+  .bin{
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    padding: 0.75rem 0.85rem;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+  }
+  .bin.foundation{ border-color: var(--brass); }
+
+  table.moscow{
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+  }
+  .table-scroll{ overflow-x: auto; margin-top: 0.5rem; }
+  table.moscow th{
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 2px solid var(--line);
+  }
+  table.moscow th.must{ color: var(--amber-glow); }
+  table.moscow th.should{ color: var(--amber-dim); }
+  table.moscow th.could{ color: var(--teal-glow); }
+  table.moscow th.wont{ color: var(--copper); }
+  table.moscow td{
+    vertical-align: top;
+    padding: 0.7rem 0.8rem;
+    border-top: 1px solid var(--line-soft);
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+  }
+  table.moscow td.must{ border-left: 2px solid var(--amber); }
+  table.moscow td.should{ border-left: 2px solid var(--amber-dim); }
+  table.moscow td.could{ border-left: 2px solid var(--teal); }
+  table.moscow td.wont{ border-left: 2px solid var(--copper-dim); color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--copper-dim); }
+
+  /* ============ SECTION 6: SYNTHESIS (CLIMAX) ============ */
+  .synthesis-panel{
+    background:
+      radial-gradient(ellipse 480px 260px at 30% 0%, rgba(232,150,63,0.16), transparent 65%),
+      var(--bg-panel-2);
+    border: 1px solid var(--amber-dim);
+    padding: 2.2rem;
+    box-shadow: 0 0 60px rgba(232,150,63,0.06);
+  }
+  .synthesis-eyebrow{
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 0.7rem;
+  }
+  .synthesis-panel p{
+    font-size: 1.08rem;
+    line-height: 1.7;
+    color: var(--ink);
+    margin: 0 0 1.1rem;
+  }
+  .synthesis-panel p:last-child{ margin-bottom: 0; }
+  .tagword{
+    color: var(--amber-glow);
+    font-style: normal;
+    font-weight: 600;
+    text-shadow: 0 0 16px rgba(255,177,92,0.3);
+  }
+  .tagword.teal{ color: var(--teal-glow); text-shadow: 0 0 16px rgba(127,214,186,0.3); }
+
+  /* ============ FOOTER ============ */
+  footer.colophon{
+    margin-top: 5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+</style>
+
+<div class="page">
+
+  <header class="cover">
+    <div class="eyebrow">Session Ledger · Energy Tracker v2</div>
+    <h1>Killing the crown jewel,<br>finding the <span class="glow flicker">north star</span></h1>
+    <p class="dek">A record of one Creative Partner brainstorming session: an energy-tracking app relearns what it's for, once the feature it was built around gets switched off.</p>
+    <div class="meta-strip">
+      <div><span class="k">Topic</span><span class="v">v2 of energy&#8209;tracker: reframing product concepts and UX on a new platform</span></div>
+      <div><span class="k">Goal</span><span class="v">Challenge and reframe decomposition, residual, insights and tariff model; establish a smooth new UX</span></div>
+      <div><span class="k">Mode</span><span class="v">Creative Partner, in chat</span></div>
+      <div><span class="k">Status</span><span class="v status">Complete · closed 2026-08-08 13:42</span></div>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="legend-title">Reading the ledger</div>
+    <div class="legend-item"><span class="who-dot user"></span> User — generated by the person</div>
+    <div class="legend-item"><span class="who-dot coach"></span> Coach — generated by the facilitator</div>
+    <div class="legend-item"><span class="kind-sample">Idea</span> a candidate, not yet settled</div>
+    <div class="legend-item"><span class="kind-sample decision">Decision</span> committed, moves forward</div>
+    <div class="legend-item"><span class="kind-sample insight">Insight</span> a truth surfaced, not chosen</div>
+  </div>
+
+  <main>
+
+    <!-- SECTION 1 -->
+    <section class="panel lit" id="s1">
+      <div class="node">01</div>
+      <div class="panel-head">
+        <div class="technique">Technique 1 of 4 — Kill the Crown Jewel</div>
+        <h2>Kill the Crown Jewel</h2>
+        <p class="desc">Name the feature you would defend hardest. Then argue for cutting it, and see what has to grow into the space it leaves.</p>
+      </div>
+
+      <div class="jewel-box">
+        <div class="switch"><div class="knob"></div></div>
+        <div class="jewel-text">
+          <div class="jewel-label">Decision by user — the crown jewel, named</div>
+          <div class="jewel-name">Decomposition &amp; Residual Breakdown</div>
+          <div class="jewel-sub">Per&#8209;Room / Device attribution against the Main Meter</div>
+        </div>
+        <div class="stamp">Decommissioned</div>
+      </div>
+
+      <div class="relit-label">What re-lit in its place</div>
+      <div class="bulb-row">
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>Without decomposition, the app becomes a pattern-finder on raw meter readings: it surfaces usage patterns and trends, and ties them to the annual baseline and invoice impact.</p>
+        </div></div>
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>Tariff optimization becomes first-class: actively finding more attractive tariff conditions to save cost, not just recording the current one.</p>
+        </div></div>
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>The tariff radar must show projected annual savings versus the current contract, correctly normalizing for switching-bonus payouts that inflate the first period's attractiveness.</p>
+        </div></div>
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>Manual life-event annotations become a substitute context signal: cooked 2h, gaming session 3h, WFH 4x/week, on vacation 2 weeks.</p>
+        </div></div>
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>Light AI research assists correlation with plausibility: guesstimate wattage from named setups — gaming PC components, electric cooking appliances — to give annotated events quasi-proof.</p>
+        </div></div>
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>Voice mode for logging events — quick dictation, Siri-style — envisioned for a future mobile app, faster than open-app-tap-tap.</p>
+        </div></div>
+        <div class="bulb-item"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+          <p>Alternative capture pattern: an end-of-day or end-of-week voice recap/dictation of special events, instead of real-time logging.</p>
+        </div></div>
+        <div class="bulb-item coach"><span class="bulb"></span><div class="bulb-body">
+          <div class="tag-row"><span class="who-dot coach"></span>Idea · Coach</div>
+          <p>The weekly voice recap doubles as the insight-review ritual itself: the app asks "anything unusual this week?" and threads the answer directly onto the spike it already flagged.</p>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- SECTION 2 -->
+    <section class="panel lit" id="s2">
+      <div class="node">02</div>
+      <div class="panel-head">
+        <div class="technique">Technique 2 of 4 — Job to Be Done</div>
+        <h2>Job to Be Done</h2>
+        <p class="desc">Set the feature list aside. Ask what the person actually opens the app to accomplish — and what feeling they're chasing or avoiding.</p>
+      </div>
+
+      <div class="ticket">
+        <div class="ticket-head">Work order 1 · Emotional job</div>
+        <div class="ticket-job">Tell me early if I'm heading for a surprise invoice</div>
+        <div class="gauge-row">
+          <div class="gauge relief">
+            <svg width="80" height="46" viewBox="0 0 100 55">
+              <path d="M10,50 A40,40 0 0,1 90,50" fill="none" stroke="#4a3f2a" stroke-width="8" stroke-linecap="round"/>
+              <path d="M10,50 A40,40 0 0,1 50,10.5" fill="none" stroke="#e8963f" stroke-width="8" stroke-linecap="round"/>
+              <line x1="50" y1="50" x2="26" y2="22" stroke="#ece3d0" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="50" cy="50" r="4" fill="#ece3d0"/>
+            </svg>
+            <div class="glabel">Relief — within range</div>
+          </div>
+          <div class="gauge delight">
+            <svg width="80" height="46" viewBox="0 0 100 55">
+              <path d="M10,50 A40,40 0 0,1 90,50" fill="none" stroke="#4a3f2a" stroke-width="8" stroke-linecap="round"/>
+              <path d="M10,50 A40,40 0 0,1 14.5,29" fill="none" stroke="#4fae93" stroke-width="8" stroke-linecap="round"/>
+              <line x1="50" y1="50" x2="15" y2="46" stroke="#ece3d0" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="50" cy="50" r="4" fill="#ece3d0"/>
+            </svg>
+            <div class="glabel">Delight — below baseline</div>
+          </div>
+          <div class="gauge worry">
+            <svg width="80" height="46" viewBox="0 0 100 55">
+              <path d="M10,50 A40,40 0 0,1 90,50" fill="none" stroke="#4a3f2a" stroke-width="8" stroke-linecap="round"/>
+              <path d="M65,13.5 A40,40 0 0,1 90,50" fill="none" stroke="#b5502c" stroke-width="8" stroke-linecap="round"/>
+              <line x1="50" y1="50" x2="82" y2="27" stroke="#ece3d0" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="50" cy="50" r="4" fill="#ece3d0"/>
+            </svg>
+            <div class="glabel">Worry — over ~100&nbsp;kWh</div>
+          </div>
+        </div>
+        <div class="entry">
+          <div class="tag-row"><span class="who-dot user"></span><span class="kind">Idea · User</span></div>
+          <p>The real emotional job is detecting early whether consumption is trending significantly above baseline — the fear is a surprise invoice. About 100&nbsp;kWh over baseline is a felt "magic number" worth actively surfacing.</p>
+        </div>
+        <div class="entry">
+          <div class="tag-row"><span class="who-dot user"></span><span class="kind">Idea · User</span></div>
+          <p>Three emotional states on opening the app: within anticipated range = relief, all good; below baseline = delight; over the ~100&nbsp;kWh threshold = actionable worry.</p>
+        </div>
+      </div>
+
+      <div class="ticket">
+        <div class="ticket-head">Work order 2 · Decision job</div>
+        <div class="ticket-job">Help me decide whether to switch tariffs</div>
+        <div class="entry">
+          <div class="tag-row"><span class="who-dot user"></span><span class="kind">Idea · User</span></div>
+          <p>A second job: open the app to decide whether to switch tariffs — not just to check status.</p>
+        </div>
+        <div class="entry">
+          <div class="tag-row"><span class="who-dot user"></span><span class="kind">Idea · User</span></div>
+          <p>Decision screen: a green/red badge for tariff attractiveness, shown both with and without the switching bonus factored in.</p>
+        </div>
+        <div class="entry">
+          <div class="tag-row"><span class="who-dot user"></span><span class="kind">Idea · User</span></div>
+          <p>A relative market-standing indicator: "your tariff is top 10% / mid-range / expensive end" compared to available market tariffs.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3 -->
+    <section class="panel lit" id="s3">
+      <div class="node">03</div>
+      <div class="panel-head">
+        <div class="technique">Technique 3 of 4 — Role Playing</div>
+        <h2>Role Playing</h2>
+        <p class="desc">Step fully into the person actually holding the phone — not an idealized user, this exact one — and let their real constraints talk back.</p>
+      </div>
+
+      <div class="badge-wrap">
+        <div class="id-badge">
+          <div class="id-photo">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#7d715a" stroke-width="1.6">
+              <circle cx="12" cy="8" r="4"/>
+              <path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+            </svg>
+          </div>
+          <div class="id-role">Role played</div>
+          <div class="id-name">The Tenant</div>
+          <div class="id-tags">
+            <span>No main-meter access</span>
+            <span>Reads meter by hand</span>
+            <span>Also: a developer</span>
+          </div>
+        </div>
+        <div class="role-quotes">
+          <div class="quote">
+            <div class="tag-row"><span class="who-dot user"></span>Insight · User</div>
+            <p>"I'm a tenant, not a property owner — a smart main meter is unlikely and complicated. An irregular 1&#8211;2 day manual reading cadence is my honest baseline, not a flaw to engineer away."</p>
+          </div>
+          <div class="quote">
+            <div class="tag-row"><span class="who-dot user"></span>Insight · User</div>
+            <p>"My spreadsheet's real weakness isn't the tabular entry — it's integration: pulling in external data and online searches, and the friction of typing on mobile."</p>
+          </div>
+          <div class="quote">
+            <div class="tag-row"><span class="who-dot user"></span>Idea · User</div>
+            <p>"I'm a developer. I want this tool to reach spheres the spreadsheet can't" — an appetite for an extensible, programmable platform, not just a fixed feature set.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4 -->
+    <section class="panel lit" id="s4">
+      <div class="node">04</div>
+      <div class="panel-head">
+        <div class="technique">Technique 4 of 4 — Sci-Fi Artifact from the Future</div>
+        <h2>Sci-Fi Artifact from the Future</h2>
+        <p class="desc">Skip the roadmap. Describe the single object a future version of this product leaves behind on a nightstand.</p>
+      </div>
+
+      <div class="artifact-wrap">
+        <div class="phone">
+          <div class="notif">
+            <div class="app">Energy Tracker · now</div>
+            <div class="body flicker">Quiet week, 240&nbsp;kWh under pace. Saturday gaming binge already absorbed.</div>
+          </div>
+        </div>
+        <div class="artifact-caption">
+          <div class="tag-row"><span class="who-dot coach"></span>Idea · Coach</div>
+          <p>A zero-tap ambient artifact: a single push notification — no chart, no numbers — dismissed in one swipe.</p>
+          <div class="tag-row"><span class="who-dot user"></span>Decision · User</div>
+          <p>Adopted the ambient zero-tap notification as the concrete north-star artifact for v2's future interaction model.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5 -->
+    <section class="panel lit" id="s5">
+      <div class="node">05</div>
+      <div class="panel-head">
+        <div class="technique">Convergence</div>
+        <h2>Sorting the Bench, Then the Board</h2>
+        <p class="desc">Twenty candidates generated across four techniques, first grouped by affinity, then run through MoSCoW.</p>
+      </div>
+
+      <div class="cluster-strip"><strong>20 candidates</strong> sorted into 5 clusters —</div>
+      <div class="cluster-bins">
+        <div class="bin">Pattern Detective</div>
+        <div class="bin">Tariff Savings Radar</div>
+        <div class="bin">Context Capture (voice + AI)</div>
+        <div class="bin">Extensible Platform</div>
+        <div class="bin foundation">Real-World Constraints (foundation)</div>
+      </div>
+      <div class="entry decision">
+        <div class="tag-row"><span class="who-dot coach"></span><span class="kind">Decision · Coach</span></div>
+        <p>Affinity clustering run on the 20 candidates, resolving into the five clusters above.</p>
+      </div>
+      <div class="entry decision">
+        <div class="tag-row"><span class="who-dot user"></span><span class="kind">Decision · User — correction</span></div>
+        <p>Smart Plug data (Eve/Meross) is not discarded — it feeds Pattern Detective as an additional data source alongside the Main Meter, just not room/device decomposition. Context Capture specifically targets appliances that can't be measured: the induction cooktop, the bathroom water heater.</p>
+      </div>
+      <div class="entry decision">
+        <div class="tag-row"><span class="who-dot user"></span><span class="kind">Decision · User</span></div>
+        <p>Full market-percentile tariff-comparison ranking is a long-run extension, not v2 — it requires a 3rd-party tariff data feed to check the user's contract in the background. Deferred deliberately, not dismissed.</p>
+      </div>
+
+      <div class="relit-label">MoSCoW</div>
+      <div class="table-scroll">
+        <table class="moscow">
+          <thead>
+            <tr>
+              <th class="must">Must</th>
+              <th class="should">Should</th>
+              <th class="could">Could</th>
+              <th class="wont">Won't this round</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="must">Pattern Detective</td>
+              <td class="should">Context Capture (text/tap first)</td>
+              <td class="could">Extensible Platform</td>
+              <td class="wont">Market-percentile / tariff-comparison wizard</td>
+            </tr>
+            <tr>
+              <td class="must">Real-World Constraints</td>
+              <td class="should">Tariff Savings Radar (bonus-decay-aware, no market ranking)</td>
+              <td class="could">Voice-mode input</td>
+              <td class="wont">&nbsp;</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="entry decision" style="margin-top:1.2rem;">
+        <div class="tag-row"><span class="who-dot coach"></span><span class="kind">Decision · Coach</span></div>
+        <p>MoSCoW confirmed as tabulated above.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 6: SYNTHESIS -->
+    <section class="panel lit" id="s6">
+      <div class="node">06</div>
+      <div class="panel-head">
+        <div class="technique">Synthesis</div>
+        <h2>The North Star, Assembled</h2>
+        <p class="desc">Where every thread lands.</p>
+      </div>
+
+      <div class="synthesis-panel">
+        <div class="synthesis-eyebrow flicker">Session insight</div>
+        <p>v2's core direction is the <span class="tagword">Pattern Detective</span> — a gap-tolerant rolling baseline over the Main Meter plus imported Smart Plug signal — surfaced as one glanceable status, culminating in the zero-tap ambient notification.</p>
+        <p><span class="tagword teal">Context Capture</span> (voice-first, AI-plausibility-assisted) is Decomposition's heir for unmeasurable built-ins — the induction cooktop, the water heater — not a generic log.</p>
+        <p>The <span class="tagword">Tariff Savings Radar</span> shares its "decaying baseline" math with the pace threshold.</p>
+        <p><span class="tagword teal">Extensible Platform</span> is three scoped points: custom event/plausibility rules, generic data-source mapping, tunable thresholds — voice is just an input modality on point one, not a separate feature.</p>
+        <p>Market-percentile tariff comparison is confirmed as a deliberate long-run deferral, needing a 3rd-party data feed.</p>
+        <p>Foundation: tenant, no smart meter, 1&#8211;2 day irregular cadence — accepted as ground truth.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    <span>Transcribed from .memlog.md — brainstorm-energy-tracker-v2-2026-08-08</span>
+    <span>Creative Partner session · closed 2026-08-08 13:42</span>
+  </footer>
+
+</div>
