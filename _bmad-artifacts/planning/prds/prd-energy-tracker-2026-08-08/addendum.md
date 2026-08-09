@@ -1,7 +1,7 @@
 ---
 title: Energy Tracker v2 PRD — Addendum
 created: 2026-08-08
-updated: 2026-08-08
+updated: 2026-08-09
 ---
 
 # Addendum
@@ -21,15 +21,16 @@ Revisit once FR-6/FR-21 are live and there's real signal on whether a single tun
 
 ## Deployment/technical-how notes
 
-### Candidate low-cost cloud deployment shape
-Raised while scoping the hosting-target NFR. One concrete deployment shape the PM has in mind for keeping both self-hosted and cloud-hosted total cost low:
+### Candidate low-cost cloud deployment shape — superseded by architecture decision
+
+Raised while scoping the hosting-target NFR, as a candidate shape for `bmad-architecture` to evaluate, not a locked decision:
 
 - **Frontend:** Azure Static Web App
 - **Backend:** Azure Container App (scale-to-zero)
 - **Data:** Azure SQL Basic SKU
 - **Auth:** Auth0 or Entra ID as the OIDC provider
 
-This is implementation-level, not a PRD commitment — the PRD's NFR states the capability (cost-efficient on modest self-hosted hardware AND low-tier/scale-to-zero cloud tiers, swappable OIDC provider via config) without naming a specific cloud vendor or service. Worth handing to `bmad-architecture` as a candidate shape to evaluate, not a locked decision.
+**Resolution (architecture spine `ARCHITECTURE-SPINE.md`, AD-2/AD-13, 2026-08-09):** the frontend/backend split was evaluated and **not adopted**. The finalized architecture serves the built frontend from the same container as the backend API (AD-13) — verified that linking a Container App as a Static Web Apps backend requires the SWA *Standard* plan ($9/month flat), while Container Apps' own consumption-plan free grant already covers this project's expected traffic at $0; splitting also has no self-hosted equivalent, which conflicts with the PRD's single-deployment-artifact NFR. The **Data** and **Auth** candidates were adopted largely as proposed: Azure SQL Basic DTU is one of two config-selectable database providers (AD-2, alongside PostgreSQL for self-host/ARM compatibility), and auth uses ASP.NET Core's generic OIDC handler (AD-17), config-compatible with Entra ID, Auth0, or any other OIDC provider rather than binding to one by name.
 
 ### Smart Plug export file schema (v1 reference, carried forward for v2 parsing)
 Referenced from FR-4 (Smart Plug File Import). v1's PRD documented these format specifics, which are still applicable since v2 imports the same source files:

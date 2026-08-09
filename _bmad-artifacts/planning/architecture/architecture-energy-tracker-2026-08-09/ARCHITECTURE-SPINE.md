@@ -118,7 +118,7 @@ graph LR
 
 - **Binds:** all (deployment)
 - **Prevents:** self-host and cloud needing structurally different deployment topologies, which would violate the PRD's explicit "one deployment artifact" NFR.
-- **Rule:** The `Api` project serves the built React/shadcn SPA's static assets directly (ASP.NET Core SPA-hosting pattern) from the same container as the API. **This deviates from the PRD addendum's candidate shape** (Azure Static Web App + separate Container App) — that split has no self-host equivalent. Flagged for the addendum to be updated to match.
+- **Rule:** The `Api` project serves the built React/shadcn SPA's static assets directly (ASP.NET Core SPA-hosting pattern) from the same container as the API. **This deviates from, and supersedes, the PRD addendum's candidate shape** (Azure Static Web App + separate Container App) — that split has no self-host equivalent, and (reconfirmed 2026-08-09) costs a guaranteed extra $9/month on Azure for capability this project's traffic doesn't need. Addendum updated to match.
 
 ### AD-14 — Main Meter is the sole authoritative total
 
