@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Density Comparison — Trend History (Green Eco, Dark)</title>
+<style>
+/*
+  DENSITY COMPARISON — Trend History (FR-8 / FR-9, realizes UJ-3)
+  ------------------------------------------------------------
+  Tokens reused verbatim from direction-green-eco.html (dark variant):
+
+  Section bg:              linear-gradient(180deg, #10201A 0%, #0B1712 100%)
+  Panel-back (rear glass):  rgba(28,44,36,0.55), border rgba(210,235,220,0.10)
+  Card (front glass):       background rgba(220,245,230,0.07), border rgba(210,235,220,0.16)
+                             backdrop-filter: blur(28px) saturate(160%)
+                             box-shadow: 0 30px 60px rgba(5,15,10,0.55), inset 0 1px 0 rgba(220,245,230,0.09)
+  Text primary #EAF5EE | secondary rgba(234,245,238,0.62) | quiet rgba(234,245,238,0.32)
+  Brand accent (chrome only): #2FB397 | badge bg rgba(47,179,151,0.16)
+  Status — within range (sage): #9FBB8A | badge bg rgba(159,187,138,0.16)
+  Status — below baseline (emerald): #4FCA72 | badge bg rgba(79,202,114,0.17)
+  Status — trending (amber, never red): #E2A542 | badge bg rgba(226,165,66,0.18)
+
+  Frame is browser/tablet-width (not phone) — this is UJ-3's "calm evening
+  browsing" context, not the meter-side reading-entry path.
+
+  Vocabulary used throughout, per PRD glossary/FR-8/FR-9:
+  - Room → Power Point → Device: the tagging scaffold, explicitly NOT an
+    attribution system — nothing here reconciles to the Main Meter total.
+  - Gaps in Meter Reading history render as a visible BREAK in the trend line
+    (FR-8), never an interpolated line — interpolation-and-flag treatment is
+    specific to Smart Plug import gaps (FR-24), not this core trend.
+  - Per-plug data is framed as "measured context," not a reconciled
+    attribution breakdown of the Main Meter total (FR-9).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 44px 28px 90px;
+}
+.wrap { max-width: 1900px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; }
+.intro {
+  max-width: 820px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(234,245,238,0.62);
+  margin-bottom: 34px;
+}
+.intro code { color: rgba(234,245,238,0.8); }
+
+.row { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-start; margin-bottom: 40px; }
+
+.col { flex: 1 1 560px; min-width: 480px; max-width: 640px; }
+.col-label {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+  color: #9FBB8A; margin-bottom: 4px;
+}
+.col-sub { font-size: 12px; color: rgba(234,245,238,0.42); margin-bottom: 14px; line-height: 1.5; }
+
+/* ---------- App frame (browser/tablet) ---------- */
+.appframe {
+  border-radius: 20px;
+  background: linear-gradient(160deg, #1C2C24, #0F1A15);
+  border: 1px solid rgba(210,235,220,0.08);
+  box-shadow: 0 30px 70px rgba(0,0,0,0.5);
+  padding: 10px;
+}
+.chrome-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 10px; }
+.chrome-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(234,245,238,0.14); }
+.screen {
+  border-radius: 14px;
+  background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%);
+  padding: 22px 22px 26px;
+  min-height: 560px;
+}
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.crumb { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(234,245,238,0.4); }
+.crumb a { color: #6FD1B1; text-decoration: none; }
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: #F3FBF5; margin-bottom: 18px; }
+
+/* ---------- shared glass card ---------- */
+.card {
+  border-radius: 18px;
+  background: rgba(220,245,230,0.06);
+  border: 1px solid rgba(210,235,220,0.13);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  padding: 18px 18px 16px;
+  margin-bottom: 14px;
+}
+.card h3 { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(234,245,238,0.45); margin-bottom: 12px; }
+
+.plain-line { font-size: 15px; line-height: 1.55; color: rgba(234,245,238,0.82); font-weight: 400; }
+.plain-line b { color: #EAF5EE; font-weight: 700; }
+
+/* ---------- sparkline / chart ---------- */
+svg text { font-family: inherit; }
+.axis-label { font-size: 8.5px; fill: rgba(234,245,238,0.38); }
+.grid-line { stroke: rgba(234,245,238,0.08); stroke-width: 1; }
+.baseline-line { stroke: rgba(234,245,238,0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+.trend-path { fill: none; stroke: #9FBB8A; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.trend-path.warn { stroke: #E2A542; }
+.gap-band { fill: rgba(226,165,66,0.07); }
+.gap-label { font-size: 8px; fill: rgba(226,165,66,0.75); font-weight: 600; }
+.pt { fill: #9FBB8A; }
+.pt.warn { fill: #E2A542; }
+.annot { fill: rgba(234,245,238,0.5); }
+.annot-label { font-size: 7.5px; fill: rgba(234,245,238,0.42); }
+
+/* ---------- collapsible list (Minimal, Moderate) ---------- */
+details.plug-list { border-radius: 14px; background: rgba(220,245,230,0.04); border: 1px solid rgba(210,235,220,0.1); padding: 4px 4px; }
+details.plug-list > summary {
+  cursor: pointer; list-style: none; font-size: 13px; font-weight: 600; color: rgba(234,245,238,0.75);
+  padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;
+}
+details.plug-list > summary::-webkit-details-marker { display: none; }
+details.plug-list > summary::after { content: "▾"; color: rgba(234,245,238,0.35); transition: none; }
+details.plug-list[open] > summary::after { content: "▴"; }
+.plug-body { padding: 4px 14px 12px; }
+
+.room-item summary { cursor: pointer; list-style: none; font-size: 13px; font-weight: 700; color: #EAF5EE; padding: 9px 6px; display: flex; justify-content: space-between; }
+.room-item summary::-webkit-details-marker { display: none; }
+.room-item summary::after { content: "▾"; color: rgba(234,245,238,0.35); font-weight: 400; }
+.room-item[open] summary::after { content: "▴"; }
+.room-item { border-bottom: 1px solid rgba(210,235,220,0.08); }
+.room-item:last-child { border-bottom: none; }
+.pp-item summary { cursor: pointer; list-style: none; font-size: 12.5px; font-weight: 600; color: rgba(234,245,238,0.75); padding: 7px 6px 7px 16px; display: flex; justify-content: space-between; }
+.pp-item summary::-webkit-details-marker { display: none; }
+.pp-item summary::after { content: "▾"; color: rgba(234,245,238,0.3); font-weight: 400; }
+.pp-item[open] summary::after { content: "▴"; }
+.device-row { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 6px 6px 30px; color: rgba(234,245,238,0.6); font-variant-numeric: tabular-nums; }
+.device-row b { color: rgba(234,245,238,0.85); font-weight: 600; }
+.kwh { font-variant-numeric: tabular-nums; }
+
+.caveat { font-size: 11.5px; line-height: 1.55; color: rgba(234,245,238,0.4); margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(210,235,220,0.08); }
+
+/* ---------- Dense: flat stats list ---------- */
+.stat-flat { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 4px; border-bottom: 1px solid rgba(210,235,220,0.06); font-size: 12px; }
+.stat-flat:last-child { border-bottom: none; }
+.stat-flat .path { color: rgba(234,245,238,0.7); }
+.stat-flat .path b { color: #EAF5EE; }
+.stat-flat .nums { display: flex; gap: 14px; font-variant-numeric: tabular-nums; color: rgba(234,245,238,0.55); white-space: nowrap; }
+.stat-flat .nums b { color: #EAF5EE; }
+.room-heading { font-size: 10.5px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: rgba(234,245,238,0.35); margin: 12px 0 2px; }
+.room-heading:first-child { margin-top: 0; }
+
+/* ---------- Dense: chart/table CSS-only toggle ---------- */
+.view-toggle-input { position: absolute; opacity: 0; pointer-events: none; }
+.view-toggle-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.view-toggle-tabs label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 6px 12px; border-radius: 20px; cursor: pointer;
+  color: rgba(234,245,238,0.45); background: rgba(220,245,230,0.04); border: 1px solid rgba(210,235,220,0.1);
+}
+#dv-chart:checked ~ .view-toggle-tabs label[for="dv-chart"],
+#dv-table:checked ~ .view-toggle-tabs label[for="dv-table"] {
+  color: #06120D; background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); border-color: transparent;
+}
+.view-chart, .view-table { display: none; }
+#dv-chart:checked ~ .view-chart { display: block; }
+#dv-table:checked ~ .view-table { display: block; }
+.dtable { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.dtable th { text-align: left; font-weight: 600; color: rgba(234,245,238,0.4); text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid rgba(210,235,220,0.12); }
+.dtable td { padding: 6px 8px; border-bottom: 1px solid rgba(210,235,220,0.06); color: rgba(234,245,238,0.7); font-variant-numeric: tabular-nums; }
+.dtable td.status-cell.within { color: #9FBB8A; }
+.dtable td.status-cell.warn { color: #E2A542; }
+.dtable tr:last-child td { border-bottom: none; }
+
+/* ---------- Rationale ---------- */
+.rationale-box {
+  max-width: 1200px;
+  border-radius: 18px;
+  padding: 22px 26px;
+  background: rgba(220,245,230,0.05);
+  border: 1px solid rgba(210,235,220,0.12);
+}
+.rationale-box h2 { font-size: 15px; font-weight: 700; margin-bottom: 10px; color: #EAF5EE; }
+.rationale-box p { font-size: 14.5px; line-height: 1.65; color: rgba(234,245,238,0.72); margin-bottom: 10px; }
+.rationale-box p:last-child { margin-bottom: 0; }
+.rationale-box strong { color: #EAF5EE; }
+.pick { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #06120D; background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); padding: 3px 10px; border-radius: 20px; margin-right: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Trend History — Density Comparison</h1>
+  <p class="intro">
+    Same screen, three densities. Drill-down: pace-over-time (<code>FR-8</code>) plus per-plug
+    measured data by <code>Room → Power Point → Device</code> (<code>FR-9</code>), realizing
+    <code>UJ-3</code> — "Sam browses trends on a calm evening." All three share the finalized
+    dark Green Eco palette; frame width matches a tablet/browser context, not the meter-side
+    phone flow.
+  </p>
+
+  <div class="row">
+
+    <!-- ================= MINIMAL ================= -->
+    <div class="col">
+      <div class="col-label">1 · Minimal</div>
+      <div class="col-sub">One sparkline, one plain-language line, per-plug data collapsed. Almost no numbers visible by default.</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar">
+            <div class="crumb"><a href="#">← Dashboard</a></div>
+          </div>
+          <div class="page-title">Trend History</div>
+
+          <div class="card">
+            <svg viewBox="0 0 300 70" width="100%" height="70" preserveAspectRatio="none">
+              <line x1="0" y1="40" x2="300" y2="40" class="baseline-line"/>
+              <path d="M4,40 L60,30 L116,22" class="trend-path"/>
+              <path d="M150,26 L200,10 L240,32 L296,16" class="trend-path"/>
+              <rect x="116" y="0" width="34" height="70" class="gap-band"/>
+            </svg>
+            <p class="plain-line" style="margin-top:10px;">
+              Running about <b>240&nbsp;kWh under baseline</b> since January. There was a quiet
+              stretch in June that drifted toward last year's surprise-invoice pace before
+              settling back down — and no reading came in between Apr&nbsp;3–17, so that stretch
+              is shown as a gap rather than guessed at.
+            </p>
+          </div>
+
+          <details class="plug-list">
+            <summary>Room → Power Point → Device data</summary>
+            <div class="plug-body">
+              <div class="device-row"><span>Living Room → TV Power Point → Smart TV</span><b class="kwh">38 kWh</b></div>
+              <div class="device-row"><span>Kitchen → Fridge Circuit → Fridge-Freezer</span><b class="kwh">164 kWh</b></div>
+              <div class="device-row"><span>Office → Desk Power Point → Monitor + PC</span><b class="kwh">96 kWh</b></div>
+              <p class="caveat">Measured context, not a reconciled breakdown of your Main Meter total.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODERATE ================= -->
+    <div class="col">
+      <div class="col-label">2 · Moderate</div>
+      <div class="col-sub">Proper trend chart with axis labels and a visibly-broken gap, plus an expandable Room → Power Point → Device list with headline kWh.</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar">
+            <div class="crumb"><a href="#">← Dashboard</a></div>
+          </div>
+          <div class="page-title">Trend History</div>
+
+          <div class="card">
+            <h3>Pace vs. yearly baseline</h3>
+            <svg viewBox="0 0 320 130" width="100%" height="150" preserveAspectRatio="xMidYMid meet">
+              <line x1="28" y1="10" x2="28" y2="106" class="grid-line"/>
+              <line x1="28" y1="106" x2="310" y2="106" class="grid-line"/>
+              <line x1="28" y1="60" x2="310" y2="60" class="baseline-line"/>
+              <text x="0" y="63" class="axis-label">0</text>
+              <text x="0" y="14" class="axis-label">+40</text>
+              <text x="0" y="109" class="axis-label">−40</text>
+              <text x="30" y="120" class="axis-label">Jan</text>
+              <text x="150" y="120" class="axis-label">Apr</text>
+              <text x="290" y="120" class="axis-label">Aug</text>
+              <rect x="150" y="10" width="30" height="96" class="gap-band"/>
+              <text x="152" y="22" class="gap-label">No reading</text>
+              <text x="152" y="31" class="gap-label">Apr 3–17</text>
+              <path d="M34,60 L96,48 L148,38" class="trend-path"/>
+              <path d="M182,44 L228,80 L270,52 L304,40" class="trend-path"/>
+              <circle cx="304" cy="40" r="3" class="pt"/>
+            </svg>
+            <p class="plain-line" style="margin-top:8px; font-size:13px; color:rgba(234,245,238,0.55);">
+              Currently 240&nbsp;kWh under baseline. Gaps in reading history render as a visible
+              break in the line — never interpolated.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Room → Power Point → Device</h3>
+            <details class="room-item" open>
+              <summary><span>Living Room</span><span class="kwh">60 kWh</span></summary>
+              <details class="pp-item">
+                <summary><span>TV Power Point</span><span class="kwh">60 kWh</span></summary>
+                <div class="device-row"><span>Smart TV</span><b class="kwh">38 kWh</b></div>
+                <div class="device-row"><span>Games Console</span><b class="kwh">22 kWh</b></div>
+              </details>
+            </details>
+            <details class="room-item">
+              <summary><span>Kitchen</span><span class="kwh">173 kWh</span></summary>
+              <details class="pp-item">
+                <summary><span>Fridge Circuit</span><span class="kwh">164 kWh</span></summary>
+                <div class="device-row"><span>Fridge-Freezer</span><b class="kwh">164 kWh</b></div>
+              </details>
+              <details class="pp-item">
+                <summary><span>Worktop Sockets</span><span class="kwh">9 kWh</span></summary>
+                <div class="device-row"><span>Kettle</span><b class="kwh">9 kWh</b></div>
+              </details>
+            </details>
+            <details class="room-item">
+              <summary><span>Office</span><span class="kwh">100 kWh</span></summary>
+              <details class="pp-item">
+                <summary><span>Desk Power Point</span><span class="kwh">100 kWh</span></summary>
+                <div class="device-row"><span>Monitor + PC</span><b class="kwh">96 kWh</b></div>
+                <div class="device-row"><span>Desk Lamp</span><b class="kwh">4 kWh</b></div>
+              </details>
+            </details>
+            <p class="caveat">Measured context, not a reconciled attribution of your Main Meter total — these figures won't sum to it.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DENSE ================= -->
+    <div class="col">
+      <div class="col-label">3 · Dense</div>
+      <div class="col-sub">Full chart with annotations, a chart/table toggle, and per-device stats shown flat — nothing needs expanding.</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar">
+            <div class="crumb"><a href="#">← Dashboard</a></div>
+          </div>
+          <div class="page-title">Trend History</div>
+
+          <div class="card">
+            <h3>Pace vs. yearly baseline (3,200 kWh/yr)</h3>
+
+            <input type="radio" name="dv" id="dv-chart" class="view-toggle-input" checked>
+            <input type="radio" name="dv" id="dv-table" class="view-toggle-input">
+            <div class="view-toggle-tabs">
+              <label for="dv-chart">Chart</label>
+              <label for="dv-table">Table</label>
+            </div>
+
+            <div class="view-chart">
+              <svg viewBox="0 0 320 130" width="100%" height="150" preserveAspectRatio="xMidYMid meet">
+                <line x1="28" y1="10" x2="28" y2="106" class="grid-line"/>
+                <line x1="28" y1="106" x2="310" y2="106" class="grid-line"/>
+                <line x1="28" y1="34" x2="310" y2="34" class="grid-line"/>
+                <line x1="28" y1="82" x2="310" y2="82" class="grid-line"/>
+                <line x1="28" y1="60" x2="310" y2="60" class="baseline-line"/>
+                <text x="0" y="63" class="axis-label">0</text>
+                <text x="0" y="14" class="axis-label">+40</text>
+                <text x="0" y="109" class="axis-label">−40</text>
+                <text x="30" y="120" class="axis-label">Jan</text>
+                <text x="150" y="120" class="axis-label">Apr</text>
+                <text x="290" y="120" class="axis-label">Aug</text>
+                <rect x="150" y="10" width="30" height="96" class="gap-band"/>
+                <text x="152" y="22" class="gap-label">No reading</text>
+                <text x="152" y="31" class="gap-label">Apr 3–17</text>
+                <path d="M34,60 L58,54 L82,50 L96,48 L118,42 L148,38" class="trend-path"/>
+                <path d="M182,44 L198,58 L214,74 L228,80 L244,70 L258,58 L270,52 L286,44 L304,40" class="trend-path"/>
+                <circle cx="96" cy="48" r="2.4" class="pt"/>
+                <circle cx="228" cy="80" r="2.6" class="pt warn"/>
+                <text x="220" y="94" class="annot-label">Trending — Jun 12</text>
+                <circle cx="58" cy="54" r="2.2" class="annot"/>
+                <text x="40" y="47" class="annot-label">Gaming session logged</text>
+                <circle cx="304" cy="40" r="3" class="pt"/>
+              </svg>
+            </div>
+
+            <div class="view-table">
+              <table class="dtable">
+                <thead><tr><th>Week of</th><th>Pace vs baseline</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Jan 5</td><td>+0 kWh</td><td class="status-cell within">Within range</td></tr>
+                  <tr><td>Feb 2</td><td>−10 kWh</td><td class="status-cell within">Within range</td></tr>
+                  <tr><td>Mar 2</td><td>−18 kWh</td><td class="status-cell within">Within range</td></tr>
+                  <tr><td>Apr 3–17</td><td>—</td><td>No reading (gap)</td></tr>
+                  <tr><td>May 4</td><td>−32 kWh</td><td class="status-cell within">Below baseline</td></tr>
+                  <tr><td>Jun 8</td><td>+22 kWh</td><td class="status-cell warn">Trending</td></tr>
+                  <tr><td>Jul 6</td><td>−4 kWh</td><td class="status-cell within">Within range</td></tr>
+                  <tr><td>Aug 3</td><td>−24 kWh</td><td class="status-cell within">Within range</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Room → Power Point → Device — all stats visible</h3>
+            <div class="room-heading">Living Room</div>
+            <div class="stat-flat"><span class="path">TV Power Point → <b>Smart TV</b></span><span class="nums"><b>38 kWh</b><span>11% of tracked</span><span>+4 vs Jul</span></span></div>
+            <div class="stat-flat"><span class="path">TV Power Point → <b>Games Console</b></span><span class="nums"><b>22 kWh</b><span>7% of tracked</span><span>+9 vs Jul</span></span></div>
+            <div class="room-heading">Kitchen</div>
+            <div class="stat-flat"><span class="path">Fridge Circuit → <b>Fridge-Freezer</b></span><span class="nums"><b>164 kWh</b><span>49% of tracked</span><span>−2 vs Jul</span></span></div>
+            <div class="stat-flat"><span class="path">Worktop Sockets → <b>Kettle</b></span><span class="nums"><b>9 kWh</b><span>3% of tracked</span><span>+1 vs Jul</span></span></div>
+            <div class="room-heading">Office</div>
+            <div class="stat-flat"><span class="path">Desk Power Point → <b>Monitor + PC</b></span><span class="nums"><b>96 kWh</b><span>29% of tracked</span><span>+6 vs Jul</span></span></div>
+            <div class="stat-flat"><span class="path">Desk Power Point → <b>Desk Lamp</b></span><span class="nums"><b>4 kWh</b><span>1% of tracked</span><span>+0 vs Jul</span></span></div>
+            <p class="caveat">333 kWh tracked via Smart Plug — measured context, not a reconciled attribution of the Main Meter total. Percentages are of tracked data only, not of household consumption.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="rationale-box">
+    <h2>Recommendation</h2>
+    <p><span class="pick">Default</span><strong>Moderate.</strong> It's the smallest density that still satisfies UJ-3's actual ask — "reviews the general consumption trend... drills into smart-plug/device-level data for anything notable" — with a real chart (gap rendered as a visible break, per FR-8, not interpolated) and an expandable Room → Power Point → Device list that starts collapsed but is genuinely useful once opened.</p>
+    <p><strong>Minimal</strong> protects the "says less, on purpose" discipline almost too well: a sparkline and one sentence can't really be "browsed," so it under-serves the calm-evening curiosity UJ-3 describes — it reads better as a Dashboard teaser than as the drill-down itself.</p>
+    <p><strong>Dense</strong> is the one to worry about: annotations, a table view, and always-expanded per-device stats are genuinely useful for a power user, but flattening everything into view by default risks making the drill-down feel like required reading — which the PRD's product-discipline constraint explicitly rules out (Status must stay the trustworthy headline; drill-down existing is fine, drill-down as a precondition for trust is a regression). Dense reads better as an opt-in density than as the default.</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: Energy Tracker v2</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>Energy Tracker v2 — UX Design Validation Report</h1>
+        <div class="subtitle">_bmad-artifacts/planning/ux-designs/ux-energy-tracker-2026-08-08/{DESIGN,EXPERIENCE}.md</div>
+      </div>
+    </header>
+
+    <div class="synthesis">
+      <p>The spine pair is mechanically clean — every <code>{token}</code> reference resolves, section order is canonical in both files, all three PRD user journeys are covered verbatim with real climax beats, and the invented Micro-Flow section for meter regression earns its place. It falls short of a clean pass on three structural fronts: the Meter Regression modal has a full behavioral spec but no visual spec anywhere in DESIGN.md; a linked mockup visibly violates DESIGN.md's own color-discipline rule and neither spine catches it; and several PRD-explicit, UI-relevant requirements (audit-trail correction notes, FR-17's no-correlation state, import-validation failure) have no State/Component Pattern representation.</p>
+      <p>The accessibility lens shifts the picture in one important way: this isn't just a documentation-completeness gap. The color <em>system</em> has a systemic, measured contrast problem — secondary/quiet text tokens fail AA by a wide margin (2.1–2.9:1 against a 4.5:1 requirement) in real functional copy, and the Status badge text as literally specified in DESIGN.md also fails AA, while the rendered mockups quietly substitute different, undocumented, compliant colors instead. Since the spine is stated to win on conflict with any mock, a developer building strictly from the documented tokens would ship the failing colors, not the working ones. None of this requires a redesign — it requires re-tuning specific token values against measured, composited contrast before status is set to final.</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card"><div class="dim-name">Flow coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+      <div class="dim-card"><div class="dim-name">Token completeness</div><div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Component coverage</div><div class="dim-verdict" style="color: var(--verdict-thin)">Thin</div></div>
+      <div class="dim-card"><div class="dim-name">State coverage</div><div class="dim-verdict" style="color: var(--verdict-thin)">Thin</div></div>
+      <div class="dim-card"><div class="dim-name">Visual reference coverage</div><div class="dim-verdict" style="color: var(--verdict-thin)">Thin</div></div>
+      <div class="dim-card"><div class="dim-name">Bloat &amp; overspecification</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+      <div class="dim-card"><div class="dim-name">Inheritance discipline</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+      <div class="dim-card"><div class="dim-name">Shape fit</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>1. Flow coverage</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>UJ-1/2/3 (PRD §2.3) all present in EXPERIENCE.md Key Flows: names verbatim, protagonist (Sam) named, numbered steps, explicit Climax beat, edge cases given where the PRD source has one.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">No Key Flow walkthrough for Log Event → Wattage Plausibility correlation</h3><span class="finding-location">EXPERIENCE.md:30,48</span></header>
+            <div class="finding-note">FR-16/17 only appears as an IA row and one Voice-and-Tone line — the only Should-tier feature with zero flow-level walkthrough. Not one of the PRD's 3 named UJs, so not a hard miss.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Accept as intentionally out of Key-Flows scope, or add a short flow.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>2. Token completeness</h2><span class="verdict-pill verdict-adequate">Adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>168 frontmatter paths, 99 unique <code>{path.to.token}</code> references in prose — zero fail to resolve (verified programmatically). Every color has light/dark hex except <code>destructive</code>, deliberately left un-overridden per the shadcn-delta pattern.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">No quantified contrast ratio for any load-bearing color pair</h3><span class="finding-location">DESIGN.md:276; EXPERIENCE.md:109</span></header>
+            <div class="finding-note">Only qualitative claims ("chosen to hold AA contrast", "confirmed this session"). <code>text-quiet</code>/<code>text-quiet-dark</code> (0.36/0.32 alpha) is the riskiest candidate and unverified — see the accessibility review below, which found this fails in practice.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Record actual measured contrast numbers for text-quiet-on-surface-quiet and status-triad-on-surface-glass at minimum.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title"><code>typography.status-figure</code> has no <code>fontSize</code></h3><span class="finding-location">DESIGN.md:103-106</span></header>
+            <div class="finding-note">Valid per spec's "any subset" allowance since it's reused at multiple sizes, but worth a one-line note confirming that's intentional.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a one-line confirmation note.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">Attractiveness-signal light-mode hex values are inferred, not rendered</h3><span class="finding-location">DESIGN.md:48-55</span></header>
+            <div class="finding-note">Already disclosed in-document as <code>[ASSUMPTION]</code> — listed here only because it's a real, open gap.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Render/confirm a light-mode Tariff Radar mock when convenient.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>3. Component coverage</h2><span class="verdict-pill verdict-thin">Thin</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>Every component name cross-checked both directions between DESIGN.md.Components and EXPERIENCE.md.Component Patterns.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Meter Regression prompt has full behavioral spec but zero visual spec</h3><span class="finding-location">EXPERIENCE.md:68,116-126 / DESIGN.md (absent)</span></header>
+            <div class="finding-note">A modal the doc itself calls "real, unusual, load-bearing" has no entry anywhere in DESIGN.md — not even the inherited-shadcn acknowledgment given to other spine-only surfaces. A downstream builder has zero visual anchor (color, radius, whether it borrows destructive red).</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a Components row — even a one-liner: inherits shadcn Dialog, state which color treatment and why.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title"><code>nav-chrome</code> has visual spec but no behavioral row, and mobile nav pattern is never described</h3><span class="finding-location">DESIGN.md:190-194,315-317</span></header>
+            <div class="finding-note">Bottom tab bar vs. hamburger vs. persistent sidebar is never stated anywhere, despite this being a mobile-first product.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a Nav chrome behavioral row; state the mobile nav pattern in Foundation or IA.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Wattage Plausibility correlation display has no Component/State Pattern row</h3><span class="finding-location">EXPERIENCE.md (absent)</span></header>
+            <div class="finding-note">FR-17 has multiple PRD-testable UI states (correlation shown / no-deviation-found / many-to-one mapping) with only an IA mention and one Voice-and-Tone line.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a Component Patterns row, at minimum covering the "no correlation found" case.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">Room → Power Point → Device tree has no dedicated DESIGN.md row</h3><span class="finding-location">EXPERIENCE.md:63 / DESIGN.md:305 (inline mention only)</span></header>
+            <div class="finding-note">Functionally fine (unmodified shadcn accordion) but not a clean 1:1 name match between the two spines.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Optional — add a matching named row for consistency.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>4. State coverage</h2><span class="verdict-pill verdict-thin">Thin</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>Every IA surface walked against State Patterns and against Cross-Cutting NFRs / FR consequences that imply a UI state.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Audit-trail correction notes and locked-tariff-field editing have zero UI representation</h3><span class="finding-location">EXPERIENCE.md (absent)</span></header>
+            <div class="finding-note">Both are explicit, testable, UI-visible PRD requirements (Cross-Cutting NFRs; FR-10's price-lock override step).</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add State Patterns rows for "editing a past Reading/Tariff entry" and "editing a locked Tariff price field."</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Import validation-failure state (FR-23) is missing</h3><span class="finding-location">EXPERIENCE.md:70-85 (only success/gap states present)</span></header>
+            <div class="finding-note">FR-23 states malformed data is rejected/reported, not partially applied — no matching State Pattern exists.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a Data Import failure/validation-error state row.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">FR-17 "no observable deviation" state is absent</h3><span class="finding-location">EXPERIENCE.md (absent)</span></header>
+            <div class="finding-note">Cross-referenced from the Component coverage finding above — an Event with no corresponding deviation should show "without a correlation," not be flagged wrong; currently undocumented as a State Pattern.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add alongside the new Wattage Plausibility Component Patterns row.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>5. Visual reference coverage</h2><span class="verdict-pill verdict-thin">Thin</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>All 5 <code>mockups/</code> files, all 5 <code>.working/</code> superseded-exploration files, and the empty <code>imports/</code> directory were checked for inline linkage from both spines.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">Smart Plug Import mock reuses Status-triad colors for non-status UI, violating DESIGN.md's own rule</h3><span class="finding-location">mockups/key-smart-plug-import.html:157-163,187-191 vs. DESIGN.md:328</span></header>
+            <div class="finding-note"><code>.processing-pill</code> and <code>.complete-check</code> use <code>status-within-range-dark</code>/<code>status-below-baseline-dark</code> for an upload badge and a generic checkmark — neither is a Pattern Detective Status. This directly violates the documented Do's/Don'ts row ("Don't reuse a status-triad color for chrome, decoration, or a non-status badge"). DESIGN.md never links this mock, so a spine-only reader has no way to catch the conflict.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Recolor the mock to a neutral/brand-chrome treatment, or add an explicit, deliberate exception to the Do's/Don'ts rule if this reuse is actually intended.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">key-smart-plug-import.html is never linked from DESIGN.md</h3><span class="finding-location">EXPERIENCE.md links it (IA, Component Patterns ×2); DESIGN.md does not</span></header>
+            <div class="finding-note">The mock contains real visual decisions (gap-card styling reusing <code>trend-chart.gap-band</code> and <code>status-trending</code>) with no DESIGN.md anchor.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a DESIGN.md link, likely alongside Trend chart or a new Smart Plug Import components note.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">direction-deep-warm-hybrid.html's influence on the final palette is untraceable in either spine</h3><span class="finding-location">.memlog.md:11 credits it; DESIGN.md/EXPERIENCE.md: no mention</span></header>
+            <div class="finding-note">The palette's dark/light degradation logic reads as if it landed from nowhere, though the memlog shows real lineage.</div>
+            <div class="finding-fix"><strong>Fix:</strong> One sentence of lineage credit in Colors or Elevation &amp; Depth.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>6. Bloat &amp; overspecification</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>No meaningful bloat. EXPERIENCE.md prose stays behavioral throughout; DESIGN.md carries editorial voice appropriately without drifting into decorative narrative untied to a decision. Tables used where they earn their place.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">"Spine wins on conflict" stated three times across both files</h3><span class="finding-location">EXPERIENCE.md:14,37; DESIGN.md:232</span></header>
+            <div class="finding-note">Harmless redundancy, not a real defect.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Optional consolidation.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>7. Inheritance discipline</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p><code>sources</code> frontmatter resolves in both files. UJ names verbatim from PRD §2.3. Glossary inherited by reference, not restated. Zero broken token references (verified programmatically).</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">FR-25 flow named three slightly different ways across the pair</h3><span class="finding-location">PRD "Meter Reading Regression Detection"; EXPERIENCE.md "Meter regression prompt" / "...Classification"</span></header>
+            <div class="finding-note">Same concept, no risk of confusion in context, but not a clean verbatim match.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Optional naming consolidation.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>8. Shape fit</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>DESIGN.md section order matches the canonical sequence exactly. EXPERIENCE.md has all required defaults present and in order. The invented Micro-Flow section is well-justified and earns its place — a genuine strength.</p></div></div>
+        <div class="findings-list"></div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>Accessibility review</h2><span class="reviewer-source">review-accessibility.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>Mostly ready, with real and fixable contrast gaps, not just theoretical ones. The behavioral contract (motion/<code>prefers-reduced-motion</code>, focus-trap-and-return, offline capture, colorblind text-pairing) is genuinely well specified and, where checkable against the mockups' actual CSS, correctly implemented. The color <em>system</em> has a systemic problem: several secondary/quiet text tokens and multiple mockup-rendered text elements measure well below 4.5:1 against their actual composited backgrounds — this is load-bearing microcopy, not decoration. None of this requires a redesign; it requires re-tuning specific token values against measured, composited contrast.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">Secondary/quiet body text fails AA systemically, in both modes, in real functional copy</h3><span class="finding-location">DESIGN.md Colors (text-quiet, text-secondary); mockups/direction-green-eco.html .tariff-quiet/.secondary-footer/.date</span></header>
+            <div class="finding-note">Measured against actual composited backgrounds: light-mode ≈2.1–2.5:1, dark-mode ≈2.7–2.9:1, well under the 4.5:1 required for normal text. The Tariff Check "nothing due" line and trend/import footnotes are functional messages, not decoration.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Re-tune these tokens' lightness/alpha against their actual composited background until every real-copy use clears 4.5:1.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-critical">critical</span><h3 class="finding-title">Status badge text fails AA as literally specified; mockups quietly use different, undocumented colors instead</h3><span class="finding-location">DESIGN.md Components → status-card; mockups/direction-green-eco.html:196-238</span></header>
+            <div class="finding-note">DESIGN.md's badge text spec (raw status-triad hex) measures 2.85–3.98:1. The mockup instead uses different, better-contrast hex values (4.86–7.72:1) that appear nowhere in DESIGN.md's token table. Since the spine wins on conflict with any mock, a dev building strictly from documented tokens would reproduce the failing colors.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add explicit <code>status-*-badge-text</code>/<code>-dark</code> tokens capturing the mockup's actual working values; point the component prose at them instead of the raw status-triad swatch.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-high">high</span><h3 class="finding-title">"Within range" frame in the finalized mockup actually renders using the "below baseline" hex</h3><span class="finding-location">mockups/direction-green-eco.html vs. DESIGN.md Colors — status triad</span></header>
+            <div class="finding-note">The documented sage <code>status-within-range</code> tokens never appear in any rendered mockup; "below baseline" itself is never shown at all. Real risk of wrong-hue-to-wrong-state implementation, which would also undercut the session's colorblind-safety decision (which relies on three visually distinct states plus text).</div>
+            <div class="finding-fix"><strong>Fix:</strong> Render (or at least spec-correct) an explicit "below baseline" frame using the sage token; reconcile the file's header comment with its actual CSS.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">FR-13's explanatory copy falls short of AA in the one rendered state</h3><span class="finding-location">mockups/key-tariff-radar.html .signal-detail/.signal-frame-label/.signal-amount</span></header>
+            <div class="finding-note"><code>.signal-detail</code> ≈3.88–4.35:1, <code>.signal-frame-label</code> ≈2.48:1, "Not worth it" <code>.signal-amount</code> ≈3.49:1 — the gap is specifically in the supporting sentences carrying the nuance the two-way signal exists to communicate. The verdict pill itself is fine (5.4–11.1:1).</div>
+            <div class="finding-fix"><strong>Fix:</strong> Lighten/darken these per-mode and re-check against the actual composited row background.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">Trend chart has no structured text alternative for its trajectory</h3><span class="finding-location">EXPERIENCE.md Component Patterns → Trend chart; mockups/density-trend-history.html "2 · Moderate"</span></header>
+            <div class="finding-note">Only a snapshot sentence plus disconnected SVG text nodes exist; no <code>&lt;title&gt;</code>/<code>role="img"</code>/accessible-name grouping. The rejected Dense variant already prototypes a table equivalent that Moderate could reuse.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Wrap the chart in a labelled <code>role="img"</code> with an aria-label/aria-describedby summary, or add a collapsed text-table equivalent.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">No documented focus-indicator visual token</h3><span class="finding-location">DESIGN.md Colors/Components (absent); motion-demo.html one-off <code>:focus-visible</code> outline</span></header>
+            <div class="finding-note">EXPERIENCE.md correctly specifies focus-trap-and-return behavior, but DESIGN.md defines no canonical <code>focus-ring</code> token — the one rendered example is a one-off in a motion demo, not referenced as canonical.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Promote a <code>focus-ring</code>/<code>focus-ring-dark</code> token into DESIGN.md, verified against both glass and base surfaces (WCAG 2.4.7/2.4.11).</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">i18n/locale NFR not referenced in either spine</h3><span class="finding-location">PRD Cross-Cutting NFRs (de-DE/en-US); DESIGN.md/EXPERIENCE.md: no mention</span></header>
+            <div class="finding-note">No note addresses German text-expansion tolerance for tight uppercase status pills, and every rendered mock hardcodes English date formatting.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a line to EXPERIENCE.md Accessibility Floor confirming badge/pill components have layout headroom for de-DE label lengths.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">low</span><h3 class="finding-title">Primary action button renders a hair under its own stated 44×44pt minimum</h3><span class="finding-location">mockups/motion-demo.html (~42px effective height)</span></header>
+            <div class="finding-note">Still comfortably clears WCAG 2.2 AA's actual 2.5.8 minimum (24×24px) — not a conformance failure, just a minor mismatch against the spine's own self-imposed, stricter minimum on the highest-frequency interaction (UJ-1).</div>
+            <div class="finding-fix"><strong>Fix:</strong> Optional — bump padding slightly to match the stated 44pt target.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li>99 unique <code>{path.to.token}</code> references across both files, all resolve against DESIGN.md's 168 frontmatter paths (verified by script).</li>
+        <li><code>imports/</code> is empty — no orphans possible there.</li>
+        <li>No Mermaid diagrams present in either spine.</li>
+        <li>Frontmatter complete and well-formed in both files.</li>
+        <li>Component-name casing/naming consistent between the two files' tables except where noted above (§3, §7).</li>
+        <li>Accessibility review confirmed as well-handled, not re-flagged: complete <code>prefers-reduced-motion</code> contract, FR-13 color+text pairing on the verdict badge itself, consistent plain-language gap-flagging, specular sweep correctly invisible to the accessibility tree, and the session's deliberate colorblind-safety decision (not re-litigated).</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: review-rubric.md</span>
+        <span>Accessibility: review-accessibility.md</span>
+        <span>Generated: 2026-08-09T00:00:00Z</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

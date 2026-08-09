@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction — Green Eco (Dark / Light)</title>
+<style>
+/*
+  DESIGN TOKENS — Green Eco
+  ------------------------------------------------------------
+  Structure kept from DEEP GLASS: stacked panel-back + status-card (real z-depth),
+  diagonal specular sweep overlay, 700-weight bold headline type, tight tracking,
+  uppercase status badge. Same skeleton as direction-deep-warm-hybrid.html.
+
+  TWO SEPARATE TOKEN SETS — do not conflate:
+  (A) BRAND ACCENT — one teal-leaning green used ONLY for chrome/interactive
+      elements (mark icon, wordmark accent, links, active nav). Never used
+      for a Status state.
+  (B) STATUS TRIAD — three distinct colors for the three semantic states.
+      "Below baseline" is deliberately the most saturated, most purely
+      "green" color on screen (it's the good news); "within range" is a
+      cooler, desaturated sage (calm/neutral); "trending" is a warm amber
+      (never red — the product's tone stays calm, not alarmist). All three
+      are chosen to sit visibly apart from the brand teal in hue+saturation.
+
+  ---- DARK VARIANT --------------------------------------------------------
+  Section background:     linear-gradient(180deg, #10201A 0%, #0B1712 100%)
+  Phone shell:             linear-gradient(160deg, #1C2C24, #0F1A15), border rgba(210,235,220,0.08)
+  Screen bg:               radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%)
+  Panel-back (rear glass): rgba(28,44,36,0.55), border rgba(210,235,220,0.10)
+  Status-card (front glass): background rgba(220,245,230,0.07), border rgba(210,235,220,0.16)
+                              backdrop-filter: blur(28px) saturate(160%)
+                              box-shadow: 0 30px 60px rgba(5,15,10,0.55), inset 0 1px 0 rgba(220,245,230,0.09)
+  Specular sweep:          linear-gradient(115deg, transparent 30%, rgba(220,245,230,0.14) 46%, transparent 62%)
+  Text primary:            #EAF5EE   |  secondary rgba(234,245,238,0.62)  |  quiet rgba(234,245,238,0.55)
+  [Re-tuned: quiet was rgba(...,0.32), measured 2.4-2.9:1 against its real composited
+  backgrounds (surface-quiet/-glass/-base) — fails AA. 0.55 verified 4.9-5.4:1. Applied
+  to .tariff-quiet / .secondary-footer / .date, all "quiet" tier text.]
+
+  (A) Brand accent (dark):  #2FB397  | glow rgba(47,179,151,0.55)  | badge bg rgba(47,179,151,0.16)
+  (B) Status — within range (sage, cool/desaturated):    #9FBB8A | glow rgba(159,187,138,0.45) | badge bg rgba(159,187,138,0.16) | badge TEXT #C7DCBB (7.0:1)
+  (B) Status — below baseline (saturated grass-emerald): #4FCA72 | glow rgba(79,202,114,0.5)   | badge bg rgba(79,202,114,0.17) | badge TEXT #B9EFC7 (7.75:1)
+  (B) Status — trending (warm amber, not red):            #E2A542 | glow rgba(226,165,66,0.55)  | badge bg rgba(226,165,66,0.18) | badge TEXT #F5CE93 (6.72:1)
+  [Badge TEXT is a separate, verified-AA set from the raw triad above — the raw hex
+  fails 2.85-3.98:1 as small badge-label text on its own bg tint. Raw triad still used
+  for dots/glows/lines. See DESIGN.md status-*-badge-text tokens.
+  Frame fix: an earlier pass rendered "within range" using the below-baseline emerald
+  hex and never showed "below baseline" at all. Base .status-dot/.status-badge rules
+  below are now WITHIN RANGE (sage); .below-baseline and .trending are explicit
+  modifier classes, each with their own dedicated third/second inset frame below.]
+
+  ---- LIGHT VARIANT --------------------------------------------------------
+  (Glass reads very differently on white than on black: there is no "black void" for a
+  glow to bloom into, and backdrop-filter over white looks like frosted glass, not a lit
+  panel. So instead of glowing highlights we use frosted-white translucency + soft,
+  green-tinted drop shadows to fake the same z-depth — the specular sweep survives as a
+  faint sheen instead of a bright streak, and status dots get a soft shadow "lift"
+  instead of a halo. Every accent below is darkened/desaturated from its dark-mode value
+  to hold AA contrast on cream.)
+  Section background:      linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%)
+  Phone shell:              linear-gradient(160deg, #FFFFFA, #E3EDD8), border rgba(40,70,50,0.14)
+  Screen bg:                radial-gradient(130% 90% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%)
+  Panel-back (rear glass):  rgba(255,255,255,0.55), border rgba(40,70,50,0.10)
+  Status-card (front glass):background rgba(255,255,255,0.72), border rgba(255,255,255,0.85)
+                             backdrop-filter: blur(20px) saturate(140%)
+                             box-shadow: 0 20px 40px rgba(40,70,30,0.16), inset 0 1px 0 rgba(255,255,255,0.9)
+  Specular sweep:           linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.6) 48%, transparent 60%)
+  Text primary:             #1E2A1C   |  secondary rgba(30,42,28,0.68)  |  quiet rgba(30,42,28,0.65)
+  [Re-tuned: quiet was rgba(...,0.36), secondary was rgba(...,0.62) — measured 2.1-4.35:1
+  against real composited backgrounds, several failing AA. 0.65/0.68 verified 4.6-5.6:1.]
+
+  (A) Brand accent (light): #1E7A61 | shadow rgba(30,122,97,0.35)   | badge bg rgba(30,122,97,0.14)
+  (B) Status — within range (light): #6B8656 | shadow rgba(107,134,86,0.32) | badge bg rgba(107,134,86,0.14) | badge TEXT #41603A (5.93:1)
+  (B) Status — below baseline (light): #2F9E52 | shadow rgba(47,158,82,0.35) | badge bg rgba(47,158,82,0.15) | badge TEXT #1F7038 (5.10:1)
+  (B) Status — trending (light): #B87A1E | shadow rgba(184,122,30,0.36) | badge bg rgba(184,122,30,0.16) | badge TEXT #8A5A14 (4.86:1)
+  [Same badge-text-vs-raw-triad split as dark, and the same within-range/below-baseline
+  frame-labeling fix — see dark-variant note above.]
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #E4EBDA;
+  color: #1E2A1C;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+.rationale {
+  max-width: 800px;
+  margin: 0 0 44px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(30,42,28,0.78);
+  font-weight: 400;
+}
+.rationale strong { color: #1E2A1C; font-weight: 700; }
+
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.theme { flex: 1 1 520px; border-radius: 28px; padding: 36px 28px 44px; min-width: 320px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 24px; }
+
+.stage { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; justify-content: center; }
+.frame-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.frame-label { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 600; }
+
+.phone {
+  width: 340px;
+  border-radius: 52px;
+  padding: 11px;
+  position: relative;
+}
+.phone.inset { width: 208px; border-radius: 34px; padding: 8px; }
+.screen {
+  border-radius: 41px;
+  height: 690px;
+  position: relative;
+  overflow: hidden;
+  padding: 28px 19px 22px;
+  display: flex;
+  flex-direction: column;
+}
+.phone.inset .screen { border-radius: 26px; height: 420px; padding: 17px 12px 13px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; position: relative; z-index: 3; }
+.wordmark-row { display: flex; align-items: center; gap: 8px; }
+.mark { width: 20px; height: 20px; border-radius: 8px; }
+.phone.inset .mark { width: 14px; height: 14px; border-radius: 5px; }
+.wordmark { font-size: 14px; font-weight: 700; letter-spacing: 0.2px; }
+.phone.inset .wordmark { font-size: 11px; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
+.phone.inset .date { font-size: 8.5px; }
+
+.panel-stack { position: relative; margin-bottom: 18px; }
+.panel-back {
+  position: absolute; inset: 9px -6px -13px 9px;
+  border-radius: 28px;
+  z-index: 1;
+}
+.phone.inset .panel-back { inset: 6px -4px -8px 6px; border-radius: 18px; }
+
+.status-card {
+  position: relative;
+  z-index: 2;
+  border-radius: 28px;
+  padding: 27px 23px 25px;
+  overflow: hidden;
+}
+.phone.inset .status-card { border-radius: 18px; padding: 16px 14px 14px; }
+.status-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+
+.status-row { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; position: relative; z-index: 1; }
+.phone.inset .status-row { gap: 6px; margin-bottom: 9px; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; }
+.phone.inset .status-dot { width: 7px; height: 7px; }
+.status-badge { font-size: 11.5px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; padding: 4px 11px; border-radius: 20px; }
+.phone.inset .status-badge { font-size: 8.5px; padding: 3px 7px; }
+
+.status-headline { font-size: 27px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 9px; line-height: 1.16; position: relative; z-index: 1; }
+.phone.inset .status-headline { font-size: 18px; margin-bottom: 5px; }
+.status-body { font-size: 14px; font-weight: 400; line-height: 1.55; position: relative; z-index: 1; }
+.phone.inset .status-body { font-size: 10.8px; line-height: 1.42; }
+
+.tariff-quiet {
+  font-size: 12px; font-weight: 400;
+  padding: 12px 6px; margin-bottom: 8px;
+  border-radius: 15px;
+}
+.phone.inset .tariff-quiet { font-size: 9px; padding: 7px 4px; border-radius: 10px; }
+
+.spacer { flex: 1; }
+
+.secondary-footer { font-size: 10.5px; font-weight: 400; display: flex; justify-content: space-between; padding-top: 4px; }
+.phone.inset .secondary-footer { font-size: 8px; }
+.secondary-footer a { text-decoration: none; }
+
+/* ============ DARK THEME ============ */
+.theme.dark {
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+}
+.theme.dark .theme-label { color: rgba(234,245,238,0.4); }
+.theme.dark .frame-label { color: rgba(234,245,238,0.42); }
+.theme.dark .phone {
+  background: linear-gradient(160deg, #1C2C24, #0F1A15);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(220,245,230,0.07);
+  border: 1px solid rgba(210,235,220,0.08);
+}
+.theme.dark .screen { background: radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); }
+/* brand accent (chrome only — mark) */
+.theme.dark .mark { background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); box-shadow: 0 2px 8px rgba(47,179,151,0.55); }
+.theme.dark .wordmark { color: #EAF5EE; }
+.theme.dark .panel-back { background: rgba(28,44,36,0.55); border: 1px solid rgba(210,235,220,0.10); }
+.theme.dark .status-card {
+  background: rgba(220,245,230,0.07);
+  border: 1px solid rgba(210,235,220,0.16);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 30px 60px rgba(5,15,10,0.55), inset 0 1px 0 rgba(220,245,230,0.09);
+}
+.theme.dark .status-card::before { background: linear-gradient(115deg, transparent 30%, rgba(220,245,230,0.14) 46%, transparent 62%); }
+/* status: base/default rule = WITHIN RANGE (sage) — the primary frame's state.
+   .trending and .below-baseline modifiers override for their own frames.
+   Badge TEXT uses the dedicated badge-text tokens (verified AA against the
+   badge's own -bg tint), not the raw status-* triad, which fails ~2.9-4.0:1
+   at badge-label size — see DESIGN.md Components -> Status card. */
+.theme.dark .status-dot { background: #9FBB8A; box-shadow: 0 0 0 6px rgba(159,187,138,0.18), 0 0 16px rgba(159,187,138,0.4); }
+.theme.dark .status-badge { color: #C7DCBB; background: rgba(159,187,138,0.16); }
+.theme.dark .status-headline { color: #F3FBF5; }
+.theme.dark .status-body { color: rgba(234,245,238,0.64); }
+.theme.dark .below-baseline .status-dot { background: #4FCA72; box-shadow: 0 0 0 6px rgba(79,202,114,0.2), 0 0 20px rgba(79,202,114,0.5); }
+.theme.dark .below-baseline .status-badge { color: #B9EFC7; background: rgba(79,202,114,0.17); }
+.theme.dark .trending .status-dot { background: #E2A542; box-shadow: 0 0 0 6px rgba(226,165,66,0.22), 0 0 20px rgba(226,165,66,0.6); }
+.theme.dark .trending .status-badge { color: #F5CE93; background: rgba(226,165,66,0.18); }
+.theme.dark .tariff-quiet { color: rgba(234,245,238,0.55); background: rgba(220,245,230,0.03); border: 1px solid rgba(210,235,220,0.05); }
+.theme.dark .secondary-footer { color: rgba(234,245,238,0.55); }
+.theme.dark .secondary-footer a { color: #6FD1B1; }
+.theme.dark .date { color: rgba(234,245,238,0.55); }
+
+/* ============ LIGHT THEME ============ */
+.theme.light {
+  background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%);
+  color: #1E2A1C;
+  box-shadow: 0 24px 60px rgba(40,70,30,0.14);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+.theme.light .theme-label { color: rgba(30,42,28,0.46); }
+.theme.light .frame-label { color: rgba(30,42,28,0.5); }
+.theme.light .phone {
+  background: linear-gradient(160deg, #FFFFFA, #E3EDD8);
+  box-shadow: 0 30px 60px rgba(40,70,30,0.22), inset 0 1px 0 rgba(255,255,255,0.7);
+  border: 1px solid rgba(40,70,50,0.14);
+}
+.theme.light .screen { background: radial-gradient(130% 90% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
+.theme.light .mark { background: radial-gradient(60% 60% at 35% 30%, #A6E8D2, #24997B 60%, #16604D 100%); box-shadow: 0 2px 6px rgba(30,122,97,0.4); }
+.theme.light .wordmark { color: #1E2A1C; }
+.theme.light .panel-back { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.10); }
+.theme.light .status-card {
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(255,255,255,0.85);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 20px 40px rgba(40,70,30,0.16), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.theme.light .status-card::before { background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.6) 48%, transparent 60%); }
+/* status: base/default rule = WITHIN RANGE (sage); .trending and
+   .below-baseline modifiers override for their own frames — see the dark
+   theme's comment above for the badge-text-token rationale (applies
+   identically here). */
+.theme.light .status-dot { background: #6B8656; box-shadow: 0 3px 8px rgba(107,134,86,0.4), 0 0 0 5px rgba(107,134,86,0.12); }
+.theme.light .status-badge { color: #41603A; background: rgba(107,134,86,0.14); }
+.theme.light .status-headline { color: #16210F; }
+.theme.light .status-body { color: rgba(30,42,28,0.66); }
+.theme.light .below-baseline .status-dot { background: #2F9E52; box-shadow: 0 3px 8px rgba(47,158,82,0.45), 0 0 0 5px rgba(47,158,82,0.12); }
+.theme.light .below-baseline .status-badge { color: #1F7038; background: rgba(47,158,82,0.15); }
+.theme.light .trending .status-dot { background: #B87A1E; box-shadow: 0 3px 8px rgba(184,122,30,0.45), 0 0 0 5px rgba(184,122,30,0.14); }
+.theme.light .trending .status-badge { color: #8A5A14; background: rgba(184,122,30,0.16); }
+.theme.light .tariff-quiet { color: rgba(30,42,28,0.65); background: rgba(255,255,255,0.4); border: 1px solid rgba(40,70,50,0.08); }
+.theme.light .secondary-footer { color: rgba(30,42,28,0.65); }
+.theme.light .secondary-footer a { color: #1E7A61; }
+.theme.light .date { color: rgba(30,42,28,0.65); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Green Eco — Dark &amp; Light</h1>
+  <p class="rationale">
+    <strong>Green as brand, green as status are deliberately two separate token sets.</strong> Less energy is greener for the planet and lighter on the bill, so one teal-leaning green anchors the interactive chrome — the mark, links, active states — and appears nowhere else. Status keeps its own triad tuned to stay legible against that chrome: a cool, desaturated <strong>sage</strong> for "within range" (calm, nothing to do), a distinctly more saturated <strong>grass-emerald</strong> for "below baseline" — allowed to be the single greenest thing on screen, since it's the good news — and a warm <strong>amber</strong>, never red, for "trending," so urgency reads through warmth rather than alarm. <strong>Dark and Light are equal citizens</strong>: identical panel-stack z-depth, specular sweep and bold type in both, with Light trading glow for frosted-white translucency and soft green-tinted shadows to fake the same depth on a bright ground.
+  </p>
+  <div class="theme-row">
+
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="stage">
+        <div class="frame-col">
+          <span class="frame-label">Within range</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Within range</span>
+                  </div>
+                  <div class="status-headline">Quiet week.</div>
+                  <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <span class="frame-label">Trending</span>
+          <div class="phone inset">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card trending">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Trending</span>
+                  </div>
+                  <div class="status-headline">Worth a look.</div>
+                  <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <span class="frame-label">Below baseline</span>
+          <div class="phone inset">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card below-baseline">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Below baseline</span>
+                  </div>
+                  <div class="status-headline">Well under baseline.</div>
+                  <div class="status-body">180&nbsp;kWh under pace this month — your quietest month yet.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="stage">
+        <div class="frame-col">
+          <span class="frame-label">Within range</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Within range</span>
+                  </div>
+                  <div class="status-headline">Quiet week.</div>
+                  <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <span class="frame-label">Trending</span>
+          <div class="phone inset">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card trending">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Trending</span>
+                  </div>
+                  <div class="status-headline">Worth a look.</div>
+                  <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <span class="frame-label">Below baseline</span>
+          <div class="phone inset">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card below-baseline">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Below baseline</span>
+                  </div>
+                  <div class="status-headline">Well under baseline.</div>
+                  <div class="status-body">180&nbsp;kWh under pace this month — your quietest month yet.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>

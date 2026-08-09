@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction 3 — Warm Glass</title>
+<style>
+/*
+  DESIGN TOKENS — Warm Glass
+  ------------------------------------------------------------
+  Page background:       linear-gradient(180deg, #201810 0%, #17110C 100%)
+  Phone shell:            linear-gradient(160deg, #2b2018, #17120d), border rgba(255,232,204,0.08)
+  Glass panel:            background rgba(255,238,214,0.065)
+                           border 1px solid rgba(255,232,204,0.14)
+                           backdrop-filter: blur(24px) saturate(150%)
+                           box-shadow: 0 20px 44px rgba(20,10,0,0.45), inset 0 1px 0 rgba(255,238,214,0.08)
+  Text primary:           #FBF1E6
+  Text secondary:         rgba(251,241,230,0.62)
+  Text quiet/tertiary:    rgba(251,241,230,0.34)
+
+  STATUS SEMANTIC COLORS (three-state system, warm-shifted):
+    Within range   -> accent #E2A857 | glow rgba(226,168,87,0.4)   | badge bg rgba(226,168,87,0.16)
+    Below baseline -> accent #A9BE72 | glow rgba(169,190,114,0.4)  | badge bg rgba(169,190,114,0.16)
+    Trending       -> accent #E2703A | glow rgba(226,112,58,0.45)  | badge bg rgba(226,112,58,0.18)
+
+  MOTION INTENT (static mockup — described, not implemented):
+    - Status glow pulses slowly like candlelight (2.6s ease-in-out, opacity 0.75 -> 1.0), warmer/slower than a UI "loading" pulse.
+    - State change: warm cross-dissolve 260ms, accent color temperature shifts are the primary cue (no motion flourish needed).
+    - Tariff prompt, when it becomes active, would gently expand height (auto, 240ms) rather than pop in.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #201810 0%, #17110C 100%);
+  color: #FBF1E6;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+.rationale {
+  max-width: 680px;
+  margin: 0 auto 56px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(251,241,230,0.72);
+  font-weight: 400;
+}
+.rationale strong { color: #FBF1E6; font-weight: 600; }
+.stage { display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; justify-content: center; }
+.frame-col { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.frame-label { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: rgba(251,241,230,0.42); font-weight: 600; }
+
+.phone {
+  width: 390px;
+  border-radius: 58px;
+  padding: 12px;
+  background: linear-gradient(160deg, #2b2018, #17120d);
+  box-shadow: 0 40px 90px rgba(20,10,0,0.6), inset 0 1px 0 rgba(255,238,214,0.07);
+  border: 1px solid rgba(255,232,204,0.08);
+}
+.phone.inset { width: 232px; border-radius: 38px; padding: 8px; }
+.screen {
+  border-radius: 46px;
+  height: 780px;
+  background: radial-gradient(130% 90% at 25% 0%, #2a2015 0%, #1b140e 55%, #140f0a 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 32px 22px 26px;
+  display: flex;
+  flex-direction: column;
+}
+.phone.inset .screen { border-radius: 30px; height: 462px; padding: 19px 14px 15px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.wordmark-row { display: flex; align-items: center; gap: 8px; }
+.mark {
+  width: 22px; height: 22px; border-radius: 9px;
+  background: radial-gradient(60% 60% at 35% 30%, #F6D9A6, #E2A857 60%, #B87A32 100%);
+  box-shadow: 0 2px 8px rgba(226,168,87,0.5);
+}
+.phone.inset .mark { width: 15px; height: 15px; border-radius: 6px; }
+.wordmark { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; color: #FBF1E6; }
+.phone.inset .wordmark { font-size: 11.5px; }
+.date { font-size: 12px; color: rgba(251,241,230,0.36); font-weight: 400; }
+.phone.inset .date { font-size: 9.5px; }
+
+.status-card {
+  border-radius: 34px;
+  padding: 30px 26px 28px;
+  background: rgba(255,238,214,0.065);
+  border: 1px solid rgba(255,232,204,0.14);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 20px 44px rgba(20,10,0,0.45), inset 0 1px 0 rgba(255,238,214,0.08);
+  margin-bottom: 20px;
+}
+.phone.inset .status-card { border-radius: 22px; padding: 18px 16px 16px; margin-bottom: 12px; }
+
+.status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.phone.inset .status-row { gap: 7px; margin-bottom: 10px; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #E2A857; box-shadow: 0 0 0 6px rgba(226,168,87,0.18), 0 0 20px rgba(226,168,87,0.55); }
+.phone.inset .status-dot { width: 7px; height: 7px; box-shadow: 0 0 0 4px rgba(226,168,87,0.18), 0 0 12px rgba(226,168,87,0.55); }
+.status-badge { font-size: 12px; font-weight: 600; letter-spacing: 0.6px; color: #F0C98A; padding: 4px 12px; border-radius: 20px; background: rgba(226,168,87,0.16); }
+.phone.inset .status-badge { font-size: 9.5px; padding: 3px 8px; }
+
+.status-headline { font-size: 27px; font-weight: 600; letter-spacing: 0.1px; color: #FFF7EC; margin-bottom: 10px; line-height: 1.22; }
+.phone.inset .status-headline { font-size: 18px; margin-bottom: 6px; }
+.status-body { font-size: 15px; font-weight: 400; line-height: 1.55; color: rgba(251,241,230,0.66); }
+.phone.inset .status-body { font-size: 11.5px; line-height: 1.42; }
+
+.trending .status-dot { background: #E2703A; box-shadow: 0 0 0 6px rgba(226,112,58,0.2), 0 0 20px rgba(226,112,58,0.6); }
+.trending .status-badge { color: #F5A87D; background: rgba(226,112,58,0.18); }
+
+.tariff-quiet {
+  font-size: 12.5px; font-weight: 400; color: rgba(251,241,230,0.36);
+  padding: 12px 4px; border-top: 1px solid rgba(255,232,204,0.08);
+}
+.phone.inset .tariff-quiet { font-size: 10px; padding: 8px 2px; }
+
+.spacer { flex: 1; }
+
+.secondary-footer { font-size: 11.5px; font-weight: 400; color: rgba(251,241,230,0.3); display: flex; justify-content: space-between; padding-top: 6px; }
+.phone.inset .secondary-footer { font-size: 9px; }
+.secondary-footer a { color: rgba(251,241,230,0.42); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="rationale">
+    <strong>Warm Glass</strong> keeps the same frosted-material language but shifts the temperature toward amber and copper — because this reads a household's own consumption, not a server fleet. A small glowing "mark" replaces cold-blue precision with something closer to a porch light, and the semantic palette (gold / sage / terracotta) stays warm across all three states rather than defaulting to clinical blue-green-red.
+  </p>
+  <div class="stage">
+    <div class="frame-col">
+      <span class="frame-label">Within range</span>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <div class="wordmark-row">
+              <span class="mark"></span>
+              <span class="wordmark">Energy Tracker</span>
+            </div>
+            <span class="date">Thu, Aug 8</span>
+          </div>
+          <div class="status-card">
+            <div class="status-row">
+              <span class="status-dot"></span>
+              <span class="status-badge">Within range</span>
+            </div>
+            <div class="status-headline">Quiet week.</div>
+            <div class="status-body">240&nbsp;kWh under pace. Saturday's gaming session already absorbed.</div>
+          </div>
+          <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+          <div class="spacer"></div>
+          <div class="secondary-footer">
+            <span>Last reading Aug 3</span>
+            <a href="#">Trend history →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-col">
+      <span class="frame-label">Trending</span>
+      <div class="phone inset">
+        <div class="screen">
+          <div class="topbar">
+            <div class="wordmark-row">
+              <span class="mark"></span>
+              <span class="wordmark">Energy Tracker</span>
+            </div>
+            <span class="date">Thu, Aug 8</span>
+          </div>
+          <div class="status-card trending">
+            <div class="status-row">
+              <span class="status-dot"></span>
+              <span class="status-badge">Trending</span>
+            </div>
+            <div class="status-headline">Worth a look.</div>
+            <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+          </div>
+          <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+          <div class="spacer"></div>
+          <div class="secondary-footer">
+            <span>Last reading Aug 3</span>
+            <a href="#">Trend history →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

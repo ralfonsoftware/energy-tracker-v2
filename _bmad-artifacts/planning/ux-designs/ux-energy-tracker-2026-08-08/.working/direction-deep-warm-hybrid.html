@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction — Deep Warm Hybrid (Dark / Light)</title>
+<style>
+/*
+  DESIGN TOKENS — Deep Warm Hybrid
+  ------------------------------------------------------------
+  Structure kept from DEEP GLASS: stacked panel-back + status-card (real z-depth),
+  diagonal specular sweep overlay, 700-weight bold headline type, tight tracking,
+  uppercase status badge.
+  Palette kept from WARM GLASS: amber / copper (within range), sage (below baseline),
+  terracotta (trending); warm porch-light "mark" icon instead of a cold logo dot.
+
+  ---- DARK VARIANT --------------------------------------------------------
+  Section background:     linear-gradient(180deg, #201810 0%, #17110C 100%)
+  Phone shell:             linear-gradient(160deg, #2b2018, #17120d), border rgba(255,232,204,0.08)
+  Screen bg:               radial-gradient(130% 90% at 25% 0%, #2a2015 0%, #1b140e 55%, #140f0a 100%)
+  Panel-back (rear glass): rgba(43,32,20,0.55), border rgba(255,232,204,0.10)
+  Status-card (front glass): background rgba(255,238,214,0.07), border rgba(255,232,204,0.16)
+                              backdrop-filter: blur(28px) saturate(160%)
+                              box-shadow: 0 30px 60px rgba(20,10,0,0.55), inset 0 1px 0 rgba(255,238,214,0.09)
+  Specular sweep:          linear-gradient(115deg, transparent 30%, rgba(255,238,214,0.14) 46%, transparent 62%)
+  Text primary:            #FBF1E6   |  secondary rgba(251,241,230,0.62)  |  quiet rgba(251,241,230,0.32)
+  Status — within range:   accent #E2A857 | glow rgba(226,168,87,0.5)  | badge bg rgba(226,168,87,0.16)
+  Status — below baseline: accent #A9BE72 | glow rgba(169,190,114,0.45)| badge bg rgba(169,190,114,0.16)
+  Status — trending:       accent #E2703A | glow rgba(226,112,58,0.55) | badge bg rgba(226,112,58,0.18)
+
+  ---- LIGHT VARIANT --------------------------------------------------------
+  (Glass reads very differently on white than on black: there is no "black void" for a
+  glow to bloom into, and backdrop-filter over white looks like frosted glass, not a lit
+  panel. So instead of glowing highlights we use frosted-white translucency + soft,
+  warm-tinted drop shadows to fake the same z-depth — the specular sweep survives as a
+  faint sheen instead of a bright streak, and status dots get a soft shadow "lift"
+  instead of a halo.)
+  Section background:      linear-gradient(180deg, #FBF3E7 0%, #F3E6D4 100%)
+  Phone shell:              linear-gradient(160deg, #FFFDF9, #EDDFC7), border rgba(120,90,50,0.14)
+  Screen bg:                radial-gradient(130% 90% at 25% 0%, #FFF9F0 0%, #FBF1E3 55%, #F5E7D2 100%)
+  Panel-back (rear glass):  rgba(255,255,255,0.55), border rgba(120,90,50,0.10)
+  Status-card (front glass):background rgba(255,255,255,0.72), border rgba(255,255,255,0.85)
+                             backdrop-filter: blur(20px) saturate(140%)
+                             box-shadow: 0 20px 40px rgba(120,80,30,0.16), inset 0 1px 0 rgba(255,255,255,0.9)
+  Specular sweep:           linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.6) 48%, transparent 60%)
+  Text primary:             #3B2A16   |  secondary rgba(59,42,22,0.62)  |  quiet rgba(59,42,22,0.36)
+  Status — within range:    accent #B4792A | shadow rgba(180,121,42,0.35) | badge bg rgba(180,121,42,0.14)
+  Status — below baseline:  accent #5F7A3B | shadow rgba(95,122,59,0.32)  | badge bg rgba(95,122,59,0.14)
+  Status — trending:        accent #C1502A | shadow rgba(193,80,42,0.36)  | badge bg rgba(193,80,42,0.16)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #E9E1D2;
+  color: #2A2016;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+.rationale {
+  max-width: 780px;
+  margin: 0 0 44px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(42,32,22,0.78);
+  font-weight: 400;
+}
+.rationale strong { color: #2A2016; font-weight: 700; }
+
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.theme { flex: 1 1 520px; border-radius: 28px; padding: 36px 28px 44px; min-width: 320px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 24px; }
+
+.stage { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; justify-content: center; }
+.frame-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.frame-label { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 600; }
+
+.phone {
+  width: 340px;
+  border-radius: 52px;
+  padding: 11px;
+  position: relative;
+}
+.phone.inset { width: 208px; border-radius: 34px; padding: 8px; }
+.screen {
+  border-radius: 41px;
+  height: 690px;
+  position: relative;
+  overflow: hidden;
+  padding: 28px 19px 22px;
+  display: flex;
+  flex-direction: column;
+}
+.phone.inset .screen { border-radius: 26px; height: 420px; padding: 17px 12px 13px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; position: relative; z-index: 3; }
+.wordmark-row { display: flex; align-items: center; gap: 8px; }
+.mark { width: 20px; height: 20px; border-radius: 8px; }
+.phone.inset .mark { width: 14px; height: 14px; border-radius: 5px; }
+.wordmark { font-size: 14px; font-weight: 700; letter-spacing: 0.2px; }
+.phone.inset .wordmark { font-size: 11px; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
+.phone.inset .date { font-size: 8.5px; }
+
+.panel-stack { position: relative; margin-bottom: 18px; }
+.panel-back {
+  position: absolute; inset: 9px -6px -13px 9px;
+  border-radius: 28px;
+  z-index: 1;
+}
+.phone.inset .panel-back { inset: 6px -4px -8px 6px; border-radius: 18px; }
+
+.status-card {
+  position: relative;
+  z-index: 2;
+  border-radius: 28px;
+  padding: 27px 23px 25px;
+  overflow: hidden;
+}
+.phone.inset .status-card { border-radius: 18px; padding: 16px 14px 14px; }
+.status-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+
+.status-row { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; position: relative; z-index: 1; }
+.phone.inset .status-row { gap: 6px; margin-bottom: 9px; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; }
+.phone.inset .status-dot { width: 7px; height: 7px; }
+.status-badge { font-size: 11.5px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; padding: 4px 11px; border-radius: 20px; }
+.phone.inset .status-badge { font-size: 8.5px; padding: 3px 7px; }
+
+.status-headline { font-size: 27px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 9px; line-height: 1.16; position: relative; z-index: 1; }
+.phone.inset .status-headline { font-size: 18px; margin-bottom: 5px; }
+.status-body { font-size: 14px; font-weight: 400; line-height: 1.55; position: relative; z-index: 1; }
+.phone.inset .status-body { font-size: 10.8px; line-height: 1.42; }
+
+.tariff-quiet {
+  font-size: 12px; font-weight: 400;
+  padding: 12px 6px; margin-bottom: 8px;
+  border-radius: 15px;
+}
+.phone.inset .tariff-quiet { font-size: 9px; padding: 7px 4px; border-radius: 10px; }
+
+.spacer { flex: 1; }
+
+.secondary-footer { font-size: 10.5px; font-weight: 400; display: flex; justify-content: space-between; padding-top: 4px; }
+.phone.inset .secondary-footer { font-size: 8px; }
+.secondary-footer a { text-decoration: none; }
+
+/* ============ DARK THEME ============ */
+.theme.dark {
+  background: linear-gradient(180deg, #201810 0%, #17110C 100%);
+  color: #FBF1E6;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+}
+.theme.dark .theme-label { color: rgba(251,241,230,0.4); }
+.theme.dark .frame-label { color: rgba(251,241,230,0.42); }
+.theme.dark .phone {
+  background: linear-gradient(160deg, #2b2018, #17120d);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,238,214,0.07);
+  border: 1px solid rgba(255,232,204,0.08);
+}
+.theme.dark .screen { background: radial-gradient(130% 90% at 25% 0%, #2a2015 0%, #1b140e 55%, #140f0a 100%); }
+.theme.dark .mark { background: radial-gradient(60% 60% at 35% 30%, #F6D9A6, #E2A857 60%, #B87A32 100%); box-shadow: 0 2px 8px rgba(226,168,87,0.5); }
+.theme.dark .wordmark { color: #FBF1E6; }
+.theme.dark .date { color: rgba(251,241,230,0.34); }
+.theme.dark .panel-back { background: rgba(43,32,20,0.55); border: 1px solid rgba(255,232,204,0.10); }
+.theme.dark .status-card {
+  background: rgba(255,238,214,0.07);
+  border: 1px solid rgba(255,232,204,0.16);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 30px 60px rgba(20,10,0,0.55), inset 0 1px 0 rgba(255,238,214,0.09);
+}
+.theme.dark .status-card::before { background: linear-gradient(115deg, transparent 30%, rgba(255,238,214,0.14) 46%, transparent 62%); }
+.theme.dark .status-dot { background: #E2A857; box-shadow: 0 0 0 6px rgba(226,168,87,0.2), 0 0 20px rgba(226,168,87,0.6); }
+.theme.dark .status-badge { color: #F0C98A; background: rgba(226,168,87,0.16); }
+.theme.dark .status-headline { color: #FFF7EC; }
+.theme.dark .status-body { color: rgba(251,241,230,0.64); }
+.theme.dark .trending .status-dot { background: #E2703A; box-shadow: 0 0 0 6px rgba(226,112,58,0.22), 0 0 20px rgba(226,112,58,0.65); }
+.theme.dark .trending .status-badge { color: #F5A87D; background: rgba(226,112,58,0.18); }
+.theme.dark .tariff-quiet { color: rgba(251,241,230,0.34); background: rgba(255,238,214,0.03); border: 1px solid rgba(255,232,204,0.05); }
+.theme.dark .secondary-footer { color: rgba(251,241,230,0.28); }
+.theme.dark .secondary-footer a { color: rgba(251,241,230,0.42); }
+
+/* ============ LIGHT THEME ============ */
+.theme.light {
+  background: linear-gradient(180deg, #FBF3E7 0%, #F3E6D4 100%);
+  color: #3B2A16;
+  box-shadow: 0 24px 60px rgba(120,90,40,0.14);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+.theme.light .theme-label { color: rgba(59,42,22,0.46); }
+.theme.light .frame-label { color: rgba(59,42,22,0.5); }
+.theme.light .phone {
+  background: linear-gradient(160deg, #FFFDF9, #EDDFC7);
+  box-shadow: 0 30px 60px rgba(120,80,30,0.22), inset 0 1px 0 rgba(255,255,255,0.7);
+  border: 1px solid rgba(120,90,50,0.14);
+}
+.theme.light .screen { background: radial-gradient(130% 90% at 25% 0%, #FFF9F0 0%, #FBF1E3 55%, #F5E7D2 100%); }
+.theme.light .mark { background: radial-gradient(60% 60% at 35% 30%, #FFEBC4, #D99A44 60%, #A66C29 100%); box-shadow: 0 2px 6px rgba(180,121,42,0.4); }
+.theme.light .wordmark { color: #3B2A16; }
+.theme.light .date { color: rgba(59,42,22,0.4); }
+.theme.light .panel-back { background: rgba(255,255,255,0.55); border: 1px solid rgba(120,90,50,0.10); }
+.theme.light .status-card {
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(255,255,255,0.85);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 20px 40px rgba(120,80,30,0.16), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.theme.light .status-card::before { background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.6) 48%, transparent 60%); }
+.theme.light .status-dot { background: #B4792A; box-shadow: 0 3px 8px rgba(180,121,42,0.45), 0 0 0 5px rgba(180,121,42,0.12); }
+.theme.light .status-badge { color: #8A5A1E; background: rgba(180,121,42,0.14); }
+.theme.light .status-headline { color: #2B1E10; }
+.theme.light .status-body { color: rgba(59,42,22,0.66); }
+.theme.light .trending .status-dot { background: #C1502A; box-shadow: 0 3px 8px rgba(193,80,42,0.45), 0 0 0 5px rgba(193,80,42,0.14); }
+.theme.light .trending .status-badge { color: #973A1B; background: rgba(193,80,42,0.16); }
+.theme.light .tariff-quiet { color: rgba(59,42,22,0.42); background: rgba(255,255,255,0.4); border: 1px solid rgba(120,90,50,0.08); }
+.theme.light .secondary-footer { color: rgba(59,42,22,0.36); }
+.theme.light .secondary-footer a { color: rgba(59,42,22,0.5); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Deep Warm Hybrid — Dark &amp; Light</h1>
+  <p class="rationale">
+    <strong>Deep Warm Hybrid</strong> keeps Deep Glass's structure — stacked rear/front panels for real z-depth, a diagonal specular sweep, and bold 700-weight type — and re-skins it with Warm Glass's amber/copper/sage palette and porch-light mark, so the instrument feels confident but domestic rather than clinical. Glass reads very differently on white than on black, so the light variant trades glowing highlights for <strong>frosted-white translucency and soft warm-tinted drop shadows</strong>: the same panel stack and sheen survive, but status dots get a gentle lift-shadow instead of a halo, and all three semantic colors are darkened/desaturated to hold contrast on cream instead of glowing against near-black.
+  </p>
+  <div class="theme-row">
+
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="stage">
+        <div class="frame-col">
+          <span class="frame-label">Within range</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Within range</span>
+                  </div>
+                  <div class="status-headline">Quiet week.</div>
+                  <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <span class="frame-label">Trending</span>
+          <div class="phone inset">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card trending">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Trending</span>
+                  </div>
+                  <div class="status-headline">Worth a look.</div>
+                  <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="stage">
+        <div class="frame-col">
+          <span class="frame-label">Within range</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Within range</span>
+                  </div>
+                  <div class="status-headline">Quiet week.</div>
+                  <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <span class="frame-label">Trending</span>
+          <div class="phone inset">
+            <div class="screen">
+              <div class="topbar">
+                <div class="wordmark-row">
+                  <span class="mark"></span>
+                  <span class="wordmark">Energy Tracker</span>
+                </div>
+                <span class="date">Thu, Aug 8</span>
+              </div>
+              <div class="panel-stack">
+                <div class="panel-back"></div>
+                <div class="status-card trending">
+                  <div class="status-row">
+                    <span class="status-dot"></span>
+                    <span class="status-badge">Trending</span>
+                  </div>
+                  <div class="status-headline">Worth a look.</div>
+                  <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+                </div>
+              </div>
+              <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+              <div class="spacer"></div>
+              <div class="secondary-footer">
+                <span>Last reading Aug 3</span>
+                <a href="#">Trend history →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>

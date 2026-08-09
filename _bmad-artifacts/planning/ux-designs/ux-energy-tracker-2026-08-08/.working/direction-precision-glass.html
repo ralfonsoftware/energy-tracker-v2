@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction 4 — Precision Glass</title>
+<style>
+/*
+  DESIGN TOKENS — Precision Glass
+  ------------------------------------------------------------
+  Page background:        linear-gradient(180deg, #0B0D10 0%, #101317 100%) + faint grid overlay
+  Grid overlay:            repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 32px)
+  Phone shell:             linear-gradient(160deg, #1a1e23, #0d0f12), border rgba(255,255,255,0.06)
+  Glass panel:             background rgba(255,255,255,0.045)
+                            border 1px solid rgba(255,255,255,0.1)
+                            backdrop-filter: blur(16px) saturate(120%)
+                            box-shadow: 0 12px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)
+                            border-radius: 16px (deliberately less rounded — "instrument" not "app")
+  Text primary:            #E7ECEF
+  Text secondary:          rgba(231,236,239,0.58)
+  Text quiet/tertiary:     rgba(231,236,239,0.32)
+  Numeric font stack:      ui-monospace, "SF Mono", "Menlo", "Consolas", monospace (tabular-nums)
+
+  STATUS SEMANTIC COLORS (three-state system, clinical/instrument contrast):
+    Within range   -> accent #4FC3F7 | glow rgba(79,195,247,0.4)   | badge bg rgba(79,195,247,0.12)
+    Below baseline -> accent #4ADE80 | glow rgba(74,222,128,0.4)   | badge bg rgba(74,222,128,0.12)
+    Trending       -> accent #FBBF24 | glow rgba(251,191,36,0.45)  | badge bg rgba(251,191,36,0.14)
+
+  MOTION INTENT (static mockup — described, not implemented):
+    - No easing flourish: state changes are a hard 90ms cut (like an instrument reading updating), not a fade.
+    - The kWh/€ figures would roll (odometer-style digit change) on data refresh, underscoring "measured, not decorative."
+    - Status indicator is a diamond, not a circle — reads as a marker on a gauge rather than a friendly dot.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 32px),
+    linear-gradient(180deg, #0B0D10 0%, #101317 100%);
+  color: #E7ECEF;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+.rationale {
+  max-width: 700px;
+  margin: 0 auto 56px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(231,236,239,0.68);
+  font-weight: 400;
+}
+.rationale strong { color: #E7ECEF; font-weight: 600; }
+.rationale code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: #4FC3F7; }
+.stage { display: flex; flex-wrap: wrap; gap: 44px; align-items: flex-start; justify-content: center; }
+.frame-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.frame-label { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(231,236,239,0.4); font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+.phone {
+  width: 390px;
+  border-radius: 40px;
+  padding: 10px;
+  background: linear-gradient(160deg, #1a1e23, #0d0f12);
+  box-shadow: 0 30px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.phone.inset { width: 228px; border-radius: 26px; padding: 7px; }
+.screen {
+  border-radius: 30px;
+  height: 780px;
+  background: linear-gradient(180deg, #14171b 0%, #0e1013 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 26px 18px 20px;
+  display: flex;
+  flex-direction: column;
+}
+.phone.inset .screen { border-radius: 18px; height: 462px; padding: 15px 12px 12px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.wordmark { font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #E7ECEF; }
+.phone.inset .wordmark { font-size: 10px; }
+.date { font-size: 11px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: rgba(231,236,239,0.4); }
+.phone.inset .date { font-size: 8.5px; }
+
+.status-card {
+  border-radius: 16px;
+  padding: 20px 18px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  margin-bottom: 12px;
+}
+.phone.inset .status-card { border-radius: 11px; padding: 12px 11px; margin-bottom: 8px; }
+
+.status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.phone.inset .status-row { gap: 6px; margin-bottom: 7px; }
+.status-diamond { width: 8px; height: 8px; background: #4FC3F7; transform: rotate(45deg); box-shadow: 0 0 10px rgba(79,195,247,0.6); }
+.phone.inset .status-diamond { width: 6px; height: 6px; }
+.status-badge { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #4FC3F7; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.phone.inset .status-badge { font-size: 8.5px; letter-spacing: 1px; }
+
+.status-headline { font-size: 21px; font-weight: 600; letter-spacing: -0.1px; color: #F2F5F7; margin-bottom: 8px; line-height: 1.2; }
+.phone.inset .status-headline { font-size: 14.5px; margin-bottom: 5px; }
+.status-body { font-size: 13.5px; font-weight: 400; line-height: 1.5; color: rgba(231,236,239,0.6); margin-bottom: 16px; }
+.phone.inset .status-body { font-size: 10.5px; line-height: 1.38; margin-bottom: 10px; }
+
+.stat-row { display: flex; gap: 0; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 14px; }
+.phone.inset .stat-row { padding-top: 9px; }
+.stat { flex: 1; }
+.stat + .stat { border-left: 1px solid rgba(255,255,255,0.07); padding-left: 14px; margin-left: 14px; }
+.phone.inset .stat + .stat { padding-left: 9px; margin-left: 9px; }
+.stat-label { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: rgba(231,236,239,0.34); margin-bottom: 4px; }
+.phone.inset .stat-label { font-size: 7.5px; margin-bottom: 2px; }
+.stat-value { font-size: 17px; font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; color: #E7ECEF; }
+.phone.inset .stat-value { font-size: 12px; }
+.stat-value.delta { color: #4FC3F7; }
+.trending .stat-value.delta { color: #FBBF24; }
+
+.trending .status-diamond { background: #FBBF24; box-shadow: 0 0 10px rgba(251,191,36,0.65); }
+.trending .status-badge { color: #FBBF24; }
+
+.tariff-quiet {
+  font-size: 11.5px; font-weight: 400; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: rgba(231,236,239,0.34);
+  padding: 10px 4px;
+  letter-spacing: 0.2px;
+}
+.phone.inset .tariff-quiet { font-size: 9px; padding: 7px 2px; }
+
+.spacer { flex: 1; }
+
+.secondary-footer { font-size: 10.5px; font-weight: 400; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: rgba(231,236,239,0.3); display: flex; justify-content: space-between; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06); }
+.phone.inset .secondary-footer { font-size: 8px; }
+.secondary-footer a { color: rgba(231,236,239,0.42); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="rationale">
+    <strong>Precision Glass</strong> reads as a trustworthy instrument rather than a soft app: tighter panels (<code>16px</code> radius, not fully rounded), tabular monospace figures for every number, a diamond marker instead of a friendly dot, and a denser stat row exposing kWh/€ alongside the status. Still glass and still dark, but the register is "measured and legible" over "gentle."
+  </p>
+  <div class="stage">
+    <div class="frame-col">
+      <span class="frame-label">Within range</span>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <span class="wordmark">Energy Tracker</span>
+            <span class="date">2026-08-08</span>
+          </div>
+          <div class="status-card">
+            <div class="status-row">
+              <span class="status-diamond"></span>
+              <span class="status-badge">Within range</span>
+            </div>
+            <div class="status-headline">Quiet week.</div>
+            <div class="status-body">240&nbsp;kWh under pace. Saturday's gaming session already absorbed.</div>
+            <div class="stat-row">
+              <div class="stat">
+                <div class="stat-label">This week</div>
+                <div class="stat-value">86.4 kWh</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">vs. baseline</div>
+                <div class="stat-value delta">−240 kWh</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Est. cost</div>
+                <div class="stat-value">€31.20</div>
+              </div>
+            </div>
+          </div>
+          <div class="tariff-quiet">TARIFF_CHECK: nothing due right now.</div>
+          <div class="spacer"></div>
+          <div class="secondary-footer">
+            <span>Last reading Aug 3</span>
+            <a href="#">Trend history →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-col">
+      <span class="frame-label">Trending</span>
+      <div class="phone inset">
+        <div class="screen">
+          <div class="topbar">
+            <span class="wordmark">Energy Tracker</span>
+            <span class="date">2026-08-08</span>
+          </div>
+          <div class="status-card trending">
+            <div class="status-row">
+              <span class="status-diamond"></span>
+              <span class="status-badge">Trending</span>
+            </div>
+            <div class="status-headline">Worth a look.</div>
+            <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+            <div class="stat-row">
+              <div class="stat">
+                <div class="stat-label">This week</div>
+                <div class="stat-value">168.9 kWh</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">vs. baseline</div>
+                <div class="stat-value delta">+142 kWh</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Est. cost</div>
+                <div class="stat-value">€58.90</div>
+              </div>
+            </div>
+          </div>
+          <div class="tariff-quiet">TARIFF_CHECK: nothing due right now.</div>
+          <div class="spacer"></div>
+          <div class="secondary-footer">
+            <span>Last reading Aug 3</span>
+            <a href="#">Trend history →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

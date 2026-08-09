@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction 1 — Frosted Calm</title>
+<style>
+/*
+  DESIGN TOKENS — Frosted Calm
+  ------------------------------------------------------------
+  Page background:      linear-gradient(180deg, #10141a 0%, #171d26 100%)
+  Phone shell:           linear-gradient(160deg, #23293380, #1a1f2780), border rgba(255,255,255,0.08)
+  Glass panel (default): background rgba(255,255,255,0.055)
+                          border 1px solid rgba(255,255,255,0.11)
+                          backdrop-filter: blur(22px) saturate(140%)
+                          box-shadow: 0 18px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)
+  Text primary:          #EDF1F5   (92% white)
+  Text secondary:        rgba(237,241,245,0.62)
+  Text quiet/tertiary:   rgba(237,241,245,0.36)
+
+  STATUS SEMANTIC COLORS (three-state system):
+    Within range   -> accent #7FB4EA  | glow rgba(127,180,234,0.35) | badge bg rgba(127,180,234,0.14)
+    Below baseline -> accent #86D2A6  | glow rgba(134,210,166,0.35) | badge bg rgba(134,210,166,0.14)
+    Trending       -> accent #F2C27B  | glow rgba(242,194,123,0.38) | badge bg rgba(242,194,123,0.16)
+
+  MOTION INTENT (static mockup — described, not implemented):
+    - Status card cross-fades + scales from 0.98 to 1.0 over 220ms ease-out on state change.
+    - Status dot has a slow 3s breathing opacity pulse (0.7 -> 1.0), never jarring.
+    - No parallax, no bounce — everything settles gently, matching "calm" mood.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10141a 0%, #171d26 100%);
+  color: #EDF1F5;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+.rationale {
+  max-width: 680px;
+  margin: 0 auto 56px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(237,241,245,0.72);
+  font-weight: 300;
+  letter-spacing: 0.1px;
+}
+.rationale strong { color: #EDF1F5; font-weight: 500; }
+.stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  align-items: flex-start;
+  justify-content: center;
+}
+.frame-col { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.frame-label {
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: rgba(237,241,245,0.4);
+  font-weight: 500;
+}
+.phone {
+  width: 390px;
+  border-radius: 56px;
+  padding: 12px;
+  background: linear-gradient(160deg, rgba(35,41,51,0.9), rgba(20,24,31,0.9));
+  box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.phone.inset { width: 232px; border-radius: 36px; padding: 8px; }
+.screen {
+  border-radius: 44px;
+  height: 780px;
+  background: radial-gradient(120% 90% at 20% 0%, #1c222c 0%, #12161d 60%, #0e1115 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 34px 22px 26px;
+  display: flex;
+  flex-direction: column;
+}
+.phone.inset .screen { border-radius: 28px; height: 460px; padding: 20px 14px 16px; }
+.topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 28px; }
+.phone.inset .topbar { margin-bottom: 16px; }
+.wordmark { font-size: 15px; font-weight: 400; letter-spacing: 0.3px; color: rgba(237,241,245,0.85); }
+.phone.inset .wordmark { font-size: 12px; }
+.date { font-size: 12px; color: rgba(237,241,245,0.34); font-weight: 300; }
+.phone.inset .date { font-size: 10px; }
+
+.status-card {
+  border-radius: 32px;
+  padding: 30px 26px 28px;
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.11);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+  margin-bottom: 22px;
+}
+.phone.inset .status-card { border-radius: 22px; padding: 18px 16px 16px; margin-bottom: 14px; }
+
+.status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.phone.inset .status-row { gap: 7px; margin-bottom: 10px; }
+.status-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #7FB4EA;
+  box-shadow: 0 0 0 6px rgba(127,180,234,0.16), 0 0 18px rgba(127,180,234,0.5);
+}
+.phone.inset .status-dot { width: 7px; height: 7px; box-shadow: 0 0 0 4px rgba(127,180,234,0.16), 0 0 12px rgba(127,180,234,0.5); }
+.status-badge {
+  font-size: 12px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase;
+  color: #7FB4EA;
+  padding: 4px 11px;
+  border-radius: 20px;
+  background: rgba(127,180,234,0.14);
+}
+.phone.inset .status-badge { font-size: 9.5px; padding: 3px 8px; }
+
+.status-headline {
+  font-size: 28px; font-weight: 300; letter-spacing: 0.1px;
+  color: #F5F8FB; margin-bottom: 10px; line-height: 1.2;
+}
+.phone.inset .status-headline { font-size: 19px; margin-bottom: 6px; }
+.status-body {
+  font-size: 15px; font-weight: 300; line-height: 1.55;
+  color: rgba(237,241,245,0.64);
+}
+.phone.inset .status-body { font-size: 11.5px; line-height: 1.4; }
+
+.trending .status-dot { background: #F2C27B; box-shadow: 0 0 0 6px rgba(242,194,123,0.18), 0 0 18px rgba(242,194,123,0.55); }
+.trending .status-badge { color: #F2C27B; background: rgba(242,194,123,0.16); }
+
+.tariff-quiet {
+  font-size: 12.5px; font-weight: 300; color: rgba(237,241,245,0.34);
+  padding: 12px 4px; border-top: 1px solid rgba(255,255,255,0.06);
+  letter-spacing: 0.1px;
+}
+.phone.inset .tariff-quiet { font-size: 10px; padding: 8px 2px; }
+
+.spacer { flex: 1; }
+
+.secondary-footer {
+  font-size: 11.5px; font-weight: 300; color: rgba(237,241,245,0.28);
+  display: flex; justify-content: space-between; padding-top: 6px;
+}
+.phone.inset .secondary-footer { font-size: 9px; }
+.secondary-footer a { color: rgba(237,241,245,0.28); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="rationale">
+    <strong>Frosted Calm</strong> is the softest reading of the brief: very light-touch glass (low contrast, gentle 22px blur), airy whitespace, and light typographic weight (300) so nothing shouts. The status card is the only element with real visual weight — everything else, including the tariff line, recedes into near-silence, so trust is carried by restraint rather than emphasis.
+  </p>
+  <div class="stage">
+    <div class="frame-col">
+      <span class="frame-label">Within range</span>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <span class="wordmark">Energy Tracker</span>
+            <span class="date">Thu, Aug 8</span>
+          </div>
+          <div class="status-card">
+            <div class="status-row">
+              <span class="status-dot"></span>
+              <span class="status-badge">Within range</span>
+            </div>
+            <div class="status-headline">Quiet week.</div>
+            <div class="status-body">240&nbsp;kWh under pace. Saturday's gaming session already absorbed.</div>
+          </div>
+          <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+          <div class="spacer"></div>
+          <div class="secondary-footer">
+            <span>Last reading Aug 3</span>
+            <a href="#">Trend history →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-col">
+      <span class="frame-label">Trending</span>
+      <div class="phone inset">
+        <div class="screen">
+          <div class="topbar">
+            <span class="wordmark">Energy Tracker</span>
+            <span class="date">Thu, Aug 8</span>
+          </div>
+          <div class="status-card trending">
+            <div class="status-row">
+              <span class="status-dot"></span>
+              <span class="status-badge">Trending</span>
+            </div>
+            <div class="status-headline">Worth a look.</div>
+            <div class="status-body">Approaching the pace that led to last year's surprise invoice.</div>
+          </div>
+          <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+          <div class="spacer"></div>
+          <div class="secondary-footer">
+            <span>Last reading Aug 3</span>
+            <a href="#">Trend history →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

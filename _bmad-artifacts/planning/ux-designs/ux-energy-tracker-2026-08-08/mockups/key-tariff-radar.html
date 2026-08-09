@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Tariff Radar (Green Eco, Dark)</title>
+<style>
+/*
+  KEY SCREEN — TARIFF SAVINGS RADAR (§4.2, FR-10–FR-15)
+  ==========================================================================
+  What this file illustrates, and where each piece comes from:
+
+  - DESIGN.md → Components → "Tariff Check prompt card": the quiet-weight
+    banner at the top of each phone (`.tariff-check-card`). Same tokens in
+    BOTH states below — {rounded.sm}=14px, {colors.surface-quiet-dark},
+    {colors.text-quiet-dark}, {typography.body-secondary}, {spacing.4}
+    padding — per DESIGN.md's own instruction that the "due" and "not due"
+    states share identical visual weight and differ ONLY in copy ("Shown
+    only when a check is actually due; otherwise the space renders
+    neutral/empty microcopy at the same quiet weight rather than
+    disappearing"). Nothing about this card is allowed to shout, in
+    either state — it must never out-compete a Status card, and this
+    screen doesn't even have one to out-compete, so the discipline is
+    self-imposed here.
+
+  - EXPERIENCE.md → Information Architecture: "Tariff Radar — reached
+    from Dashboard's Tariff Check prompt, OR Settings." Two frames below
+    render exactly those two entry paths: Frame 1 is what Sam sees after
+    tapping a due reminder (the "why am I here" framing is present, FR-15
+    gate open); Frame 2 is what Sam sees navigating here on their own
+    initiative from Settings when nothing is due (FR-15 gate closed —
+    the screen still fully works, just without reminder framing, and per
+    EXPERIENCE.md State Patterns "No Tariff Check currently due" the
+    banner shows the neutral quiet line, never a fabricated recommendation).
+
+  - PRD §4.2 FR-13 — Two-Way Attractiveness Signal: both signals (bonus
+    included / bonus normalized) are shown TOGETHER, not toggled, and are
+    given deliberately, honestly different numbers so the feature's whole
+    point — an inflated year-one bonus can make a genuinely-worse ongoing
+    rate look like a win — is dramatized rather than asserted. See the
+    color-token reasoning below.
+
+  - EXPERIENCE.md → Voice and Tone: every line of copy here names an
+    actual number and an actual thing that happened ("€350 signup bonus,"
+    "€13/yr more"), never a vague nudge, never an exclamation mark, never
+    a fabricated recommendation when nothing is due.
+
+  ==========================================================================
+  FR-13 TWO-WAY ATTRACTIVENESS SIGNAL — COLOR-TOKEN RESOLUTION
+  --------------------------------------------------------------------------
+  FR-13 asks for a green/red signal, shown twice. That is explicitly a
+  2-STATE binary system ("worth switching" / "not worth it") — a
+  different shape from the Status card's 3-state triad (within-range /
+  below-baseline / trending, FR-6). It is NOT force-fit onto the triad.
+
+  Two reuse options were considered and rejected:
+
+  1. Reusing {colors.status-below-baseline} (emerald) for "worth
+     switching." Rejected. DESIGN.md's entire color rationale rests on
+     one green ALWAYS meaning ONE thing at a glance — that's the stated
+     reason brand-accent and status-below-baseline are already different
+     hues ("collapsing 'below baseline' into the brand's own chrome
+     color would make it impossible to tell... whether a green thing on
+     screen is the product or your consumption"). Reusing that same
+     emerald here would introduce a THIRD meaning for the identical hue
+     ("this tariff switch is good"), on a screen that can appear right
+     next to Dashboard in the same session. That's the exact ambiguity
+     the rationale warns against — so it's not reused, even though both
+     are "good news, shown in green."
+
+  2. Reusing shadcn `destructive` (or a status-trending amber) for "not
+     worth it." Rejected. DESIGN.md reserves red exclusively for genuine
+     system errors ("a failed save, a broken import") specifically so
+     that red always means something actually went wrong — a stay-put
+     tariff verdict is a mild non-event, not an error, and amber already
+     carries a distinct, established meaning ("trending," a pace
+     warning) that has nothing to do with tariffs.
+
+  RESOLUTION — a dedicated, purpose-built pair, used ONLY for this one
+  2-state signal and nowhere else in the product:
+    --attractiveness-worth-it      #6FDB93 (mint green)
+    --attractiveness-worth-it-bg   rgba(111,219,147,0.16)
+    --attractiveness-not-worth-it     #E2685A (muted clay-red — clearly
+                                       "red" next to the green, but
+                                       warmer/less alarming than a true
+                                       error red, since this is a stay-
+                                       put verdict, not a system fault)
+    --attractiveness-not-worth-it-bg  rgba(226,104,90,0.16)
+  Both rows also carry a plain-language verdict word in the badge text
+  ("Worth switching" / "Not worth it") — never color alone — matching
+  the same color-blind-safe discipline EXPERIENCE.md's Accessibility
+  Floor already applies to the Status triad (text label + headline
+  sentence, not a bare colored dot).
+
+  Dark mode only in this file — Light was validated separately this
+  session (direction-green-eco.html, motion-demo.html,
+  density-trend-history.html are all dark-only precedent for these
+  isolated component studies).
+*/
+:root {
+  /* Dedicated FR-13 two-way attractiveness signal pair — see reasoning above.
+     Not reused anywhere else in the product; not derived from the Status
+     triad, brand-accent, or destructive/error tokens. */
+  --attractiveness-worth-it: #6FDB93;
+  --attractiveness-worth-it-bg: rgba(111,219,147,0.16);
+  --attractiveness-not-worth-it: #E2685A;
+  --attractiveness-not-worth-it-bg: rgba(226,104,90,0.16);
+  /* Supporting-text tokens (verified against the actual row-tint background,
+     not the raw pair above): the raw pair reads fine as a solid pill fill
+     (5.4-11.1:1) but falls short at body-text weight against its own -bg
+     tint — .signal-detail/.signal-frame-label measured 2.5-4.35:1, and the
+     "not worth it" .signal-amount figure (set directly in the raw color)
+     measured 3.50:1. {colors.attractiveness-signal-supporting-text-dark}
+     covers the two body-copy classes; {colors.attractiveness-not-worth-it-text-dark}
+     covers the not-worth-it amount figure specifically. */
+  --signal-supporting-text: rgba(234,245,238,0.7);
+  --attractiveness-not-worth-it-text: #EB958C;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 44px 28px 90px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; }
+.intro {
+  max-width: 840px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(234,245,238,0.62);
+  margin-bottom: 38px;
+}
+.intro code { color: rgba(234,245,238,0.82); }
+
+.frames { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.frame-col { flex: 1 1 360px; max-width: 380px; }
+.frame-label { font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #9FBB8A; margin-bottom: 4px; }
+.frame-sub { font-size: 12px; color: rgba(234,245,238,0.42); margin-bottom: 16px; line-height: 1.5; }
+
+/* ---------- phone shell ---------- */
+.phone {
+  width: 100%;
+  border-radius: 46px;
+  padding: 11px;
+  background: linear-gradient(160deg, #1C2C24, #0F1A15);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(220,245,230,0.07);
+  border: 1px solid rgba(210,235,220,0.08);
+}
+.screen {
+  border-radius: 36px;
+  background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%);
+  padding: 26px 19px 24px; /* {spacing.mobile-margin} = 19px side margin */
+}
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.crumb { font-size: 12px; color: rgba(234,245,238,0.42); text-decoration: none; }
+.crumb a { color: #6FD1B1; text-decoration: none; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.55); } /* was 0.34 = ~2.9:1, fails AA; corrected to text-quiet-dark */
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: #F3FBF5; margin-bottom: 16px; }
+
+/* ---------- Tariff Check prompt card (DESIGN.md component, identical in both states) ---------- */
+.tariff-check-card {
+  border-radius: 14px; /* {rounded.sm} */
+  background: rgba(220,245,230,0.03); /* {colors.surface-quiet-dark} */
+  border: 1px solid rgba(210,235,220,0.06);
+  padding: 16px; /* {spacing.4} */
+  font-size: 12px; line-height: 1.5; /* {typography.body-secondary} */
+  color: rgba(234,245,238,0.55); /* {colors.text-quiet-dark}, corrected — was 0.5 (~4.6:1, too close to the 4.5:1 floor to be safe); now matches the re-tuned token with real margin (~5.25:1) */
+  margin-bottom: 18px; /* {spacing.card-gap} */
+}
+.tariff-check-card b { color: rgba(234,245,238,0.72); font-weight: 600; }
+
+/* ---------- generic glass card (derived from the Trend-chart / Room-list card
+   pattern already established in density-trend-history.html — rounded.md,
+   surface-glass-dark fill — reused here rather than inventing a new surface,
+   since DESIGN.md doesn't name a dedicated "Tariff summary card" component) ---------- */
+.card {
+  border-radius: 18px; /* {rounded.md} */
+  background: rgba(220,245,230,0.07); /* {colors.surface-glass-dark} */
+  border: 1px solid rgba(210,235,220,0.14);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  padding: 18px 18px 16px;
+  margin-bottom: 14px;
+}
+.card h3 { font-size: 11.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(234,245,238,0.45); margin-bottom: 4px; }
+.card .tariff-name { font-size: 15px; font-weight: 700; color: #F3FBF5; margin-bottom: 12px; }
+
+.field-row { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 1px solid rgba(210,235,220,0.07); font-size: 13px; }
+.field-row:last-of-type { border-bottom: none; }
+.field-row .k { color: rgba(234,245,238,0.5); }
+.field-row .v { font-variant-numeric: tabular-nums; font-weight: 700; color: #EAF5EE; }
+.card-note { font-size: 11.5px; line-height: 1.5; color: rgba(234,245,238,0.38); margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(210,235,220,0.07); }
+
+/* ---------- two-way attractiveness signal (FR-13) ---------- */
+.signal-card h3 { margin-bottom: 12px; }
+.signal-row {
+  display: flex; align-items: center; gap: 12px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.signal-row:last-of-type { margin-bottom: 0; }
+.signal-row.worth { background: var(--attractiveness-worth-it-bg); }
+.signal-row.not-worth { background: var(--attractiveness-not-worth-it-bg); }
+.signal-badge {
+  flex: 0 0 auto;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px; /* {rounded.full} */
+  white-space: nowrap;
+}
+.signal-row.worth .signal-badge { color: #06120D; background: var(--attractiveness-worth-it); }
+.signal-row.not-worth .signal-badge { color: #2B0E09; background: var(--attractiveness-not-worth-it); }
+.signal-text { flex: 1 1 auto; }
+.signal-amount { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 2px; }
+.signal-row.worth .signal-amount { color: var(--attractiveness-worth-it); } /* raw pair already clears 4.5:1 here — 5.62:1 */
+.signal-row.not-worth .signal-amount { color: var(--attractiveness-not-worth-it-text); } /* raw pair only 3.50:1 here — dedicated token clears 5.06:1 */
+.signal-detail { font-size: 11.5px; line-height: 1.45; color: var(--signal-supporting-text); } /* was rgba(...,0.55) = 3.84-4.35:1, fails AA */
+.signal-frame-label { font-size: 10px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--signal-supporting-text); margin-bottom: 2px; } /* was rgba(...,0.35) = 2.46-2.68:1, fails AA */
+
+/* ---------- empty compare state (Frame 2) ---------- */
+.compare-empty {
+  border-radius: 18px;
+  border: 1px dashed rgba(210,235,220,0.16);
+  padding: 20px 16px;
+  text-align: center;
+}
+.compare-empty p { font-size: 13px; line-height: 1.5; color: rgba(234,245,238,0.5); margin-bottom: 12px; }
+.ghost-btn {
+  display: inline-block;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  color: #9FBB8A;
+  background: transparent;
+  border: 1px solid rgba(159,187,138,0.4);
+  border-radius: 999px;
+  padding: 9px 18px;
+}
+
+.footer-note { font-size: 11px; line-height: 1.5; color: rgba(234,245,238,0.55); margin-top: 6px; } /* was 0.3 = ~2.6:1, fails AA; corrected to text-quiet-dark */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tariff Radar — Key Screens</h1>
+  <p class="intro">
+    Two states of the same screen (<code>FR-10</code>–<code>FR-15</code>), reached either way per
+    <code>EXPERIENCE.md</code>'s Information Architecture: from the Dashboard's due reminder, or
+    directly from Settings. Frame 1 dramatizes <code>FR-13</code>'s two-way signal with real,
+    honestly-different numbers for the same household (3,200&nbsp;kWh/yr pace, matching the figure
+    used in <code>density-trend-history.html</code>). Frame 2 shows the load-bearing alternate: the
+    same screen when no reminder is due, reached proactively — it still fully works, it just doesn't
+    open with "why am I here" framing.
+  </p>
+
+  <div class="frames">
+
+    <!-- ================= FRAME 1 — reminder-triggered, due ================= -->
+    <div class="frame-col">
+      <div class="frame-label">1 · Reminder-triggered</div>
+      <div class="frame-sub">Sam tapped the Dashboard's Tariff Check prompt because a check is actually due (FR-15 gate open).</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Dashboard</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Tariff Radar</div>
+
+          <div class="tariff-check-card">
+            Tariff check — <b>worth a look.</b> It's been 3&nbsp;months since you last compared rates, and your minimum contract term ended a while back.
+          </div>
+
+          <div class="card">
+            <h3>Your current tariff</h3>
+            <div class="tariff-name">Stadtwerke Flex&nbsp;12</div>
+            <div class="field-row"><span class="k">Base fee</span><span class="v">€12.50 / mo</span></div>
+            <div class="field-row"><span class="k">Price per kWh</span><span class="v">€0.3200</span></div>
+            <div class="field-row"><span class="k">Currency</span><span class="v">EUR</span></div>
+            <div class="field-row"><span class="k">Contract started</span><span class="v">15 Mar 2025</span></div>
+            <div class="card-note">12-month minimum term ended 15&nbsp;Mar&nbsp;2026 — now running on a rolling basis, as expected.</div>
+          </div>
+
+          <div class="card">
+            <h3>Comparing against</h3>
+            <div class="tariff-name">GrünStrom Wechselbonus&nbsp;12</div>
+            <div class="field-row"><span class="k">Base fee</span><span class="v">€14.90 / mo</span></div>
+            <div class="field-row"><span class="k">Price per kWh</span><span class="v">€0.3150</span></div>
+            <div class="field-row"><span class="k">Switching bonus</span><span class="v">€350 once</span></div>
+            <div class="card-note">Scratch comparison only — entering this doesn't change your actual tariff unless you switch.</div>
+          </div>
+
+          <div class="card signal-card">
+            <h3>Is it worth switching?</h3>
+            <div class="signal-row worth">
+              <span class="signal-badge">Worth switching</span>
+              <div class="signal-text">
+                <div class="signal-frame-label">With the signup bonus</div>
+                <div class="signal-amount">Save about €337 this year</div>
+                <div class="signal-detail">€350 of that is the one-time bonus, credited in month one.</div>
+              </div>
+            </div>
+            <div class="signal-row not-worth">
+              <span class="signal-badge">Not worth it</span>
+              <div class="signal-text">
+                <div class="signal-frame-label">Bonus normalized (ongoing rate only)</div>
+                <div class="signal-amount">About €13/yr more, not less</div>
+                <div class="signal-detail">Once the bonus is gone, GrünStrom's ongoing rate costs more than Stadtwerke Flex&nbsp;12 at your pace.</div>
+              </div>
+            </div>
+          </div>
+          <p class="footer-note">Based on your last 12 months of readings — 3,200 kWh/yr.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= FRAME 2 — proactive visit, not due ================= -->
+    <div class="frame-col">
+      <div class="frame-label">2 · Proactive visit</div>
+      <div class="frame-sub">Sam opened this from Settings on their own — no reminder fired. FR-15's gate is closed; the screen still works, minus the framing.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Settings</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Tariff Radar</div>
+
+          <div class="tariff-check-card">
+            Tariff check — <b>nothing due right now.</b> Next check around November 2026.
+          </div>
+
+          <div class="card">
+            <h3>Your current tariff</h3>
+            <div class="tariff-name">Stadtwerke Flex&nbsp;12</div>
+            <div class="field-row"><span class="k">Base fee</span><span class="v">€12.50 / mo</span></div>
+            <div class="field-row"><span class="k">Price per kWh</span><span class="v">€0.3200</span></div>
+            <div class="field-row"><span class="k">Currency</span><span class="v">EUR</span></div>
+            <div class="field-row"><span class="k">Contract started</span><span class="v">15 Mar 2025</span></div>
+            <div class="card-note">12-month minimum term ended 15&nbsp;Mar&nbsp;2026 — now running on a rolling basis, as expected.</div>
+          </div>
+
+          <div class="compare-empty">
+            <p>No comparison entered yet. Add a candidate tariff any time — you don't need to wait for a check to be due.</p>
+            <span class="ghost-btn">+ Compare a tariff</span>
+          </div>
+          <p class="footer-note">Comparing is exploratory — nothing here changes your tariff until you explicitly switch.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

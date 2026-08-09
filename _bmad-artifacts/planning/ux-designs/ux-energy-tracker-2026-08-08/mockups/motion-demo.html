@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motion Demo — Green Eco (Dark)</title>
+<style>
+/*
+  MOTION DEMO — Green Eco / Deep Glass, Dark variant only
+  ------------------------------------------------------------
+  Tokens reused verbatim from direction-green-eco.html (dark variant — see that
+  file's top comment for the full light-variant set, not needed here):
+
+  Section bg:              linear-gradient(180deg, #10201A 0%, #0B1712 100%)
+  Phone shell:              linear-gradient(160deg, #1C2C24, #0F1A15), border rgba(210,235,220,0.08)
+  Screen bg:                radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%)
+  Panel-back (rear glass):  rgba(28,44,36,0.55), border rgba(210,235,220,0.10)
+  Status-card (front glass):background rgba(220,245,230,0.07), border rgba(210,235,220,0.16)
+                             backdrop-filter: blur(28px) saturate(160%)
+                             box-shadow: 0 30px 60px rgba(5,15,10,0.55), inset 0 1px 0 rgba(220,245,230,0.09)
+  Specular sweep gradient:  linear-gradient(115deg, transparent 30%, rgba(220,245,230,0.14) 46%, transparent 62%)
+  Text primary #EAF5EE | secondary rgba(234,245,238,0.62) | quiet rgba(234,245,238,0.32)
+  Brand accent (chrome only): #2FB397 | glow rgba(47,179,151,0.55) | badge bg rgba(47,179,151,0.16)
+  Status — within range (sage, documented mapping): #9FBB8A | badge bg rgba(159,187,138,0.16)
+
+  ------------------------------------------------------------
+  THE LOOP — one 8s cycle, replayed infinitely so this static file is watchable
+  without interaction. Real elapsed time at 8s = 100%:
+    0.00s– 1.28s ( 0–16%)  Status card entrance/settle: opacity+scale+translateY,
+                            calm ease-out, NO overshoot/bounce (bounce reads as
+                            "snappy", which is the opposite of the calm/trustworthy
+                            brief).
+    1.28s– 3.52s (16–44%)  Specular sweep drifts once across the settled glass
+                            panel — slow (~2.2s traverse), soft opacity ramp at
+                            both ends so it never "flashes".
+    3.52s– 4.00s (44–50%)  Primary action ("Log reading") shows its press state:
+                            slight scale compression + shadow/glow pull-in, i.e.
+                            glass being pushed down into the stack, not a color
+                            flash.
+    4.00s– 4.56s (50–57%)  Log Reading sheet slides up + backdrop blurs in over
+                            the dashboard.
+    4.56s– 7.20s (57–90%)  Sheet holds open.
+    7.20s– 7.76s (90–97%)  Sheet slides back down, backdrop clears, dashboard
+                            (incl. status card) fades for the next entrance.
+    7.76s– 8.00s (97–100%) Rest, then the cycle restarts at 0%.
+
+  REDUCED MOTION — real, load-bearing behavior, not decorative:
+  Every animation above is declared ONLY inside
+  `@media (prefers-reduced-motion: no-preference)`. The un-conditioned base
+  CSS for every animated element already renders its *final* settled state
+  (status card at opacity:1/scale:1, sheet's own illustrative frame shown
+  statically below). So when the OS/browser is set to reduce motion:
+    - the status card's entrance never plays — it is simply present, already
+      settled, on first paint (no fade/scale-in).
+    - the specular sweep never runs — no moving highlight, ever.
+    - the primary action's press is a plain instant CSS `:active` state
+      change (scale/shadow swap with zero transition) — no eased compression.
+    - the Log Reading sheet does not slide or the backdrop blur ramp; the
+      "Reduced-motion fallback" panel further down this page shows what
+      replaces it: an instant open/close state swap (optionally a quick
+      opacity crossfade, never a slide/translate), which is what the real
+      product implements for that OS setting.
+  This file has no on/off switch of its own — flip your OS "reduce motion"
+  setting while this page is open and the animated demo above will actually
+  stop, live, because it's gated by the real media query rather than a
+  decorative label.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 980px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+.rationale {
+  max-width: 720px;
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(234,245,238,0.72);
+}
+.rationale strong { color: #EAF5EE; font-weight: 700; }
+.note {
+  max-width: 720px;
+  margin: 0 0 40px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(234,245,238,0.5);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(220,245,230,0.04);
+  border: 1px solid rgba(210,235,220,0.09);
+}
+.note strong { color: rgba(234,245,238,0.82); }
+
+.layout { display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; }
+
+/* ---------- Phone frame ---------- */
+.phone {
+  width: 340px;
+  border-radius: 52px;
+  padding: 11px;
+  background: linear-gradient(160deg, #1C2C24, #0F1A15);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(220,245,230,0.07);
+  border: 1px solid rgba(210,235,220,0.08);
+  flex: 0 0 auto;
+}
+.screen {
+  border-radius: 41px;
+  height: 690px;
+  position: relative;
+  overflow: hidden;
+  padding: 28px 19px 22px;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%);
+}
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; position: relative; z-index: 1; }
+.wordmark-row { display: flex; align-items: center; gap: 8px; }
+.mark { width: 20px; height: 20px; border-radius: 8px; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); box-shadow: 0 2px 8px rgba(47,179,151,0.55); }
+.wordmark { font-size: 14px; font-weight: 700; letter-spacing: 0.2px; color: #EAF5EE; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.34); }
+
+.panel-stack { position: relative; margin-bottom: 18px; }
+.panel-back {
+  position: absolute; inset: 9px -6px -13px 9px;
+  border-radius: 28px;
+  z-index: 1;
+  background: rgba(28,44,36,0.55);
+  border: 1px solid rgba(210,235,220,0.10);
+}
+
+.status-card {
+  position: relative;
+  z-index: 2;
+  border-radius: 28px;
+  padding: 27px 23px 25px;
+  overflow: hidden;
+  background: rgba(220,245,230,0.07);
+  border: 1px solid rgba(210,235,220,0.16);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 30px 60px rgba(5,15,10,0.55), inset 0 1px 0 rgba(220,245,230,0.09);
+  /* Base = final settled state. Entrance animation (added only under
+     no-preference below) temporarily overrides opacity/transform each loop. */
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+.status-card::before {
+  content: "";
+  position: absolute;
+  top: -20%; left: -40%;
+  width: 90%; height: 140%;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(220,245,230,0.16) 46%, transparent 62%);
+  opacity: 0;
+  transform: translateX(-40%);
+}
+
+.status-row { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; position: relative; z-index: 1; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #9FBB8A; box-shadow: 0 0 0 6px rgba(159,187,138,0.18), 0 0 16px rgba(159,187,138,0.4); }
+.status-badge { font-size: 11.5px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; padding: 4px 11px; border-radius: 20px; color: #DCE9D2; background: rgba(159,187,138,0.16); }
+
+.status-headline { font-size: 27px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 9px; line-height: 1.16; position: relative; z-index: 1; color: #F3FBF5; }
+.status-body { font-size: 14px; font-weight: 400; line-height: 1.55; position: relative; z-index: 1; color: rgba(234,245,238,0.64); }
+
+.spacer { flex: 1; }
+
+.secondary-footer { font-size: 10.5px; font-weight: 400; display: flex; justify-content: space-between; align-items: center; padding-top: 4px; position: relative; z-index: 1; color: rgba(234,245,238,0.28); }
+.secondary-footer a { text-decoration: none; color: #6FD1B1; }
+
+/* ---------- Primary action: Log reading ---------- */
+.log-btn-row { display: flex; justify-content: center; margin: 6px 0 14px; position: relative; z-index: 1; }
+.log-btn {
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #06120D;
+  background: linear-gradient(160deg, #6FE3C4, #2FB397 70%);
+  border: none;
+  border-radius: 999px;
+  padding: 13px 26px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(47,179,151,0.35), inset 0 1px 0 rgba(255,255,255,0.35);
+  transform: scale(1);
+}
+/* Real, always-on interactive states — inspectable independent of the demo loop */
+.log-btn:focus-visible {
+  outline: 2px solid #8FE9CE;
+  outline-offset: 3px;
+}
+.log-btn:active {
+  transform: scale(0.965);
+  box-shadow: 0 4px 10px rgba(47,179,151,0.3), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 2px 6px rgba(0,0,0,0.18);
+}
+/* Pause the auto-demo while a real user is actually interacting with it */
+.log-btn:hover, .log-btn:focus-visible, .log-btn:active { animation-play-state: paused; }
+
+/* ---------- Log Reading sheet ---------- */
+.backdrop {
+  position: absolute; inset: 0;
+  z-index: 5;
+  background: rgba(6,14,10,0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+.sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 6;
+  border-radius: 26px 26px 20px 20px;
+  padding: 10px 20px 22px;
+  background: rgba(24,38,31,0.86);
+  border: 1px solid rgba(210,235,220,0.16);
+  border-bottom: none;
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 -20px 50px rgba(0,0,0,0.5);
+  transform: translateY(100%);
+}
+.sheet-handle { width: 36px; height: 4px; border-radius: 3px; background: rgba(234,245,238,0.22); margin: 0 auto 16px; }
+.sheet-title { font-size: 16px; font-weight: 700; color: #F3FBF5; margin-bottom: 4px; }
+.sheet-sub { font-size: 12px; color: rgba(234,245,238,0.5); margin-bottom: 16px; }
+.field-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.42); margin-bottom: 6px; }
+.field {
+  font-variant-numeric: tabular-nums;
+  font-size: 20px; font-weight: 700; color: #EAF5EE;
+  background: rgba(220,245,230,0.06);
+  border: 1px solid rgba(210,235,220,0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.field span { color: rgba(234,245,238,0.35); font-weight: 500; font-size: 13px; }
+.save-btn {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px; font-weight: 700;
+  color: #06120D;
+  background: linear-gradient(160deg, #6FE3C4, #2FB397 70%);
+  border: none; border-radius: 14px;
+  padding: 13px;
+}
+
+/* ============================================================
+   MOTION — only when the OS/browser has NOT requested reduced motion
+   ============================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  .status-card { animation: card-entrance 8s cubic-bezier(0.22,0.61,0.36,1) infinite; }
+  .status-card::before { animation: specular-sweep 8s ease-in-out infinite; }
+  .log-btn { animation: btn-press-demo 8s ease-out infinite; }
+  .backdrop { animation: backdrop-fade 8s ease infinite; }
+  .sheet { animation: sheet-slide 8s cubic-bezier(0.22,0.61,0.36,1) infinite; }
+
+  @keyframes card-entrance {
+    0%   { opacity: 0; transform: scale(0.96) translateY(8px); }
+    3%   { opacity: 0; transform: scale(0.96) translateY(8px); }
+    16%  { opacity: 1; transform: scale(1) translateY(0); }
+    90%  { opacity: 1; transform: scale(1) translateY(0); }
+    97%  { opacity: 0; transform: scale(0.985) translateY(-4px); }
+    100% { opacity: 0; transform: scale(0.96) translateY(8px); }
+  }
+  @keyframes specular-sweep {
+    0%, 15%   { opacity: 0; transform: translateX(-40%); }
+    20%       { opacity: 1; }
+    38%       { opacity: 1; }
+    44%, 100% { opacity: 0; transform: translateX(70%); }
+  }
+  @keyframes btn-press-demo {
+    0%, 42%   { transform: scale(1); box-shadow: 0 10px 24px rgba(47,179,151,0.35), inset 0 1px 0 rgba(255,255,255,0.35); }
+    46%       { transform: scale(0.965); box-shadow: 0 4px 10px rgba(47,179,151,0.3), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 2px 6px rgba(0,0,0,0.18); }
+    50%, 100% { transform: scale(1); box-shadow: 0 10px 24px rgba(47,179,151,0.35), inset 0 1px 0 rgba(255,255,255,0.35); }
+  }
+  @keyframes backdrop-fade {
+    0%, 49%   { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+    57%       { opacity: 1; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    90%       { opacity: 1; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    97%, 100% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+  }
+  @keyframes sheet-slide {
+    0%, 49%   { transform: translateY(100%); }
+    57%       { transform: translateY(0%); }
+    90%       { transform: translateY(0%); }
+    97%, 100% { transform: translateY(100%); }
+  }
+}
+
+/* ============================================================
+   REDUCED MOTION FALLBACK — explicit, not just "animation removed"
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  /* Belt-and-suspenders: nothing in this file animates or transitions. */
+  * { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Illustrative "reduced motion" static panel (always visible) ---------- */
+.side { flex: 1 1 380px; min-width: 300px; }
+.side h2 { font-size: 15px; font-weight: 700; margin-bottom: 10px; color: #EAF5EE; }
+.legend { list-style: none; margin: 0 0 28px; padding: 0; }
+.legend li { font-size: 13px; line-height: 1.6; color: rgba(234,245,238,0.62); margin-bottom: 10px; padding-left: 18px; position: relative; }
+.legend li::before { content: "—"; position: absolute; left: 0; color: rgba(234,245,238,0.3); }
+.legend b { color: #EAF5EE; }
+
+.fallback-box {
+  border-radius: 18px;
+  padding: 20px 20px 22px;
+  background: rgba(220,245,230,0.04);
+  border: 1px solid rgba(210,235,220,0.1);
+}
+.fallback-box h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: rgba(234,245,238,0.5); margin-bottom: 14px; }
+.fallback-frames { display: flex; gap: 12px; }
+.fallback-frame { flex: 1; border-radius: 12px; padding: 14px; background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.1); }
+.fallback-frame .cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(234,245,238,0.4); margin-bottom: 8px; }
+.fallback-mini-card { border-radius: 10px; padding: 12px; background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.14); }
+.fallback-mini-card .mini-h { font-size: 13px; font-weight: 700; color: #F3FBF5; margin-bottom: 4px; }
+.fallback-mini-card .mini-b { font-size: 10.5px; color: rgba(234,245,238,0.5); }
+.fallback-mini-sheet { border-radius: 10px; padding: 12px; background: rgba(24,38,31,0.9); border: 1px solid rgba(210,235,220,0.16); }
+.fallback-mini-sheet .mini-h { font-size: 13px; font-weight: 700; color: #F3FBF5; margin-bottom: 4px; }
+.fallback-mini-sheet .mini-b { font-size: 10.5px; color: rgba(234,245,238,0.5); }
+.fallback-note { font-size: 12px; line-height: 1.6; color: rgba(234,245,238,0.55); margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Motion Demo — Green Eco, Dark</h1>
+  <p class="rationale">
+    <strong>Motion here reinforces "calm and trustworthy," not "responsive and snappy."</strong>
+    Every move is slow, soft, and settles rather than bounces: the status card eases to rest with
+    no overshoot, the specular highlight drifts rather than flashes, and the primary action
+    compresses into the glass instead of flashing a color change on press — this is a household
+    utility reporting a number, not a game giving feedback. All motion is gated behind
+    <code>prefers-reduced-motion: no-preference</code>; with reduced motion requested, every
+    element renders directly in its finished state and interactions become instant, undamped
+    state changes — confirmed both in code (see the two <code>@media</code> blocks below) and in
+    the illustrated panel to the right.
+  </p>
+  <p class="note">
+    <strong>Watch it loop:</strong> the phone below replays an 8-second cycle continuously — status
+    card entrance → specular sweep → primary-action press → sheet opens → sheet closes — so it's
+    watchable without clicking anything. The "Log reading" button's press state is also real:
+    hover/focus/click it directly (<code>:active</code> / <code>:focus-visible</code>) and the
+    auto-demo pauses so you can inspect the pressed state on your own terms.
+  </p>
+
+  <div class="layout">
+    <div class="phone">
+      <div class="screen">
+        <div class="topbar">
+          <div class="wordmark-row">
+            <span class="mark"></span>
+            <span class="wordmark">Energy Tracker</span>
+          </div>
+          <span class="date">Thu, Aug 8</span>
+        </div>
+
+        <div class="panel-stack">
+          <div class="panel-back"></div>
+          <div class="status-card">
+            <div class="status-row">
+              <span class="status-dot"></span>
+              <span class="status-badge">Within range</span>
+            </div>
+            <div class="status-headline">Quiet week.</div>
+            <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+          </div>
+        </div>
+
+        <div class="log-btn-row">
+          <button class="log-btn" type="button">+ Log reading</button>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="secondary-footer">
+          <span>Last reading Aug 3</span>
+          <a href="#">Trend history →</a>
+        </div>
+
+        <div class="backdrop"></div>
+        <div class="sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-title">Log a reading</div>
+          <div class="sheet-sub">Main Meter — enter the number shown on the dial.</div>
+          <div class="field-label">Reading (kWh)</div>
+          <div class="field">18452<span> kWh</span></div>
+          <button class="save-btn" type="button">Save reading</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <h2>What's animating, and why</h2>
+      <ul class="legend">
+        <li><b>Status card entrance/settle</b> — opacity + scale (0.96→1) + an 8px translateY, eased out with no bounce. Reads as "the number has arrived and is safe to trust," not "look at me."</li>
+        <li><b>Specular sweep</b> — a soft diagonal highlight drifts once across the glass over ~2.2s, opacity-ramped at both ends so it never hard-cuts in or out.</li>
+        <li><b>Primary-action press</b> — "+ Log reading" compresses to 0.965 scale and its shadow pulls in, like glass being pushed down into the stack. No color flash.</li>
+        <li><b>Sheet open</b> — Log Reading slides up from the bottom edge while the dashboard backdrop blurs in behind it, then reverses on close.</li>
+      </ul>
+
+      <div class="fallback-box">
+        <h3>Reduced-motion fallback (illustrated)</h3>
+        <div class="fallback-frames">
+          <div class="fallback-frame">
+            <div class="cap">Dashboard — instant</div>
+            <div class="fallback-mini-card">
+              <div class="mini-h">Quiet week.</div>
+              <div class="mini-b">Status card is simply present at full opacity on first paint — no fade-in, no sweep.</div>
+            </div>
+          </div>
+          <div class="fallback-frame">
+            <div class="cap">Sheet open — instant</div>
+            <div class="fallback-mini-sheet">
+              <div class="mini-h">Log a reading</div>
+              <div class="mini-b">Sheet appears as an instant state swap (or a quick opacity crossfade) — never a slide, never a blur ramp.</div>
+            </div>
+          </div>
+        </div>
+        <p class="fallback-note">
+          Both frames above are static — that <em>is</em> the reduced-motion behavior. No slide, no sweep,
+          no eased press: state changes directly from A to B. This is WCAG&nbsp;AA 2.3.3-relevant, so it's
+          implemented as real CSS gated on <code>prefers-reduced-motion</code> (see the two
+          <code>@media</code> blocks in this file's &lt;style&gt;), not just described here.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

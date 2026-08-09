@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Smart Plug Import (Green Eco, Dark)</title>
+<style>
+/*
+  KEY SCREEN — SMART PLUG IMPORT (FR-4, FR-24)
+  ==========================================================================
+  What this file illustrates, and where each piece comes from:
+
+  - PRD §4.1 FR-4 / Feature-specific NFRs — "Smart Plug import runs fully
+    async with a completion signal (Tier 3)." EXPERIENCE.md State Patterns:
+    "Smart Plug import in progress — Fully async (Tier 3 NFR): upload
+    confirms immediately, a completion notification lands separately. UI
+    never blocks on parsing." State 1 below renders that literally: the
+    processing indicator is a small inline pill next to content the rest
+    of the screen keeps rendering normally (the Settings list beneath it
+    stays fully legible and tappable) — there is deliberately no full-
+    screen spinner, no disabled/greyed-out chrome, nothing that reads as
+    "wait here." The copy says outright that leaving is fine.
+
+  - PRD §4.1 FR-24 (Smart-Plug Import Gap Handling) + EXPERIENCE.md State
+    Patterns ("Smart Plug import — gap detected within covered range" /
+    "gap at the very start of first-ever import"). FR-24 has two distinct
+    sub-cases with different treatments:
+      (a) a gap mid-range, with prior data to average from → capped
+          (e.g. at the preceding week's average) and flagged as estimated.
+      (b) a gap at the very start of a household's FIRST-EVER import, with
+          nothing preceding to average from → left unfilled, flagged as
+          missing, not interpolated from nothing.
+    State 2 below deliberately renders sub-case (a) — the household
+    already has 8 months of prior Fridge Circuit history before this gap,
+    so there's a real preceding week to average from. The on-page copy
+    says so explicitly and names sub-case (b) by contrast, per the brief's
+    instruction to note which sub-case was chosen rather than silently
+    picking one.
+
+  - EXPERIENCE.md → Voice and Tone: "No reading came in between Apr 3–17,
+    so that stretch is shown as a gap rather than guessed at" / "never
+    silently interpolating a line through a gap." The gap card below
+    follows the same discipline for Smart Plug data specifically: the
+    estimated figure is never presented with the weight of a measured one,
+    and the copy states plainly what was done and why, in numbers.
+
+  - Gap visual treatment reuses DESIGN.md's existing `trend-chart` tokens
+    ({colors.status-trending} amber + {components.trend-chart.gap-band}
+    tint) rather than inventing a new "flagged data" color. This is a
+    deliberate reuse, not a new pattern: DESIGN.md already defines amber +
+    gap-band specifically as "uncertain / don't treat this as solid
+    measured data" for Trend History's own reading gaps (FR-8). A Smart
+    Plug import gap (FR-24) is the same underlying idea — data that isn't
+    real, flagged rather than hidden — so it borrows the same visual
+    vocabulary instead of a freelanced one. It is NOT reused as a Status
+    triad "trending" signal here; there is no pace/Status state on this
+    screen, only the shared "flagged/uncertain" meaning of the tokens.
+
+  Dark mode only in this file — Light was validated separately this
+  session (direction-green-eco.html, motion-demo.html,
+  density-trend-history.html are all dark-only precedent for these
+  isolated component studies). Settings-area flow, kept in the same
+  phone-frame width as the other key screens for consistency (this
+  product is mobile-first end to end, not just for meter-side entry).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 44px 28px 90px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; }
+.intro {
+  max-width: 840px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(234,245,238,0.62);
+  margin-bottom: 38px;
+}
+.intro code { color: rgba(234,245,238,0.82); }
+
+.frames { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.frame-col { flex: 1 1 360px; max-width: 380px; }
+.frame-label { font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #9FBB8A; margin-bottom: 4px; }
+.frame-sub { font-size: 12px; color: rgba(234,245,238,0.42); margin-bottom: 16px; line-height: 1.5; }
+
+/* ---------- phone shell ---------- */
+.phone {
+  width: 100%;
+  border-radius: 46px;
+  padding: 11px;
+  background: linear-gradient(160deg, #1C2C24, #0F1A15);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(220,245,230,0.07);
+  border: 1px solid rgba(210,235,220,0.08);
+}
+.screen {
+  border-radius: 36px;
+  background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%);
+  padding: 26px 19px 24px; /* {spacing.mobile-margin} = 19px side margin */
+}
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.crumb { font-size: 12px; color: rgba(234,245,238,0.42); text-decoration: none; }
+.crumb a { color: #6FD1B1; text-decoration: none; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.55); } /* was 0.34 = ~2.9:1, fails AA; corrected to text-quiet-dark */
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: #F3FBF5; margin-bottom: 16px; }
+
+/* ---------- generic glass card (rounded.md / surface-glass-dark — same
+   derived pattern used across the other key screens in this set) ---------- */
+.card {
+  border-radius: 18px; /* {rounded.md} */
+  background: rgba(220,245,230,0.07); /* {colors.surface-glass-dark} */
+  border: 1px solid rgba(210,235,220,0.14);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  padding: 18px 18px 16px;
+  margin-bottom: 14px;
+}
+.card h3 { font-size: 11.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(234,245,238,0.45); margin-bottom: 10px; }
+
+/* ---------- file picker / drop zone ---------- */
+.dropzone {
+  border-radius: 18px; /* {rounded.md} */
+  border: 1px dashed rgba(210,235,220,0.22);
+  padding: 22px 16px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.dropzone p.hint { font-size: 13px; color: rgba(234,245,238,0.55); margin-bottom: 10px; line-height: 1.5; }
+.dropzone .formats { font-size: 11px; color: rgba(234,245,238,0.34); margin-bottom: 14px; }
+.choose-btn {
+  display: inline-block;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  color: #06120D;
+  background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); /* {components.primary-action-button.background} */
+  border: none; border-radius: 999px; /* {rounded.full} */
+  padding: 10px 20px;
+}
+
+/* ---------- selected-file row ---------- */
+.file-row { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; }
+.file-icon {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
+  background: rgba(220,245,230,0.08); border: 1px solid rgba(210,235,220,0.14);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #9FBB8A;
+}
+.file-meta { flex: 1 1 auto; min-width: 0; }
+.file-name { font-size: 13px; font-weight: 700; color: #EAF5EE; overflow-wrap: anywhere; }
+.file-sub { font-size: 11.5px; color: rgba(234,245,238,0.42); margin-top: 2px; }
+
+/* ---------- processing pill (indeterminate, non-blocking) ----------
+   Recolored from an earlier pass that used #9FBB8A/status-within-range-dark
+   here — a status-triad color, wrong per DESIGN.md's own Do's/Don'ts
+   ("reuse a status-triad color for chrome, decoration, or a non-status
+   badge"). A processing indicator isn't a Pattern Detective Status, so it
+   now uses brand-accent-dark chrome instead: #8FE9CE (the same light-mint
+   highlight already used in the mark's own gradient) on
+   {colors.brand-accent-bg-dark}, verified 7.5:1 against the pill's own
+   composited background. */
+.processing-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.processing-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+  color: #8FE9CE;
+  background: rgba(47,179,151,0.16); /* {colors.brand-accent-bg-dark} */
+  border-radius: 999px;
+  padding: 5px 11px;
+}
+.processing-dot { width: 6px; height: 6px; border-radius: 50%; background: #8FE9CE; }
+.progress-track { height: 4px; border-radius: 4px; background: rgba(220,245,230,0.08); overflow: hidden; margin: 12px 0 2px; }
+.progress-fill { height: 100%; width: 38%; border-radius: 4px; background: linear-gradient(90deg, #2FB397, #6FE3C4); }
+
+.async-note {
+  font-size: 12.5px; line-height: 1.55; color: rgba(234,245,238,0.6);
+  padding-top: 12px; margin-top: 4px; border-top: 1px solid rgba(210,235,220,0.09);
+}
+.async-note b { color: #EAF5EE; }
+
+/* ---------- proof-of-non-blocking: ordinary settings rows below ---------- */
+.settings-list { border-radius: 18px; overflow: hidden; }
+.settings-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 4px; font-size: 13px; color: rgba(234,245,238,0.75);
+  border-bottom: 1px solid rgba(210,235,220,0.08);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row .arrow { color: rgba(234,245,238,0.3); font-size: 12px; }
+.list-label { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(234,245,238,0.35); margin: 4px 0 8px; }
+
+/* ---------- completion state ----------
+   Recolored from an earlier pass that used #6FDB93/status-below-baseline-dark
+   here — same Do's/Don'ts violation as the processing pill above. A generic
+   completion checkmark isn't reporting a consumption Status, so it now uses
+   a neutral glass chip (a brighter surface-quiet-dark tint, for visibility
+   as a standalone circle) with text-primary-dark for the glyph — verified
+   10.7:1, no status or brand color at all. */
+.complete-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.complete-check {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(220,245,230,0.12); color: #EAF5EE;
+  display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+}
+.complete-title { font-size: 15px; font-weight: 700; color: #F3FBF5; }
+.complete-sub { font-size: 12px; color: rgba(234,245,238,0.5); margin-top: 1px; }
+
+/* ---------- flagged-gap card (reuses trend-chart gap-band / status-trending amber) ---------- */
+.gap-card {
+  border-radius: 18px;
+  background: rgba(226,165,66,0.07); /* {components.trend-chart.gap-band-dark} */
+  border: 1px solid rgba(226,165,66,0.22);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.gap-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.gap-badge {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase;
+  color: #E2A542; /* {colors.status-trending-dark} */
+  background: rgba(226,165,66,0.18);
+  padding: 4px 10px; border-radius: 999px;
+}
+.gap-range { font-size: 13px; font-weight: 700; color: #EAF5EE; }
+.gap-detail { font-size: 12.5px; line-height: 1.55; color: rgba(234,245,238,0.65); margin-bottom: 10px; }
+.gap-detail b { color: #EAF5EE; }
+.gap-subcase-note {
+  font-size: 11.5px; line-height: 1.5; color: rgba(234,245,238,0.4);
+  padding-top: 10px; border-top: 1px solid rgba(226,165,66,0.18);
+}
+
+.footer-note { font-size: 11px; line-height: 1.5; color: rgba(234,245,238,0.55); margin-top: 6px; } /* was 0.3 = ~2.6:1, fails AA; corrected to text-quiet-dark */
+
+/* ---------- calm motion on the processing dot only — gated per EXPERIENCE.md's
+   Interaction Primitives contract; static (no pulse) under reduced motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .processing-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Smart Plug Import — Key Screens</h1>
+  <p class="intro">
+    Two states of the same flow (<code>FR-4</code>, <code>FR-24</code>), reached from Settings.
+    State 1 shows the moment right after a file is selected — upload confirms immediately, parsing
+    runs in the background, and the rest of the screen stays fully usable. State 2 shows the
+    load-bearing alternate: the import finishes and part of its range came back with missing
+    interval data, handled honestly rather than silently smoothed over.
+  </p>
+
+  <div class="frames">
+
+    <!-- ================= STATE 1 — canonical / in-progress ================= -->
+    <div class="frame-col">
+      <div class="frame-label">1 · Uploading, non-blocking</div>
+      <div class="frame-sub">File just selected. Processing is async (Tier 3 NFR) — nothing here locks the UI.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Settings</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Smart Plug Import</div>
+
+          <div class="dropzone">
+            <p class="hint">Drop a file here, or choose one to upload.</p>
+            <p class="formats">Accepts Eve Home exports (.xlsx) or Meross exports (.csv).</p>
+            <span class="choose-btn">Choose file</span>
+          </div>
+
+          <div class="card">
+            <div class="file-row">
+              <span class="file-icon">XL</span>
+              <div class="file-meta">
+                <div class="file-name">EveHome-FridgeCircuit-Aug2026.xlsx</div>
+                <div class="file-sub">384 KB · Tagged to Kitchen → Fridge Circuit</div>
+              </div>
+            </div>
+            <div class="processing-row">
+              <span class="processing-pill"><span class="processing-dot"></span>Processing</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill"></div></div>
+            <p class="async-note">
+              Uploaded. <b>We're parsing this in the background — you'll get a notification when it's done.</b>
+              Feel free to leave this screen; nothing here needs to stay open.
+            </p>
+          </div>
+
+          <p class="list-label">Also in Settings</p>
+          <div class="settings-list card">
+            <div class="settings-row"><span>Room / Power Point / Device management</span><span class="arrow">→</span></div>
+            <div class="settings-row"><span>Yearly Baseline</span><span class="arrow">→</span></div>
+            <div class="settings-row"><span>Data export</span><span class="arrow">→</span></div>
+          </div>
+          <p class="footer-note">Everything above stays tappable while the import runs — it isn't waiting on it.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 2 — completion with flagged gap ================= -->
+    <div class="frame-col">
+      <div class="frame-label">2 · Complete, gap flagged</div>
+      <div class="frame-sub">FR-24 sub-case (a): a mid-range gap with prior history to average from — capped and flagged, never shown as measured.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Settings</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Smart Plug Import</div>
+
+          <div class="complete-banner">
+            <span class="complete-check">✓</span>
+            <div>
+              <div class="complete-title">Import complete</div>
+              <div class="complete-sub">EveHome-FridgeCircuit-Aug2026.xlsx</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Summary</h3>
+            <p class="gap-detail" style="margin-bottom:0;">
+              <b>214 days</b> of Fridge Circuit data added, Jan&nbsp;5 – Aug&nbsp;8&nbsp;2026.
+            </p>
+          </div>
+
+          <div class="gap-card">
+            <div class="gap-head">
+              <span class="gap-badge">1 gap flagged</span>
+              <span class="gap-range">Apr 12–18</span>
+            </div>
+            <p class="gap-detail">
+              <b>No data received</b> from this plug for 6 days. Filled from the preceding week's
+              average (<b>4.1 kWh/day</b>) and flagged as <b>estimated</b> — never counted as measured.
+            </p>
+            <p class="gap-subcase-note">
+              Filled because 8 months of prior Fridge Circuit history existed to average from. A gap
+              at the very start of a household's first-ever import has nothing preceding it to
+              average — that case is left unfilled and flagged as missing instead, not estimated.
+            </p>
+          </div>
+
+          <p class="footer-note">Baseline sharpening uses the flagged figure as a bounded estimate only — it's never presented as a real reading.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
