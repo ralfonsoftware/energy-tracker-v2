@@ -1,0 +1,25 @@
+# Optional override profile for local testing of the SQL Server provider path (AD-2).
+# Not a second deployment path — the default deployment is docker-compose.yml (Postgres).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.sqlserver.yml up
+#
+# Note: the postgres container from the base file still starts alongside sqlserver here;
+# that's an accepted tradeoff for keeping this an override rather than a duplicated stack.
+services:
+  api:
+    environment:
+      Database__Provider: SqlServer
+      ConnectionStrings__Default: "Server=sqlserver;Database=${MSSQL_DB:-energytracker};User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

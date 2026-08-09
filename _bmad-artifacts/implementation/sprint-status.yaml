@@ -1,0 +1,96 @@
+# generated: 2026-08-09
+# last_updated: 2026-08-09
+# project: energy-tracker
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-artifacts/implementation
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+
+generated: 2026-08-09
+last_updated: 2026-08-09
+project: energy-tracker
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-artifacts/implementation"
+
+development_status:
+  epic-1: in-progress
+  1-1-deployable-application-skeleton-local-dev-self-host: review
+  1-2-azure-infrastructure-as-code-resource-deployment-pipeline: backlog
+  1-3-ci-build-test-cd-deploy-pipeline-app-to-azure: backlog
+  1-4-pull-request-review-workflow: backlog
+  1-5-household-provisioning-via-oidc: backlog
+  1-6-household-member-invitation: backlog
+  1-7-room-power-point-device-management: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-yearly-baseline-configuration: backlog
+  2-2-meter-reading-entry-with-offline-queueing: backlog
+  2-3-meter-reading-regression-detection-classification: backlog
+  2-4-gap-tolerant-rolling-baseline-status-computation: backlog
+  2-5-dashboard-status-display: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-smart-plug-file-upload-async-parsing: backlog
+  3-2-import-to-power-point-mapping: backlog
+  3-3-smart-plug-import-gap-handling-baseline-sharpening: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-trend-history-view: backlog
+  4-2-per-plug-measured-data-view: backlog
+  4-3-correcting-a-meter-reading: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-tariff-configuration: backlog
+  5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: backlog
+  5-3-two-way-attractiveness-signal: backlog
+  5-4-tariff-check-reminder: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-event-logging: backlog
+  6-2-wattage-plausibility-correlation: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-full-data-export: backlog
+  7-2-full-data-import-restore-migration: backlog
+  epic-7-retrospective: optional

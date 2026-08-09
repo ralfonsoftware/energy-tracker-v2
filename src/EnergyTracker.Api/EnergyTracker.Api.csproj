@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnergyTracker.Infrastructure\EnergyTracker.Infrastructure.csproj" />
+    <ProjectReference Include="..\EnergyTracker.Infrastructure.Migrations.Postgres\EnergyTracker.Infrastructure.Migrations.Postgres.csproj" />
+    <ProjectReference Include="..\EnergyTracker.Infrastructure.Migrations.SqlServer\EnergyTracker.Infrastructure.Migrations.SqlServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

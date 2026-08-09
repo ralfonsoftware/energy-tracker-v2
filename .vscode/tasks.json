@@ -1,0 +1,69 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-api",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/src/EnergyTracker.Api/EnergyTracker.Api.csproj"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "watch-api",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "run", "--project", "${workspaceFolder}/src/EnergyTracker.Api/EnergyTracker.Api.csproj"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "dotnet-watch",
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^watch : Started$",
+          "endsPattern": "Now listening on:|watch : Started"
+        }
+      }
+    },
+    {
+      "label": "dev-frontend",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE v",
+          "endsPattern": "Local:\\s+http"
+        }
+      }
+    },
+    {
+      "label": "postgres-up",
+      "type": "shell",
+      "command": "docker compose up postgres -d",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "dotnet-test",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/EnergyTracker.sln"],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
