@@ -11,7 +11,7 @@ created: '2026-08-09'
 updated: '2026-08-09'
 sources:
   - _bmad-artifacts/planning/briefs/brief-energy-tracker-2026-08-08/brief.md
-  - _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd.md
+  - _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd/index.md
   - _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/addendum.md
   - _bmad-artifacts/planning/ux-designs/ux-energy-tracker-2026-08-08/DESIGN.md
   - _bmad-artifacts/planning/ux-designs/ux-energy-tracker-2026-08-08/EXPERIENCE.md

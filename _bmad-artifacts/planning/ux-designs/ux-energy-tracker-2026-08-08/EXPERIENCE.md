@@ -6,7 +6,7 @@ created: 2026-08-08
 updated: 2026-08-09
 sources:
   - _bmad-artifacts/planning/briefs/brief-energy-tracker-2026-08-08/brief.md
-  - _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd.md
+  - _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd/index.md
 ---
 
 # Energy Tracker v2 — Experience Spine

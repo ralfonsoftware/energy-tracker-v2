@@ -1,0 +1,6 @@
+# Constraints and Guardrails
+
+- **Privacy:** self-hosted by default, no third-party account required to view your own data. Energy consumption data is treated as sensitive — it's a fairly direct proxy for occupancy patterns — so no telemetry/analytics phone-home by default.
+- **Data ownership:** a Household's data is always exportable in a documented format (FR-22); there is no vendor lock-in path where data can only be read back out through the product itself.
+- **Cost:** the product must not require a paid third-party service to run a basic self-hosted instance. Optional integrations (e.g. AI-assisted Wattage Plausibility, FR-17) degrade gracefully rather than becoming a hard dependency — the rest of the product functions fully with them disabled.
+- **Product discipline — says less, on purpose:** the dashboard Status (FR-7) is the headline the product is judged by; the drill-down views (FR-8, FR-9) existing is fine, but UX and architecture must never make checking the drill-down a precondition for trusting the Status. If a design or implementation choice pulls users toward the drill-down to feel confident, that's a regression against the product's core discipline, not a feature win. Ties to counter-metric SM-C2.

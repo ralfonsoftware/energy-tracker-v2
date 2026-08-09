@@ -1,0 +1,24 @@
+# 3. Glossary
+
+- **Household** — the top-level entity everything (readings, tariff, settings) is scoped to. One instance can technically hold more than one, but the product isn't designed around managing many (no cross-user admin views).
+- **Main Meter** — the physical utility meter for a Household; the sole source of truth for total consumption — nothing is ever reconciled to override it. The data model supports more than one Main Meter per Household (e.g. dual-tariff day/night meters) from day one, to avoid a costly schema rework later — but v2's UI and Pattern Detective logic operate on a single Main Meter per Household; multi-meter user flows are deferred (see Non-Goals).
+- **Meter Reading** — a numeric kWh value plus a timestamp, manually entered against the Main Meter. Multiple Readings per day are valid as long as timestamps differ.
+- **Yearly Baseline** — a target annual kWh figure (user-entered or preset by household size) that Pattern Detective's pace status is measured against. A distinct, user-set target — not derived from reading history.
+- **Pattern Detective** — the core feature: a gap-tolerant rolling consumption baseline computed from Meter Readings, sharpened by Smart Plug signals, producing the Status.
+- **Gap** — a period with no Meter Reading; the baseline is gap-tolerant by design and doesn't break when a reading is late or early.
+- **Status** — the single glanceable pace signal Pattern Detective outputs: *within range*, *below baseline*, or *trending* (toward the felt surprise-invoice threshold).
+- **Smart Plug** — a third-party device (Eve Home, Meross) whose exported interval data is imported as a measured signal that sharpens the baseline without requiring full household coverage.
+- **Power Point** — a socket/outlet a Smart Plug or Device is tagged to.
+- **Device** — an appliance tagged to a Power Point.
+- **Room → Power Point → Device** — the organizing/tagging scaffold for measured and annotated data. Explicitly not an attribution system — nothing here reconciles to the Main Meter total.
+- **Tariff** — the Household's current electricity contract: base fee, price/kWh, currency, and contract start date. Modeled as a flat rate only — tiered or time-of-use billing structures are out of scope for v2 (see Non-Goals).
+- **Contract Period** — the tariff's minimum duration (e.g. 1/6/12/24 months); gates when the Tariff Check Reminder can first fire.
+- **Switching Bonus** — a one-time or time-limited incentive on a candidate tariff that inflates early-period savings if left in the comparison.
+- **Bonus-Decay Normalization** — the shared math (used by both Tariff Savings Radar and Pattern Detective's pace threshold) that strips a Switching Bonus's distorting effect out of a savings comparison.
+- **Tariff Savings Radar** — the feature comparing the current Tariff against a user-entered candidate tariff, bonus-normalized, shown as a green/red signal both with and without the bonus.
+- **Tariff Check Reminder** — a proactive prompt to revisit the Tariff Savings Radar, gated to no earlier than 3 months before the Contract Period ends, then recurring at a user-customizable cadence.
+- **Event** — a logged, unmeasured activity (e.g. "cooked 2h," "away 2 weeks") captured via Context Capture, optionally tagged to a Room, Power Point, or Device.
+- **Wattage Plausibility** — the AI-assisted rough correlation between a logged Event and the consumption deviation (a bump or a dip) Pattern Detective observed at that time.
+- **Extension Point** — one of three scoped platform hooks: custom event/plausibility rules, generic data-source column mapping, tunable threshold settings.
+- **Locale** — a Household's language+region setting, driving display formatting; underlying data is always stored locale-neutral.
+- **Self-Hoster** — the secondary-audience user running their own Energy Tracker instance for their own Household, using the same product without special-casing.

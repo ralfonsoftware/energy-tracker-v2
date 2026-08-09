@@ -1,0 +1,7 @@
+# 1. Vision
+
+Energy Tracker v2 is a self-hostable web app that answers one question in seconds: is your household's electricity consumption on track, and is your tariff still worth staying on? A tenant with no smart main meter reads their physical meter every 1-2 days, logs it from their phone in under a minute, and gets back a single trustworthy status instead of a spreadsheet full of numbers they have to interpret on their own.
+
+At its core is a gap-tolerant rolling baseline built from manual meter readings — sharpened by whatever smart-plug signals are available, never dependent on full coverage — culminating in one glanceable status: within range, below baseline, or trending toward a surprise invoice. Around that core sit two supporting capabilities: a Tariff Savings Radar that answers whether switching contracts would actually save money once switching bonuses are normalized out, and lightweight Context Capture for the appliances no smart plug can see, so a spike in the data can be explained by something the household remembers doing that week.
+
+It is built for the no-smart-meter case as the primary design constraint, not an edge case bolted on later — and built in the open, with a data model that's generic by design and an architecture meant to extend without forking, so other self-hosters in the same situation can adapt it to their own flat and their own hardware over time.
