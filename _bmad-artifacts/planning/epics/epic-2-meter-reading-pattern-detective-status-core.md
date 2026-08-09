@@ -1,0 +1,224 @@
+# Epic 2: Meter Reading & Pattern Detective Status Core
+
+The product's non-negotiable core loop: a Household member logs a Meter Reading in under a minute (with offline queuing), sets a Yearly Baseline, and sees a single trustworthy Status (within range / below baseline / trending) on the dashboard — computed from a gap-tolerant rolling baseline, with meter-rollover/reset regressions caught and classified rather than silently corrupting the pace. Fully functional with zero Smart Plug coverage. Realizes UJ-1 and UJ-2's Status half.
+
+**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25
+**NFRs:** NFR1 (perf tier 1), NFR7 (offline capture), NFR9 (recomputation policy), NFR10 (concurrency), NFR15 (says-less discipline)
+**Architecture:** AD-4, AD-7, AD-12, AD-14, AD-16
+**UX-DRs:** UX-DR1 (status/brand tokens), UX-DR2 (Status card), UX-DR3 (Log Reading sheet), UX-DR4 (Meter Regression prompt), UX-DR8 (primary action button), UX-DR9 (nav chrome), UX-DR13 (one-level-deep modal stacking), UX-DR14 (empty/edge states), UX-DR15 (motion contract), UX-DR16 (accessibility floor), UX-DR17 (voice/tone), UX-DR18 (regression micro-flow)
+
+## Story 2.1: Yearly Baseline Configuration
+
+As a Household member,
+I want to set and later edit my Household's Yearly Baseline,
+So that Pattern Detective has a target to measure my consumption pace against.
+
+**Acceptance Criteria:**
+
+**Given** onboarding or Settings
+**When** I set a Yearly Baseline
+**Then** household-size presets (1 person ≈ 1500 kWh, 2 ≈ 2500 kWh, 3 ≈ 3500 kWh, 4 ≈ 4250 kWh) are offered as starting suggestions, never silently applied as a default (FR-2, AD-15)
+
+**Given** an existing Yearly Baseline
+**When** I change it
+**Then** the change takes effect going forward only — it never retroactively rewrites past Status history (FR-2, NFR9)
+
+**Given** the Yearly Baseline value
+**When** stored
+**Then** it is a Household-scoped config row, never a literal in code (AD-15)
+
+**Given** two Household members editing the Yearly Baseline at the same time
+**When** both submit
+**Then** the second writer receives a 409 conflict rather than silently overwriting the first (AD-4, NFR10)
+
+## Story 2.2: Meter Reading Entry with Offline Queueing
+
+As a Household member,
+I want to log a Meter Reading with today's date/time pre-selected in under a minute, even without connectivity,
+So that I can capture my meter's number as part of my routine without breaking the habit.
+
+**Acceptance Criteria:**
+
+**Given** the Log Reading sheet
+**When** it opens
+**Then** today's date/time is pre-selected and editable, I enter a single kWh number, and save with one confirmation tap (FR-1)
+
+**Given** the default path with no edits
+**When** I save
+**Then** confirmation lands in under a minute, responding within the ≤2s Tier 1 target (FR-1, NFR1)
+
+**Given** I already logged a reading today
+**When** I log a second reading later the same day with a different timestamp
+**Then** it's accepted as a distinct entry — never rejected as a duplicate or silently overwritten (FR-1)
+
+**Given** I enter a reading with an earlier timestamp than my most recent one
+**When** I save it
+**Then** it's accepted as a backfill, not rejected (FR-1)
+
+**Given** no network connectivity at the meter
+**When** I save a reading
+**Then** it queues locally (IndexedDB) and syncs automatically when connectivity returns (NFR7)
+
+**Given** a queued offline reading whose sync retries after losing its acknowledgment
+**When** the retry lands
+**Then** the API's idempotency-key upsert treats it as a no-op against the already-recorded reading — never a duplicate insert (AD-16)
+
+**Given** a genuinely new reading entered while an earlier sync is still pending
+**When** both eventually sync
+**Then** both are recorded as distinct readings — the idempotency mechanism never collapses a legitimate second entry (AD-16)
+
+**Given** the Log Reading sheet
+**When** presented
+**Then** it renders as a sheet over the Dashboard, never its own route, with top-rounded/flush-bottom shape and a tabular-nums kWh field (UX-DR3)
+
+**Given** the Log Reading sheet
+**When** it opens
+**Then** it traps focus while open and returns focus to the triggering control on close, is announced on open (role + label) for screen readers, and its Save action meets the 44×44pt-equivalent tap-target minimum (UX-DR16)
+
+## Story 2.3: Meter Reading Regression Detection & Classification
+
+As a Household member,
+I want a Meter Reading lower than the previous one to be flagged and classified rather than silently breaking my baseline,
+So that a meter swap or digit rollover doesn't corrupt my Status.
+
+**Acceptance Criteria:**
+
+**Given** a new Meter Reading lower than the Reading immediately preceding it by timestamp (not entry order)
+**When** it's saved
+**Then** a classification prompt opens asking to confirm *reset* or *rollover*, and no negative consumption rate is computed (FR-25)
+
+**Given** the classification prompt
+**When** I confirm *reset*
+**Then** a new baseline-computation sequence starts going forward without discarding prior Reading history (FR-25)
+
+**Given** the classification prompt
+**When** I confirm *rollover*
+**Then** the interval's consumption is computed as (meter's known digit capacity − previous Reading) + new Reading (FR-25)
+
+**Given** a backfilled Reading
+**When** compared for regression
+**Then** "immediately preceding" is determined by timestamp order, never entry order (FR-25)
+
+**Given** an unconfirmed regression prompt
+**When** any later reading or Status computation runs
+**Then** the flagged Reading is excluded from baseline computation until resolved, and the prompt never silently expires or defaults to either classification (FR-25)
+
+**Given** a second lower-than-previous Reading arrives while an earlier regression prompt is still open
+**When** it's detected
+**Then** it queues behind the first rather than opening a second, conflicting prompt — at most one open `MeterRegressionPrompt` exists per Main Meter (FR-25, AD-12)
+
+**Given** the regression prompt triggers while a Log Reading sheet happens to be open
+**When** it opens
+**Then** it supersedes the Log Reading sheet rather than stacking on top of it (UX-DR13)
+
+**Given** the regression prompt UI
+**When** rendered
+**Then** it uses the neutral/informational glass treatment, never destructive/error styling — this is a normal classification step, not a system error (UX-DR4, UX-DR18)
+
+**Given** the regression prompt
+**When** it opens
+**Then** it traps focus while open and returns focus to the triggering control on close, and is announced on open (role + label) for screen readers (UX-DR16)
+
+## Story 2.4: Gap-Tolerant Rolling Baseline & Status Computation
+
+As a Household member,
+I want the system to compute a single trustworthy Status from my reading pace vs my Yearly Baseline, tolerant of irregular reading gaps,
+So that I know at a glance whether I'm on track.
+
+**Acceptance Criteria:**
+
+**Given** a sequence of Meter Readings with irregular intervals, including multi-day gaps
+**When** the pace is computed
+**Then** each gap is absorbed into the rate calculation between that reading pair rather than breaking or resetting the computation (FR-3)
+
+**Given** the computed pace
+**When** compared to the Yearly Baseline
+**Then** the comparison is like-for-like — pace-to-date vs. baseline-to-date (FR-3)
+
+**Given** an unusually long gap since the last reading
+**When** Status is computed
+**Then** it's flagged low-confidence rather than presented with the same certainty as a normal 1-2 day interval (FR-3)
+
+**Given** the current pace exceeds the Yearly Baseline pace by more than the household's configured threshold (default ~100 kWh)
+**When** Status is computed
+**Then** it resolves to *trending* (FR-6)
+
+**Given** the pace is exactly equal to the baseline pace plus the threshold
+**When** Status is computed
+**Then** it resolves to *within range*, not *trending* — an exact tie resolves to the calmer state (FR-6)
+
+**Given** fewer than two Meter Readings exist, or no Yearly Baseline is set
+**When** Status is requested
+**Then** it is undefined rather than defaulting to any of the three states (FR-6)
+
+**Given** a new Meter Reading is saved
+**When** the save completes
+**Then** Status recomputes immediately — never on a fixed schedule alone (FR-6, AD-7)
+
+**Given** Status is (re)computed
+**When** the computation completes
+**Then** the result is also written to an immutable `StatusSnapshot` row via the single `IStatusRecomputeService`, so a later Yearly Baseline/threshold edit never rewrites this historical value (AD-7, NFR9)
+
+**Given** any Status computation or API response
+**When** inspected
+**Then** no Smart Plug or Event data is summed into or reconciled against the Main Meter-derived pace figure — `MeterReading` is the sole authoritative total (AD-14)
+
+**Given** a Reading excluded due to an unresolved regression prompt (Story 2.3)
+**When** Status is computed
+**Then** that Reading, and everything chronologically after it, is excluded from the computation until the prompt is resolved
+
+## Story 2.5: Dashboard Status Display
+
+As a Household member,
+I want to see my current Status as the first thing on the Dashboard,
+So that I know if I'm on track without hunting for the answer.
+
+**Acceptance Criteria:**
+
+**Given** the Dashboard
+**When** it loads
+**Then** the Status is visible without scrolling or drilling into a sub-view (FR-7)
+
+**Given** the Status card
+**When** rendered
+**Then** no chart is required to read it — it's legible as a single glanceable state: status dot, uppercase badge, headline sentence, supporting sentence (FR-7, UX-DR2)
+
+**Given** first-ever load with no computable Status (fewer than two Readings or no Yearly Baseline, per Story 2.4)
+**When** the Dashboard renders
+**Then** it shows an onboarding prompt ("log your first reading to get started") rather than blank space or a default Status value (FR-7, UX-DR14)
+
+**Given** the three real Status states (within range / below baseline / trending)
+**When** rendered
+**Then** each uses its dedicated AA-verified badge-text token (never the raw status-triad hex) and its own status color — never the brand-accent teal, and never a 4th "unknown" visual treatment (UX-DR1, UX-DR2)
+
+**Given** the Status card
+**When** rendered in Dark and Light mode
+**Then** both render the rear/front glass panel stack with backdrop blur+saturate as equal citizens — Dark shows the glow/specular treatment, Light substitutes frosted-white translucency with soft green-tinted drop shadows rather than attempting to replicate the Dark-mode glow (UX-DR11)
+
+**Given** the Status card's data resolves, on cold load or after a recompute
+**When** it appears
+**Then** it plays the settle + specular-sweep entrance animation once, gated behind `prefers-reduced-motion: no-preference`, with a fully settled/instant fallback when reduced motion is requested (UX-DR15)
+
+**Given** a Status recompute happens while the Dashboard is open
+**When** the value changes
+**Then** it's announced via `aria-live="polite"` rather than requiring a manual refresh check (UX-DR16)
+
+**Given** the Dashboard's cold load
+**When** data hasn't resolved yet
+**Then** a shadcn `Skeleton` matching the Status card's footprint is shown so nothing reflows on resolution (UX-DR14)
+
+**Given** the Status headline/body copy
+**When** rendered
+**Then** it follows the plain-language voice/tone discipline — named number, named thing that happened, never generic congratulation or gamified language (UX-DR17)
+
+**Given** the Status card and any other Dashboard element
+**When** compared
+**Then** the Status card remains the single highest-visual-weight surface on the Dashboard — nothing else visually competes with it (NFR15)
+
+**Given** the Dashboard
+**When** rendered
+**Then** it includes the primary "Log Reading" action button (pill shape, gradient fill) that opens the Log Reading sheet from Story 2.2; its press state compresses to ~0.965 scale with shadow pull-in, never a color flash (UX-DR8)
+
+**Given** the bottom tab bar (mobile)
+**When** the Dashboard is the active surface
+**Then** its nav item uses the brand-accent-tinted active state, never a status color; the tab bar shell carries all four top-level entries (Dashboard, Trend History, Tariff Radar, Settings) per UX-DR9, with the latter three surfaces' content filled in by later epics
