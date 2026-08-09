@@ -30,11 +30,15 @@ if ! dotnet ef migrations add "$MIGRATION_NAME" \
   --context EnergyTrackerDbContext \
   --output-dir Migrations; then
   echo "SqlServer migration failed — rolling back the Postgres migration to keep both providers in sync." >&2
-  dotnet ef migrations remove \
+  if dotnet ef migrations remove \
     --project "$POSTGRES_PROJECT" \
     --startup-project "$POSTGRES_PROJECT" \
     --context EnergyTrackerDbContext \
-    --force
+    --force; then
+    echo "Rollback succeeded — neither provider has migration '$MIGRATION_NAME'." >&2
+  else
+    echo "ROLLBACK FAILED — Postgres migrations project may still have '$MIGRATION_NAME' while SqlServer does not. Manual cleanup required: check $POSTGRES_PROJECT/Migrations/ before re-running." >&2
+  fi
   exit 1
 fi
 

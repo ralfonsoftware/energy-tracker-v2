@@ -1,0 +1,9 @@
+# Local-dev-only override: publishes Postgres to the host so `dotnet run`
+# (running natively, not in a container) can reach it. Never used for
+# self-hosting — docker-compose.yml alone (the self-host reference, AD-13)
+# keeps Postgres unreachable outside the Docker network by default.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up postgres -d
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"

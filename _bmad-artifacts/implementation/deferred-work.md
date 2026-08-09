@@ -1,0 +1,3 @@
+## Deferred from: code review of story-1-1-deployable-application-skeleton-local-dev-self-host (2026-08-09)
+
+- No automated path applies pending EF Core migrations at startup or in self-host docs [src/EnergyTracker.Api/Program.cs:37] — not blocking this story since the `InitialCreate` migration is currently empty (no domain entities yet), but Story 1.5+ (or whichever story first adds real entities) will need either a `dbContext.Database.MigrateAsync()` call at startup or a documented `dotnet ef database update` step for self-hosters, since there's currently no SDK-free way to apply a schema on a fresh volume.

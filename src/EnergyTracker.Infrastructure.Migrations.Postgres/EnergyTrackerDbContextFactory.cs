@@ -8,9 +8,16 @@ public class EnergyTrackerDbContextFactory : IDesignTimeDbContextFactory<EnergyT
 {
     public EnergyTrackerDbContext CreateDbContext(string[] args)
     {
+        // dotnet ef only needs a syntactically valid connection string to build the model at
+        // design time — it does not need to actually connect. Prefer the real environment
+        // variable (same shape the app reads at runtime) so this never ships a credential-shaped
+        // literal in the compiled assembly; the local fallback below never touches a live database.
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+            ?? "Host=localhost;Database=energytracker_design";
+
         var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
         optionsBuilder.UseNpgsql(
-            "Host=localhost;Database=energytracker_design;Username=postgres;Password=postgres",
+            connectionString,
             o => o.MigrationsAssembly(typeof(EnergyTrackerDbContextFactory).Assembly.GetName().Name));
 
         return new EnergyTrackerDbContext(optionsBuilder.Options);

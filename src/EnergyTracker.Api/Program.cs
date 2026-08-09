@@ -13,18 +13,21 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 // Database:Provider is read exactly once, here at the composition root (Consistency Conventions) —
 // nothing in Infrastructure re-reads or branches on it independently.
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "Postgres";
+// Matches docker-compose.yml's default POSTGRES_USER/POSTGRES_DB and .env.example's default
+// POSTGRES_PASSWORD, so `dotnet run` against `docker compose up postgres -d` works with no
+// extra configuration as long as .env's password wasn't changed from the example.
 var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? "Host=localhost;Database=energytracker;Username=postgres;Password=postgres";
+    ?? "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";
 
 builder.Services.AddDbContext<EnergyTrackerDbContext>(options =>
 {
-    switch (databaseProvider)
+    switch (databaseProvider.ToLowerInvariant())
     {
-        case "Postgres":
+        case "postgres":
             options.UseNpgsql(connectionString,
                 o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres"));
             break;
-        case "SqlServer":
+        case "sqlserver":
             options.UseSqlServer(connectionString,
                 o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer"));
             break;

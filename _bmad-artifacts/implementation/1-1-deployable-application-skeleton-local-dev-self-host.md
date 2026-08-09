@@ -4,7 +4,7 @@ baseline_commit: 4395ddb67b2291bdfc43e262480c82dfc1807d8d
 
 # Story 1.1: Deployable Application Skeleton (Local Dev & Self-Host)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -99,7 +99,19 @@ energy-tracker-v2/
   EnergyTracker.sln
 ```
 
-No variance from this structure is expected or justified for this story — it is prescribed exactly by the Architecture Spine, not inferred.
+The Structural Seed above scopes the buildable/deployable source tree (`src/`, `web/`, deployment files) — it does not enumerate supporting test infrastructure or tooling configuration, which are expected to exist alongside it. This story additionally added, each with a stated rationale (see Debug Log References / Completion Notes above):
+
+```text
+energy-tracker-v2/
+  tests/                               # backend test projects (Architecture/Infrastructure/Api)
+  Directory.Packages.props             # central package version pin — fixes a real EF Core version
+                                        # conflict across projects (see Debug Log References)
+  global.json                          # pins dotnet-ef test runner tooling
+  .config/dotnet-tools.json            # pins the dotnet-ef local tool
+  .vscode/                             # launch/task configs for local dev (docs/local-development.md)
+```
+
+No variance from the Structural Seed's `src/`/`web/`/deployment-file scope is expected or justified for this story — that part is prescribed exactly by the Architecture Spine, not inferred.
 
 ### References
 
@@ -195,6 +207,21 @@ Claude Sonnet 5 (claude-sonnet-5)
 - `web/src/test/setup.ts`
 - `web/playwright.config.ts`
 - `web/e2e/app-shell.spec.ts`
+
+### Review Findings
+
+- [x] [Review][Patch] Add a `Testcontainers.MsSql`-based SqlServer migration-apply test mirroring `PostgresMigrationTests.cs` [tests/EnergyTracker.Infrastructure.Tests/SqlServerMigrationTests.cs] — fixed: added, verified passing against a real Testcontainers-provisioned SQL Server instance.
+- [x] [Review][Resolved] Repo structure exceeds the story's original "no variance" Structural Seed diagram — resolved by amending the Project Structure Notes section above to explicitly scope the Structural Seed to `src/`/`web/`/deployment files and document the justified test-infra/tooling additions (`tests/`, `Directory.Packages.props`, `global.json`, `.config/dotnet-tools.json`, `.vscode/`).
+- [x] [Review][Patch] Local dev connection string is broken on the documented golden path [src/EnergyTracker.Api/appsettings.json:13] — fixed: removed the empty `ConnectionStrings:Default` override (was blocking the `??` fallback) and aligned Program.cs's fallback credentials with `.env.example`'s defaults (`energytracker`/`change-me`). While verifying this, found a deeper related issue (see extra fix below) and fixed that too.
+- [x] [Review][Patch] Hardcoded design-time DB credentials compile into the runtime image, contradicting AC6's letter [src/EnergyTracker.Infrastructure.Migrations.Postgres/EnergyTrackerDbContextFactory.cs:12] — fixed: both design-time factories now read `ConnectionStrings__Default` from the environment first, falling back to a credential-free literal.
+- [x] [Review][Patch] docs/local-development.md instructs connecting to `localhost:5432`, but the Postgres service publishes no port [docker-compose.yml:16] — fixed via the extra fix below (new `docker-compose.local.yml` override), rather than by publishing the port in the shared self-host reference file.
+- [x] [Review][Patch] `scripts/add-migration.sh`'s rollback path has no distinct failure signal if the rollback itself fails [scripts/add-migration.sh:33] — fixed: rollback exit status is now checked explicitly with a distinct error message.
+- [x] [Review][Patch] No `.dockerignore` — host `node_modules`/`bin`/`obj` can pollute the Docker build context [Dockerfile:9] — fixed: added `.dockerignore`.
+- [x] [Review][Patch] `Database:Provider` switch is case-sensitive with no normalization [src/EnergyTracker.Api/Program.cs:21] — fixed: switch now compares case-insensitively.
+- [x] [Review][Patch] `global.json` pins the test runner but not the SDK version, leaving version drift vs. the Dockerfile's pinned SDK 10.0 [global.json:1] — fixed: added an `sdk` block (`10.0.100`, `rollForward: latestFeature`).
+- [x] [Review][Patch] `shadcn` is listed under `dependencies` instead of `devDependencies` — it's a CLI-only codegen tool, not a runtime import [web/package.json:16] — fixed: moved, `package-lock.json` regenerated.
+- [x] [Review][Extra fix] `docker-compose.yml`'s `postgres` service publishes no host port at all, so the documented local-dev golden path (`dotnet run` on the host + Postgres in Docker) could never connect regardless of credentials — confirmed via `docker compose ps` (`5432/tcp`, not published) and `nc localhost 5432` (connection refused). Fixed by adding `docker-compose.local.yml`, a local-dev-only override publishing `127.0.0.1:5432`, layered in only via `docker compose -f docker-compose.yml -f docker-compose.local.yml`; the self-host reference deployment (`docker-compose.yml` alone) is unchanged and still keeps Postgres unreachable outside the Docker network by default. Verified end-to-end: `dotnet ef database update` against the fallback connection string succeeded through the published port.
+- [x] [Review][Defer] No automated path applies pending EF Core migrations at startup or in self-host docs [src/EnergyTracker.Api/Program.cs:37] — deferred, pre-existing gap that doesn't block this story since `InitialCreate` is empty (no entities yet), but will need addressing once Story 1.5+ adds real entities/tables.
 
 ## Change Log
 

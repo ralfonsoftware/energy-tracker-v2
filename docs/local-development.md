@@ -45,12 +45,17 @@ single Docker image build (used for self-hosting) doesn't.
 ### 1. Start Postgres only
 
 ```bash
-docker compose up postgres -d
+docker compose -f docker-compose.yml -f docker-compose.local.yml up postgres -d
 ```
 
 This starts just the `postgres` service from `docker-compose.yml` — not the
-`api` container. Leave it running; you only need to repeat this after a
-reboot or `docker compose down`.
+`api` container. The `docker-compose.local.yml` override additionally
+publishes Postgres to `127.0.0.1:5432` so the API, running natively via
+`dotnet run` below (not in a container), can reach it; this override is
+local-dev-only and is never used for self-hosting, so the self-host
+reference deployment (`docker-compose.yml` alone) keeps Postgres unreachable
+outside the Docker network by default. Leave the container running; you
+only need to repeat this after a reboot or `docker compose down`.
 
 ### 2. Run the API
 
@@ -101,9 +106,9 @@ launch configurations (Run and Debug panel, or `F5`):
 - **Full stack: API + Frontend** (compound) — runs both of the above
   together. This is the one you want most of the time.
 
-Start Postgres first (`docker compose up postgres -d`, or run the
-`postgres-up` task from the Command Palette → "Tasks: Run Task"), then
-press `F5` and pick **Full stack: API + Frontend**.
+Start Postgres first (`docker compose -f docker-compose.yml -f docker-compose.local.yml up postgres -d`,
+or run the `postgres-up` task from the Command Palette → "Tasks: Run Task"),
+then press `F5` and pick **Full stack: API + Frontend**.
 
 ## Debugging tips
 
@@ -118,7 +123,10 @@ press `F5` and pick **Full stack: API + Frontend**.
   `http://localhost:5173` if you're not using the VS Code launch config.
 - **Database**: connect a DB client (e.g. the VS Code PostgreSQL extension,
   `psql`, or TablePlus/DBeaver) to `localhost:5432`, database/user/password
-  from your `.env`, to inspect data while debugging.
+  from your `.env`, to inspect data while debugging. This only works because
+  `docker-compose.local.yml` (step 1) publishes the port to `127.0.0.1` for
+  local dev — the self-host reference deployment (`docker-compose.yml`
+  alone) keeps Postgres unreachable outside the Docker network by default.
 - **Switching to the SQL Server provider locally**: run
   `docker compose -f docker-compose.yml -f docker-compose.sqlserver.yml up sqlserver -d`
   instead of step 1, then set `Database__Provider=SqlServer` and
@@ -147,8 +155,9 @@ per-test "Run"/"Debug" buttons if you'd rather not use the CLI for e2e tests.
 ## Common issues
 
 - **Port already in use**: another process is bound to `5133` (API),
-  `5173` (Vite), or `5432` (Postgres). Stop the conflicting process, or
-  change the port in `launchSettings.json` / `vite.config.ts` / `.env`
+  `5173` (Vite), or `5432` (Postgres, published locally via
+  `docker-compose.local.yml`). Stop the conflicting process, or change the
+  port in `launchSettings.json` / `vite.config.ts` / `docker-compose.local.yml`
   respectively.
 - **`/health` returns nothing / connection refused from the frontend**:
   the API (step 2) isn't running, or isn't on `5133`. The Vite proxy target
@@ -156,6 +165,6 @@ per-test "Run"/"Debug" buttons if you'd rather not use the CLI for e2e tests.
   update `web/vite.config.ts` too.
 - **EF Core can't connect**: confirm `docker compose ps` shows `postgres`
   as `healthy`, and that `.env`'s `POSTGRES_PASSWORD` matches what the API
-  is using (the API falls back to `postgres`/`postgres` if
-  `ConnectionStrings:Default` isn't set — override it via environment
-  variable if your `.env` password differs).
+  is using (the API falls back to `energytracker`/`change-me` — the
+  `.env.example` defaults — if `ConnectionStrings:Default` isn't set;
+  override it via environment variable if your `.env` password differs).
