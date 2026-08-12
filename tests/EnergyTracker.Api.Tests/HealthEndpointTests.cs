@@ -13,6 +13,6 @@ public class HealthEndpointTests(WebApplicationFactory<Program> factory) : IClas
 
         var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound); // deliberate failure for pr-review.yml live verification
     }
 }
