@@ -7,6 +7,15 @@ name: App Deploy
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - 'tests/**'
+      - 'EnergyTracker.sln'
+      - 'global.json'
+      - 'Dockerfile'
+      - 'Directory.Packages.props'
+      - '.github/workflows/app-deploy.yml'
   workflow_dispatch: {}
 
 permissions:
