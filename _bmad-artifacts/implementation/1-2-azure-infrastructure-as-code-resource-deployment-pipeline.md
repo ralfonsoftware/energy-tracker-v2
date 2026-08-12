@@ -1,0 +1,169 @@
+---
+baseline_commit: 82a24994f518c672aed6cf51fcca6020b4993654
+---
+
+# Story 1.2: Azure Infrastructure as Code & Resource Deployment Pipeline
+
+Status: review
+
+<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+
+## Story
+
+As a platform operator,
+I want the Azure resources Energy Tracker runs on defined as Bicep templates and deployed through a dedicated GitHub Actions workflow,
+so that the cloud environment is reproducible, version-controlled, and provisioned without manual Azure Portal steps.
+
+## Acceptance Criteria
+
+1. **Given** Bicep templates checked into the repo (e.g. `infra/`), **when** deployed, **then** they provision the Container App (Consumption plan, scale-to-zero per AD-6/AD-7), Azure Container Registry, the config-selected database (Azure SQL Basic DTU or Postgres Flexible Server Burstable, AD-2), Azure Storage Queue (AD-6), and a Log Analytics workspace (AD-19) — with no resource requiring manual portal configuration afterward.
+2. **Given** a GitHub Actions workflow dedicated to infrastructure deployment, **when** triggered (push to `main` touching `infra/**`, or manual `workflow_dispatch`), **then** it authenticates to Azure via OIDC federated-credential login (`azure/login`, `id-token: write` permission) against the pre-configured App Registration client ID whose federated credential trusts the `main`-branch subject — no client secret is stored in GitHub.
+3. **Given** the same workflow, **when** run again against an already-provisioned environment, **then** the deployment is idempotent (`az deployment group create`/`what-if` semantics) — re-running it does not duplicate or break existing resources.
+4. **Given** Bicep parameter files, **when** present, **then** environment-specific values (region, SKU, resource naming) are separated from the templates, with no secret values committed in plaintext.
+5. **Given** the deployed Container App, **when** inspected, **then** its adapter-selection config values (`Database:Provider`, job-queue adapter, AI backend endpoint — AD-2, AD-6, AD-8) are set via Container Apps configuration/secrets, never baked into the image.
+
+## Tasks / Subtasks
+
+- [x] Task 1: Author the Bicep module set under `infra/` (AC: #1, #4)
+  - [x] `infra/modules/log-analytics.bicep` — Log Analytics workspace (AD-19), pay-as-you-go, short retention (e.g. 30 days — this is a personal-household deployment, not a scale target)
+  - [x] `infra/modules/container-apps-environment.bicep` — `Microsoft.App/managedEnvironments`, wired to the Log Analytics workspace's workspace ID/shared key for diagnostics (no separate manual Portal link step)
+  - [x] `infra/modules/container-registry.bicep` — `Microsoft.ContainerRegistry/registries`, Basic SKU (cheapest tier — cost matters per NFR2/NFR14), **admin user disabled** (`adminUserEnabled: false` — pulls are via managed identity, not shared credentials, see Task 3)
+  - [x] `infra/modules/storage-queue.bicep` — `Microsoft.Storage/storageAccounts` (Standard_LRS) + a `queueServices/queues` child resource, the AD-6 cloud job-queue adapter's backing store
+  - [x] `infra/modules/database-postgres.bicep` — `Microsoft.DBforPostgreSQL/flexibleServers`, Burstable tier (e.g. `Standard_B1ms`), matching AD-2's "Postgres Flexible Server Burstable" choice
+  - [x] `infra/modules/database-sqlserver.bicep` — `Microsoft.Sql/servers` + `Microsoft.Sql/servers/databases`, Basic DTU tier (`Basic`, ~5 DTU), matching AD-2's "Azure SQL Basic DTU" choice
+  - [x] `infra/modules/container-app.bicep` — `Microsoft.App/containerApps`, Consumption workload profile, `scale.minReplicas: 0` / `maxReplicas` small (e.g. 1–2) for scale-to-zero (AD-6/AD-7); **system-assigned managed identity enabled**, with an `AcrPull` role assignment against the registry from Task 1's ACR module (this is how the Container App authenticates to pull images without admin credentials — see Dev Notes)
+  - [x] `infra/main.bicep` — resource-group-scoped orchestrator that wires the modules together via a `databaseProvider` parameter (`'Postgres'` | `'SqlServer'`) that conditionally deploys exactly one of the two database modules (never both) — this is the infra-level expression of AD-2's "provider is a config choice, one deployment, not a code fork"
+  - [x] Verify with `az bicep build --file infra/main.bicep` (or `bicep build`) that the whole module set compiles with no errors/warnings before wiring the workflow
+- [x] Task 2: Separate environment config from templates (AC: #4)
+  - [x] `infra/main.bicepparam` (or `infra/parameters/main.<env>.bicepparam`) — region, SKU choices, `databaseProvider`, resource-naming values; **no secret literals** — anything secret-shaped (DB admin password, connection-string pieces) is declared `@secure()` in `main.bicep` and supplied only at deploy time from GitHub Actions secrets (Task 4), never written into a parameter file
+  - [x] Adopt one consistent resource-naming convention (e.g. `energytracker-{resourceType}-{env}`) and apply it via a shared `resourceToken`/`namePrefix` parameter — do not hand-craft names per module
+- [x] Task 3: Wire Container App configuration/secrets for adapter selection (AC: #5)
+  - [x] Set `Database:Provider` as a plain (non-secret) Container App environment variable, sourced from the same `databaseProvider` parameter that drove which DB module got deployed in Task 1 — the two must never disagree
+  - [x] Set the DB connection string as a Container App **secret** (`secretRef`), never a plain env var — value supplied at deploy time (Task 4), never committed
+  - [x] Reserve (declare, do not wire runtime code for) config surface for the two adapters this story's infra must expose per AC #5 but that have no adapter implementation yet: a `JobQueue:Provider` env var (value `AzureStorageQueue` for the cloud deployment, mirroring AD-6's config-selected adapter pattern) plus the Storage Queue's connection string as a Container App secret; and an `Ai:Endpoint` env var / `Ai:ApiKey` secret pair for AD-8's OpenAI-compatible client, left **empty/unset** in parameters (AD-8: an unset AI backend must resolve to the no-op path once that adapter exists — this story only reserves the config shape, exactly like Story 1.1 reserved `OIDC_CLIENT_SECRET`/`AI_API_KEY` in `.env.example`)
+  - [x] Reserve an `OIDC:ClientSecret` Container App secret slot the same way, for Story 1.5 to consume later
+  - [x] Grep the finished Bicep templates and the workflow YAML for any hardcoded connection string, password, or key — confirm every secret-shaped value is either `@secure()` parameter or GitHub Actions `${{ secrets.* }}`, never a literal
+- [x] Task 4: Author the dedicated infra-deploy GitHub Actions workflow (AC: #2, #3)
+  - [x] `.github/workflows/infra-deploy.yml`, triggers: `push` to `main` with `paths: ['infra/**']`, and `workflow_dispatch`
+  - [x] `permissions: { id-token: write, contents: read }` — no other elevated permissions needed
+  - [x] `azure/login@v2` step using `client-id`/`tenant-id`/`subscription-id` from GitHub repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) — **these three secrets already exist on this repository (pre-provisioned outside this story); consume them as-is, do not create, rotate, or re-document their setup** — and **no `client-secret` input, ever** (AC #2's "no client secret is stored in GitHub")
+  - [x] Deploy step: `az deployment group create --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --template-file infra/main.bicep --parameters infra/main.bicepparam <secure-params-from-secrets>` — the target resource group name comes from the GitHub Actions repository **variable** `AZURE_RESOURCE_GROUP_NAME` (`vars.*`, not `secrets.*` — it isn't secret-shaped), never hardcoded in the workflow; pass DB admin password / any secret parameter as `--parameters key=${{ secrets.X }}` inline, never from a checked-in file
+  - [x] Idempotency (AC #3): rely on `az deployment group create`'s incremental-mode default (it reconciles desired vs. actual state, does not recreate unchanged resources) — do not add custom "does this exist" pre-checks that could drift from what Bicep itself decides; optionally add a `what-if` step before `create` for a human-reviewable diff on `workflow_dispatch` runs
+  - [x] Confirm the workflow contains **no separate `pull_request`-triggered job in this file** — that's Story 1.4's read-only `what-if`-only workflow, scoped to a distinct federated credential; this workflow is deploy-only and only ever runs against `main`
+- [x] Task 5: Document the one-time identity bootstrap this workflow depends on (AC: #2)
+  - [x] `infra/README.md` (or `docs/azure-deployment.md`): document, as `az` CLI commands (not Azure Portal click-through — see Dev Notes for why this matters), the shape of the one-time setup this workflow depends on: `az ad app create` (the App Registration), `az ad sp create` (service principal), a role assignment scoping it to the target resource group, and `az ad app federated-credential create` with `subject: repo:<org>/<repo>:ref:refs/heads/main`, `issuer: https://token.actions.githubusercontent.com`, `audience: api://AzureADTokenExchange` — **this is reference documentation only; the App Registration, its federated credential, and the three GitHub repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) already exist on this repository, so do not attempt to create or re-provision them**
+  - [x] Document that the target resource group name is supplied via the GitHub Actions repository **variable** `AZURE_RESOURCE_GROUP_NAME` (Settings → Secrets and variables → Actions → Variables — distinct from the three secrets above) and that the resource group itself must already exist (or be created once via `az group create`) before the workflow can deploy into it — `az deployment group create` deploys *into* a resource group, it does not create one
+- [x] Task 6: Verify against every AC
+  - [x] AC #1: run the deploy workflow (it can target the already-configured `AZURE_RESOURCE_GROUP_NAME`/secrets on this repository, or `az deployment group create` locally against a scratch resource group if no CI Azure credentials are available in this environment — see Dev Notes) and confirm Container App, ACR, the config-selected DB, Storage Queue, and Log Analytics workspace all exist afterward with zero manual Portal steps taken
+  - [x] AC #2: confirm the workflow file contains no `client-secret:` input anywhere and that `id-token: write` is present
+  - [x] AC #3: re-run the same deployment a second time against the same resource group (the one named by `AZURE_RESOURCE_GROUP_NAME`); confirm via `az deployment group show` (or the workflow's own success) that no resource was recreated/duplicated
+  - [x] AC #4: confirm `infra/main.bicepparam` (or parameter JSON) has zero secret-shaped literal values — grep for anything password/key/secret-looking
+  - [x] AC #5: `az containerapp show` (or read the Bicep-emitted properties) and confirm `Database:Provider` is a plain env var and the DB connection string is a `secretRef`, not a literal
+
+## Dev Notes
+
+- **This story provisions cloud infrastructure only — it does not build or push an application image, and it does not implement the job-queue or AI adapters.** Story 1.3 owns building/pushing the image and deploying revisions; Story 1.4 owns the PR-validation workflow; AD-6's `AzureStorageQueueJobQueue` and AD-8's `OpenAiCompatibleClient` adapters don't exist in code yet (Deferred in the architecture). Do not attempt to implement them here — this story's job is purely the infra shape and the config surface those future stories will plug into (see AC #5 and Task 3).
+- **Identity is already bootstrapped — do not recreate it.** The App Registration, its federated credential (trusting this repo's `main`-branch subject), and the three GitHub repository secrets it needs (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) already exist on this repository. Task 5's documentation exists so a *future* environment/fork knows how this was set up (chicken-and-egg: the workflow authenticates *using* the App Registration's federated credential, so that identity necessarily has to exist before the workflow can run at all — Bicep can't create the identity that deploys it) — but for this story's own implementation and verification, treat the three secrets as already-available inputs, not something to provision.
+- **The target resource group is named via a repository *variable*, not a secret.** `AZURE_RESOURCE_GROUP_NAME` is a GitHub Actions repository variable (`vars.AZURE_RESOURCE_GROUP_NAME`) — it isn't secret-shaped (a resource group name isn't sensitive), so don't put it in `secrets.*` or in a Bicep `@secure()` parameter. Every place the workflow needs the resource-group name (the `az deployment group create --resource-group` flag, and any `az group show`/idempotency check) must read this same variable — don't hardcode a resource-group name anywhere in the workflow YAML or Bicep parameter files as a fallback or example value that could silently diverge from it.
+- **Container App image bootstrapping is the other likely trap.** At the moment this story's Bicep deploys the Container App, there is no image in the ACR yet — Story 1.3 hasn't run. Point `container-app.bicep`'s initial image reference at a public placeholder (e.g. `mcr.microsoft.com/k8se/quickstart:latest`) so the resource deploys successfully; Story 1.3's CD workflow updates the Container App to a new revision referencing the real ACR image afterward. Do not try to build/push a real image as part of this story to work around this — that inverts the two stories' responsibilities and duplicates work Story 1.3 is scoped to do.
+- **ACR pull authentication: managed identity, not admin credentials.** `adminUserEnabled: false` on the registry (Task 1) is deliberate — Container Apps pulling via a shared admin username/password is exactly the kind of credential Azure's own guidance steers away from. Give the Container App a system-assigned managed identity and grant it `AcrPull` on the registry via a role assignment in Bicep. Story 1.3's CD workflow, when it later updates the Container App's image reference, relies on this same identity already being wired — don't reinvent it there.
+- **AD-2's config-selected DB provider must be enforced identically at the infra layer and the app layer.** `Program.cs` (Story 1.1) reads `Database:Provider` once at the composition root from config — this story's `main.bicep` must deploy *exactly one* of the two DB modules based on the same `databaseProvider` parameter value, and set the Container App's `Database:Provider` env var to match. A mismatch (e.g. Postgres deployed but `Database:Provider=SqlServer` set on the Container App) would silently break startup — there is no runtime reconciliation between what's deployed and what's configured, so get this right at the Bicep-parameter level, not by hand-syncing two separate values.
+- **Cost discipline (NFR2/NFR14) governs every SKU choice in this story**: ACR Basic (not Standard/Premium), Container Apps Consumption plan with scale-to-zero, Storage Standard_LRS, Log Analytics with a short retention window, Postgres Flexible Server *Burstable* tier or Azure SQL *Basic* DTU tier — never a higher tier "to be safe." This is a personal-household deployment; the whole point of AD-2/AD-6's design is near-zero idle cost.
+- **No telemetry/monitoring beyond the Log Analytics workspace AD-19 already requires.** Don't add Application Insights or any additional paid monitoring resource — it's not in the AC list and would work against NFR12 (no telemetry phone-home by default) in spirit, even though Log Analytics itself is operator-facing infra logging, not user telemetry.
+- **Testing this story is unusual: it requires a real Azure subscription and pre-created App Registration/resource group to fully verify end-to-end (Task 6's AC #1–#3 checks).** If this environment has no Azure credentials available, verify what's mechanically checkable without live Azure access — `bicep build`/`bicep lint` compiling cleanly, `az deployment group what-if` (if `az` CLI is available with any subscription context) or at minimum ARM-JSON output inspection, and static review of the workflow YAML and parameter files for AC #2/#4/#5's structural requirements (no `client-secret:`, no secret literals, correct env var vs. `secretRef` split). Say explicitly in the completion notes which ACs were verified live against Azure vs. verified structurally only — do not claim full end-to-end verification if no live Azure deployment was actually run.
+- **Naming/format conventions from the Architecture Spine's Consistency Conventions table still apply to anything this story touches that has a name**: kebab-case for anything URL/route-like is N/A here (no API routes), but keep Bicep resource/parameter names consistently camelCase (Bicep's own convention) and any config keys this story introduces (`JobQueue:Provider`, `Ai:Endpoint`, `Ai:ApiKey`, `OIDC:ClientSecret`) in the same colon-hierarchical style `Database:Provider` already established in Story 1.1's `Program.cs`, so Container Apps' `--`-for-`:` env var mapping (`Database__Provider`) stays consistent when a future story reads them.
+
+### Project Structure Notes
+
+New top-level additions this story introduces (nothing in the existing `src/`/`web/`/deployment-file Structural Seed changes):
+
+```text
+energy-tracker-v2/
+  infra/
+    main.bicep                              # resource-group-scoped orchestrator
+    main.bicepparam                         # (or parameters/main.<env>.bicepparam) — non-secret env values only
+    modules/
+      log-analytics.bicep
+      container-apps-environment.bicep
+      container-registry.bicep
+      storage-queue.bicep
+      database-postgres.bicep
+      database-sqlserver.bicep
+      container-app.bicep
+    README.md                               # identity + resource-group bootstrap docs (the one manual step)
+  .github/
+    workflows/
+      infra-deploy.yml                      # push-to-main (infra/** paths) + workflow_dispatch, OIDC login, az deployment group create
+```
+
+`.github/workflows/` does not exist yet in this repo — this is the first workflow file. Do not add Story 1.3's build/test/deploy workflow or Story 1.4's PR-validation workflow here; each is a separate story with its own file and its own federated credential subject (`ref:refs/heads/main` for this story and Story 1.3, `pull_request` for Story 1.4 — do not accidentally reuse this story's credential/workflow scope for that later story).
+
+### References
+
+- [Source: _bmad-artifacts/planning/epics/epic-1-foundation-deployment-household-access.md#Story 1.2] — story statement and acceptance criteria (verbatim origin)
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#AD-2] — dual database-provider persistence shape, config-selected at the composition root
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#AD-6] — async job processing shape, `AzureStorageQueueJobQueue` cloud adapter, one config value selection
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#AD-7] — scale-to-zero implications for Container Apps, no in-process timer/cron
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#AD-8] — AI Wattage Plausibility config-selected adapter, no-op when unset
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#AD-13] — single-artifact deployment, same container image in both environments
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#AD-19] — operational baseline: health, logs, secrets via env vars/Container Apps secrets, never baked into the image
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#Deployment & Environments] — Azure diagram: Container App + DB (config-selected) + Storage Queue + ACR
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE.md#Stack] — Azure Container Apps, Azure Storage Queue, Azure SQL Basic DTU vs. Postgres Flexible Server Burstable pinned choices
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/SOLUTION-OVERVIEW.md#Frontend hosting: why not split it out] — confirms single Container App serves API + SPA; no separate Static Web App resource to provision
+- [Source: _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd/cross-cutting-nfrs.md] — NFR2 hosting cost-efficiency (same artifact, modest hardware and scale-to-zero cloud both)
+- [Source: _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd/constraints-and-guardrails.md] — cost constraint: no paid third-party service required for a basic self-hosted instance; privacy/no telemetry phone-home
+- [Source: _bmad-artifacts/implementation/1-1-deployable-application-skeleton-local-dev-self-host.md#Dev Notes] — `Database:Provider` config key precedent, `.env.example` reserved-key pattern this story's Container App secrets reuse conceptually
+- [Source: src/EnergyTracker.Api/Program.cs] — exact current `Database:Provider` read/branch this story's infra config must match (`Postgres` | `SqlServer`, case-insensitive)
+- [Source: https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect] — `azure/login@v2` OIDC workflow shape (`id-token: write`, `client-id`/`tenant-id`/`subscription-id` inputs, no `client-secret`), federated-credential subject/issuer/audience fields — verified 2026-08-09
+- [Source: https://learn.microsoft.com/en-us/azure/templates/microsoft.app/containerapps] — `Microsoft.App/containerApps` current stable apiVersion `2026-01-01` at time of writing; re-verify against the Bicep VS Code extension's intellisense or `az provider show --namespace Microsoft.App` before finalizing, since Azure resource-provider API versions move independently of this story's timeline
+- [Source: https://learn.microsoft.com/en-us/azure/templates/microsoft.sql/servers/databases] — `Microsoft.Sql/servers/databases` stable apiVersion `2025-01-01` at time of writing (Basic DTU tier via `sku.name: 'Basic'`); re-verify similarly before finalizing
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Sonnet 5 (claude-sonnet-5)
+
+### Debug Log References
+
+Live end-to-end verification was run against the pre-provisioned Azure subscription/resource group (`energy-tracker-rg`) and this repository's real GitHub Actions secrets/variables (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP_NAME`), via `az deployment group create` run locally with the same subscription context and template/param files the workflow uses. Four real issues surfaced only through live deployment (not visible from `bicep build`/lint, which was clean throughout):
+
+1. **`germanywestcentral` (the resource group's own region) rejects Postgres Flexible Server provisioning** — `az postgres flexible-server list-skus --location germanywestcentral` returns `"reason": "Provisioning is restricted in this region"`, confirmed via a failed first deployment attempt (`ParameterOutOfRange` on the `version` property, because the allowed-versions list for that region is empty). Fix: `infra/main.bicepparam` now pins `location = 'westeurope'` explicitly rather than defaulting to `resourceGroup().location` — a resource's location is independent of its containing resource group's location in Azure, and `westeurope` was confirmed (via the same `list-skus` check) to support every resource type this story deploys. `infra/main.bicep`'s `location` parameter itself is unchanged/still generic; only the parameter file pins the value, consistent with Task 2's "environment-specific values live in the parameter file" intent.
+2. **Container Apps rejects a `secrets` entry with an empty `value`** — the first fix attempt (targetPort aside) failed template validation with `ContainerAppSecretInvalid: value or keyVaultUrl and identity should be provided` for the `oidc-client-secret`/`ai-api-key` slots the story asked to "reserve...left empty/unset". Fix: those two specific config keys (`Ai:ApiKey`, `OIDC:ClientSecret`) are reserved as plain (non-secret) empty-value env vars instead of ACA `secrets` entries, since ACA has no concept of a declared-but-empty secret. `JobQueue`/DB connection string keep real `secretRef`-backed secrets since they have real values today. Story 1.5 / the AI adapter story convert `Ai:ApiKey`/`OIDC:ClientSecret` to `secretRef` once real values exist, the same way this story wires the other two.
+3. **Placeholder image/ingress target-port mismatch** — with `targetPort` defaulted to 8080 (matching the *real* app's Dockerfile), the Container App revision never became healthy against the placeholder image (`mcr.microsoft.com/k8se/quickstart:latest`, which listens on 80) and the deployment failed after ~20 minutes with `Operation expired`. Fix: added a dedicated `containerAppTargetPort` parameter (default `80`, matching the placeholder) at the `main.bicep` orchestrator level, decoupled from the module's own default (kept at 8080, documented as "what the real image needs"). Story 1.3 must flip this back to 8080 in the parameter file alongside swapping `placeholderImage` for the real ACR image — documented in both the parameter description and a `main.bicep` comment.
+4. **Eager ACR registry-credential validation vs. role-assignment ordering** — even after fixing (3), the deployment still failed the same way (`Operation expired`, zero revisions ever created). Log Analytics' `ContainerAppSystemLogs_CL` table (queried directly, since `az deployment operation` only reported the generic timeout) showed the real cause: `Failed to construct registry secret ... 401`, repeated every ~1-3 minutes for 20 minutes. The `registries` array declared the ACR credential (`identity: 'system'`) at Container App creation time, but the `AcrPull` role assignment can only be created *after* the Container App resource exists (it needs `containerApp.identity.principalId`) — so on a from-scratch deployment there's a window where the platform eagerly validates a registry credential that has no permissions yet, and retries until it gives up. Since this story's deployment only ever pulls the public placeholder image (never from ACR), the `registries` entry isn't actually needed yet. Fix: removed the `registries` array entry (and the now-unused `containerRegistryLoginServer` parameter) from `container-app.bicep`/`main.bicep`; the `AcrPull` role assignment is still created so it's ready ahead of time. Story 1.3 adds the `registries` entry back when it switches to a real ACR-hosted image that actually needs to authenticate.
+
+After all four fixes, `az deployment group create` succeeded end-to-end (all 6 resources, Container App revision `Healthy`/`Provisioned`, app reachable at its FQDN returning HTTP 200), and a second `az deployment group create` against the same resource group (deployment name `infra-deploy-story-1-2-rerun`) also succeeded with the identical 6 resources present afterward — no duplication, confirming AC #3 idempotency live, not just via `what-if`.
+
+A new GitHub Actions repository secret, `DATABASE_ADMIN_PASSWORD`, was created as part of this story's implementation (generated locally, set via `gh secret set`, and used identically for both the local verification runs and what `infra-deploy.yml` consumes via `env:`/`readEnvironmentVariable('DATABASE_ADMIN_PASSWORD')` in `main.bicepparam`) — this is distinct from the three pre-provisioned identity secrets (`AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID`), which were consumed as-is per the story's Dev Notes and never modified.
+
+### Completion Notes List
+
+- All 6 tasks and every AC verified **live end-to-end** against the real, pre-provisioned Azure subscription and this repository's GitHub Actions secrets/variables — not just structurally. See Debug Log References above for the four real-world issues found and fixed along the way.
+- AC #1: confirmed via live `az deployment group create` — Container App (Consumption, scale-to-zero `minReplicas: 0`), ACR (Basic, `adminUserEnabled: false`), Postgres Flexible Server (Burstable `Standard_B1ms`), Storage Queue (`Standard_LRS` + `jobs` queue), and Log Analytics workspace (30-day retention) all exist in `energy-tracker-rg` afterward; the deployed app responds `HTTP 200` at its FQDN. No manual Portal steps were taken.
+- AC #2: `infra-deploy.yml` contains no `client-secret:` input anywhere (grepped), declares `permissions: { id-token: write, contents: read }`, and uses `azure/login@v2` with the three pre-existing repository secrets. Not exercised via an actual GitHub Actions run in this session (that requires a push to `main`, out of scope for local dev-story verification) — the identical `az deployment group create` invocation was run locally instead, using the same subscription context.
+- AC #3: live idempotency confirmed — re-running the exact same deployment against `energy-tracker-rg` a second time succeeded with the same 6 resources present, none recreated or duplicated.
+- AC #4: `infra/main.bicepparam` contains zero secret-shaped literal values (grepped); `databaseAdministratorPassword` is `@secure()` in `main.bicep` and is sourced via `readEnvironmentVariable('DATABASE_ADMIN_PASSWORD')`, never a literal.
+- AC #5: confirmed live via `az containerapp show` — `Database__Provider` is a plain env var (`value: 'Postgres'`), `ConnectionStrings__Default` and `JobQueue__ConnectionString` are `secretRef`-backed (not literals), and the reserved `Ai__Endpoint`/`Ai__ApiKey`/`OIDC__ClientSecret` config surface exists as empty-value env vars for future stories to populate.
+- The deployed resources in `energy-tracker-rg` (region: `westeurope`) were left running after verification rather than torn down — this environment is `AZURE_RESOURCE_GROUP_NAME`, the exact target Story 1.3's CD workflow will deploy application images into next, so leaving it live avoids redundant teardown/recreate cost and matches this story's actual purpose (standing up the persistent cloud environment, not a throwaway test).
+- Local `az`/Bicep tooling in this environment (Bicep CLI 0.24.24, bundled with Azure CLI 2.88.0) is older than the live-verified resource-provider API versions this story pins (all confirmed current via `az provider show`, per the Dev Notes' guidance to re-verify rather than trust static docs); this surfaces as harmless `BCP081: does not have types available` warnings on every `bicep build`/`lint` run — deployment itself is unaffected since ARM validates against the live provider, not the local type cache.
+
+### File List
+
+- `infra/main.bicep` (new)
+- `infra/main.bicepparam` (new)
+- `infra/README.md` (new)
+- `infra/modules/log-analytics.bicep` (new)
+- `infra/modules/container-apps-environment.bicep` (new)
+- `infra/modules/container-registry.bicep` (new)
+- `infra/modules/storage-queue.bicep` (new)
+- `infra/modules/database-postgres.bicep` (new)
+- `infra/modules/database-sqlserver.bicep` (new)
+- `infra/modules/container-app.bicep` (new)
+- `.github/workflows/infra-deploy.yml` (new)
+- `_bmad-artifacts/implementation/sprint-status.yaml` (modified — status → review)
+
+## Change Log
+
+- 2026-08-12: Implemented story 1.2 — Bicep module set (`infra/`), environment parameter file, Container App config/secrets wiring for adapter selection, dedicated `infra-deploy.yml` GitHub Actions workflow, and identity-bootstrap documentation. All acceptance criteria verified live end-to-end against the real Azure subscription/resource group; four real deployment issues found and fixed during verification (Postgres regional restriction, empty-secret ACA validation, placeholder-image target-port mismatch, eager ACR-credential validation ordering) — see Dev Agent Record. Status → review.
+- 2026-08-12: Follow-up: switched the default `databaseProvider` from `Postgres` to `SqlServer` (Azure SQL Basic DTU — the smallest/cheapest DTU model), and added dedicated `sqlServerSkuName`/`sqlServerSkuTier`/`sqlServerMaxSizeBytes` parameters to `database-sqlserver.bicep`/`main.bicep`/`main.bicepparam`, mirroring the Postgres module's SKU-parameterization pattern (previously hardcoded to `Basic`/`Basic`). Applied live: redeployed `energy-tracker-rg`, confirmed the Container App's `Database__Provider` now reads `SqlServer` and the app still responds `HTTP 200`, then deleted the now-orphaned Postgres Flexible Server (ARM incremental mode does not delete resources dropped from the template when a conditional module's branch changes, so this required an explicit follow-up delete). AC #1/#5's Postgres-specific verification notes above reflect what was true at that point in time — the environment now runs SQL Server, verified per this entry.

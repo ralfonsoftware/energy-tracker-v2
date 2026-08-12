@@ -1,0 +1,54 @@
+name: Infrastructure Deploy
+
+# Deploy-only workflow for infra/** — never runs against pull requests. Story 1.4 owns a
+# separate, read-only what-if-only workflow scoped to its own federated credential subject.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Azure infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # OIDC federated-credential login — no client-secret input, ever (AC #2). The App
+      # Registration/managed identity and its federated credential (trusting this repo's
+      # main-branch subject) are already bootstrapped; see infra/README.md.
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Human-reviewable diff on manual runs only — does not gate or replace the deploy step
+      # below; az deployment group create's own incremental-mode semantics are what actually
+      # provide idempotency (AC #3).
+      - name: What-if (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam
+
+      - name: Deploy
+        env:
+          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+        run: |
+          az deployment group create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam

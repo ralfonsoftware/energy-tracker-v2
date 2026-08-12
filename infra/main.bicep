@@ -1,0 +1,143 @@
+targetScope = 'resourceGroup'
+
+@description('Environment name, used in resource naming')
+param environmentName string = 'prod'
+
+@description('Azure region for all resources')
+param location string = resourceGroup().location
+
+@description('Config-selected database provider (AD-2) — exactly one of the two DB modules below is deployed to match')
+@allowed([
+  'Postgres'
+  'SqlServer'
+])
+param databaseProvider string = 'SqlServer'
+
+@description('Short, unique token used in resource names for globally-unique resource types (Storage, ACR, Postgres/SQL server FQDNs). Defaults to a token derived from the resource group so names stay stable across re-deployments to the same environment.')
+param resourceToken string = uniqueString(resourceGroup().id)
+
+@description('Log Analytics data retention in days')
+param logAnalyticsRetentionInDays int = 30
+
+@description('Database administrator login name (not secret-shaped)')
+param databaseAdministratorLogin string = 'etadmin'
+
+@description('Database administrator password — supplied at deploy time from a GitHub Actions secret, never committed')
+@secure()
+param databaseAdministratorPassword string
+
+@description('Postgres Burstable SKU')
+param postgresSkuName string = 'Standard_B1ms'
+
+@description('Postgres storage size in GB')
+param postgresStorageSizeGB int = 32
+
+@description('Azure SQL DTU-model SKU name, e.g. \'Basic\' (5 DTU), \'S0\'..\'S12\' (Standard), \'P1\'..\'P15\' (Premium). Defaults to the smallest/cheapest DTU model.')
+param sqlServerSkuName string = 'Basic'
+
+@description('Azure SQL DTU-model SKU tier corresponding to sqlServerSkuName (\'Basic\', \'Standard\', or \'Premium\') — must stay in sync with sqlServerSkuName above.')
+param sqlServerSkuTier string = 'Basic'
+
+@description('Azure SQL max database size in bytes. Basic tier caps at 2 GB (2147483648); raise this if sqlServerSkuName/sqlServerSkuTier move to a Standard/Premium tier with more headroom.')
+param sqlServerMaxSizeBytes int = 2147483648
+
+@description('Container App scale-to-zero minimum replica count (AD-6/AD-7)')
+param containerAppMinReplicas int = 0
+
+@description('Container App maximum replica count')
+param containerAppMaxReplicas int = 1
+
+@description('Initial placeholder container image — Story 1.3 replaces this with the real ACR image')
+param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
+
+@description('Port the ingress health-checks and routes traffic to. Must match whatever image is currently deployed: the placeholder image above listens on 80, while the real app image (Dockerfile ASPNETCORE_HTTP_PORTS) listens on 8080 — Story 1.3 must update this alongside swapping placeholderImage for the real ACR image, or the revision will never become healthy.')
+param containerAppTargetPort int = 80
+
+// Shared naming convention: energytracker-{resourceType}-{env}, applied via this namePrefix so no
+// module hand-crafts its own name. Storage/ACR/DB-server names are globally unique DNS names with
+// their own stricter character-set/length rules, so they additionally fold in resourceToken.
+var namePrefix = 'energytracker-${environmentName}'
+var globalToken = toLower(take(resourceToken, 10))
+
+module logAnalytics 'modules/log-analytics.bicep' = {
+  name: 'log-analytics'
+  params: {
+    name: '${namePrefix}-law'
+    location: location
+    retentionInDays: logAnalyticsRetentionInDays
+  }
+}
+
+module containerAppsEnvironment 'modules/container-apps-environment.bicep' = {
+  name: 'container-apps-environment'
+  params: {
+    name: '${namePrefix}-cae'
+    location: location
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
+    logAnalyticsCustomerId: logAnalytics.outputs.customerId
+  }
+}
+
+module containerRegistry 'modules/container-registry.bicep' = {
+  name: 'container-registry'
+  params: {
+    // ACR names: alphanumeric only, 5-50 chars, globally unique — no hyphens allowed.
+    name: toLower('energytracker${environmentName}${globalToken}acr')
+    location: location
+  }
+}
+
+module storageQueue 'modules/storage-queue.bicep' = {
+  name: 'storage-queue'
+  params: {
+    // Storage account names: lowercase alphanumeric only, max 24 chars, globally unique.
+    name: toLower('et${environmentName}${globalToken}sa')
+    location: location
+  }
+}
+
+module databasePostgres 'modules/database-postgres.bicep' = if (databaseProvider == 'Postgres') {
+  name: 'database-postgres'
+  params: {
+    name: '${namePrefix}-${globalToken}-psql'
+    location: location
+    administratorLogin: databaseAdministratorLogin
+    administratorLoginPassword: databaseAdministratorPassword
+    skuName: postgresSkuName
+    storageSizeGB: postgresStorageSizeGB
+  }
+}
+
+module databaseSqlServer 'modules/database-sqlserver.bicep' = if (databaseProvider == 'SqlServer') {
+  name: 'database-sqlserver'
+  params: {
+    name: '${namePrefix}-${globalToken}-sql'
+    location: location
+    administratorLogin: databaseAdministratorLogin
+    administratorLoginPassword: databaseAdministratorPassword
+    skuName: sqlServerSkuName
+    skuTier: sqlServerSkuTier
+    maxSizeBytes: sqlServerMaxSizeBytes
+  }
+}
+
+module containerApp 'modules/container-app.bicep' = {
+  name: 'container-app'
+  params: {
+    name: '${namePrefix}-app'
+    location: location
+    containerAppsEnvironmentId: containerAppsEnvironment.outputs.id
+    containerRegistryName: containerRegistry.outputs.name
+    placeholderImage: placeholderImage
+    databaseProvider: databaseProvider
+    databaseConnectionString: databaseProvider == 'Postgres' ? databasePostgres.outputs.connectionString : databaseSqlServer.outputs.connectionString
+    storageQueueConnectionString: storageQueue.outputs.connectionString
+    minReplicas: containerAppMinReplicas
+    maxReplicas: containerAppMaxReplicas
+    targetPort: containerAppTargetPort
+  }
+}
+
+output containerAppFqdn string = containerApp.outputs.fqdn
+output containerRegistryLoginServer string = containerRegistry.outputs.loginServer
+output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceId

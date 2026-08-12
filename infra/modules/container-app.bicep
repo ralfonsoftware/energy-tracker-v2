@@ -1,0 +1,155 @@
+@description('Name of the Container App')
+param name string
+
+@description('Azure region for the Container App')
+param location string
+
+@description('Resource ID of the Container Apps managed environment')
+param containerAppsEnvironmentId string
+
+@description('Name of the Container Registry the app pulls from (used for the AcrPull role assignment scope)')
+param containerRegistryName string
+
+@description('Initial container image. No image exists in the ACR until Story 1.3 builds/pushes one, so this deploys against a public placeholder; Story 1.3\'s CD workflow updates the revision to the real ACR image afterward.')
+param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
+
+@description('The config-selected database provider (AD-2) — must match whichever DB module main.bicep deployed')
+@allowed([
+  'Postgres'
+  'SqlServer'
+])
+param databaseProvider string
+
+@description('Database connection string, stored as a Container App secret, never a plain env var')
+@secure()
+param databaseConnectionString string
+
+@description('Storage Queue connection string for the AD-6 AzureStorageQueue job-queue adapter, stored as a Container App secret')
+@secure()
+param storageQueueConnectionString string
+
+@description('Scale-to-zero minimum replica count (AD-6/AD-7)')
+param minReplicas int = 0
+
+@description('Maximum replica count — kept small, this is a personal-household deployment')
+param maxReplicas int = 1
+
+@description('Port the ingress health-checks and routes traffic to — must match whatever image is currently deployed (placeholderImage listens on 80; the real app image listens on 8080 per Dockerfile ASPNETCORE_HTTP_PORTS)')
+param targetPort int = 8080
+
+// Well-known built-in role definition ID for "AcrPull" — stable across subscriptions/tenants.
+var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+
+resource registry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = {
+  name: containerRegistryName
+}
+
+resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
+  name: name
+  location: location
+  // System-assigned managed identity — used for AcrPull below; no shared/admin registry credentials.
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironmentId
+    workloadProfileName: 'Consumption'
+    configuration: {
+      ingress: {
+        external: true
+        targetPort: targetPort
+        transport: 'auto'
+      }
+      // No `registries` entry yet: this deployment only ever pulls the public placeholderImage
+      // below, never an ACR-hosted one. Declaring an ACR registry credential here before any
+      // image actually needs it makes the platform eagerly validate it during provisioning —
+      // which fails with a 401 (retried for ~20 min until the deployment times out), because the
+      // AcrPull role assignment further down can only be created *after* this resource exists
+      // (it needs containerApp.identity.principalId), so there's no way for that role to have
+      // propagated yet on this same deployment. The role assignment is still created below so
+      // it's ready ahead of time; Story 1.3 adds the `registries` entry back once it switches
+      // placeholderImage for a real ACR image that actually needs to authenticate to pull it.
+      // oidc-client-secret and ai-api-key are NOT declared here: Container Apps rejects a
+      // secret whose value is an empty string (it requires a non-empty value or a Key Vault
+      // reference), so a genuinely-unset secret can't be "reserved" as an ACA secret slot. The
+      // config surface is instead reserved via the corresponding plain (empty-value) env vars
+      // below — Story 1.5 / the AI adapter story convert those specific env vars to secretRef
+      // once a real value exists, the same way db-connection-string/storage-queue-connection-
+      // string are wired here.
+      secrets: [
+        {
+          name: 'db-connection-string'
+          value: databaseConnectionString
+        }
+        {
+          name: 'storage-queue-connection-string'
+          value: storageQueueConnectionString
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'energy-tracker'
+          image: placeholderImage
+          env: [
+            // Database:Provider (AD-2) — sourced from the same parameter that drove which DB
+            // module main.bicep deployed; the two must never disagree.
+            {
+              name: 'Database__Provider'
+              value: databaseProvider
+            }
+            {
+              name: 'ConnectionStrings__Default'
+              secretRef: 'db-connection-string'
+            }
+            // JobQueue adapter selection (AD-6) — config surface reserved for the cloud adapter;
+            // no adapter implementation exists in code yet (Deferred).
+            {
+              name: 'JobQueue__Provider'
+              value: 'AzureStorageQueue'
+            }
+            {
+              name: 'JobQueue__ConnectionString'
+              secretRef: 'storage-queue-connection-string'
+            }
+            // AD-8 AI backend — config surface reserved, left unset (no adapter implementation yet).
+            // An unset AI backend must resolve to the no-op path once that adapter exists.
+            {
+              name: 'Ai__Endpoint'
+              value: ''
+            }
+            {
+              name: 'Ai__ApiKey'
+              value: ''
+            }
+            // Reserved for Story 1.5 (household provisioning via OIDC) — left empty until then,
+            // mirroring Story 1.1's .env.example OIDC_CLIENT_SECRET reservation pattern.
+            {
+              name: 'OIDC__ClientSecret'
+              value: ''
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: minReplicas
+        maxReplicas: maxReplicas
+      }
+    }
+  }
+}
+
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(registry.id, containerApp.id, 'AcrPull')
+  scope: registry
+  properties: {
+    roleDefinitionId: acrPullRoleDefinitionId
+    principalId: containerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+output id string = containerApp.id
+output name string = containerApp.name
+output fqdn string = containerApp.properties.configuration.ingress.fqdn
