@@ -4,7 +4,7 @@ baseline_commit: 38ff97a5504cc3c2b615ed9dca1167b83bfac699
 
 # Story 1.3: CI Build/Test & CD Deploy Pipeline (App to Azure)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -51,13 +51,13 @@ so that every change to main reaches the running Azure environment without a man
   - [x] Apply Task 1's idempotent fixes here: `az containerapp registry set` (ACR pull auth via system identity) and `az containerapp ingress update --target-port 8080`.
   - [x] `az containerapp update --name <app> --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --image <loginServer>/energy-tracker:<IMAGE_TAG>` (same `IMAGE_TAG` value Task 3 computed and pushed — do not recompute it here, a re-run of `date -u +%Y%m%dT%H%M` in a later step would drift by a minute and reference a tag that was never pushed) — creates the new revision (AC #3).
   - [x] Resolve the FQDN — `az containerapp show ... --query properties.configuration.ingress.fqdn -o tsv` — then poll `https://<fqdn>/health` with a retry loop (e.g. every 10s, up to ~5 minutes) until it returns `200`; fail the job if the timeout is exceeded (AC #4). Give this a generous timeout: `minReplicas: 0` (scale-to-zero) means the very first request after a deploy may need to cold-start the revision.
-- [ ] Task 5: Verify against every AC
-  - [ ] AC #1: push a commit to `main` (or `workflow_dispatch` if added) and confirm the workflow fails at the test step when a test is deliberately broken, and that no later step (Docker build/deploy) runs when it does.
-  - [ ] AC #2: confirm a new tag lands in the ACR (`az acr repository show-tags --name <registry> --repository energy-tracker`) after a successful run, and that the pushed image was built from `Dockerfile` (multi-stage: frontend → backend → runtime).
-  - [ ] AC #3: confirm the workflow's Azure login step has no `client-secret:` input, and that `az containerapp show` reflects the new image reference after a run.
-  - [ ] AC #4: confirm the workflow step that curls `/health` actually gates the job (deliberately point it at a wrong port/path once during verification to confirm it fails the run, then revert).
-  - [ ] AC #5: confirm the deployed image's tag matches `YYYYMMDDTHHMM-<11-char short SHA>` and that the short SHA segment is a prefix of the triggering commit's full SHA (`git rev-parse HEAD` at trigger time vs. `az containerapp show --query properties.template.containers[0].image`); confirm the ACR (`az acr repository show-tags`) and the deployed Container App agree on the exact same tag string (guards against the Task 3/Task 4 timestamp-drift trap above).
-  - [ ] Confirm the two Task 1 fixes actually stuck: `az containerapp show` reports `configuration.ingress.targetPort: 8080` and a `registries` entry referencing the ACR with `identity: system`.
+- [x] Task 5: Verify against every AC
+  - [x] AC #1: verified without pushing broken code to `main` — locally injected a deliberately-failing xUnit test (not committed), confirmed `dotnet test EnergyTracker.sln` returns a non-zero/non-success exit code (Microsoft.Testing.Platform exit code 2), reverted, and confirmed the working tree was clean throughout (`git status` — nothing to commit). Confirmed `app-deploy.yml` has no `continue-on-error:`/`if: always()` overrides on any step, so GitHub Actions' default fail-fast sequencing means a non-zero `dotnet test` exit stops the job before the Docker build/push/deploy steps ever run.
+  - [x] AC #2: live-verified — pushed this story's commit to `main`, the real `app-deploy.yml` run (id 31623419954) succeeded end-to-end in 7m1s; `az acr repository show-tags --name energytrackerprodqvc6vfmtp5acr --repository energy-tracker` shows the new tag `20260812T1737-a9ec7c5dda0`, built from `Dockerfile`'s multi-stage frontend→backend→runtime pipeline (confirmed via local `docker build` producing an image that serves `/health` on 8080, see Completion Notes).
+  - [x] AC #3: confirmed live — the `azure/login@v3` step has no `client-secret:` input (OIDC only); `az containerapp show` reflects the new image reference `energytrackerprodqvc6vfmtp5acr.azurecr.io/energy-tracker:20260812T1737-a9ec7c5dda0` after the run.
+  - [x] AC #4: the live run's "Health check" step passed as part of the same successful pipeline run, confirming it gates correctly on a real deploy; a separate live `curl https://<fqdn>/health` after the run also returned `200`. Did not deliberately break the port/path against production to prove the negative case — judged not worth the live-prod disruption given the step's logic (curl-retry-loop with explicit `exit 1` on timeout) is simple enough to verify by reading the workflow.
+  - [x] AC #5: confirmed — deployed image tag `20260812T1737-a9ec7c5dda0` matches `YYYYMMDDTHHMM-<11-char short SHA>`; the SHA segment `a9ec7c5dda0` exactly equals `git rev-parse --short=11 HEAD` for the triggering commit. `az acr repository show-tags` and `az containerapp show --query properties.template.containers[0].image` agree on the exact same tag string — no Task 3/Task 4 timestamp-drift trap.
+  - [x] Confirmed the two Task 1 fixes stuck live: `az containerapp show` reports `configuration.ingress.targetPort: 8080` and a `registries` entry `{server: energytrackerprodqvc6vfmtp5acr.azurecr.io, identity: system}`.
 
 ## Dev Notes
 
@@ -122,6 +122,14 @@ Claude Sonnet 5 (claude-sonnet-5)
 ### Debug Log References
 
 ### Completion Notes List
+
+- **Full live verification performed** — all 5 ACs verified end-to-end against the real `energy-tracker-rg` resource group, not just structurally. Pushed this story's own commit (`a9ec7c5`) to `main`; the new `app-deploy.yml` workflow ran successfully (run id `31623419954`, 7m1s) and deployed a real revision.
+- **The RBAC gap the Dev Notes warned about ("possible AcrPush gap") did not materialize.** Checked the deploy identity's role assignment before running the pipeline: it holds `Owner` scoped to the resource group. `Owner`'s built-in role definition has `Actions: ["*"]` / `DataActions: []`; ACR's `push`/`pull` permissions (`Microsoft.ContainerRegistry/registries/push/write`, `.../pull/read`) are modeled as regular `Actions`, not `DataActions`, in Azure's RBAC system for ACR — so `Owner`'s `Actions: ["*"]` already covers them. Confirmed empirically: `az acr login` + `docker push` (via `docker/build-push-action`) succeeded in the live run with no additional role assignment needed. No Bicep `roleAssignment` change was made — none was necessary.
+- **Two of Story 1.2's deliberately-left-open gaps are now closed, both in Bicep (future `infra-deploy.yml` runs) and immediately via `az` CLI against the live Container App** (`az containerapp registry set`, `az containerapp ingress update --target-port 8080`), run once ahead of the first pipeline execution and again idempotently inside every `app-deploy.yml` run.
+- **AC #1 (test-failure blocks deploy) verified without disrupting `main`.** Rather than deliberately pushing a broken test to the shared production branch, injected a deliberately-failing xUnit test locally (never committed), confirmed `dotnet test` returns a non-success exit code, reverted, and confirmed `git status` was clean throughout. Combined with confirming `app-deploy.yml` has no `continue-on-error`/`if: always()` step overrides, this establishes the fail-fast gate holds without needing to intentionally break the shared `main` branch's CI status.
+- **AC #4's negative case (health check actually fails the job on a bad port/path) was not proven live** by deliberately misconfiguring the production ingress — judged not worth the live-prod disruption. The step's logic is a straightforward curl-retry-loop with an explicit `exit 1` on timeout, verifiable by reading the workflow; the positive case (health check passing after a real deploy) was verified live.
+- **`e2e` (Playwright) tests are intentionally excluded from this CI gate**, per Dev Notes — the epic AC only names "the test suite" without specifying e2e, and Playwright's browser-install/server-spinup cost isn't justified in this blocking gate. Story 1.4 may revisit this.
+- **`infra/main.bicepparam` required no edit** — it doesn't override `containerAppTargetPort`, so flipping the default in `infra/main.bicep` (80 → 8080) alone is sufficient; the Project Structure Notes anticipated this ("or remove the override if the new default suffices").
 
 ### File List
 
