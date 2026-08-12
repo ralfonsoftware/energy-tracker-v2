@@ -68,15 +68,20 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
         targetPort: targetPort
         transport: 'auto'
       }
-      // No `registries` entry yet: this deployment only ever pulls the public placeholderImage
-      // below, never an ACR-hosted one. Declaring an ACR registry credential here before any
-      // image actually needs it makes the platform eagerly validate it during provisioning —
-      // which fails with a 401 (retried for ~20 min until the deployment times out), because the
-      // AcrPull role assignment further down can only be created *after* this resource exists
-      // (it needs containerApp.identity.principalId), so there's no way for that role to have
-      // propagated yet on this same deployment. The role assignment is still created below so
-      // it's ready ahead of time; Story 1.3 adds the `registries` entry back once it switches
-      // placeholderImage for a real ACR image that actually needs to authenticate to pull it.
+      // ACR pull credential via the Container App's own system-assigned identity — no shared
+      // admin credentials. Story 1.2 deliberately omitted this entry on the from-scratch
+      // deployment: declaring it before the AcrPull role assignment below existed made the
+      // platform eagerly validate it during provisioning and fail with a 401 (the role can only
+      // be created after this resource exists, since it needs containerApp.identity.principalId,
+      // so it can't have propagated yet on that same first deployment). That race doesn't apply
+      // on redeploys once the Container App and role assignment already exist live in Azure —
+      // Story 1.3 re-adds this entry now that a real ACR image needs to authenticate to pull it.
+      registries: [
+        {
+          server: registry.properties.loginServer
+          identity: 'system'
+        }
+      ]
       // ai-api-key and oidc-client-secret are reserved with a non-empty placeholder value:
       // Container Apps rejects a secret whose value is an empty string (it requires a
       // non-empty value or a Key Vault reference), so a genuinely-unset secret can't be

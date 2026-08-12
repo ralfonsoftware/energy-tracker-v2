@@ -50,8 +50,8 @@ param containerAppMaxReplicas int = 1
 @description('Initial placeholder container image — Story 1.3 replaces this with the real ACR image')
 param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
-@description('Port the ingress health-checks and routes traffic to. Must match whatever image is currently deployed: the placeholder image above listens on 80, while the real app image (Dockerfile ASPNETCORE_HTTP_PORTS) listens on 8080 — Story 1.3 must update this alongside swapping placeholderImage for the real ACR image, or the revision will never become healthy.')
-param containerAppTargetPort int = 80
+@description('Port the ingress health-checks and routes traffic to. Matches the real app image (Dockerfile ASPNETCORE_HTTP_PORTS=8080), which Story 1.3\'s deploy workflow pushes and deploys; the placeholder image used before Story 1.3 listened on 80.')
+param containerAppTargetPort int = 8080
 
 // Shared naming convention: energytracker-{resourceType}-{env}, applied via this namePrefix so no
 // module hand-crafts its own name. Storage/ACR/DB-server names are globally unique DNS names with
