@@ -20,6 +20,9 @@ param storageSizeGB int = 32
 @description('Name of the application database')
 param databaseName string = 'energytracker'
 
+@description('Postgres major version')
+param version string = '16'
+
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
   name: name
   location: location
@@ -28,7 +31,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' =
     tier: 'Burstable'
   }
   properties: {
-    version: '16'
+    version: version
     administratorLogin: administratorLogin
     administratorLoginPassword: administratorLoginPassword
     storage: {
@@ -61,6 +64,9 @@ resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallR
 }
 
 // Deliberately returned to the caller (main.bicep) to pass into the Container App as a
-// secretRef-backed secret, never a plain env var — see container-app.bicep.
+// secretRef-backed secret, never a plain env var — see container-app.bicep. A @secure() output
+// decorator would mask this in deployment history too, but requires Bicep CLI >=0.29; this
+// environment's installed CLI (0.24.24) rejects that syntax with a hard BCP129 error, so the
+// lint suppression is kept instead — see the story's Review Findings for the follow-up.
 #disable-next-line outputs-should-not-contain-secrets
 output connectionString string = 'Host=${postgresServer.properties.fullyQualifiedDomainName};Database=${databaseName};Username=${administratorLogin};Password=${administratorLoginPassword};SSL Mode=Require'

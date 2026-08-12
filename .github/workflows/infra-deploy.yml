@@ -13,10 +13,20 @@ permissions:
   id-token: write
   contents: read
 
+# Prevents overlapping az deployment group create/what-if runs against the same resource group
+# (e.g. a workflow_dispatch run firing while a push-triggered run is still in progress).
+concurrency:
+  group: infra-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy Azure infrastructure
     runs-on: ubuntu-latest
+    # workflow_dispatch can be run from any ref; push is already restricted to main by the
+    # trigger above, but this guard keeps manual runs from deploying an untested branch to the
+    # shared production resource group.
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,6 +50,7 @@ jobs:
           DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
         run: |
           az deployment group what-if \
+            --name "infra-deploy-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
             --template-file infra/main.bicep \
             --parameters infra/main.bicepparam
@@ -49,6 +60,7 @@ jobs:
           DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
         run: |
           az deployment group create \
+            --name "infra-deploy-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
             --template-file infra/main.bicep \
             --parameters infra/main.bicepparam

@@ -36,6 +36,9 @@ output name string = storageAccount.name
 output queueName string = queue.name
 
 // Deliberately returned to the caller (main.bicep) to pass into the Container App as a
-// secretRef-backed secret, never a plain env var — see container-app.bicep.
+// secretRef-backed secret, never a plain env var — see container-app.bicep. A @secure() output
+// decorator would mask this in deployment history too, but requires Bicep CLI >=0.29; this
+// environment's installed CLI (0.24.24) rejects that syntax with a hard BCP129 error, so the
+// lint suppression is kept instead — see the story's Review Findings for the follow-up.
 #disable-next-line outputs-should-not-contain-secrets
 output connectionString string = 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'

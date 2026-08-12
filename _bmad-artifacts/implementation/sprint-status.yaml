@@ -50,7 +50,7 @@ story_location: "{project-root}/_bmad-artifacts/implementation"
 development_status:
   epic-1: in-progress
   1-1-deployable-application-skeleton-local-dev-self-host: done
-  1-2-azure-infrastructure-as-code-resource-deployment-pipeline: review
+  1-2-azure-infrastructure-as-code-resource-deployment-pipeline: done
   1-3-ci-build-test-cd-deploy-pipeline-app-to-azure: backlog
   1-4-pull-request-review-workflow: backlog
   1-5-household-provisioning-via-oidc: backlog

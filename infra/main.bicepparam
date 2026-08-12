@@ -18,9 +18,9 @@ param location = 'westeurope'
 param environmentName = 'prod'
 
 // Azure SQL Basic DTU (AD-2) — the smallest/cheapest DTU model, per NFR2/NFR14 cost discipline.
+// sqlServerSkuTier is derived from sqlServerSkuName in main.bicep, not a separate parameter.
 param databaseProvider = 'SqlServer'
 param sqlServerSkuName = 'Basic'
-param sqlServerSkuTier = 'Basic'
 param sqlServerMaxSizeBytes = 2147483648
 
 // Postgres params below are inert while databaseProvider = 'SqlServer' (main.bicep only deploys

@@ -23,6 +23,17 @@ Environment-specific values live in `main.bicepparam` — no secrets. Secret-sha
 (`databaseAdministratorPassword`) are `@secure()` parameters supplied only at deploy time from
 GitHub Actions secrets; they are never written into a parameter file.
 
+### Switching `databaseProvider` leaves the old DB server running — delete it manually
+
+`main.bicep` deploys exactly one of `database-postgres.bicep` / `database-sqlserver.bicep`,
+selected by the `databaseProvider` parameter. Azure Resource Manager's incremental deployment
+mode **never deletes a resource whose conditional module branch is dropped** — so switching
+`databaseProvider` (e.g. `Postgres` → `SqlServer`) deploys the new database server but leaves the
+previous one running and billed. After switching providers, manually delete the orphaned server
+(e.g. `az postgres flexible-server delete` / `az sql server delete`) once you've confirmed the new
+one is live. This isn't hypothetical — it happened during this story's own implementation; see the
+story file's Change Log.
+
 ## One-time identity bootstrap (already done — reference only)
 
 The workflow authenticates to Azure via OIDC federated-credential login

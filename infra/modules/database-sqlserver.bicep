@@ -58,6 +58,9 @@ resource allowAzureServices 'Microsoft.Sql/servers/firewallRules@2025-01-01' = {
 }
 
 // Deliberately returned to the caller (main.bicep) to pass into the Container App as a
-// secretRef-backed secret, never a plain env var — see container-app.bicep.
+// secretRef-backed secret, never a plain env var — see container-app.bicep. A @secure() output
+// decorator would mask this in deployment history too, but requires Bicep CLI >=0.29; this
+// environment's installed CLI (0.24.24) rejects that syntax with a hard BCP129 error, so the
+// lint suppression is kept instead — see the story's Review Findings for the follow-up.
 #disable-next-line outputs-should-not-contain-secrets
 output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};User ID=${administratorLogin};Password=${administratorLoginPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'

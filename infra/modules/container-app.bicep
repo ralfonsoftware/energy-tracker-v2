@@ -28,6 +28,14 @@ param databaseConnectionString string
 @secure()
 param storageQueueConnectionString string
 
+@description('Placeholder secret value for the AD-8 OpenAI-compatible AI backend API key — no adapter implementation exists yet. The AI adapter story must thread a real value from main.bicep once one exists; until then this reserves the secret slot with a non-empty sentinel (ACA rejects a secrets entry with an empty value).')
+@secure()
+param aiApiKeySecretValue string = 'unset'
+
+@description('Placeholder secret value for Story 1.5\'s OIDC client secret — no real value exists yet. Story 1.5 must thread a real value from main.bicep once one exists; until then this reserves the secret slot with a non-empty sentinel (ACA rejects a secrets entry with an empty value).')
+@secure()
+param oidcClientSecretValue string = 'unset'
+
 @description('Scale-to-zero minimum replica count (AD-6/AD-7)')
 param minReplicas int = 0
 
@@ -69,13 +77,12 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
       // propagated yet on this same deployment. The role assignment is still created below so
       // it's ready ahead of time; Story 1.3 adds the `registries` entry back once it switches
       // placeholderImage for a real ACR image that actually needs to authenticate to pull it.
-      // oidc-client-secret and ai-api-key are NOT declared here: Container Apps rejects a
-      // secret whose value is an empty string (it requires a non-empty value or a Key Vault
-      // reference), so a genuinely-unset secret can't be "reserved" as an ACA secret slot. The
-      // config surface is instead reserved via the corresponding plain (empty-value) env vars
-      // below — Story 1.5 / the AI adapter story convert those specific env vars to secretRef
-      // once a real value exists, the same way db-connection-string/storage-queue-connection-
-      // string are wired here.
+      // ai-api-key and oidc-client-secret are reserved with a non-empty placeholder value:
+      // Container Apps rejects a secret whose value is an empty string (it requires a
+      // non-empty value or a Key Vault reference), so a genuinely-unset secret can't be
+      // declared with value: ''. Story 1.5 / the AI adapter story overwrite these placeholder
+      // values with real ones (via aiApiKeySecretValue/oidcClientSecretValue, threaded from
+      // main.bicep) once real values exist.
       secrets: [
         {
           name: 'db-connection-string'
@@ -84,6 +91,14 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
         {
           name: 'storage-queue-connection-string'
           value: storageQueueConnectionString
+        }
+        {
+          name: 'ai-api-key'
+          value: aiApiKeySecretValue
+        }
+        {
+          name: 'oidc-client-secret'
+          value: oidcClientSecretValue
         }
       ]
     }
@@ -121,13 +136,13 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
             }
             {
               name: 'Ai__ApiKey'
-              value: ''
+              secretRef: 'ai-api-key'
             }
-            // Reserved for Story 1.5 (household provisioning via OIDC) — left empty until then,
-            // mirroring Story 1.1's .env.example OIDC_CLIENT_SECRET reservation pattern.
+            // Reserved for Story 1.5 (household provisioning via OIDC), mirroring Story 1.1's
+            // .env.example OIDC_CLIENT_SECRET reservation pattern.
             {
               name: 'OIDC__ClientSecret'
-              value: ''
+              secretRef: 'oidc-client-secret'
             }
           ]
         }
