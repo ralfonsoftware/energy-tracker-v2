@@ -50,7 +50,7 @@ param containerAppMaxReplicas int = 1
 @description('Initial placeholder container image — Story 1.3 replaces this with the real ACR image')
 param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
-@description('Port the ingress health-checks and routes traffic to. Matches the real app image (Dockerfile ASPNETCORE_HTTP_PORTS=8080), which Story 1.3\'s deploy workflow pushes and deploys; the placeholder image used before Story 1.3 listened on 80.')
+@description('Port the ingress health-checks and routes traffic to. Matches the real app image (Dockerfile ASPNETCORE_HTTP_PORTS=8080), which Story 1.3\'s deploy workflow pushes and deploys; the placeholder image used before Story 1.3 listened on 80. Kept in sync by hand with the hardcoded `--target-port 8080` in .github/workflows/app-deploy.yml\'s "Ensure ACR pull credential and target port" step — that step reapplies 8080 on every push independent of this default, so update both if this value ever changes.')
 param containerAppTargetPort int = 8080
 
 // Shared naming convention: energytracker-{resourceType}-{env}, applied via this namePrefix so no

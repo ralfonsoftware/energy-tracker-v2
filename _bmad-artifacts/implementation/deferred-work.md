@@ -8,3 +8,7 @@
 - GitHub Actions pinned to floating version tags, not commit SHAs (`azure/login@v2`, `actions/checkout@v4`) [.github/workflows/infra-deploy.yml:22,28] — supply-chain hardening opportunity for a workflow with `id-token: write`; not required by any AC.
 - Public ingress with no auth/access-control gate [infra/modules/container-app.bicep:58-62] — expected at this stage since only the public placeholder image is deployed (no real app or data yet); revisit once Story 1.5 (household/OIDC auth) lands to confirm the gate is actually wired before real data is exposed.
 - No approval/environment-protection gate before the deploy step runs [.github/workflows/infra-deploy.yml] — matches AC #2/#3's literal push-to-main auto-deploy design; revisit if a staging environment or required-reviewer policy is ever wanted for this repo.
+
+## Deferred from: code review of story-1-3-ci-build-test-cd-deploy-pipeline-app-to-azure (2026-08-12)
+
+- Re-adding the ACR `registries` entry unconditionally in `container-app.bicep` would reintroduce the exact eager-validation 401 race Story 1.2 removed it to avoid, if `infra-deploy.yml` is ever run against a brand-new environment (Container App + AcrPull role assignment not yet existing) rather than redeployed against the current live Story 1.2 environment [infra/modules/container-app.bicep:79-84] — zero current impact since the live environment already exists; only relevant to a future from-scratch/disaster-recovery redeploy, out of this story's scope.

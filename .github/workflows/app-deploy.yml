@@ -22,8 +22,14 @@ jobs:
   build-test-deploy:
     name: Build, test, and deploy
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 30
     steps:
+      - name: Verify running on main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow only deploys from main (got ${{ github.ref }}). Re-run workflow_dispatch selecting the main branch."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -36,8 +42,11 @@ jobs:
       - name: Restore .NET solution
         run: dotnet restore EnergyTracker.sln
 
+      # Release, to match the configuration the Docker image actually publishes (Dockerfile:
+      # `dotnet publish ... -c Release`) — gating on Debug would test a different build than what
+      # gets deployed.
       - name: Build .NET solution
-        run: dotnet build EnergyTracker.sln --no-restore
+        run: dotnet build EnergyTracker.sln --no-restore --configuration Release
 
       # Runs all three test projects (Api.Tests, Infrastructure.Tests, Architecture.Tests) via the
       # Microsoft.Testing.Platform runner (global.json). Infrastructure.Tests uses Testcontainers,
@@ -45,7 +54,7 @@ jobs:
       # `services:` config is needed. A non-zero exit here fails the job and blocks every later
       # step (build/push/deploy never runs).
       - name: Test .NET solution
-        run: dotnet test EnergyTracker.sln --no-restore
+        run: dotnet test EnergyTracker.sln --no-restore --configuration Release
 
       # node-version matches the Dockerfile's node:22-alpine build stage exactly. web/package.json's
       # @types/node devDependency is ^24, but that's a type-checking version, not the actual Node
@@ -84,6 +93,10 @@ jobs:
         id: acr
         run: |
           LOGIN_SERVER=$(az acr list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].loginServer" -o tsv)
+          if [ -z "$LOGIN_SERVER" ]; then
+            echo "::error::No ACR found in resource group ${{ vars.AZURE_RESOURCE_GROUP_NAME }}"
+            exit 1
+          fi
           echo "login_server=$LOGIN_SERVER" >> "$GITHUB_OUTPUT"
 
       - name: ACR login
@@ -115,11 +128,19 @@ jobs:
         id: app
         run: |
           APP_NAME=$(az containerapp list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].name" -o tsv)
+          if [ -z "$APP_NAME" ]; then
+            echo "::error::No Container App found in resource group ${{ vars.AZURE_RESOURCE_GROUP_NAME }}"
+            exit 1
+          fi
           echo "name=$APP_NAME" >> "$GITHUB_OUTPUT"
 
       # Idempotent — safe to run on every deploy, not just once. Corrects the two gaps Story 1.2
       # deliberately left open (see Task 1 / infra/modules/container-app.bicep, infra/main.bicep)
       # independent of whether infra-deploy.yml has been re-run since those Bicep edits landed.
+      #
+      # --target-port 8080 here must be kept in sync with `containerAppTargetPort`'s default in
+      # infra/main.bicep — this CLI call runs on every push and will silently overwrite the live
+      # port back to 8080 even if that Bicep default is ever changed without updating this value.
       - name: Ensure ACR pull credential and target port
         run: |
           az containerapp registry set \
@@ -132,6 +153,18 @@ jobs:
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
             --target-port 8080
 
+      # Captured before the update so a failed health check below has something concrete to roll
+      # back to — redeploying this exact image reference is the same, already-proven mechanism as
+      # a normal deploy, rather than relying on revision activate/deactivate semantics.
+      - name: Capture current image (pre-deploy, for rollback)
+        id: pre
+        run: |
+          PREV_IMAGE=$(az containerapp show \
+            --name ${{ steps.app.outputs.name }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --query properties.template.containers[0].image -o tsv)
+          echo "image=$PREV_IMAGE" >> "$GITHUB_OUTPUT"
+
       - name: Deploy new revision
         run: |
           az containerapp update \
@@ -142,15 +175,21 @@ jobs:
       # minReplicas: 0 (scale-to-zero, AD-6/AD-7) means the very first request after a deploy may
       # need to cold-start the revision — the retry loop below is generous on purpose so a
       # legitimately-slow-but-successful cold start doesn't make this flaky.
+      #
+      # Checks the just-deployed revision's own direct FQDN (properties.latestRevisionFqdn), not
+      # the app's shared ingress FQDN: in single-revision mode Container Apps keeps the *old*
+      # revision serving 100% of the shared FQDN's traffic until the new one passes the platform's
+      # own (TCP-only) readiness probe, so hitting the shared FQDN here could get an immediate 200
+      # from the old revision without ever having checked the new one at all.
       - name: Health check
         run: |
-          FQDN=$(az containerapp show \
+          NEW_FQDN=$(az containerapp show \
             --name ${{ steps.app.outputs.name }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
-            --query properties.configuration.ingress.fqdn -o tsv)
+            --query properties.latestRevisionFqdn -o tsv)
 
           for i in $(seq 1 30); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$FQDN/health" || echo "000")
+            STATUS=$(curl -s -o /dev/null --max-time 5 --connect-timeout 5 -w "%{http_code}" "https://$NEW_FQDN/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check passed (attempt $i)"
               exit 0
@@ -159,5 +198,9 @@ jobs:
             sleep 10
           done
 
-          echo "Health check failed after 30 attempts (5 minutes)"
+          echo "::error::New revision at https://$NEW_FQDN/health did not become healthy after 30 attempts (5 minutes) — rolling back to previous image ${{ steps.pre.outputs.image }}"
+          az containerapp update \
+            --name ${{ steps.app.outputs.name }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --image ${{ steps.pre.outputs.image }}
           exit 1
