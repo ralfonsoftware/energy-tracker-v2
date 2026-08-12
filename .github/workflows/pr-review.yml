@@ -1,0 +1,139 @@
+name: PR Review
+
+# Runs on every pull request against main — build/test/lint always, infra what-if only when
+# infra/** changed and the PR isn't from a fork. Never deploys anything (contrast with
+# app-deploy.yml/infra-deploy.yml, which only run on push to main).
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Workflow-level (not job-level): applies to both build-test-lint and validate-infra, so a rapid
+# sequence of pushes to the same PR cancels stale runs of both jobs together. Deliberately the
+# opposite of app-deploy.yml/infra-deploy.yml's cancel-in-progress: false — a PR check has no
+# shared-live-resource race to avoid, and canceling a superseded run saves CI minutes on a commit
+# nobody cares about anymore.
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # --- Build, test, and lint the .NET solution and web frontend (AC #1, #2) -------------------
+  build-test-lint:
+    name: Build, test, and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore .NET solution
+        run: dotnet restore EnergyTracker.sln
+
+      # Release, to match the configuration app-deploy.yml gates and Dockerfile actually publishes
+      # — gating on Debug would test a different build than what gets deployed.
+      - name: Build .NET solution
+        run: dotnet build EnergyTracker.sln --no-restore --configuration Release
+
+      # Runs all three test projects (Api.Tests, Infrastructure.Tests, Architecture.Tests) via the
+      # Microsoft.Testing.Platform runner (global.json). Infrastructure.Tests uses Testcontainers,
+      # which drives Docker directly — ubuntu-latest ships Docker pre-installed, so no extra
+      # `services:` config is needed, as app-deploy.yml already established.
+      - name: Test .NET solution
+        run: dotnet test EnergyTracker.sln --no-restore --configuration Release
+
+      # node-version matches the Dockerfile's node:22-alpine build stage exactly. web/package.json's
+      # @types/node devDependency is ^24, but that's a type-checking version, not the actual Node
+      # runtime the shipped image builds/runs with.
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Build frontend
+        run: npm --prefix web run build
+
+      - name: Test frontend
+        run: npm --prefix web run test
+
+      # AC #2: frontend lint (oxlint) as its own step so a lint failure is individually visible in
+      # the PR checks UI. No backend/.NET lint gate exists yet (no .editorconfig, no analyzers
+      # configured in any .csproj) — deliberately not invented here; see story Dev Notes.
+      - name: Lint frontend
+        run: npm --prefix web run lint
+
+      # Playwright test:e2e is deliberately not included in this gate — same reasoning
+      # app-deploy.yml/Story 1.3 already established (epic AC only names "the test suite" without
+      # specifying e2e; browser-install + server-spinup cost/flakiness isn't justified here).
+
+  # --- Conditional, fork-safe infra what-if validation (AC #3, #4) ----------------------------
+  validate-infra:
+    name: Validate infra changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # No `id-token: write` on build-test-lint — least-privilege boundary, only this job needs OIDC.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      # fetch-depth: 0 (full history) — this job diffs the PR's changed files against base. The
+      # pull_request event's default checkout (refs/pull/N/merge) has no parent history available
+      # in a depth-1 shallow clone, so a plain `git diff` against base.sha would fail.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for infra changes
+        id: changes
+        run: |
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q '^infra/' && echo "infra_changed=true" >> "$GITHUB_OUTPUT" || echo "infra_changed=false" >> "$GITHUB_OUTPUT"
+
+      # Explicit, named guard rather than relying solely on GitHub's implicit platform behavior of
+      # withholding secrets/OIDC tokens from fork-triggered pull_request runs. Making this visible
+      # in the workflow's own logic is what makes AC #4 verifiable by reading the YAML — and gives
+      # a fork PR touching infra/** a clear skip notice instead of an opaque azure/login failure.
+      - name: Check if PR is from a fork
+        id: origin
+        run: echo "is_fork=${{ github.event.pull_request.head.repo.full_name != github.repository }}" >> "$GITHUB_OUTPUT"
+
+      - name: Notice — infra changed but validation skipped (fork PR)
+        if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'true'
+        run: echo "::warning::infra/** changed in this fork PR; what-if validation was skipped (fork PRs never get Azure credentials) — a maintainer should check out the branch locally and run 'az deployment group what-if' before merging."
+
+      # OIDC login relies on the same identity's (energy-tracker-devops-uami) second federated
+      # credential, already provisioned for the pull_request subject — no second identity, no new
+      # credential created by this job. Reuses the same three repository secrets
+      # app-deploy.yml/infra-deploy.yml already use.
+      - name: Azure login (OIDC)
+        if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Read-only what-if only — never `az deployment group create`. That's infra-deploy.yml's
+      # exclusive job, gated to push on main only. Mirrors infra-deploy.yml's manual what-if step
+      # verbatim in mechanism, including DATABASE_ADMIN_PASSWORD (the @secure() bicepparam
+      # parameter needs it to resolve even for a dry-run; what-if does not persist or expose it).
+      - name: What-if validation
+        if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
+        env:
+          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+        run: |
+          az deployment group what-if \
+            --name "pr-review-${{ github.run_id }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam

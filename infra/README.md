@@ -43,10 +43,32 @@ one-time step, done once outside of any pipeline.
 
 **This has already been done for this repository.** The three GitHub repository secrets the
 workflow depends on (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) already exist,
-and the identity they point at already has a federated credential trusting this repo's
-`main`-branch subject, plus a role assignment scoping it to the target resource group. Do not
-recreate or re-provision any of this — the commands below are reference documentation for a
-*future* environment or fork that needs to set this up from scratch.
+and the identity they point at already has **two** federated credentials, plus a role assignment
+scoping it to the target resource group. Do not recreate or re-provision any of this — the
+commands below are reference documentation for a *future* environment or fork that needs to set
+this up from scratch.
+
+- `repo-branch-main` — trusts the `main`-branch push subject. Used by `infra-deploy.yml` and
+  `app-deploy.yml` (deploy-capable runs only).
+- `repo-pr` — trusts the `pull_request` subject. Used by `.github/workflows/pr-review.yml`'s
+  `validate-infra` job for read-only `what-if` validation on same-repo PRs only (fork-originated
+  `pull_request` runs never receive an OIDC token from GitHub regardless of this credential's
+  existence, so this cannot be used to deploy from a fork).
+
+Both credentials' subjects use GitHub's **immutable subject format** (owner/repo database IDs
+appended after `@`, not just names) — this repository was created after GitHub's July 15, 2026
+cutover to that default, so `ref:refs/heads/main`/`pull_request` subjects are suffixed with
+`@<owner-id>` / `@<repo-id>` rather than the plain `repo:owner/repo:...` form older docs and
+tooling may still show:
+
+```text
+repo-branch-main:  repo:ralfonsoftware@121377414/energy-tracker-v2@1327052942:ref:refs/heads/main
+repo-pr:            repo:ralfonsoftware@121377414/energy-tracker-v2@1327052942:pull_request
+```
+
+Verified 2026-08-12 via `az identity federated-credential list --identity-name
+energy-tracker-devops-uami --resource-group energy-tracker-devops-rg`, cross-checked against
+`gh api repos/ralfonsoftware/energy-tracker-v2` (`owner.id` / `id`).
 
 This deployment uses a **user-assigned managed identity** as the OIDC subject rather than a
 classic Entra ID App Registration + service principal — `azure/login@v2` accepts either shape
@@ -75,13 +97,27 @@ az role assignment create \
 
 # 4. Federated credential trusting this repo's main-branch subject — this is what lets
 #    azure/login@v2 exchange a GitHub Actions OIDC token for an Azure access token, with no
-#    stored secret.
+#    stored secret. For repos created after GitHub's July 15, 2026 cutover to the immutable
+#    subject format, use repo:<org>@<org-id>/<repo>@<repo-id>:ref:refs/heads/main instead —
+#    check with `gh api repos/<org>/<repo> --jq '{owner: .owner.id, repo: .id}'`.
 az identity federated-credential create \
   --name repo-branch-main \
   --identity-name <identity-name> \
   --resource-group <bootstrap-resource-group> \
   --issuer https://token.actions.githubusercontent.com \
   --subject repo:<org>/<repo>:ref:refs/heads/main \
+  --audiences api://AzureADTokenExchange
+
+# 4b. Second federated credential trusting the pull_request subject — lets pr-review.yml's
+#     validate-infra job authenticate for read-only what-if validation on same-repo PRs. Fork
+#     PRs never receive an OIDC token from GitHub, so this credential alone cannot be used to
+#     authenticate a deploy-capable run from a fork.
+az identity federated-credential create \
+  --name repo-pr \
+  --identity-name <identity-name> \
+  --resource-group <bootstrap-resource-group> \
+  --issuer https://token.actions.githubusercontent.com \
+  --subject repo:<org>/<repo>:pull_request \
   --audiences api://AzureADTokenExchange
 
 # 5. Set the three GitHub repository secrets from the identity's IDs.
@@ -119,3 +155,42 @@ az deployment group create \
 Re-running this against an already-provisioned resource group is safe: `az deployment group
 create` runs in incremental mode by default, reconciling desired vs. actual state rather than
 recreating unchanged resources.
+
+## PR review workflow and branch protection
+
+[`.github/workflows/pr-review.yml`](../.github/workflows/pr-review.yml) runs on every pull
+request against `main` — build/test/lint always (`build-test-lint` job), and a read-only infra
+`what-if` validation (`validate-infra` job) when `infra/**` changed and the PR isn't from a fork.
+It never deploys anything; that stays exclusive to `infra-deploy.yml`/`app-deploy.yml` on push to
+`main`.
+
+`main` has GitHub branch protection requiring both `build-test-lint` and `validate-infra` as
+passing status checks before a PR can merge (`required_status_checks.strict: true`, no required
+review count or restrictions configured beyond that). Configured 2026-08-12 via:
+
+```bash
+gh api repos/ralfonsoftware/energy-tracker-v2/branches/main/protection \
+  -X PUT \
+  -H "Accept: application/vnd.github+json" \
+  --input - <<'EOF'
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": [
+      { "context": "build-test-lint" },
+      { "context": "validate-infra" }
+    ]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+EOF
+```
+
+Note: `validate-infra`'s Azure-login/what-if steps are conditional (`if:`) on infra files having
+changed and the PR not being from a fork — but the *job* itself still reports an overall pass
+when those steps are skipped (a job's status reflects whether any of its steps failed, not
+whether every step ran). Requiring `validate-infra` as a status check therefore does not block
+PRs that don't touch `infra/**`, or fork PRs that do (those get an `::warning::` annotation
+instead — see the workflow's own "Notice" step).
