@@ -6,7 +6,7 @@ using 'main.bicep'
 // deploy step's environment (see .github/workflows/infra-deploy.yml), and is never written into
 // this checked-in file. resourceToken is left at its resource-group-derived default.
 
-param databaseAdministratorPassword = readEnvironmentVariable('DATABASE_ADMIN_PASSWORD')
+param databaseAdministratorPassword = readEnvironmentVariable('DATABASE_ADMIN_PASSWORD', '')
 
 // Story 1.5 (household provisioning via OIDC) — oidcAuthority/oidcClientId are non-secret, so
 // (unlike the password below) they're literal values here, not environment-variable-sourced.
@@ -20,9 +20,9 @@ param databaseAdministratorPassword = readEnvironmentVariable('DATABASE_ADMIN_PA
 // NOTE: readEnvironmentVariable('OIDC_CLIENT_SECRET') requires the GitHub Actions secret to
 // exist (see infra-deploy.yml) — it does not yet; deploys will fail until a repo admin creates
 // it (flagged explicitly rather than silently deploying against an 'unset' sentinel — Task 6).
-param oidcAuthority = ''
-param oidcClientId = ''
-param oidcClientSecret = readEnvironmentVariable('OIDC_CLIENT_SECRET')
+param oidcAuthority = readEnvironmentVariable('OIDC_AUTHORITY', '')
+param oidcClientId = readEnvironmentVariable('OIDC_CLIENT_ID', '')
+param oidcClientSecret = readEnvironmentVariable('OIDC_CLIENT_SECRET', '')
 
 // Pinned explicitly rather than left at the resource group's own location (germanywestcentral):
 // Postgres Flexible Server provisioning is subscription-restricted in that region at the time of
