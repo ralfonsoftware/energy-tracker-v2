@@ -21,8 +21,12 @@ concurrency:
 
 jobs:
   # --- Build, test, and lint the .NET solution and web frontend (AC #1, #2) -------------------
+  # No `name:` override — the reported status-check context must be the literal job id
+  # (build-test-lint) to match required_status_checks.contexts in branch protection (see
+  # infra/README.md). A display-name override here would silently desync from that requirement
+  # and leave merges permanently blocked, since GitHub matches required checks by context/job id,
+  # not by a human-friendly name.
   build-test-lint:
-    name: Build, test, and lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -77,8 +81,8 @@ jobs:
       # specifying e2e; browser-install + server-spinup cost/flakiness isn't justified here).
 
   # --- Conditional, fork-safe infra what-if validation (AC #3, #4) ----------------------------
+  # No `name:` override here either — same reasoning as build-test-lint above.
   validate-infra:
-    name: Validate infra changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # No `id-token: write` on build-test-lint — least-privilege boundary, only this job needs OIDC.
