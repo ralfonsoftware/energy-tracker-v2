@@ -50,6 +50,16 @@ param containerAppMaxReplicas int = 1
 @description('Initial placeholder container image — Story 1.3 replaces this with the real ACR image')
 param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
+@description('OIDC provider Authority URL (not secret) — a real value requires a live OIDC provider app registration (Entra ID, Auth0, etc.); left blank the app runs but /login is unusable until configured.')
+param oidcAuthority string = ''
+
+@description('OIDC provider Client ID (not secret) — see oidcAuthority.')
+param oidcClientId string = ''
+
+@description('OIDC provider Client Secret — supplied at deploy time from a GitHub Actions secret, never committed. Defaults to the non-empty \'unset\' sentinel container-app.bicep requires when no real value exists yet.')
+@secure()
+param oidcClientSecret string = 'unset'
+
 @description('Port the ingress health-checks and routes traffic to. Matches the real app image (Dockerfile ASPNETCORE_HTTP_PORTS=8080), which Story 1.3\'s deploy workflow pushes and deploys; the placeholder image used before Story 1.3 listened on 80. Kept in sync by hand with the hardcoded `--target-port 8080` in .github/workflows/app-deploy.yml\'s "Ensure ACR pull credential and target port" step — that step reapplies 8080 on every push independent of this default, so update both if this value ever changes.')
 param containerAppTargetPort int = 8080
 
@@ -139,6 +149,9 @@ module containerApp 'modules/container-app.bicep' = {
     databaseProvider: databaseProvider
     databaseConnectionString: databaseProvider == 'Postgres' ? databasePostgres.outputs.connectionString : databaseSqlServer.outputs.connectionString
     storageQueueConnectionString: storageQueue.outputs.connectionString
+    oidcAuthority: oidcAuthority
+    oidcClientId: oidcClientId
+    oidcClientSecretValue: oidcClientSecret
     minReplicas: containerAppMinReplicas
     maxReplicas: containerAppMaxReplicas
     targetPort: containerAppTargetPort

@@ -133,6 +133,25 @@ The equivalent classic App Registration shape (`az ad app create`, `az ad sp cre
 same role assignment and `az ad app federated-credential create` with the same
 subject/issuer/audience) works identically from the workflow's point of view.
 
+## OIDC_CLIENT_SECRET — a second, unrelated "OIDC" (Story 1.5)
+
+Don't confuse this with the "OIDC federated-credential login" described above — that's how this
+workflow itself authenticates to Azure (no client secret, GitHub-Actions-token-based). Story
+1.5's `OIDC_CLIENT_SECRET` is a completely different thing: the Client Secret of the end-user
+sign-in OIDC provider app registration (Entra ID, Auth0, Authentik, Keycloak, etc.) that the
+*deployed application* uses to authenticate household members — see
+[../docs/self-hosting.md](../docs/self-hosting.md) for what to register and where its Authority/
+Client ID/Client Secret get used.
+
+`infra-deploy.yml` reads it from the GitHub repository secret `OIDC_CLIENT_SECRET` and passes it
+through to `main.bicepparam` the same way `DATABASE_ADMIN_PASSWORD` already flows. **This secret
+does not exist yet in this repository** — it must be created by a repo admin
+(`gh secret set OIDC_CLIENT_SECRET`) once a real OIDC provider app registration exists; until
+then, `infra-deploy.yml` runs will fail at the `readEnvironmentVariable('OIDC_CLIENT_SECRET')`
+step in `main.bicepparam`. `oidcAuthority`/`oidcClientId` (not secret) are literal values in
+`main.bicepparam` itself, left blank for the same reason — fill in real values once a provider is
+registered.
+
 ## The target resource group is a repository *variable*, not a secret
 
 `AZURE_RESOURCE_GROUP_NAME` is a GitHub Actions repository **variable**

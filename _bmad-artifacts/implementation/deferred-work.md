@@ -20,3 +20,7 @@
 - GitHub's "require approval to run workflows for first-time/outside contributors" setting, if enabled, could leave a fork PR's Actions run never starting — both required checks stay perpetually pending, blocking merge indefinitely, with no code-level guard possible [.github/workflows/pr-review.yml — fork-handling design] — platform-level setting outside this diff's control; worth a doc note in a future pass.
 - All actions in `pr-review.yml` pinned by mutable major-version tags (`@v7`, `@v6`, `@v3`) rather than SHA [.github/workflows/pr-review.yml] — pre-existing convention from Story 1.2/1.3, propagated rather than introduced by this diff.
 - "Notice — infra changed but validation skipped (fork PR)" step's fork-skip condition relies on no earlier step being able to fail on that path — fine today, but fragile if a future edit inserts an unconditional failing step before it without adding `if: always()` [.github/workflows/pr-review.yml:120-122].
+
+## Deferred from: code review of story-1.5 (2026-08-13)
+
+- `GET /api/session`'s `SingleAsync` throws an unhandled exception if a resolved `HouseholdId` doesn't correspond to an existing `Households` row [src/EnergyTracker.Api/Endpoints/SessionEndpoints.cs:25] — pre-existing gap that only becomes reachable once a future household-deletion feature exists; no code path in this story can produce the inconsistent state today.

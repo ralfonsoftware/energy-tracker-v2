@@ -11,6 +11,11 @@ service, and no support channel is required to complete these steps.
   `docker compose` CLI plugin, included with modern Docker Desktop and Docker
   Engine installs).
 - Git, to clone the repository.
+- An OIDC provider app registration you control — Entra ID, Auth0,
+  Authentik, Keycloak, or any other standards-compliant OIDC provider. There
+  is no bundled sign-in option: authenticating via your configured provider
+  is how the very first Household gets created (no invite code, no manual
+  database step). See step 2 below for the values you'll need from it.
 
 No other software is required — the application itself (API + database) runs
 entirely inside the containers started below.
@@ -35,10 +40,22 @@ Open `.env` in a text editor and set, at minimum:
 - `POSTGRES_PASSWORD` — a password for the bundled Postgres database. Pick
   anything reasonably strong; this database is only reachable from inside
   the Docker network, not the internet.
+- `OIDC_AUTHORITY` — your OIDC provider's Authority/issuer URL (e.g. an
+  Entra ID tenant endpoint, an Auth0 domain, or your Authentik/Keycloak
+  realm URL).
+- `OIDC_CLIENT_ID` — the Client ID from your provider's app registration.
+- `OIDC_CLIENT_SECRET` — the Client Secret from that same app registration.
+  Keep this one actually secret; it's the only OIDC value that is.
 
-The other values in `.env` (`OIDC_CLIENT_SECRET`, `AI_API_KEY`) are reserved
-for features not yet built (household sign-in and AI-assisted insights,
-respectively) — leave them blank for now.
+Register a new "web application" / "confidential client" app in your OIDC
+provider first, with a redirect URI of `https://<your-instance-host>/signin-oidc`
+(or `http://localhost:8080/signin-oidc` while testing locally), then copy
+its Authority, Client ID, and Client Secret into `.env`. Without these three
+values set, the app still starts and `/health` still works, but sign-in is
+unavailable — nobody can create the first Household.
+
+`AI_API_KEY` in `.env` is reserved for a feature not yet built
+(AI-assisted insights) — leave it blank for now.
 
 `.env` is listed in `.gitignore` and is never committed. Nothing in this
 repository or in the built container image contains real secrets; every

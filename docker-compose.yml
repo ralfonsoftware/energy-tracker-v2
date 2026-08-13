@@ -7,7 +7,11 @@ services:
     environment:
       Database__Provider: Postgres
       ConnectionStrings__Default: "Host=postgres;Database=${POSTGRES_DB:-energytracker};Username=${POSTGRES_USER:-energytracker};Password=${POSTGRES_PASSWORD}"
+      Oidc__Authority: "${OIDC_AUTHORITY:-}"
+      Oidc__ClientId: "${OIDC_CLIENT_ID:-}"
       Oidc__ClientSecret: "${OIDC_CLIENT_SECRET:-}"
+      DataProtection__CertificateBase64: "${DATA_PROTECTION_CERTIFICATE_BASE64:-}"
+      DataProtection__CertificatePassword: "${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}"
       Ai__ApiKey: "${AI_API_KEY:-}"
     depends_on:
       postgres:

@@ -6,7 +6,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- IHttpContextAccessor (used by CurrentHouseholdAccessor) and the cookie/OIDC auth types
+         ship in the ASP.NET Core shared framework, not a NuGet package — Infrastructure isn't
+         Sdk.Web like Api, so it needs this FrameworkReference explicitly to see them. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
 
   <PropertyGroup>

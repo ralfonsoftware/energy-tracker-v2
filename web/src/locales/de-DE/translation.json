@@ -1,0 +1,26 @@
+{
+  "app": {
+    "title": "Energy Tracker"
+  },
+  "shell": {
+    "placeholder": "Gerüstversion"
+  },
+  "session": {
+    "loading": "Wird geladen…",
+    "error": "Etwas ist schiefgelaufen. Bitte lade die Seite neu."
+  },
+  "householdCreation": {
+    "heading": "Haushalt einrichten",
+    "description": "Wähle deine Locale und Währung, um loszulegen. Beides kannst du später ändern.",
+    "localeLabel": "Locale",
+    "localeOption": {
+      "de-DE": "Deutsch (Deutschland)",
+      "en-US": "Englisch (USA)"
+    },
+    "currencyLabel": "Währung",
+    "currencyPlaceholder": "z. B. EUR",
+    "submit": "Haushalt erstellen",
+    "submitting": "Wird erstellt…",
+    "errorGeneric": "Beim Erstellen des Haushalts ist ein Fehler aufgetreten. Bitte versuche es erneut."
+  }
+}

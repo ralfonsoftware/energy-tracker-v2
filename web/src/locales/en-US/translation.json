@@ -1,0 +1,26 @@
+{
+  "app": {
+    "title": "Energy Tracker"
+  },
+  "shell": {
+    "placeholder": "Skeleton build"
+  },
+  "session": {
+    "loading": "Loading…",
+    "error": "Something went wrong. Please try reloading the page."
+  },
+  "householdCreation": {
+    "heading": "Set up your Household",
+    "description": "Choose your Locale and Currency to get started. Both are yours to change later.",
+    "localeLabel": "Locale",
+    "localeOption": {
+      "de-DE": "German (Germany)",
+      "en-US": "English (United States)"
+    },
+    "currencyLabel": "Currency",
+    "currencyPlaceholder": "e.g. EUR",
+    "submit": "Create Household",
+    "submitting": "Creating…",
+    "errorGeneric": "Something went wrong creating your Household. Please try again."
+  }
+}

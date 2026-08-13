@@ -12,6 +12,14 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 
+    <!-- Auth — Data Protection key persistence, same 10.0.10 line as the rest of EF Core (AD-17) -->
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.10" />
+    <!-- The OIDC handler's Microsoft.IdentityModel.* dependencies are heavy enough that this
+         handler ships as a separate NuGet package rather than in the shared framework, unlike
+         the cookie handler (which does ship in Microsoft.AspNetCore.App) — verified against
+         NuGet at implementation time, not assumed. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
+
     <!-- Logging -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />

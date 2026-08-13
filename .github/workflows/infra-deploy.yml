@@ -49,6 +49,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
         run: |
           az deployment group what-if \
             --name "infra-deploy-${{ github.run_id }}" \
@@ -59,6 +60,7 @@ jobs:
       - name: Deploy
         env:
           DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
         run: |
           az deployment group create \
             --name "infra-deploy-${{ github.run_id }}" \

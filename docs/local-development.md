@@ -30,6 +30,13 @@ dotnet tool restore         # installs dotnet-ef, pinned in .config/dotnet-tools
 npm --prefix web install
 ```
 
+`OIDC_AUTHORITY`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` can stay blank for
+local dev unless you're specifically working on the sign-in flow — no
+bundled local OIDC provider exists (a deliberate, deferred scope), and the
+app runs fine without them (`/health`, most other work). Sign-in itself
+just won't work until you point them at a real provider app registration —
+see [self-hosting.md](self-hosting.md) for what to register.
+
 ## Running the stack for development
 
 Local development runs three things side by side, each independently

@@ -36,6 +36,12 @@ param aiApiKeySecretValue string = 'unset'
 @secure()
 param oidcClientSecretValue string = 'unset'
 
+@description('OIDC provider Authority URL (not secret) — blank until a real OIDC provider is registered; Program.cs treats a blank ClientId as "OIDC not configured yet" rather than failing every request.')
+param oidcAuthority string = ''
+
+@description('OIDC provider Client ID (not secret) — blank until a real OIDC provider is registered.')
+param oidcClientId string = ''
+
 @description('Scale-to-zero minimum replica count (AD-6/AD-7)')
 param minReplicas int = 0
 
@@ -143,8 +149,16 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
               name: 'Ai__ApiKey'
               secretRef: 'ai-api-key'
             }
-            // Reserved for Story 1.5 (household provisioning via OIDC), mirroring Story 1.1's
-            // .env.example OIDC_CLIENT_SECRET reservation pattern.
+            // Story 1.5 (household provisioning via OIDC) — Authority/ClientId are plain,
+            // non-secret env vars; ClientSecret is a Container App secret (see 'secrets' above).
+            {
+              name: 'OIDC__Authority'
+              value: oidcAuthority
+            }
+            {
+              name: 'OIDC__ClientId'
+              value: oidcClientId
+            }
             {
               name: 'OIDC__ClientSecret'
               secretRef: 'oidc-client-secret'
