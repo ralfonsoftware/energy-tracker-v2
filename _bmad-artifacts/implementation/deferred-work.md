@@ -24,3 +24,12 @@
 ## Deferred from: code review of story-1.5 (2026-08-13)
 
 - `GET /api/session`'s `SingleAsync` throws an unhandled exception if a resolved `HouseholdId` doesn't correspond to an existing `Households` row [src/EnergyTracker.Api/Endpoints/SessionEndpoints.cs:25] — pre-existing gap that only becomes reachable once a future household-deletion feature exists; no code path in this story can produce the inconsistent state today.
+
+## Deferred from: code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
+
+- source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
+  summary: No periodic sweep prunes orphaned `gh-actions-migrate-*` SQL firewall rules left behind by a killed/force-cancelled runner (the in-job `if: always()`+`continue-on-error` cleanup only covers normal step failure, not hard cancellation).
+  evidence: Azure SQL server-level firewall rules have a hard cap (128); enough abandoned runs could eventually exhaust it and start blocking legitimate deploys. Building a reaper is a distinct, separately-scoped task, not part of this hotfix.
+- source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
+  summary: The CI migration step runs `dotnet ef database update` on every deploy with no pre-migration backup/snapshot and no expand/contract discipline documented — a bad migration commits directly against production with no rollback story.
+  evidence: This is a pre-existing characteristic of the overall "migrate on deploy" strategy (not introduced by this diff, which only makes migrations apply where none were applying before); worth a dedicated migration-safety pass once the app has real user data at stake, not blocking for a schema that today only adds new tables.

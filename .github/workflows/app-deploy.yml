@@ -103,6 +103,111 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # --- Apply pending EF Core migrations (fixes: production /login 500s when a schema change
+      # ships without a corresponding migration-apply step) -------------------------------------
+      # SQL server name embeds uniqueString(resourceGroup().id), a token not known at
+      # workflow-authoring time — always resolve it at runtime, never hardcode it. Exactly one SQL
+      # server exists in this resource group by design.
+      - name: Resolve SQL Server name
+        id: sqlserver
+        timeout-minutes: 5
+        run: |
+          SERVER_NAME=$(az sql server list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].name" -o tsv)
+          if [ -z "$SERVER_NAME" ]; then
+            echo "::error::No SQL Server found in resource group ${{ vars.AZURE_RESOURCE_GROUP_NAME }}"
+            exit 1
+          fi
+          echo "name=$SERVER_NAME" >> "$GITHUB_OUTPUT"
+
+      # The SQL Server firewall only allows Azure-internal traffic (see
+      # infra/modules/database-sqlserver.bicep's AllowAzureServices rule) — the GitHub-hosted
+      # runner needs its own public IP whitelisted before it can reach the server to migrate it.
+      - name: Determine GitHub runner public IP
+        id: runnerip
+        timeout-minutes: 5
+        run: |
+          RUNNER_IP=$(curl -s --retry 3 --retry-delay 2 https://api.ipify.org)
+          if ! [[ "$RUNNER_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+            echo "::error::api.ipify.org did not return a valid IPv4 address (got: '$RUNNER_IP')"
+            exit 1
+          fi
+          echo "ip=$RUNNER_IP" >> "$GITHUB_OUTPUT"
+
+      # Rule name is deterministic (keyed on github.run_id) rather than a random token, so the
+      # cleanup step below needs no extra output plumbing — it can reference the same name
+      # directly. Scoped to exactly this run's IP so no other run's traffic is admitted.
+      - name: Whitelist runner IP for migration
+        timeout-minutes: 5
+        run: |
+          az sql server firewall-rule create \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --server ${{ steps.sqlserver.outputs.name }} \
+            --name "gh-actions-migrate-${{ github.run_id }}" \
+            --start-ip-address ${{ steps.runnerip.outputs.ip }} \
+            --end-ip-address ${{ steps.runnerip.outputs.ip }}
+
+      # dotnet-ef is a local tool (.config/dotnet-tools.json) — must be restored before `dotnet ef`
+      # is callable. Connection string mirrors infra/modules/database-sqlserver.bicep's
+      # `connectionString` output exactly; login `etadmin` must stay in sync with
+      # infra/main.bicepparam's `databaseAdministratorLogin`. Never echoed — only referenced via
+      # the shell variable, never printed to the log. Password is brace-escaped per
+      # SqlConnectionStringBuilder convention (doubling any literal `}`) so a password containing
+      # `;`/`=`/other ADO.NET connection-string metacharacters can't corrupt or truncate the
+      # string. Retries with backoff: Azure SQL firewall rule changes can take up to 5 minutes to
+      # propagate, so the first attempt(s) immediately after rule creation may legitimately fail.
+      - name: Apply pending EF Core migrations
+        timeout-minutes: 10
+        env:
+          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+        run: |
+          dotnet tool restore
+
+          SQL_FQDN=$(az sql server show \
+            --name ${{ steps.sqlserver.outputs.name }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --query fullyQualifiedDomainName -o tsv)
+          if [ -z "$SQL_FQDN" ]; then
+            echo "::error::SQL Server ${{ steps.sqlserver.outputs.name }} returned an empty fullyQualifiedDomainName"
+            exit 1
+          fi
+
+          ESCAPED_PASSWORD="${DATABASE_ADMIN_PASSWORD//\}/\}\}}"
+          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;User ID=etadmin;Password={${ESCAPED_PASSWORD}};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+
+          for attempt in 1 2 3 4 5; do
+            if dotnet ef database update \
+              --project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
+              --startup-project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
+              --context EnergyTrackerDbContext \
+              --connection "$CONNECTION_STRING"; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Migration failed after 5 attempts — this can happen if Azure SQL firewall propagation (up to 5 minutes) hadn't completed, or the migration itself is broken"
+              exit 1
+            fi
+            echo "Migration attempt $attempt failed, retrying in 30s (Azure SQL firewall rule changes can take a few minutes to propagate)..."
+            sleep 30
+          done
+
+      # Guaranteed to run even if the migration step above fails, so no temporary public firewall
+      # exposure is ever left lingering on the SQL server. continue-on-error so a transient Azure
+      # API error on the delete call doesn't block the ACR/deploy steps below — the migration
+      # itself already succeeded or failed by this point, and cleanup failing here is a residual
+      # firewall-exposure risk, not a reason to also block shipping the app. Skipped entirely (via
+      # the outputs.name check) when "Resolve SQL Server name" itself never succeeded, since there
+      # would be no rule to delete.
+      - name: Remove GitHub runner IP from SQL firewall
+        if: always() && steps.sqlserver.outputs.name != ''
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --server ${{ steps.sqlserver.outputs.name }} \
+            --name "gh-actions-migrate-${{ github.run_id }}" \
+            || echo "::warning::Failed to remove temporary firewall rule gh-actions-migrate-${{ github.run_id }} — it may need manual cleanup on SQL Server ${{ steps.sqlserver.outputs.name }}"
+
       # ACR name embeds uniqueString(resourceGroup().id), a token not known at workflow-authoring
       # time — always resolve it at runtime, never hardcode it. Exactly one ACR exists in this
       # resource group by design.
