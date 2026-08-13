@@ -57,14 +57,14 @@ jobs:
       - name: Build .NET solution
         run: dotnet build EnergyTracker.sln --no-restore --configuration Release
 
-      # Runs all three test projects (Api.Tests, Infrastructure.Tests, Architecture.Tests) via the
-      # Microsoft.Testing.Platform runner (global.json). Infrastructure.Tests uses Testcontainers,
-      # which drives Docker directly — ubuntu-latest ships Docker pre-installed, so no extra
-      # `services:` config is needed. A non-zero exit here fails the job and blocks every later
-      # step (build/push/deploy never runs).
-      - name: Test .NET solution
-        run: dotnet test EnergyTracker.sln --no-restore --configuration Release
-
+      # Must run before "Test .NET solution" below: EnergyTracker.Api.Tests.AuthenticationTests
+      # asserts GET / falls back to the built SPA shell (wwwroot/index.html), matching AD-13's
+      # single-artifact deployment model where the frontend is always built before the API serves
+      # it. Running the .NET tests first (the original step order) leaves wwwroot with only the
+      # committed .gitkeep placeholder, so that assertion 404s on a clean checkout — it only
+      # happened to pass locally when a stale wwwroot/ build from an earlier `npm run build`
+      # was still sitting on disk.
+      #
       # node-version matches the Dockerfile's node:22-alpine build stage exactly. web/package.json's
       # @types/node devDependency is ^24, but that's a type-checking version, not the actual Node
       # runtime the shipped image builds/runs with.
@@ -81,6 +81,14 @@ jobs:
 
       - name: Test frontend
         run: npm --prefix web run test
+
+      # Runs all three test projects (Api.Tests, Infrastructure.Tests, Architecture.Tests) via the
+      # Microsoft.Testing.Platform runner (global.json). Infrastructure.Tests uses Testcontainers,
+      # which drives Docker directly — ubuntu-latest ships Docker pre-installed, so no extra
+      # `services:` config is needed. A non-zero exit here fails the job and blocks every later
+      # step (build/push/deploy never runs).
+      - name: Test .NET solution
+        run: dotnet test EnergyTracker.sln --no-restore --configuration Release
 
       # --- Build & push Docker image (AC #2, #5) ------------------------------------------------
       - name: Set up Docker Buildx
