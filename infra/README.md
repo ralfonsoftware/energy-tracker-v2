@@ -111,7 +111,10 @@ az identity federated-credential create \
 # 4b. Second federated credential trusting the pull_request subject — lets pr-review.yml's
 #     validate-infra job authenticate for read-only what-if validation on same-repo PRs. Fork
 #     PRs never receive an OIDC token from GitHub, so this credential alone cannot be used to
-#     authenticate a deploy-capable run from a fork.
+#     authenticate a deploy-capable run from a fork. For repos created after GitHub's July 15,
+#     2026 cutover to the immutable subject format, use repo:<org>@<org-id>/<repo>@<repo-id>:
+#     pull_request instead — check with `gh api repos/<org>/<repo> --jq '{owner: .owner.id,
+#     repo: .id}'`.
 az identity federated-credential create \
   --name repo-pr \
   --identity-name <identity-name> \

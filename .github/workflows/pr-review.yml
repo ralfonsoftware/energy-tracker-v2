@@ -22,7 +22,7 @@ concurrency:
 jobs:
   # --- Build, test, and lint the .NET solution and web frontend (AC #1, #2) -------------------
   # No `name:` override — the reported status-check context must be the literal job id
-  # (build-test-lint) to match required_status_checks.contexts in branch protection (see
+  # (build-test-lint) to match required_status_checks.checks[].context in branch protection (see
   # infra/README.md). A display-name override here would silently desync from that requirement
   # and leave merges permanently blocked, since GitHub matches required checks by context/job id,
   # not by a human-friendly name.
@@ -93,15 +93,34 @@ jobs:
       # fetch-depth: 0 (full history) — this job diffs the PR's changed files against base. The
       # pull_request event's default checkout (refs/pull/N/merge) has no parent history available
       # in a depth-1 shallow clone, so a plain `git diff` against base.sha would fail.
+      # No explicit `ref:` — this defaults to the PR's synthetic merge commit
+      # (refs/pull/N/merge), not the PR head branch, so `what-if` below validates what deploying
+      # *after* merging into main would look like. That's the right target for this check, but it
+      # also means a PR with a real merge conflict against main fails this job for reasons
+      # unrelated to the PR's own content.
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      # base.sha/head.sha are commit SHAs from the pull_request event payload, not free-form
+      # attacker-controlled text, so interpolating them into `run:` here is safe.
+      # `--no-renames` so a file moved out of infra/ still shows its old (infra/-prefixed) path
+      # instead of only the new path, which `grep` would otherwise miss entirely. The diff is
+      # written to a file so a `git diff` failure (bad SHA, transient error) is a distinct,
+      # non-swallowed failure — the previous `git diff | grep` pipeline coerced any git diff
+      # failure into `infra_changed=false` because only grep's exit code was checked. Matching is
+      # restricted to `.bicep`/`.bicepparam` files so unrelated infra/-tree changes (e.g. this
+      # file, infra/README.md) don't trigger an Azure login + what-if run.
       - name: Check for infra changes
         id: changes
         run: |
-          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q '^infra/' && echo "infra_changed=true" >> "$GITHUB_OUTPUT" || echo "infra_changed=false" >> "$GITHUB_OUTPUT"
+          git diff --no-renames --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > /tmp/changed-files.txt
+          if grep -qE '^infra/.*\.(bicep|bicepparam)$' /tmp/changed-files.txt; then
+            echo "infra_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "infra_changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Explicit, named guard rather than relying solely on GitHub's implicit platform behavior of
       # withholding secrets/OIDC tokens from fork-triggered pull_request runs. Making this visible
@@ -111,9 +130,15 @@ jobs:
         id: origin
         run: echo "is_fork=${{ github.event.pull_request.head.repo.full_name != github.repository }}" >> "$GITHUB_OUTPUT"
 
+      # Always runs (no `if:` restriction) so it never shows as "skipped" in the Actions UI —
+      # the condition lives in the shell script instead, so the step's own presence/log is
+      # evidence it executed, not just an artifact of GitHub's conditional-step rendering.
       - name: Notice — infra changed but validation skipped (fork PR)
-        if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'true'
-        run: echo "::warning::infra/** changed in this fork PR; what-if validation was skipped (fork PRs never get Azure credentials) — a maintainer should check out the branch locally and run 'az deployment group what-if' before merging."
+        if: always()
+        run: |
+          if [ "${{ steps.changes.outputs.infra_changed }}" = "true" ] && [ "${{ steps.origin.outputs.is_fork }}" = "true" ]; then
+            echo "::warning::infra/** changed in this fork PR; what-if validation was skipped (fork PRs never get Azure credentials) — a maintainer should check out the branch locally and run 'az deployment group what-if' before merging."
+          fi
 
       # OIDC login relies on the same identity's (energy-tracker-devops-uami) second federated
       # credential, already provisioned for the pull_request subject — no second identity, no new

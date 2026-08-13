@@ -4,7 +4,7 @@ baseline_commit: 24a53b1eb0361225ff15302cc9398ef1cc5afcdb
 
 # Story 1.4: Pull Request Review Workflow
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -97,9 +97,11 @@ energy-tracker-v2/
       infra-deploy.yml          # unchanged — do not modify or trigger from pr-review.yml
   infra/
     README.md                   # modified — document the already-existing pull_request federated credential (Task 3) and the branch-protection note (Task 4) in existing documentation sections
+  web/
+    .oxlintrc.json               # modified — no-unused-vars set to error so lint failures actually fail the check (AC #2); a config-only change, not application code
 ```
 
-No changes to `src/`, `web/`, `infra/*.bicep`, or any application code — this is a CI-only story, same category as Story 1.2/1.3 but scoped to pull requests instead of pushes to `main`.
+No changes to `src/`, `web/`'s application code, or `infra/*.bicep` — this is a CI-only story, same category as Story 1.2/1.3 but scoped to pull requests instead of pushes to `main`. The one exception is `web/.oxlintrc.json`, lint configuration rather than application code, needed to make AC #2 actually true (see Completion Notes).
 
 ### References
 
@@ -147,3 +149,18 @@ None — no persistent debug log was needed; all verification was interactive (l
 ### Change Log
 
 - 2026-08-13: Story 1.4 implementation complete. `.github/workflows/pr-review.yml` added (`build-test-lint` + `validate-infra` jobs). Branch protection enabled on `main` requiring both checks. Fixed a job-`name:`/required-status-check-context mismatch that left merges permanently blocked even after checks passed (caught via live PR verification, not structural review alone). Fixed `web/.oxlintrc.json` so `no-unused-vars` violations actually fail CI (oxlint's default `warn` severity doesn't fail the process). Verified the existing `pull_request` federated credential live and documented its actual (immutable-ID) subject format, which differs from what the story's Dev Notes assumed.
+
+### Review Findings
+
+- [x] [Review][Patch] `grep '^infra/'` change-detection both over- and under-triggers — no `.bicep`/`.bicepparam` extension filter (any file under `infra/`, e.g. `infra/README.md`, triggers a full Azure login + `what-if` run — this very diff's own `infra/README.md` change would trigger it) and, separately, `git diff --name-only`'s default rename detection drops the old path entirely when a file is moved *out of* `infra/`, so that removal is invisible to the check [.github/workflows/pr-review.yml:107-110] — fixed: added `--no-renames` and an extension-filtered `grep -E`
+- [x] [Review][Patch] `git diff` failure in the "Check for infra changes" step is silently coerced to `infra_changed=false` — the `&&`/`||` chain evaluates `grep`'s exit code, not `git diff`'s, and no `set -o pipefail` is set, so a broken/failing diff invocation makes a required security-relevant check silently skip validation instead of failing loud [.github/workflows/pr-review.yml:107-110] — fixed: `git diff` now writes to a file first so its own failure is distinct from grep's match result
+- [x] [Review][Patch] "Notice — infra changed but validation skipped (fork PR)" step is gated with a step-level `if:`, contradicting Task 2's explicit instruction ("no `if:` restriction, always runs") — the step now shows as "skipped" for the vast majority of PRs instead of always running with the condition embedded in the shell script [.github/workflows/pr-review.yml:120-122] — fixed: step now uses `if: always()` with the condition moved into the shell script
+- [x] [Review][Patch] Story's own Project Structure Notes ("No changes to `src/`, `web/`, ... application code") and file-tree enumeration omit `web/.oxlintrc.json`, which the diff does modify (and the File List correctly discloses) — the constraint text was never reconciled with the actual scope [_bmad-artifacts/implementation/1-4-pull-request-review-workflow.md — Project Structure Notes] — fixed: file-tree and constraint text updated to disclose the config-only exception
+- [x] [Review][Patch] `infra/README.md`'s new federated-credential bootstrap block for `repo-pr` (step 4b) omits the immutable-subject-format caveat that the pre-existing `repo-branch-main` block (step 4) has, despite Task 3 asking for "the same style" [infra/README.md — step 4b, ~L110-120] — fixed: added the equivalent caveat to step 4b
+- [x] [Review][Patch] `pr-review.yml`'s comment says the reported context must match `required_status_checks.contexts`, but the actual `gh api` payload documented in `infra/README.md` uses the current `checks` array format — stale/imprecise terminology, not a functional bug [.github/workflows/pr-review.yml:30-34] — fixed: comment reworded to `required_status_checks.checks[].context`
+- [x] [Review][Patch] `validate-infra`'s `actions/checkout@v7` step has no explicit `ref:`, so it silently defaults to the PR's synthetic merge-commit (`refs/pull/N/merge`) rather than the PR head branch — a reasonable default for a what-if validation, but undocumented, and it means a PR with a real merge conflict against `main` fails required checks for reasons unrelated to the PR's own content [.github/workflows/pr-review.yml:99-105] — fixed: added an explanatory comment (behavior unchanged, documented as intentional)
+- [x] [Review][Defer] `web/.oxlintrc.json`'s new `"no-unused-vars": "error"` has no ignore pattern for intentionally-unused vars (e.g. `_`-prefixed args) — repo is clean today, but the first legitimate unused-arg case becomes an unexplained CI blocker with no documented escape hatch [web/.oxlintrc.json] — deferred: no current violation, revisit if it starts blocking legitimate code
+- [x] [Review][Defer] Branch-protection `required_status_checks.checks` entries omit `app_id`, so GitHub matches the required check by context string from any reporting source, not only this workflow's job [infra/README.md — branch protection `gh api` payload] — deferred: low practical risk for this repo's trust model, hardening improvement not a defect
+- [x] [Review][Defer] GitHub's "require approval to run workflows for first-time/outside contributors" setting (if enabled at the org/repo level) could leave a fork PR's Actions run never starting, leaving both required checks perpetually pending and merge blocked indefinitely — not addressable in workflow YAML [.github/workflows/pr-review.yml — fork-handling design] — deferred: platform-level setting outside this diff's control, worth a doc note in a future pass
+- [x] [Review][Defer] All actions pinned by mutable major-version tags (`@v7`, `@v6`, `@v3`) rather than SHA, propagating the existing `app-deploy.yml`/`infra-deploy.yml` convention into a third workflow [.github/workflows/pr-review.yml] — deferred, pre-existing convention from Story 1.2/1.3, not introduced by this diff
+- [x] [Review][Defer] "Notice" step's fork-skip condition relies on no earlier step being able to fail on that path — fine today, but fragile if a future edit inserts an unconditional failing step before it without adding `if: always()` [.github/workflows/pr-review.yml:120-122] — deferred: no current defect, note for future editors
