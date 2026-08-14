@@ -172,7 +172,47 @@ So that I can start using the product without any manual database step.
 **When** rendered
 **Then** it contains no hardcoded locale-specific strings or formats — all copy is sourced from the Locale-driven translation mechanism (AD-18)
 
-## Story 1.6: Household Member Invitation
+## Story 1.6: CI/CD Deploy Idempotency — Container App Image Preservation
+
+As a platform operator,
+I want `infra-deploy.yml` to never revert the Container App to the placeholder image,
+So that running an infrastructure-only change (e.g. rotating a secret) doesn't silently take production down.
+
+**Acceptance Criteria:**
+
+**Given** the Container App is currently running a real deployed image (not the placeholder)
+**When** `infra-deploy.yml` runs (push to `infra/**` or manual `workflow_dispatch`)
+**Then** it continues running that same image afterward — `infra-deploy.yml` never overwrites `properties.template.containers[0].image` back to `placeholderImage`
+
+**Given** a brand-new environment with no image ever deployed yet
+**When** `infra-deploy.yml` runs for the first time
+**Then** it still provisions the Container App successfully using the placeholder image (Story 1.2's original bootstrap behavior is preserved)
+
+**Given** `infra-deploy.yml` and `app-deploy.yml` are both idempotent
+**When** either runs multiple times in sequence in any order
+**Then** the final state is always: Container App running the most recently app-deployed image, with whatever secrets/config `infra-deploy.yml` most recently applied
+
+## Story 1.7: OIDC Redirect URI Scheme Correctness Behind Container Apps Ingress
+
+As anyone authenticating against a production deployment,
+I want the app's OIDC `redirect_uri` to always use `https`, matching the identity provider's whitelisted callback URL,
+So that login succeeds instead of failing with a callback URL mismatch.
+
+**Acceptance Criteria:**
+
+**Given** the app runs behind Azure Container Apps' ingress (TLS-terminating, forwards plain HTTP internally)
+**When** the OIDC handler builds `redirect_uri` for the authorize request
+**Then** it uses `https://`, matching exactly what's registered as the allowed callback URL with the OIDC provider
+
+**Given** `ForwardedHeadersOptions` is configured for `X-Forwarded-Proto`/`X-Forwarded-For`
+**When** the middleware evaluates an incoming request from Container Apps' ingress
+**Then** it actually trusts and applies that header — not silently ignored due to default `KnownNetworks`/`KnownProxies` restrictions
+
+**Given** a full login round trip against the real configured OIDC tenant in production
+**When** a user visits `/login`
+**Then** they reach the identity provider's own login page without a "Callback URL mismatch" error
+
+## Story 1.8: Household Member Invitation
 
 As an existing Household member,
 I want to invite additional members to my Household,
@@ -192,7 +232,7 @@ So that everyone sharing this home in real life can also log readings and see th
 **When** they access any Household-scoped data
 **Then** they see only this Household's data, enforced at the data-access layer (AD-3, NFR4)
 
-## Story 1.7: Room, Power Point & Device Management
+## Story 1.9: Room, Power Point & Device Management
 
 As a Household member,
 I want to create, edit, and delete Rooms, Power Points, and Devices,
