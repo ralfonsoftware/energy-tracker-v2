@@ -21,7 +21,13 @@ public class ArchiveRoom(ITaggingScaffoldRepository repository)
             return room;
         }
 
-        room.ArchivedAt = DateTimeOffset.UtcNow;
+        // Postgres' timestamptz has microsecond precision, one tick coarser than
+        // DateTimeOffset's 100ns ticks. Truncate before assigning so the in-memory value
+        // returned from this call matches exactly what a later re-read from the DB
+        // produces — otherwise a second archive call's guard-return would carry a
+        // sub-microsecond-different ArchivedAt than the first call's response.
+        var archivedAt = DateTimeOffset.UtcNow;
+        room.ArchivedAt = archivedAt.AddTicks(-(archivedAt.Ticks % TimeSpan.TicksPerMicrosecond));
         await repository.UpdateRoomAsync(room, cancellationToken);
 
         return room;

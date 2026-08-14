@@ -19,7 +19,10 @@ public class ArchivePowerPoint(ITaggingScaffoldRepository repository)
             return powerPoint;
         }
 
-        powerPoint.ArchivedAt = DateTimeOffset.UtcNow;
+        // See ArchiveRoom's identical truncation for why: keeps this call's in-memory
+        // ArchivedAt byte-identical to what a later re-read from Postgres returns.
+        var archivedAt = DateTimeOffset.UtcNow;
+        powerPoint.ArchivedAt = archivedAt.AddTicks(-(archivedAt.Ticks % TimeSpan.TicksPerMicrosecond));
         await repository.UpdatePowerPointAsync(powerPoint, cancellationToken);
 
         return powerPoint;

@@ -16,7 +16,10 @@ public class ArchiveDevice(ITaggingScaffoldRepository repository)
             return device;
         }
 
-        device.ArchivedAt = DateTimeOffset.UtcNow;
+        // See ArchiveRoom's identical truncation for why: keeps this call's in-memory
+        // ArchivedAt byte-identical to what a later re-read from Postgres returns.
+        var archivedAt = DateTimeOffset.UtcNow;
+        device.ArchivedAt = archivedAt.AddTicks(-(archivedAt.Ticks % TimeSpan.TicksPerMicrosecond));
         await repository.UpdateDeviceAsync(device, cancellationToken);
 
         return device;
