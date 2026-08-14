@@ -171,10 +171,22 @@ var app = builder.Build();
 // instead of https://, breaking login against any provider that requires an exact match.
 // Container Apps' external ingress is the only path into the container (no direct access
 // bypassing it), so trusting X-Forwarded-* headers here without a KnownProxies allowlist is safe.
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// Self-host (docs/self-hosting.md) exposes the container's port directly with no reverse proxy
+// required or documented, so this trust extends to any direct caller there too — but nothing in
+// this codebase treats RemoteIpAddress or X-Forwarded-For as a security signal (no rate limiting,
+// no IP-based auth), and the only consumers of Request.Scheme are the OIDC redirect_uri and the
+// cookie Secure-flag decision, neither exploitable by a client lying about its own scheme. See
+// Story 1.7 Dev Notes for the full per-target analysis.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-});
+};
+// KnownIPNetworks/KnownProxies default to loopback-only, which Container Apps' internal ingress
+// peer never matches — without clearing these, the middleware silently ignores the headers
+// above and Request.Scheme stays "http" (Story 1.7's production bug).
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 // AddProblemDetails() above only backs endpoints that explicitly call Results.Problem(...) —
 // without this, unhandled exceptions bypass RFC 7807 entirely and return a bare empty 500.
