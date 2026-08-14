@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { HouseholdCreationForm, type CreatedHousehold } from '@/components/household-creation/household-creation-form'
+import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
+import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -17,9 +19,15 @@ type SessionState =
   | { status: 'needs-household' }
   | { status: 'ready'; household: CreatedHousehold }
 
+// The first URL in this repo besides "/" that the SPA shell must render distinctly. A single
+// regex check is proportionate to one new path pattern — no router library added for this
+// (see Story 1.5's Dev Notes on deferring react-router until genuinely needed).
+const INVITE_PATH_PATTERN = /^\/join\/([^/]+)\/?$/
+
 function App() {
   const { t } = useTranslation()
   const [state, setState] = useState<SessionState>({ status: 'loading' })
+  const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
 
   useEffect(() => {
     let cancelled = false
@@ -76,9 +84,13 @@ function App() {
 
   useEffect(() => {
     if (state.status === 'unauthenticated') {
-      window.location.href = '/login'
+      // Preserve /join/{token} across the OIDC round trip — otherwise the invited person gets
+      // bounced to "/" after login and loses their invite link entirely (AC #1).
+      window.location.href = inviteToken
+        ? `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`
+        : '/login'
     }
-  }, [state.status])
+  }, [state.status, inviteToken])
 
   if (state.status === 'loading' || state.status === 'unauthenticated') {
     return (
@@ -97,6 +109,21 @@ function App() {
   }
 
   if (state.status === 'needs-household') {
+    if (inviteToken) {
+      return (
+        <InviteAcceptForm
+          token={inviteToken}
+          onJoined={(household) => {
+            // Clear the invite path so the "ready" branch below doesn't mistake this freshly
+            // joined member for someone visiting a stale/foreign invite link (inviteToken is
+            // re-derived from window.location.pathname on every render, not stored in state).
+            window.history.replaceState({}, '', '/')
+            setState({ status: 'ready', household })
+          }}
+        />
+      )
+    }
+
     return (
       <HouseholdCreationForm
         onCreated={(household) => setState({ status: 'ready', household })}
@@ -104,12 +131,28 @@ function App() {
     )
   }
 
+  // A principal that already has a Household visiting a stale/foreign invite link — graceful
+  // handling, not a feature (matches the product's "never a silently-ignored state" discipline).
+  if (inviteToken) {
+    return (
+      <main className="flex min-h-svh flex-col items-center justify-center gap-4 p-4">
+        <p className="text-muted-foreground text-sm">{t('householdInvite.alreadyInHousehold')}</p>
+        <a href="/" className="text-sm underline underline-offset-4">
+          {t('householdInvite.backToApp')}
+        </a>
+      </main>
+    )
+  }
+
   // Real Dashboard is Epic 2, out of scope here — AC #1 only requires "never a broken or empty
   // dashboard," not a built one. This placeholder is Story 1.1's existing skeleton content.
+  // The invite-generation panel lives here rather than a real Settings surface, which doesn't
+  // exist as a built surface yet (Story 1.9's own AC is what first introduces one).
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-4">
       <h1 className="text-2xl font-semibold">{t('app.title')}</h1>
       <Button>{t('shell.placeholder')}</Button>
+      <InviteGeneratePanel />
     </main>
   )
 }

@@ -35,7 +35,9 @@ local dev unless you're specifically working on the sign-in flow — no
 bundled local OIDC provider exists (a deliberate, deferred scope), and the
 app runs fine without them (`/health`, most other work). Sign-in itself
 just won't work until you point them at a real provider app registration —
-see [self-hosting.md](self-hosting.md) for what to register.
+see [self-hosting.md](self-hosting.md) for what to register. (`/login` also
+accepts an optional `returnUrl`, used internally by the Household
+member-invitation flow — informational only, nothing to configure.)
 
 ## Running the stack for development
 

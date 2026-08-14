@@ -54,6 +54,11 @@ its Authority, Client ID, and Client Secret into `.env`. Without these three
 values set, the app still starts and `/health` still works, but sign-in is
 unavailable — nobody can create the first Household.
 
+(`/login` also accepts an optional `returnUrl` query parameter, used
+internally by the Household member-invitation flow to return an invited
+person to their `/join/{token}` link after signing in — no extra
+configuration needed, informational only.)
+
 `AI_API_KEY` in `.env` is reserved for a feature not yet built
 (AI-assisted insights) — leave it blank for now.
 

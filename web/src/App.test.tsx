@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -11,9 +12,32 @@ function mockSession(response: object | null, status = 200) {
   )
 }
 
+function jsonResponse(body: object | null, status = 200) {
+  return new Response(body === null ? null : JSON.stringify(body), { status })
+}
+
+// Routes fetch calls by (method, URL) pair so a single test can mock both /api/session and a
+// second endpoint (e.g. the invite preview/accept calls) with distinct responses.
+function mockFetchRoutes(routes: Array<{ method: string; url: string; respond: () => Response }>) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      const method = (init?.method ?? 'GET').toUpperCase()
+      const route = routes.find((r) => r.method === method && r.url === url)
+      if (!route) {
+        throw new Error(`Unmocked fetch: ${method} ${url}`)
+      }
+
+      return Promise.resolve(route.respond())
+    }),
+  )
+}
+
 describe('App', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    window.history.pushState({}, '', '/')
   })
 
   it('renders the placeholder shell once the session has a Household', async () => {
@@ -45,5 +69,183 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: 'Set up your Household' })).not.toBeInTheDocument()
 
     Object.defineProperty(window, 'location', { value: originalLocation, writable: true })
+  })
+
+  describe('/join/{token} invite-accept flow', () => {
+    it('navigates to /login with the invite path preserved as returnUrl on an unauthenticated 401', async () => {
+      mockSession(null, 401)
+      const originalLocation = window.location
+      const mockLocation = { ...originalLocation, pathname: '/join/sometoken', href: '' }
+      Object.defineProperty(window, 'location', { value: mockLocation, writable: true })
+
+      render(<App />)
+
+      await vi.waitFor(() => expect(window.location.href).toBe('/login?returnUrl=%2Fjoin%2Fsometoken'))
+
+      Object.defineProperty(window, 'location', { value: originalLocation, writable: true })
+    })
+
+    it('renders the accept form when the invite token is valid', async () => {
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse({ expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByRole('heading', { name: 'Join a Household' })).toBeInTheDocument()
+    })
+
+    it('renders invalid copy when the invite token is unknown (404)', async () => {
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse(null, 404) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByText("This invite link is no longer valid. Ask the person who sent it for a new one.")).toBeInTheDocument()
+    })
+
+    it('renders invalid copy when the invite token is expired or already consumed (409)', async () => {
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse(null, 409) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByText("This invite link is no longer valid. Ask the person who sent it for a new one.")).toBeInTheDocument()
+    })
+
+    it('accepting a valid invite transitions to the ready dashboard', async () => {
+      const user = userEvent.setup()
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse({ expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+        {
+          method: 'POST',
+          url: '/api/household-invites/sometoken/accept',
+          respond: () => jsonResponse({ id: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }),
+        },
+      ])
+
+      render(<App />)
+
+      const acceptButton = await screen.findByRole('button', { name: 'Join Household' })
+      await user.click(acceptButton)
+
+      expect(await screen.findByRole('heading', { name: 'Energy Tracker' })).toBeInTheDocument()
+    })
+
+    it('shows a brief message instead of the dashboard when a principal with a Household visits a stale invite link', async () => {
+      window.history.pushState({}, '', '/join/sometoken')
+      mockSession({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' })
+
+      render(<App />)
+
+      expect(
+        await screen.findByText("You already belong to a Household, so this invite link doesn't apply to you."),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Energy Tracker' })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Go to Energy Tracker' })).toHaveAttribute('href', '/')
+    })
+
+    it('still recognizes a trailing-slash invite path', async () => {
+      window.history.pushState({}, '', '/join/sometoken/')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse({ expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByRole('heading', { name: 'Join a Household' })).toBeInTheDocument()
+    })
+
+    it('renders a distinct error message, not invalid copy, when the preview check fails with a transient server error', async () => {
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse(null, 500) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByText('Something went wrong loading this invite. Please try again.')).toBeInTheDocument()
+      expect(screen.queryByText("This invite link is no longer valid. Ask the person who sent it for a new one.")).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Go to Energy Tracker' })).toHaveAttribute('href', '/')
+    })
+
+    it('renders a distinct error message, not invalid copy, when accepting fails with a transient server error', async () => {
+      const user = userEvent.setup()
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse({ expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+        { method: 'POST', url: '/api/household-invites/sometoken/accept', respond: () => jsonResponse(null, 500) },
+      ])
+
+      render(<App />)
+
+      const acceptButton = await screen.findByRole('button', { name: 'Join Household' })
+      await user.click(acceptButton)
+
+      expect(await screen.findByText('Something went wrong loading this invite. Please try again.')).toBeInTheDocument()
+      expect(screen.queryByText("This invite link is no longer valid. Ask the person who sent it for a new one.")).not.toBeInTheDocument()
+    })
+  })
+
+  describe('invite-generation panel', () => {
+    it('generates a shareable link and copies it to the clipboard', async () => {
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true })
+
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'POST', url: '/api/household-invites', respond: () => jsonResponse({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+      ])
+
+      render(<App />)
+
+      const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
+      await user.click(generateButton)
+
+      const linkInput = await screen.findByLabelText('Invite link')
+      expect(linkInput).toHaveValue(`${window.location.origin}/join/abcd1234`)
+
+      const copyButton = screen.getByRole('button', { name: 'Copy link' })
+      await user.click(copyButton)
+
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/join/abcd1234`)
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    })
+
+    it('shows an error instead of "Copied" when the clipboard write is rejected', async () => {
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockRejectedValue(new Error('denied'))
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true })
+
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'POST', url: '/api/household-invites', respond: () => jsonResponse({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+      ])
+
+      render(<App />)
+
+      const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
+      await user.click(generateButton)
+
+      const copyButton = await screen.findByRole('button', { name: 'Copy link' })
+      await user.click(copyButton)
+
+      expect(await screen.findByText('Something went wrong creating the invite. Please try again.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument()
+    })
   })
 })

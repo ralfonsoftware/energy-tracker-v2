@@ -19,4 +19,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Lets AuthEndpointsTests unit-test IsSafeLocalReturnUrl directly — the open-redirect
+         validation logic has real security stakes and is easier to verify exhaustively as a
+         pure function than by standing up a fully-configured OIDC scheme in the test host. -->
+    <InternalsVisibleTo Include="EnergyTracker.Api.Tests" />
+  </ItemGroup>
+
 </Project>

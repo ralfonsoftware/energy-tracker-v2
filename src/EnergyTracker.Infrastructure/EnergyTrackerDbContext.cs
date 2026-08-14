@@ -11,6 +11,8 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
 
     public DbSet<HouseholdMember> HouseholdMembers => Set<HouseholdMember>();
 
+    public DbSet<HouseholdInvite> HouseholdInvites => Set<HouseholdInvite>();
+
     // Backs PersistKeysToDbContext (AC #4) — Data Protection keys survive a scale-to-zero cold
     // start instead of being regenerated in memory (AD-17).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();

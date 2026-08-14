@@ -46,6 +46,43 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.ToTable("Households", (string)null);
                 });
 
+            modelBuilder.Entity("EnergyTracker.Domain.HouseholdInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConsumedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("HouseholdInvites", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.HouseholdMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -95,6 +132,15 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("DataProtectionKeys");
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.HouseholdInvite", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.HouseholdMember", b =>

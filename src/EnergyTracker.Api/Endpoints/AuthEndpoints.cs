@@ -13,9 +13,11 @@ public static class AuthEndpoints
         // something the SPA calls via fetch. Meaningless without a real provider configured —
         // /login is the one endpoint this story's Program.cs comment explicitly accepts as
         // unusable until Oidc:Authority/Oidc:ClientId are set.
-        app.MapGet("/login", () =>
+        // returnUrl (Story 1.8) lets the invited person's very first click — /join/{token} —
+        // survive the OIDC round trip instead of always landing on "/".
+        app.MapGet("/login", (string? returnUrl) =>
             Results.Challenge(
-                new AuthenticationProperties { RedirectUri = "/" },
+                new AuthenticationProperties { RedirectUri = IsSafeLocalReturnUrl(returnUrl) ? returnUrl! : "/" },
                 [OpenIdConnectDefaults.AuthenticationScheme]));
 
         // Signs out the cookie scheme, plus the OIDC scheme (provider-side end-session, if
@@ -31,4 +33,22 @@ public static class AuthEndpoints
 
         return app;
     }
+
+    // returnUrl-style query parameters feeding into a redirect target are a classic open-redirect
+    // vector — the naive implementation ("just redirect to whatever was passed") is also the
+    // shortest one to write. Reject anything that isn't a single-slash-prefixed, same-origin
+    // relative path: protocol-relative (`//evil.example`) and backslash (`/\evil.example`)
+    // variants are real browser-recognized bypasses for a check that only tests StartsWith("/"),
+    // and an embedded `://` catches an absolute URL slipped in after a leading slash. Also reject
+    // any control character (tab/CR/LF included): the WHATWG URL parser strips ASCII tab and
+    // newline from a URL before resolving it, so a value like "/\t/evil.example" — which passes
+    // every check above — reaches the browser as a Location header and is then re-parsed as
+    // "//evil.example", a protocol-relative redirect off-origin.
+    internal static bool IsSafeLocalReturnUrl(string? returnUrl) =>
+        !string.IsNullOrEmpty(returnUrl) &&
+        returnUrl.StartsWith('/') &&
+        !returnUrl.StartsWith("//", StringComparison.Ordinal) &&
+        !returnUrl.StartsWith("/\\", StringComparison.Ordinal) &&
+        !returnUrl.Contains("://", StringComparison.Ordinal) &&
+        !returnUrl.Any(char.IsControl);
 }

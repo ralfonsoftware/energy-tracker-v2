@@ -22,5 +22,22 @@
     "submit": "Create Household",
     "submitting": "Creating…",
     "errorGeneric": "Something went wrong creating your Household. Please try again."
+  },
+  "householdInvite": {
+    "generateButton": "Invite a member",
+    "generating": "Creating invite…",
+    "linkLabel": "Invite link",
+    "copyButton": "Copy link",
+    "copied": "Copied",
+    "expiresNote": "This link expires in 7 days and can be used once.",
+    "errorGeneric": "Something went wrong creating the invite. Please try again.",
+    "acceptHeading": "Join a Household",
+    "acceptDescription": "You've been invited to join a Household. Accepting gives you the same full access as every other member.",
+    "acceptButton": "Join Household",
+    "accepting": "Joining…",
+    "invalid": "This invite link is no longer valid. Ask the person who sent it for a new one.",
+    "error": "Something went wrong loading this invite. Please try again.",
+    "alreadyInHousehold": "You already belong to a Household, so this invite link doesn't apply to you.",
+    "backToApp": "Go to Energy Tracker"
   }
 }

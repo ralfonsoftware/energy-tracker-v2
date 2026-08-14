@@ -162,6 +162,8 @@ if (!string.IsNullOrEmpty(dataProtectionCertificateBase64))
 builder.Services.AddScoped<IHouseholdRepository, HouseholdRepository>();
 builder.Services.AddScoped<ICurrentHouseholdAccessor, CurrentHouseholdAccessor>();
 builder.Services.AddScoped<CreateHousehold>();
+builder.Services.AddScoped<CreateHouseholdInvite>();
+builder.Services.AddScoped<AcceptHouseholdInvite>();
 
 var app = builder.Build();
 
@@ -207,6 +209,7 @@ app.MapAuthEndpoints(oidcConfigured);
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapSessionEndpoints();
 api.MapHouseholdEndpoints();
+api.MapHouseholdInviteEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();

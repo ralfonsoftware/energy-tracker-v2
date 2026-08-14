@@ -22,5 +22,22 @@
     "submit": "Haushalt erstellen",
     "submitting": "Wird erstellt…",
     "errorGeneric": "Beim Erstellen des Haushalts ist ein Fehler aufgetreten. Bitte versuche es erneut."
+  },
+  "householdInvite": {
+    "generateButton": "Mitglied einladen",
+    "generating": "Einladung wird erstellt…",
+    "linkLabel": "Einladungslink",
+    "copyButton": "Link kopieren",
+    "copied": "Kopiert",
+    "expiresNote": "Dieser Link läuft in 7 Tagen ab und kann einmal verwendet werden.",
+    "errorGeneric": "Beim Erstellen der Einladung ist ein Fehler aufgetreten. Bitte versuche es erneut.",
+    "acceptHeading": "Haushalt beitreten",
+    "acceptDescription": "Du wurdest eingeladen, einem Haushalt beizutreten. Mit der Annahme erhältst du denselben vollen Zugriff wie jedes andere Mitglied.",
+    "acceptButton": "Haushalt beitreten",
+    "accepting": "Wird beigetreten…",
+    "invalid": "Dieser Einladungslink ist nicht mehr gültig. Bitte die Person, die ihn gesendet hat, um einen neuen.",
+    "error": "Beim Laden dieser Einladung ist ein Fehler aufgetreten. Bitte versuche es erneut.",
+    "alreadyInHousehold": "Du gehörst bereits zu einem Haushalt, daher gilt dieser Einladungslink nicht für dich.",
+    "backToApp": "Zu Energy Tracker"
   }
 }
