@@ -20,6 +20,9 @@ public class EnergyTrackerDbContextFactory : IDesignTimeDbContextFactory<EnergyT
             connectionString,
             o => o.MigrationsAssembly(typeof(EnergyTrackerDbContextFactory).Assembly.GetName().Name));
 
-        return new EnergyTrackerDbContext(optionsBuilder.Options);
+        // ICurrentHouseholdAccessor is never actually used at design time — Room/PowerPoint/
+        // Device's AD-3 filter only resolves it when a query executes, and `dotnet ef migrations
+        // add` only needs to build the model, never run a query.
+        return new EnergyTrackerDbContext(optionsBuilder.Options, null!);
     }
 }

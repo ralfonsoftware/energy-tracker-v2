@@ -30,7 +30,7 @@ var databaseProvider = builder.Configuration["Database:Provider"] ?? "Postgres";
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";
 
-builder.Services.AddDbContext<EnergyTrackerDbContext>(options =>
+void ConfigureDbContext(DbContextOptionsBuilder options)
 {
     switch (databaseProvider.ToLowerInvariant())
     {
@@ -46,7 +46,12 @@ builder.Services.AddDbContext<EnergyTrackerDbContext>(options =>
             throw new InvalidOperationException(
                 $"Unsupported Database:Provider '{databaseProvider}'. Expected 'Postgres' or 'SqlServer'.");
     }
-});
+}
+
+builder.Services.AddDbContext<EnergyTrackerDbContext>(ConfigureDbContext);
+// Backs CurrentHouseholdAccessor's own lookup — see HouseholdMembershipDbContext's doc comment
+// for why it's a separate context type rather than reusing EnergyTrackerDbContext.
+builder.Services.AddDbContextFactory<HouseholdMembershipDbContext>(ConfigureDbContext);
 
 // Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are read exactly once, here at the composition
 // root (Consistency Conventions, NFR3/AC #6) — nothing downstream re-reads or branches on them.
@@ -177,6 +182,17 @@ builder.Services.AddScoped<CreateHousehold>();
 builder.Services.AddScoped<CreateHouseholdInvite>();
 builder.Services.AddScoped<AcceptHouseholdInvite>();
 
+builder.Services.AddScoped<ITaggingScaffoldRepository, TaggingScaffoldRepository>();
+builder.Services.AddScoped<CreateRoom>();
+builder.Services.AddScoped<RenameRoom>();
+builder.Services.AddScoped<ArchiveRoom>();
+builder.Services.AddScoped<CreatePowerPoint>();
+builder.Services.AddScoped<RenamePowerPoint>();
+builder.Services.AddScoped<ArchivePowerPoint>();
+builder.Services.AddScoped<CreateDevice>();
+builder.Services.AddScoped<RenameDevice>();
+builder.Services.AddScoped<ArchiveDevice>();
+
 var app = builder.Build();
 
 // Must run before anything reads Request.Scheme/Host — Azure Container Apps (this story's own
@@ -222,6 +238,7 @@ var api = app.MapGroup("/api").RequireAuthorization();
 api.MapSessionEndpoints();
 api.MapHouseholdEndpoints();
 api.MapHouseholdInviteEndpoints();
+api.MapTaggingScaffoldEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();

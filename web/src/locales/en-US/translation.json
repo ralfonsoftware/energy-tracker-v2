@@ -39,5 +39,29 @@
     "error": "Something went wrong loading this invite. Please try again.",
     "alreadyInHousehold": "You already belong to a Household, so this invite link doesn't apply to you.",
     "backToApp": "Go to Energy Tracker"
+  },
+  "settings": {
+    "heading": "Settings",
+    "backToApp": "Go to Energy Tracker"
+  },
+  "taggingScaffold": {
+    "heading": "Rooms, Power Points & Devices",
+    "roomsEmpty": "No rooms yet.",
+    "addRoom": "Add Room",
+    "addPowerPoint": "Add Power Point",
+    "addDevice": "Add Device",
+    "namePlaceholder": "Name",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "rename": "Rename",
+    "delete": "Delete",
+    "archivedBadge": "Archived",
+    "loading": "Loading…",
+    "confirmDeleteRoom": "Delete this Room? It will be archived, not removed, so any historical data stays valid.",
+    "confirmDeletePowerPoint": "Delete this Power Point? It will be archived, not removed, so any historical data stays valid.",
+    "confirmDeleteDevice": "Delete this Device? It will be archived, not removed, so any historical data stays valid.",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "errorParentArchived": "That parent was archived in the meantime. Please refresh and try again."
   }
 }

@@ -20,7 +20,7 @@ public class PostgresMigrationTests : IAsyncLifetime
         optionsBuilder.UseNpgsql(_container.GetConnectionString(),
             o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres"));
 
-        await using var dbContext = new EnergyTrackerDbContext(optionsBuilder.Options);
+        await using var dbContext = new EnergyTrackerDbContext(optionsBuilder.Options, null!);
 
         await dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
 

@@ -57,7 +57,7 @@ development_status:
   1-6-cicd-deploy-idempotency-container-app-image-preservation: done
   1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress: done
   1-8-household-member-invitation: done
-  1-9-room-power-point-device-management: backlog
+  1-9-room-power-point-device-management: done
   epic-1-retrospective: optional
 
   epic-2: backlog

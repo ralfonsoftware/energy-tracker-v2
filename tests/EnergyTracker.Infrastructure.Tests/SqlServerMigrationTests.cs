@@ -20,7 +20,7 @@ public class SqlServerMigrationTests : IAsyncLifetime
         optionsBuilder.UseSqlServer(_container.GetConnectionString(),
             o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer"));
 
-        await using var dbContext = new EnergyTrackerDbContext(optionsBuilder.Options);
+        await using var dbContext = new EnergyTrackerDbContext(optionsBuilder.Options, null!);
 
         await dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
 

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { HouseholdCreationForm, type CreatedHousehold } from '@/components/household-creation/household-creation-form'
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
 import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
+import { SettingsPage } from '@/components/settings/settings-page'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -27,6 +28,12 @@ const INVITE_PATH_PATTERN = /^\/join\/([^/]+)\/?$/
 function App() {
   const { t } = useTranslation()
   const [state, setState] = useState<SessionState>({ status: 'loading' })
+  // Local view state, not a URL route — Story 1.9's Settings surface is the first thing reachable
+  // via a button rather than a bookmarkable path, matching Story 1.5's "no react-router yet"
+  // precedent (see invite-accept-form.tsx's /join/{token} handling for the one existing exception,
+  // which predates this and stays URL-addressable for its own reason: it must survive a full-page
+  // OIDC redirect round trip).
+  const [view, setView] = useState<'dashboard' | 'settings'>('dashboard')
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
 
   useEffect(() => {
@@ -144,15 +151,20 @@ function App() {
     )
   }
 
+  if (view === 'settings') {
+    return <SettingsPage onBack={() => setView('dashboard')} />
+  }
+
   // Real Dashboard is Epic 2, out of scope here — AC #1 only requires "never a broken or empty
   // dashboard," not a built one. This placeholder is Story 1.1's existing skeleton content.
-  // The invite-generation panel lives here rather than a real Settings surface, which doesn't
-  // exist as a built surface yet (Story 1.9's own AC is what first introduces one).
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-4">
       <h1 className="text-2xl font-semibold">{t('app.title')}</h1>
       <Button>{t('shell.placeholder')}</Button>
       <InviteGeneratePanel />
+      <Button variant="outline" onClick={() => setView('settings')}>
+        {t('settings.heading')}
+      </Button>
     </main>
   )
 }

@@ -39,5 +39,29 @@
     "error": "Beim Laden dieser Einladung ist ein Fehler aufgetreten. Bitte versuche es erneut.",
     "alreadyInHousehold": "Du gehörst bereits zu einem Haushalt, daher gilt dieser Einladungslink nicht für dich.",
     "backToApp": "Zu Energy Tracker"
+  },
+  "settings": {
+    "heading": "Einstellungen",
+    "backToApp": "Zu Energy Tracker"
+  },
+  "taggingScaffold": {
+    "heading": "Räume, Steckdosen & Geräte",
+    "roomsEmpty": "Noch keine Räume vorhanden.",
+    "addRoom": "Raum hinzufügen",
+    "addPowerPoint": "Steckdose hinzufügen",
+    "addDevice": "Gerät hinzufügen",
+    "namePlaceholder": "Name",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "cancel": "Abbrechen",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "archivedBadge": "Archiviert",
+    "loading": "Wird geladen…",
+    "confirmDeleteRoom": "Diesen Raum löschen? Er wird archiviert statt entfernt, damit historische Daten gültig bleiben.",
+    "confirmDeletePowerPoint": "Diese Steckdose löschen? Sie wird archiviert statt entfernt, damit historische Daten gültig bleiben.",
+    "confirmDeleteDevice": "Dieses Gerät löschen? Es wird archiviert statt entfernt, damit historische Daten gültig bleiben.",
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "errorParentArchived": "Das übergeordnete Element wurde inzwischen archiviert. Bitte aktualisiere die Seite und versuche es erneut."
   }
 }

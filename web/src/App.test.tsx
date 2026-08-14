@@ -200,6 +200,27 @@ describe('App', () => {
     })
   })
 
+  describe('Settings navigation', () => {
+    it('switches to the Settings surface and back via local view state, not a URL route', async () => {
+      const user = userEvent.setup()
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([]) },
+        { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([]) },
+        { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+      ])
+
+      render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+      expect(window.location.pathname).toBe('/')
+
+      await user.click(screen.getByRole('button', { name: 'Go to Energy Tracker' }))
+      expect(await screen.findByRole('heading', { name: 'Energy Tracker' })).toBeInTheDocument()
+    })
+  })
+
   describe('invite-generation panel', () => {
     it('generates a shareable link and copies it to the clipboard', async () => {
       const user = userEvent.setup()

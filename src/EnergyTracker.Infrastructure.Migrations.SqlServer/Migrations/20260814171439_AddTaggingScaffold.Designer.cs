@@ -4,6 +4,7 @@ using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 {
     [DbContext(typeof(EnergyTrackerDbContext))]
-    partial class EnergyTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260814171439_AddTaggingScaffold")]
+    partial class AddTaggingScaffold
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -47,10 +50,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HouseholdId");
-
-                    b.HasIndex("PowerPointId", "Name")
-                        .IsUnique();
+                    b.HasIndex("PowerPointId");
 
                     b.ToTable("Devices", (string)null);
                 });
@@ -173,10 +173,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HouseholdId");
-
-                    b.HasIndex("RoomId", "Name")
-                        .IsUnique();
+                    b.HasIndex("RoomId");
 
                     b.ToTable("PowerPoints", (string)null);
                 });
@@ -203,11 +200,6 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HouseholdId");
-
-                    b.HasIndex("HouseholdId", "Name")
-                        .IsUnique();
-
                     b.ToTable("Rooms", (string)null);
                 });
 
@@ -232,12 +224,6 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
             modelBuilder.Entity("EnergyTracker.Domain.Device", b =>
                 {
-                    b.HasOne("EnergyTracker.Domain.Household", null)
-                        .WithMany()
-                        .HasForeignKey("HouseholdId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("EnergyTracker.Domain.PowerPoint", null)
                         .WithMany()
                         .HasForeignKey("PowerPointId")
@@ -265,24 +251,9 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
             modelBuilder.Entity("EnergyTracker.Domain.PowerPoint", b =>
                 {
-                    b.HasOne("EnergyTracker.Domain.Household", null)
-                        .WithMany()
-                        .HasForeignKey("HouseholdId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("EnergyTracker.Domain.Room", null)
                         .WithMany()
                         .HasForeignKey("RoomId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("EnergyTracker.Domain.Room", b =>
-                {
-                    b.HasOne("EnergyTracker.Domain.Household", null)
-                        .WithMany()
-                        .HasForeignKey("HouseholdId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -11,8 +11,11 @@ namespace EnergyTracker.Infrastructure.Adapters;
 /// row keyed on the OIDC issuer+subject carried by the cookie principal (AD-3's HTTP-request
 /// resolution path). "Does this principal have a Household" is the only question asked here —
 /// never "does any Household exist system-wide" (a deployment may legitimately hold more than one).
+/// Queries through HouseholdMembershipDbContext (see its own doc comment) rather than
+/// EnergyTrackerDbContext directly, so EnergyTrackerDbContext can take this accessor as a normal
+/// constructor dependency with no circular-DI workaround needed.
 /// </summary>
-public class CurrentHouseholdAccessor(IHttpContextAccessor httpContextAccessor, EnergyTrackerDbContext dbContext)
+public class CurrentHouseholdAccessor(IHttpContextAccessor httpContextAccessor, IDbContextFactory<HouseholdMembershipDbContext> dbContextFactory)
     : ICurrentHouseholdAccessor
 {
     private bool _resolved;
@@ -45,6 +48,7 @@ public class CurrentHouseholdAccessor(IHttpContextAccessor httpContextAccessor, 
         var issuer = issuerClaim.Value;
         var subject = subjectClaim.Value;
 
+        using var dbContext = dbContextFactory.CreateDbContext();
         return dbContext.HouseholdMembers
             .Where(m => m.ExternalIssuer == issuer && m.ExternalSubjectId == subject)
             .Select(m => (Guid?)m.HouseholdId)
