@@ -28,6 +28,8 @@ cd energy-tracker-v2
 cp .env.example .env        # set POSTGRES_PASSWORD to anything for local dev
 dotnet tool restore         # installs dotnet-ef, pinned in .config/dotnet-tools.json
 npm --prefix web install
+docker compose -f docker-compose.yml -f docker-compose.local.yml up postgres -d
+./scripts/migrate.sh        # applies EF Core migrations — the API doesn't do this on startup
 ```
 
 `OIDC_AUTHORITY`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` can stay blank for
@@ -90,15 +92,68 @@ npm --prefix web run dev
 ```
 
 This starts the Vite dev server at `http://localhost:5173` with hot module
-reload. `web/vite.config.ts` proxies `/health` and `/api/*` requests to
-`http://localhost:5133` (the API from step 2), so the frontend can call the
-API from the browser without CORS issues, exactly as it will once the two
-are served together in production. Add new backend routes under `/api/` to
-pick up this proxy automatically.
+reload. `web/vite.config.ts` proxies `/health`, `/api/*`, and the OIDC
+full-page routes (`/login`, `/logout`, `/signin-oidc`,
+`/signout-callback-oidc`) to `http://localhost:5133` (the API from step 2),
+so the frontend can call the API from the browser without CORS issues,
+exactly as it will once the two are served together in production. Add new
+backend routes under `/api/` to pick up the fetch-call proxy automatically.
 
 Open `http://localhost:5173` in a browser — **not** `http://localhost:5133`;
 the API doesn't serve `wwwroot` content usefully in this mode since the
 frontend isn't built to disk during `npm run dev`.
+
+### Testing sign-in in Safari (or other cookie-strict browsers)
+
+Sign-in works in Chrome against the plain-HTTP setup above but fails in
+Safari with `Correlation failed` / a `CryptographicException` on
+`/signin-oidc`. This isn't a bug to route around: the cookie/correlation/
+nonce cookies ASP.NET Core's OIDC handler sets are all `SecurePolicy=Always`
+(hardcoded — Cookie: `Program.cs`; Correlation/Nonce: the OIDC handler's own
+default, not overridable via config), so browsers only store *and send*
+them over a connection they consider genuinely TLS. Chrome specifically
+exempts `http://localhost` from that rule in both directions (a
+Chromium-only dev convenience); Safari doesn't, and neither does production
+(Azure Container Apps terminates real TLS at the ingress) — so Safari here
+is actually agreeing with production, and plain-HTTP Chrome is the outlier.
+
+Two hops need HTTPS, not just one: the SPA origin (so the cookie is stored
+over TLS) **and** the API (because Auth0 POSTs the callback straight back
+to whatever `redirect_uri` the API computed — bypassing Vite entirely for
+that hop — so if the API only ever saw itself as `http`, that's what
+`redirect_uri` says, and Safari won't attach a Secure cookie to that
+callback POST no matter how it was obtained).
+
+One-time setup — trust the API's dev cert and export a copy for Vite:
+
+```bash
+dotnet dev-certs https --trust
+dotnet dev-certs https --trust -ep certs/vite-dev-cert.pem --format Pem -np
+```
+
+`scripts/run-api.sh` always launches the `https` profile now, so the API
+listens on `https://localhost:7005` *in addition to*
+`http://localhost:5133` (both at once — nothing else changes for anyone not
+testing Safari). `web/vite.config.ts` picks up the exported cert
+automatically: if `certs/vite-dev-cert.{pem,key}` exist,
+`npm --prefix web run dev` serves `https://localhost:5173` instead of
+`http://localhost:5173`; if they don't, nothing changes. The four OIDC
+full-page routes (`/login`, `/logout`, `/signin-oidc`,
+`/signout-callback-oidc`) proxy to the API's `https://localhost:7005`
+specifically — and because that proxy entry doesn't rewrite the `Host`
+header, the API computes `redirect_uri` as `https://localhost:5173/...`
+(the SPA's own origin, correct scheme), not the API's bare port — so
+sign-in also lands you back on the actual app, not a blank API response.
+
+**Add to your Auth0 app's Allowed Callback URLs**:
+`https://localhost:5173/signin-oidc` (keep the existing
+`http://localhost:5133/signin-oidc` too, for Chrome/plain-HTTP testing).
+**Allowed Logout URLs**, if you exercise `/logout`:
+`https://localhost:5173/signout-callback-oidc`.
+
+Open `https://localhost:5173` (not `:5133`, and note `https`) in Safari.
+`certs/` is git-ignored — these certs are local-machine-only, like the Data
+Protection cert (`DATA_PROTECTION_CERTIFICATE_BASE64`).
 
 ## Running it all from VS Code (F5)
 
@@ -177,3 +232,13 @@ per-test "Run"/"Debug" buttons if you'd rather not use the CLI for e2e tests.
   is using (the API falls back to `energytracker`/`change-me` — the
   `.env.example` defaults — if `ConnectionStrings:Default` isn't set;
   override it via environment variable if your `.env` password differs).
+- **`relation "DataProtectionKeys" does not exist` (or `Households`,
+  `HouseholdInvites`) / sign-in fails with a `CryptographicException`**:
+  migrations haven't been applied to this Postgres volume yet — the API
+  doesn't run them on startup. Run `./scripts/migrate.sh`. This also happens
+  after `docker compose down -v`, which wipes the volume along with the
+  schema.
+- **Sign-in loops or fails with `Correlation failed` in Safari but works in
+  Chrome**: see "Testing sign-in in Safari" above — Safari (correctly)
+  refuses the OIDC handler's `Secure` cookies over plain HTTP; Chrome
+  silently allows it on `localhost` only.

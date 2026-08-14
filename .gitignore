@@ -436,3 +436,6 @@ sample-data/
 web/playwright-report/
 web/test-results/
 web/blob-report/
+
+# Local Data Protection dev certificates (see .env.example: DATA_PROTECTION_CERTIFICATE_BASE64)
+certs/

@@ -130,6 +130,18 @@ if (oidcConfigured)
 
                 return Task.CompletedTask;
             },
+            // Auth0 (and other OIDC providers) validate post_logout_redirect_uri against the
+            // calling application's registered Allowed Logout URLs — but need either
+            // id_token_hint or client_id to know WHICH application that is. SaveTokens=false
+            // above means there's never an id_token to offer as id_token_hint, and the handler
+            // doesn't populate ClientId on the end-session request by default, so without this,
+            // sign-out fails provider-side with "post_logout_redirect_uri is not defined as a
+            // valid URL" even when it genuinely is registered.
+            OnRedirectToIdentityProviderForSignOut = context =>
+            {
+                context.ProtocolMessage.ClientId = oidcClientId;
+                return Task.CompletedTask;
+            },
         };
     });
 }
