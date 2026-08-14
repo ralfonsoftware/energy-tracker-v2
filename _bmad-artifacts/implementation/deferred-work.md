@@ -37,6 +37,11 @@
   summary: Running `infra-deploy.yml` resets the Container App's image back to `placeholderImage` (`mcr.microsoft.com/k8se/quickstart:latest`), reverting whatever `app-deploy.yml` last deployed, until `app-deploy.yml` is run again to restore the real image.
   evidence: Confirmed as a live, real (not just theoretical) production outage window on 2026-08-13: running `infra-deploy.yml` to sync a rotated `DATABASE_ADMIN_PASSWORD` into the Container App's `db-connection-string` secret silently swapped the running image back to the placeholder, requiring a follow-up `app-deploy.yml` run to fix. `app-deploy.yml` already patches around two related gaps ("Ensure ACR pull credential and target port" step, itself referencing "the two gaps Story 1.2 deliberately left open") but does not restore the image — `infra-deploy.yml` should either thread through the currently-deployed image (e.g. read it via `az containerapp show` before redeploying) or `app-deploy.yml` should be documented as a mandatory follow-up after every `infra-deploy.yml` run.
 
+## Deferred from: code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
+
+- `az containerapp list --query "[0].name"` silently picks an arbitrary Container App if more than one ever exists in the resource group, rather than filtering by an identifying name/tag [.github/workflows/infra-deploy.yml:55] — pre-existing pattern copied verbatim from `app-deploy.yml:255`'s identical lookup, which is itself justified by "Exactly one exists in this resource group by design"; this diff duplicates rather than introduces the assumption. Revisit if a second Container App is ever added to the resource group.
+- No `timeout-minutes` set on `infra-deploy.yml`'s job or any of its steps, including the new "Resolve current Container App image" step [.github/workflows/infra-deploy.yml] — pre-existing gap across the whole workflow file (only `app-deploy.yml`'s SQL-related steps set per-step timeouts); not unique to this diff.
+
 ## Follow-up: OIDC callback URL scheme mismatch (2026-08-13)
 
 - source_spec: none

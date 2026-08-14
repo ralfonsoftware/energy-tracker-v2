@@ -14,10 +14,12 @@ permissions:
   id-token: write
   contents: read
 
-# Prevents overlapping az deployment group create/what-if runs against the same resource group
-# (e.g. a workflow_dispatch run firing while a push-triggered run is still in progress).
+# Shared with app-deploy.yml's concurrency group (not just this workflow's own runs): the two
+# workflows write to the same Container App, and if they raced each other, infra-deploy.yml could
+# read app-deploy.yml's pre-update image and reapply it after app-deploy.yml finishes, clobbering
+# the fresh deploy. One shared group makes infra-deploy.yml and app-deploy.yml mutually exclusive.
 concurrency:
-  group: infra-deploy
+  group: infra-app-deploy
   cancel-in-progress: false
 
 jobs:
@@ -42,6 +44,29 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # Reads back whatever image is currently running so the Deploy/What-if steps below can
+      # re-apply it — az deployment group create's incremental mode still unconditionally
+      # overwrites properties.template.containers[0].image with whatever the template says,
+      # since the property is always present in the template (just bound to placeholderImage).
+      # Empty output means no Container App exists yet (brand-new environment, AC #2); that's the
+      # expected first-deploy case, not an error, so this step does not exit 1 the way
+      # app-deploy.yml's "Resolve Container App name" step does.
+      - name: Resolve current Container App image (if any)
+        id: currentimage
+        run: |
+          APP_NAME=$(az containerapp list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].name" -o tsv)
+          if [ -z "$APP_NAME" ]; then
+            echo "::notice::No Container App found — first deploy, placeholder image will be used"
+            echo "image=" >> "$GITHUB_OUTPUT"
+          else
+            CURRENT_IMAGE=$(az containerapp show \
+              --name "$APP_NAME" \
+              --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+              --query properties.template.containers[0].image -o tsv)
+            echo "::notice::Preserving currently-running image: $CURRENT_IMAGE"
+            echo "image=$CURRENT_IMAGE" >> "$GITHUB_OUTPUT"
+          fi
+
       # Human-reviewable diff on manual runs only — does not gate or replace the deploy step
       # below; az deployment group create's own incremental-mode semantics are what actually
       # provide idempotency (AC #3).
@@ -52,12 +77,17 @@ jobs:
           OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+          CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
+          DEPLOY_PARAMS=(infra/main.bicepparam)
+          if [ -n "$CURRENT_IMAGE" ]; then
+            DEPLOY_PARAMS+=(placeholderImage="$CURRENT_IMAGE")
+          fi
           az deployment group what-if \
             --name "infra-deploy-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam
+            --parameters "${DEPLOY_PARAMS[@]}"
 
       - name: Deploy
         env:
@@ -65,9 +95,14 @@ jobs:
           OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+          CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
+          DEPLOY_PARAMS=(infra/main.bicepparam)
+          if [ -n "$CURRENT_IMAGE" ]; then
+            DEPLOY_PARAMS+=(placeholderImage="$CURRENT_IMAGE")
+          fi
           az deployment group create \
             --name "infra-deploy-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam
+            --parameters "${DEPLOY_PARAMS[@]}"

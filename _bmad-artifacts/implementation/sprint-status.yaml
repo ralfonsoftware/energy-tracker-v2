@@ -54,7 +54,7 @@ development_status:
   1-3-ci-build-test-cd-deploy-pipeline-app-to-azure: done
   1-4-pull-request-review-workflow: done
   1-5-household-provisioning-via-oidc: done
-  1-6-cicd-deploy-idempotency-container-app-image-preservation: backlog
+  1-6-cicd-deploy-idempotency-container-app-image-preservation: done
   1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress: backlog
   1-8-household-member-invitation: backlog
   1-9-room-power-point-device-management: backlog

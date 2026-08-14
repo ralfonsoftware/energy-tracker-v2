@@ -34,6 +34,19 @@ previous one running and billed. After switching providers, manually delete the 
 one is live. This isn't hypothetical — it happened during this story's own implementation; see the
 story file's Change Log.
 
+### `infra-deploy.yml` preserves the currently-running Container App image
+
+`container-app.bicep` always declares `image: placeholderImage` in its template, so — before this
+was fixed — every `infra-deploy.yml` run unconditionally reset the live Container App image back
+to the placeholder (`mcr.microsoft.com/k8se/quickstart:latest`), reverting whatever image
+`app-deploy.yml` had most recently deployed. `infra-deploy.yml` now reads back the currently
+running image (`az containerapp show`) before deploying and passes it through as a
+`placeholderImage` CLI parameter override, so re-running `infra-deploy.yml` (e.g. to rotate a
+secret) no longer takes the app down. On a brand-new environment with no Container App yet, that
+lookup is empty and the parameter's own default (the placeholder image) is used, same as before —
+the Container App still bootstraps correctly on first deploy, and only starts running a real image
+once `app-deploy.yml` first runs.
+
 ## One-time identity bootstrap (already done — reference only)
 
 The workflow authenticates to Azure via OIDC federated-credential login

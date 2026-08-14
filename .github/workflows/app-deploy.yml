@@ -22,9 +22,12 @@ permissions:
   id-token: write
   contents: read
 
-# Prevents overlapping runs from racing each other against the same Container App revision.
+# Shared with infra-deploy.yml's concurrency group (not just this workflow's own runs): the two
+# workflows write to the same Container App, and if they raced each other, infra-deploy.yml could
+# read this workflow's pre-update image and reapply it after this workflow finishes, clobbering
+# the fresh deploy. One shared group makes app-deploy.yml and infra-deploy.yml mutually exclusive.
 concurrency:
-  group: app-deploy
+  group: infra-app-deploy
   cancel-in-progress: false
 
 jobs:
