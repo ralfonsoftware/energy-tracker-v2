@@ -83,7 +83,11 @@ resource nearCapWarningAlert 'Microsoft.Insights/scheduledQueryRules@2026-03-01'
     scopes: [
       logAnalyticsWorkspaceId
     ]
-    evaluationFrequency: 'P1D'
+    // Azure rejects a stateful rule (autoMitigate: true, below) at a frequency greater than 12
+    // hours ("Stateful rules can not run in a frequency greater than 12 hours" — hit deploying
+    // this exact rule). windowSize stays a rolling 24h window; only how often it's re-checked
+    // changes, so this is a strict improvement over once-daily (faster detection, same query).
+    evaluationFrequency: 'PT12H'
     windowSize: 'P1D'
     criteria: {
       allOf: [
