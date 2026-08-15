@@ -36,6 +36,10 @@ param aiApiKeySecretValue string = 'unset'
 @secure()
 param oidcClientSecretValue string = 'unset'
 
+@description('Application Insights connection string (AD-19 OTel extension), stored as a Container App secret. main.bicep always supplies a real value (the appInsights module deploys unconditionally); this default is only the same non-empty ACA-required sentinel used below for the other reserved-but-possibly-unset secrets.')
+@secure()
+param appInsightsConnectionString string = 'unset'
+
 @description('OIDC provider Authority URL (not secret) — blank until a real OIDC provider is registered; Program.cs treats a blank ClientId as "OIDC not configured yet" rather than failing every request.')
 param oidcAuthority string = ''
 
@@ -111,6 +115,10 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
           name: 'oidc-client-secret'
           value: oidcClientSecretValue
         }
+        {
+          name: 'appinsights-connection-string'
+          value: appInsightsConnectionString
+        }
       ]
     }
     template: {
@@ -162,6 +170,17 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
             {
               name: 'OIDC__ClientSecret'
               secretRef: 'oidc-client-secret'
+            }
+            // AD-19 OTel extension — Program.cs reads Otel:Exporter exactly once at the
+            // composition root (Consistency Conventions) to select AzureMonitor here vs. Otlp
+            // in docker-compose.yml's local dev config.
+            {
+              name: 'Otel__Exporter'
+              value: 'AzureMonitor'
+            }
+            {
+              name: 'Otel__AzureMonitorConnectionString'
+              secretRef: 'appinsights-connection-string'
             }
           ]
         }

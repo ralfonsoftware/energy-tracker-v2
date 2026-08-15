@@ -61,3 +61,9 @@
 - No retry action in the tagging-scaffold UI after the initial load fails [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx] — nice-to-have, not blocking.
 - Uneven length-validation test coverage: only `CreateRoomTests` asserts the >200-char rejection; `CreatePowerPointTests`/`CreateDeviceTests`/all three `Rename*Tests` don't, despite sharing `TaggingScaffoldNameValidator` [tests/EnergyTracker.Application.Tests/] — shared-validator logic makes an actual regression unlikely.
 - Settings navigation bypasses browser back-button history (no `react-router`, local `view` state) [web/src/App.tsx] — consistent with the pre-existing pattern already used by the Invite panel, not a new regression introduced by this story.
+
+## Deferred from: code review of spec-otel-api-instrumentation (2026-08-15)
+
+- source_spec: `_bmad-artifacts/implementation/spec-otel-api-instrumentation.md`
+  summary: OTel resource attributes are minimal — `ConfigureResource(r => r.AddService("EnergyTracker.Api"))` with no `serviceVersion`, `deployment.environment`, or instance identifier, duplicated across both exporter branches with no shared factory.
+  evidence: Once local, self-host, and multiple Azure environments all land in a shared backend under one bare service name, telling their telemetry apart becomes guesswork. Real future value, but out of scope for a spec whose job was getting OTel wired up at all — richer resource tagging is a natural, separately-scoped follow-up once there's more than one environment's telemetry to actually distinguish.

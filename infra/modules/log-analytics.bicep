@@ -7,6 +7,9 @@ param location string
 @description('Data retention in days (kept short — personal-household deployment, not a scale target, AD-19)')
 param retentionInDays int = 30
 
+@description('Daily ingestion cap in GB, shared by this workspace and any workspace-based Application Insights component layered on it (AD-19 OTel extension). -1 = unlimited. Default 1 GB/day is a spike safeguard for a personal-household deployment, not a routine cost-control lever.')
+param dailyQuotaGb int = 1
+
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2026-03-01' = {
   name: name
   location: location
@@ -15,6 +18,9 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2026-03
       name: 'PerGB2018'
     }
     retentionInDays: retentionInDays
+    workspaceCapping: {
+      dailyQuotaGb: dailyQuotaGb
+    }
   }
 }
 
