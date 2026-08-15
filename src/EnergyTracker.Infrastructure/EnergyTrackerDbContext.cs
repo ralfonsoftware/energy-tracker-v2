@@ -27,6 +27,10 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
 
     public DbSet<Device> Devices => Set<Device>();
 
+    public DbSet<MainMeter> MainMeters => Set<MainMeter>();
+
+    public DbSet<MeterReading> MeterReadings => Set<MeterReading>();
+
     // Backs PersistKeysToDbContext (AC #4) — Data Protection keys survive a scale-to-zero cold
     // start instead of being regenerated in memory (AD-17).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -43,5 +47,7 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
         modelBuilder.Entity<Room>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
         modelBuilder.Entity<PowerPoint>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
         modelBuilder.Entity<Device>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
+        modelBuilder.Entity<MainMeter>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
+        modelBuilder.Entity<MeterReading>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
     }
 }

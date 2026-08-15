@@ -42,6 +42,10 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-15
+# 2026-08-15: story 2.2 moved to done (code review complete, 4 patch findings fixed, 4 deferred)
+# 2026-08-15: story 2.2 moved to review (dev-story implementation complete, 146 .NET + 42 frontend tests green)
+# 2026-08-15: story 2.2 moved to in-progress (dev-story activation)
+# 2026-08-15: story 2.2 created (create-story) - status set to ready-for-dev
 # 2026-08-15: story 2.1 moved to in-progress (dev-story activation)
 # 2026-08-15: story 2.1 moved to done (code review complete, 8 patch findings fixed, 1 deferred)
 # 2026-08-15: the two Sally/Amelia token-wiring action items are marked done
@@ -70,7 +74,7 @@ development_status:
 
   epic-2: in-progress
   2-1-yearly-baseline-configuration: done
-  2-2-meter-reading-entry-with-offline-queueing: backlog
+  2-2-meter-reading-entry-with-offline-queueing: done
   2-3-meter-reading-regression-detection-classification: backlog
   2-4-gap-tolerant-rolling-baseline-status-computation: backlog
   2-5-dashboard-status-display: backlog

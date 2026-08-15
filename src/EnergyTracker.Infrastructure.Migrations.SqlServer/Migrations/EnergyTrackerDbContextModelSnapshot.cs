@@ -156,6 +156,63 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.ToTable("HouseholdMembers", (string)null);
                 });
 
+            modelBuilder.Entity("EnergyTracker.Domain.MainMeter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId")
+                        .IsUnique();
+
+                    b.ToTable("MainMeters", (string)null);
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.MeterReading", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("KwhValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("MainMeterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ReadingTimestamp")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("MainMeterId");
+
+                    b.ToTable("MeterReadings", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.PowerPoint", b =>
                 {
                     b.Property<Guid>("Id")
@@ -268,6 +325,30 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                         .WithMany("Members")
                         .HasForeignKey("HouseholdId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.MainMeter", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.MeterReading", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.MainMeter", null)
+                        .WithMany()
+                        .HasForeignKey("MainMeterId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -5,6 +5,8 @@ import { HouseholdCreationForm, type CreatedHousehold } from '@/components/house
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
 import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
 import { SettingsPage } from '@/components/settings/settings-page'
+import { LogReadingSheet } from '@/components/meter-reading/log-reading-sheet'
+import { registerOfflineSync } from '@/lib/meter-reading-sync'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -90,6 +92,16 @@ function App() {
   }, [])
 
   useEffect(() => {
+    // Only once a Household session is confirmed — flushing against an unauthenticated or
+    // still-resolving session would just churn on 401s until the queued reading's owner is known.
+    if (state.status !== 'ready') {
+      return
+    }
+
+    return registerOfflineSync()
+  }, [state.status])
+
+  useEffect(() => {
     if (state.status === 'unauthenticated') {
       // Preserve /join/{token} across the OIDC round trip — otherwise the invited person gets
       // bounced to "/" after login and loses their invite link entirely (AC #1).
@@ -161,6 +173,10 @@ function App() {
     <main className="flex min-h-svh flex-col items-center justify-center gap-4">
       <h1 className="text-2xl font-semibold">{t('app.title')}</h1>
       <Button>{t('shell.placeholder')}</Button>
+      {/* Plain trigger only — the polished pill/gradient Dashboard button (UX-DR8) is Story 2.5's
+          own deliverable; this just gives the Log Reading sheet (Story 2.2) somewhere to open
+          from and something to return focus to (AC #9). */}
+      <LogReadingSheet trigger={<Button variant="outline">{t('meterReading.trigger')}</Button>} />
       <InviteGeneratePanel />
       <Button variant="outline" onClick={() => setView('settings')}>
         {t('settings.heading')}
