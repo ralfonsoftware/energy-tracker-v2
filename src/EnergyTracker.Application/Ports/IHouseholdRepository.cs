@@ -15,4 +15,7 @@ public interface IHouseholdRepository
 
     /// <summary>Marks the invite consumed and adds the new member as a single unit of work, returning the joined Household.</summary>
     Task<Household> AcceptInviteAsync(HouseholdInvite invite, HouseholdMember newMember, CancellationToken cancellationToken);
+
+    /// <summary>Updates the Yearly Baseline under AD-4 optimistic concurrency, throwing <see cref="HouseholdConcurrencyConflictException"/> on a lost race.</summary>
+    Task<Household> UpdateYearlyBaselineAsync(Guid householdId, decimal yearlyBaselineKwh, int expectedVersion, CancellationToken cancellationToken);
 }

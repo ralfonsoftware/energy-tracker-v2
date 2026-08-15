@@ -73,3 +73,7 @@
 - source_spec: `_bmad-artifacts/implementation/spec-design-token-wiring.md`
   summary: No visual-regression/screenshot-diff safety net exists anywhere in the project despite `test:e2e` (Playwright) already being configured, so a global theme change like this one ships with no automated check that palette/contrast didn't break elsewhere.
   evidence: Real gap, but pre-existing and disproportionate to this story's scope (a CSS-variable remap) — standing up visual regression tooling from scratch is a separately-scoped investment, worth doing once there's more themed UI (Epic 2's Status card, Trend chart, etc.) to actually protect.
+
+## Deferred from: code review of story-2.1 (2026-08-15)
+
+- Unhandled not-found path on `Household` lookups — `GET /households/{id}` and `HouseholdRepository.UpdateYearlyBaselineAsync` both use `SingleAsync` with no not-found guard; a missing row throws an uncaught `InvalidOperationException` → 500 instead of a `ProblemDetails` 404 [src/EnergyTracker.Api/Endpoints/HouseholdEndpoints.cs:90, src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs:96] — currently unreachable (no Household-deletion feature exists anywhere in the app) and mirrors the pre-existing `AcceptInviteAsync` `SingleAsync` pattern already in the codebase; not a new anti-pattern introduced by this diff.

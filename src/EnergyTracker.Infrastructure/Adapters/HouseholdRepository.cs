@@ -90,4 +90,31 @@ public class HouseholdRepository(EnergyTrackerDbContext dbContext) : IHouseholdR
         // regardless of the calling principal's own resolved household state.
         return await dbContext.Households.SingleAsync(h => h.Id == invite.HouseholdId, cancellationToken);
     }
+
+    public async Task<Household> UpdateYearlyBaselineAsync(Guid householdId, decimal yearlyBaselineKwh, int expectedVersion, CancellationToken cancellationToken)
+    {
+        var household = await dbContext.Households.SingleAsync(h => h.Id == householdId, cancellationToken);
+
+        // Makes EF's SaveChangesAsync compare expectedVersion (the caller's known value) against
+        // the DB, not whatever the freshly-loaded entity already has.
+        dbContext.Entry(household).Property(h => h.Version).OriginalValue = expectedVersion;
+
+        household.YearlyBaselineKwh = yearlyBaselineKwh;
+        // AD-4 requires the concurrency token to change on every update — see AcceptInviteAsync's
+        // invite.Version++ above for the identical reasoning.
+        household.Version++;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Second place in the codebase allowed to know about DbUpdateConcurrencyException —
+            // see the AD-1 trap-note precedent next to AcceptInviteAsync's catch block above.
+            throw new HouseholdConcurrencyConflictException(householdId);
+        }
+
+        return household;
+    }
 }

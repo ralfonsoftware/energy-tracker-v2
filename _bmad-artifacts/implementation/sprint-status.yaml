@@ -42,6 +42,8 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-15
+# 2026-08-15: story 2.1 moved to in-progress (dev-story activation)
+# 2026-08-15: story 2.1 moved to done (code review complete, 8 patch findings fixed, 1 deferred)
 # 2026-08-15: the two Sally/Amelia token-wiring action items are marked done
 # on a deliberately narrowed scope — only the shadcn vars DESIGN.md claims as
 # its brand delta (background/foreground/primary/ring/font) were wired.
@@ -54,7 +56,7 @@ tracking_system: file-system
 story_location: "{project-root}/_bmad-artifacts/implementation"
 
 development_status:
-  epic-1: in-progress
+  epic-1: done
   1-1-deployable-application-skeleton-local-dev-self-host: done
   1-2-azure-infrastructure-as-code-resource-deployment-pipeline: done
   1-3-ci-build-test-cd-deploy-pipeline-app-to-azure: done
@@ -66,8 +68,8 @@ development_status:
   1-9-room-power-point-device-management: done
   epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-yearly-baseline-configuration: backlog
+  epic-2: in-progress
+  2-1-yearly-baseline-configuration: done
   2-2-meter-reading-entry-with-offline-queueing: backlog
   2-3-meter-reading-regression-detection-classification: backlog
   2-4-gap-tolerant-rolling-baseline-status-computation: backlog

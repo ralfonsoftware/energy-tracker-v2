@@ -152,7 +152,7 @@ function App() {
   }
 
   if (view === 'settings') {
-    return <SettingsPage onBack={() => setView('dashboard')} />
+    return <SettingsPage householdId={state.household.id} onBack={() => setView('dashboard')} />
   }
 
   // Real Dashboard is Epic 2, out of scope here — AC #1 only requires "never a broken or empty

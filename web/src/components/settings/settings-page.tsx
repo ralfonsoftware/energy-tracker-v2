@@ -1,16 +1,18 @@
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { TaggingScaffoldManager } from '@/components/tagging-scaffold/tagging-scaffold-manager'
+import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline-form'
 
 interface SettingsPageProps {
+  householdId: string
   onBack: () => void
 }
 
-// The minimum surface that satisfies AC #1's "reached via Settings" — not the full Settings page
-// EXPERIENCE.md's Information Architecture eventually describes (Yearly Baseline, Tariff cadence,
-// AI backend choice, data export/import, member invitation). None of those exist as features yet;
-// Epic 2+ builds them. This story only adds the Room/Power Point/Device management slice.
-export function SettingsPage({ onBack }: SettingsPageProps) {
+// Not yet the full Settings page EXPERIENCE.md's Information Architecture eventually describes
+// (Tariff cadence, AI backend choice, data export/import, member invitation) — those are later
+// Epic 2+ stories. This page currently covers Room/Power Point/Device management (Story 1.9) and
+// Yearly Baseline (Story 2.1).
+export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
   const { t } = useTranslation()
 
   return (
@@ -22,6 +24,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         </Button>
       </div>
 
+      <YearlyBaselineForm householdId={householdId} />
       <TaggingScaffoldManager />
     </main>
   )

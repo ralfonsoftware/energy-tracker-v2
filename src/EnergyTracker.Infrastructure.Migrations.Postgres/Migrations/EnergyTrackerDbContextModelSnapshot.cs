@@ -74,6 +74,14 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("YearlyBaselineKwh")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.HasKey("Id");
 
                     b.ToTable("Households", (string)null);

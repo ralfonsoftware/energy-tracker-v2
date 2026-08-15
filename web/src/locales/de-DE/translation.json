@@ -63,5 +63,21 @@
     "confirmDeleteDevice": "Dieses Gerät löschen? Es wird archiviert statt entfernt, damit historische Daten gültig bleiben.",
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
     "errorParentArchived": "Das übergeordnete Element wurde inzwischen archiviert. Bitte aktualisiere die Seite und versuche es erneut."
+  },
+  "yearlyBaseline": {
+    "heading": "Jahresbasiswert",
+    "description": "Lege fest, wie viel Strom dein Haushalt voraussichtlich in einem Jahr verbraucht. Pattern Detective misst daran dein Verbrauchstempo. Eine Änderung wirkt sich nur auf zukünftige Werte aus.",
+    "preset1": "1 Person (≈{{kwh}} kWh)",
+    "preset2": "2 Personen (≈{{kwh}} kWh)",
+    "preset3": "3 Personen (≈{{kwh}} kWh)",
+    "preset4": "4 Personen (≈{{kwh}} kWh)",
+    "inputLabel": "Jahresbasiswert (kWh)",
+    "submit": "Speichern",
+    "saving": "Wird gespeichert…",
+    "loading": "Wird geladen…",
+    "retry": "Erneut versuchen",
+    "errorGeneric": "Beim Speichern deines Jahresbasiswerts ist ein Fehler aufgetreten. Bitte versuche es erneut.",
+    "errorConflict": "Dieser Jahresbasiswert wurde inzwischen an anderer Stelle geändert. Wir haben unten den aktuellen Wert geladen — bitte prüfen und erneut speichern.",
+    "errorConflictRefetchFailed": "Dieser Jahresbasiswert wurde inzwischen an anderer Stelle geändert, und wir konnten den aktuellen Wert nicht laden. Bitte lade die Seite neu, bevor du erneut speicherst."
   }
 }

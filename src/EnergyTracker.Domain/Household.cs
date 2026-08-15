@@ -13,5 +13,14 @@ public class Household
 
     public required DateTimeOffset CreatedAtUtc { get; init; }
 
+    // Nullable — a Household may not have set one yet (AC #1: presets are suggestions, never a
+    // silently-applied default).
+    public decimal? YearlyBaselineKwh { get; set; }
+
+    // Portable EF Core concurrency token (AD-4) — guards two concurrent Yearly Baseline edits
+    // from both succeeding. Household's first Version column; see HouseholdInvite.cs for the
+    // established precedent this copies.
+    public int Version { get; set; }
+
     public ICollection<HouseholdMember> Members { get; init; } = new List<HouseholdMember>();
 }
