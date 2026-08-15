@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -58,7 +58,7 @@ development_status:
   1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress: done
   1-8-household-member-invitation: done
   1-9-room-power-point-device-management: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: backlog
   2-1-yearly-baseline-configuration: backlog
@@ -96,3 +96,49 @@ development_status:
   7-1-full-data-export: backlog
   7-2-full-data-import-restore-migration: backlog
   epic-7-retrospective: optional
+
+action_items:
+  - epic: 1
+    action: "Add a required, blocking 'verified against the real deployed environment' AC for any story touching auth, ingress, proxy config, or the deploy pipeline"
+    owner: "story authors/reviewers"
+    status: open
+  - epic: 1
+    action: "Document known local-vs-Azure behavior deltas (forwarded headers/HTTPS, Postgres region restrictions, ACR credential timing, empty-secret ACA validation) in one place for story-definition-time reference"
+    owner: "Winston (architecture)"
+    status: done
+  - epic: 1
+    action: "Add OpenTelemetry (logs/metrics/traces) to the API, OTLP-exportable; local dev wired to a .NET Aspire dashboard via docker-compose.yml"
+    owner: "Amelia/Winston"
+    status: open
+  - epic: 1
+    action: "Provision Application Insights on Azure as the OTel export target, layered on the existing Log Analytics workspace"
+    owner: "Winston"
+    status: open
+  - epic: 1
+    action: "Add a daily ingestion cap (Bicep param, default 1 GB/day) on Application Insights and Log Analytics"
+    owner: "Winston"
+    status: open
+  - epic: 1
+    action: "Add a cap-triggered alert (Azure Monitor action group) emailing a Bicep-param-defined notification address"
+    owner: "Winston"
+    status: open
+  - epic: 1
+    action: "Document the OTel/App Insights/ingestion-cap additions as an extension of AD-19 in the architecture spine"
+    owner: "Winston"
+    status: open
+  - epic: 1
+    action: "Wire DESIGN.md's real design tokens (surface-glass, brand-accent, status badge colors, typography scale) into web/src/index.css, replacing stock shadcn defaults"
+    owner: "Sally/Amelia"
+    status: open
+  - epic: 1
+    action: "Sweep existing Epic 1 UI (household creation/invite, settings, room/power-point/device management) to use the real design tokens instead of shadcn defaults"
+    owner: "Sally/Amelia"
+    status: open
+  - epic: 2
+    action: "Add a story for Room/PowerPoint/Device re-parenting near the end of Epic 2 (deferred in Story 1.9, reintroduced due to real daily use surfacing reorganization needs)"
+    owner: "John (epic definition)"
+    status: open
+  - epic: 1
+    action: "Document that the local Auth0 client registration referenced by .env is intentionally separate from the production registration (setup already correct, just undocumented)"
+    owner: "Amelia (doc-only)"
+    status: open

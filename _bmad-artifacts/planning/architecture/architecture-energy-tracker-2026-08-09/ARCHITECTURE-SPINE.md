@@ -8,7 +8,7 @@ scope: 'Whole-system architecture for Energy Tracker v2: Pattern Detective, Tari
 binds: [FR-1..FR-28, all Cross-Cutting NFRs]
 status: final
 created: '2026-08-09'
-updated: '2026-08-09'
+updated: '2026-08-15'
 sources:
   - _bmad-artifacts/planning/briefs/brief-energy-tracker-2026-08-08/brief.md
   - _bmad-artifacts/planning/prds/prd-energy-tracker-2026-08-08/prd/index.md
@@ -155,6 +155,7 @@ graph LR
 - **Binds:** all (deployment/operations — an envelope this altitude owns and must not leave silent)
 - **Prevents:** self-host and Azure needing different operational tooling, and secrets ending up in source control or baked into the image.
 - **Rule:** The `Api` exposes a `/health` endpoint (liveness only — no DB/dependency check, so a slow Postgres/Azure SQL doesn't fail Container Apps' probe and cause a restart loop). Logging is structured (Serilog or equivalent) to stdout/stderr only — self-host reads it via `docker logs`, Azure wires the same stream to Log Analytics; no code-level branching on environment for logging. All secrets (DB connection string, OIDC client secret, AI API key) are supplied via environment variables / Container Apps secrets / a self-host `.env` file — never committed, never baked into the image.
+- **Known local-vs-Azure behavior deltas:** local dev/self-host and Azure structurally diverge in ways that only surface on a live Azure deployment (no reverse proxy locally vs. Container Apps' TLS-terminating ingress, no ACR/managed-identity concept locally vs. a real credential-timing race on a fresh deploy, no region concept locally vs. Postgres's per-region provisioning restrictions, blank-env-var-is-fine locally vs. ACA rejecting an empty `secrets` value). Documented in full, with the story/incident each one traces back to, in `docs/local-vs-azure-deltas.md` — check it at definition time for any story touching auth, ingress, the database provider, or the deploy pipeline.
 
 ## Consistency Conventions
 
