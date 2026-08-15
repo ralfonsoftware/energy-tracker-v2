@@ -67,3 +67,9 @@
 - source_spec: `_bmad-artifacts/implementation/spec-otel-api-instrumentation.md`
   summary: OTel resource attributes are minimal — `ConfigureResource(r => r.AddService("EnergyTracker.Api"))` with no `serviceVersion`, `deployment.environment`, or instance identifier, duplicated across both exporter branches with no shared factory.
   evidence: Once local, self-host, and multiple Azure environments all land in a shared backend under one bare service name, telling their telemetry apart becomes guesswork. Real future value, but out of scope for a spec whose job was getting OTel wired up at all — richer resource tagging is a natural, separately-scoped follow-up once there's more than one environment's telemetry to actually distinguish.
+
+## Deferred from: code review of spec-design-token-wiring (2026-08-15)
+
+- source_spec: `_bmad-artifacts/implementation/spec-design-token-wiring.md`
+  summary: No visual-regression/screenshot-diff safety net exists anywhere in the project despite `test:e2e` (Playwright) already being configured, so a global theme change like this one ships with no automated check that palette/contrast didn't break elsewhere.
+  evidence: Real gap, but pre-existing and disproportionate to this story's scope (a CSS-variable remap) — standing up visual regression tooling from scratch is a separately-scoped investment, worth doing once there's more themed UI (Epic 2's Status card, Trend chart, etc.) to actually protect.
