@@ -1,0 +1,7 @@
+# Layout & Spacing
+
+Mobile-first, responsive web — the primary authored surface is a phone-width screen, because meter-side reading entry (UJ-1) is the product's highest-frequency, highest-stakes interaction and it happens standing at a meter with a phone in hand. Browser/tablet width is the secondary authored surface, used for the calm-evening trend-browsing context (UJ-3) where a wider frame legitimately helps (trend chart, Room → Power Point → Device tree).
+
+Spacing reflects "says less, on purpose": generous, calm gaps rather than a dense grid. `{spacing.card-padding}` (24px) is the standard interior padding for a glass card; `{spacing.card-gap}` (18px) separates stacked panel elements; `{spacing.mobile-margin}` (19px) is the phone-screen edge margin; `{spacing.5}` (24px) is the gap between major sections on a surface (e.g., between the Status card and the Tariff Check card on Dashboard). Tailwind's base 4px scale (`{spacing.1}`–`{spacing.6}`) is inherited as-is for anything not named above — no exotic scale, just used generously rather than packed tight. The app background itself sits on `{colors.surface-base}` / `{colors.surface-base-dark}`, one shade back from every glass panel so the panel stack has somewhere to cast its depth against.
+
+Single-column layout on phone width. The drill-down surfaces (Trend History) widen to a browser/tablet frame but stay single-column-of-cards internally — no dense multi-column dashboard grid; that would work against the product's discipline of the Status card as the one thing that matters most.

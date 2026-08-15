@@ -1,0 +1,10 @@
+# Deferred
+
+- **FR-20 generic Smart-Plug column mapping.** PRD itself flags this as low-confidence (Open Question 1). `ISmartPlugParser` (AD-9) leaves the seam open, but no generic/config-driven mapper is designed or built yet — revisit after a feasibility spike against real-world export variance.
+- **FR-19 custom event/plausibility rules.** No rule format or evaluation engine designed yet. Whatever's built must stay behind a port consistent with AD-1, not a bespoke scripting layer.
+- **FR-21 broader tunable thresholds** beyond the single FR-6 trending threshold. No settings-surface design yet.
+- **FR-18 proactive weekly recap.** Needs a real externally-triggered scheduler per AD-7 (Container Apps scheduled Jobs or a KEDA cron rule) plus a decided notification delivery channel (PRD Open Question 2) — neither is designed yet.
+- **Worker/API process split.** AD-6 currently runs API and job processing in one process/container. If Smart Plug import volume or AI-correlation load ever justifies independent scaling, split the worker into its own Container App with a queue-depth KEDA rule — same image, different entrypoint/command. Not needed at current expected household-scale volume.
+- **Local OIDC provider for dev/test.** Docker Compose currently expects a real OIDC issuer (Entra ID/Auth0/etc.) even in local dev. Whether to bundle a lightweight local OIDC container (e.g. for offline dev) is left open — not blocking, since self-hosters typically already run one.
+- **Multi-Main-Meter UI/logic.** The data model allows more than one Main Meter per Household (PRD Glossary), but v2's Pattern Detective and dashboard operate on a single Main Meter per Household — multi-meter flows are explicitly out of scope for v2, not designed here.
+- **Storage growth on Azure SQL Basic (2 GB cap).** Fine for relational rows (readings, tariffs, events) at personal-household scale; dense Smart Plug interval data over many years could approach it. Not a concern at MVP scale — revisit if a household's import history grows large enough to matter.
