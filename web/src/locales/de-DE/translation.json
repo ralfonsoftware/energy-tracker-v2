@@ -79,5 +79,17 @@
     "errorGeneric": "Beim Speichern deines Jahresbasiswerts ist ein Fehler aufgetreten. Bitte versuche es erneut.",
     "errorConflict": "Dieser Jahresbasiswert wurde inzwischen an anderer Stelle geändert. Wir haben unten den aktuellen Wert geladen — bitte prüfen und erneut speichern.",
     "errorConflictRefetchFailed": "Dieser Jahresbasiswert wurde inzwischen an anderer Stelle geändert, und wir konnten den aktuellen Wert nicht laden. Bitte lade die Seite neu, bevor du erneut speicherst."
+  },
+  "meterReading": {
+    "trigger": "Zählerstand erfassen",
+    "sheetTitle": "Zählerstand erfassen",
+    "sheetDescription": "Gib den aktuellen Stand deines Zählers ein.",
+    "kwhLabel": "kWh",
+    "dateTimeLabel": "Datum & Uhrzeit",
+    "save": "Zählerstand speichern",
+    "saving": "Wird gespeichert…",
+    "savedConfirmation": "Gespeichert: {{kwh}} kWh um {{time}}",
+    "savedOffline": "Gespeichert — wird synchronisiert, sobald du wieder online bist",
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   }
 }

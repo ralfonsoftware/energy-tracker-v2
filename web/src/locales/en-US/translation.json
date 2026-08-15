@@ -79,5 +79,17 @@
     "errorGeneric": "Something went wrong saving your Yearly Baseline. Please try again.",
     "errorConflict": "This Yearly Baseline was changed elsewhere in the meantime. We've loaded the latest value below — please review and save again.",
     "errorConflictRefetchFailed": "This Yearly Baseline was changed elsewhere in the meantime, and we couldn't load the latest value. Please reload the page before saving again."
+  },
+  "meterReading": {
+    "trigger": "Log reading",
+    "sheetTitle": "Log a Meter Reading",
+    "sheetDescription": "Enter your meter's current reading.",
+    "kwhLabel": "kWh",
+    "dateTimeLabel": "Date & time",
+    "save": "Save reading",
+    "saving": "Saving…",
+    "savedConfirmation": "Saved: {{kwh}} kWh at {{time}}",
+    "savedOffline": "Saved — will sync when you're back online",
+    "errorGeneric": "Something went wrong. Please try again."
   }
 }

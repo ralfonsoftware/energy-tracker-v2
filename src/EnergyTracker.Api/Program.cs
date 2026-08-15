@@ -284,6 +284,9 @@ builder.Services.AddScoped<CreateDevice>();
 builder.Services.AddScoped<RenameDevice>();
 builder.Services.AddScoped<ArchiveDevice>();
 
+builder.Services.AddScoped<IMeterReadingRepository, MeterReadingRepository>();
+builder.Services.AddScoped<CreateMeterReading>();
+
 var app = builder.Build();
 
 // Must run before anything reads Request.Scheme/Host — Azure Container Apps (this story's own
@@ -330,6 +333,7 @@ api.MapSessionEndpoints();
 api.MapHouseholdEndpoints();
 api.MapHouseholdInviteEndpoints();
 api.MapTaggingScaffoldEndpoints();
+api.MapMeterReadingEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();
