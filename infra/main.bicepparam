@@ -48,3 +48,12 @@ param logAnalyticsRetentionInDays = 30
 param databaseAdministratorLogin = 'etadmin'
 param containerAppMinReplicas = 0
 param containerAppMaxReplicas = 1
+
+// AD-19 OTel extension (epic-1 retro action items 4-6). Application Insights itself deploys
+// unconditionally (layered on the existing Log Analytics workspace at no separate ingestion
+// cap), but the cap-triggered alerts do not: otelAlertNotificationEmail mirrors the
+// oidcAuthority/oidcClientId pattern above — left blank because no notification address has
+// been decided yet (an external, not-self-provisionable choice), so main.bicep's
+// monitorAlert module simply doesn't deploy until this is filled in.
+param otelDailyIngestionCapGb = 1
+param otelAlertNotificationEmail = ''

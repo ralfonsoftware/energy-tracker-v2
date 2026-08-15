@@ -13,9 +13,31 @@ services:
       DataProtection__CertificateBase64: "${DATA_PROTECTION_CERTIFICATE_BASE64:-}"
       DataProtection__CertificatePassword: "${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}"
       Ai__ApiKey: "${AI_API_KEY:-}"
+      # AD-19 OTel extension — local dev exports to the aspire-dashboard container below via OTLP.
+      Otel__Exporter: Otlp
+      Otel__OtlpEndpoint: "http://aspire-dashboard:18889"
     depends_on:
       postgres:
         condition: service_healthy
+      aspire-dashboard:
+        condition: service_started
+
+  # Standalone OTLP-receiving dashboard (not the full Aspire app-host/orchestration) — local dev's
+  # AD-19 OTel extension target. Unsecured (anonymous access, no login token), so the host ports
+  # below are bound to 127.0.0.1 only (matches docker-compose.local.yml's existing pattern for
+  # host-published local-only ports) — this file doubles as the self-host reference deployment
+  # (AD-13), and an unsecured dashboard + open OTLP receiver bound to all interfaces would be
+  # reachable from the self-hoster's LAN, not just their own machine (caught in code review).
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.1
+    environment:
+      # Verified empirically against this image tag (docker-compose smoke test, AD-19 OTel
+      # extension work) — NOT the ASPIRE_DASHBOARD_* name some docs reference, which had no effect
+      # on this build and still required browser-token login.
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "127.0.0.1:18888:18888"
+      - "127.0.0.1:18889:18889"
 
   postgres:
     image: postgres:18-alpine

@@ -109,23 +109,23 @@ action_items:
   - epic: 1
     action: "Add OpenTelemetry (logs/metrics/traces) to the API, OTLP-exportable; local dev wired to a .NET Aspire dashboard via docker-compose.yml"
     owner: "Amelia/Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Provision Application Insights on Azure as the OTel export target, layered on the existing Log Analytics workspace"
     owner: "Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Add a daily ingestion cap (Bicep param, default 1 GB/day) on Application Insights and Log Analytics"
     owner: "Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Add a cap-triggered alert (Azure Monitor action group) emailing a Bicep-param-defined notification address"
     owner: "Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Document the OTel/App Insights/ingestion-cap additions as an extension of AD-19 in the architecture spine"
     owner: "Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Wire DESIGN.md's real design tokens (surface-glass, brand-accent, status badge colors, typography scale) into web/src/index.css, replacing stock shadcn defaults"
     owner: "Sally/Amelia"

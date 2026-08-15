@@ -21,6 +21,12 @@ param resourceToken string = uniqueString(resourceGroup().id)
 @description('Log Analytics data retention in days')
 param logAnalyticsRetentionInDays int = 30
 
+@description('Daily ingestion cap in GB, shared by the Log Analytics workspace and the workspace-based Application Insights layered on it (AD-19 OTel extension)')
+param otelDailyIngestionCapGb int = 1
+
+@description('Email address notified when the daily ingestion cap is reached or nearly reached (90%). Blank disables both alerts — same degrade-gracefully shape as the blank OIDC params below.')
+param otelAlertNotificationEmail string = ''
+
 @description('Database administrator login name (not secret-shaped)')
 param databaseAdministratorLogin string = 'etadmin'
 
@@ -82,6 +88,27 @@ module logAnalytics 'modules/log-analytics.bicep' = {
     name: '${namePrefix}-law'
     location: location
     retentionInDays: logAnalyticsRetentionInDays
+    dailyQuotaGb: otelDailyIngestionCapGb
+  }
+}
+
+module appInsights 'modules/app-insights.bicep' = {
+  name: 'app-insights'
+  params: {
+    name: '${namePrefix}-appi'
+    location: location
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
+  }
+}
+
+module monitorAlert 'modules/monitor-alert.bicep' = if (!empty(otelAlertNotificationEmail)) {
+  name: 'monitor-alert'
+  params: {
+    name: '${namePrefix}-otel'
+    location: location
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
+    notificationEmail: otelAlertNotificationEmail
+    dailyCapGb: otelDailyIngestionCapGb
   }
 }
 
@@ -152,6 +179,7 @@ module containerApp 'modules/container-app.bicep' = {
     oidcAuthority: oidcAuthority
     oidcClientId: oidcClientId
     oidcClientSecretValue: oidcClientSecret
+    appInsightsConnectionString: appInsights.outputs.connectionString
     minReplicas: containerAppMinReplicas
     maxReplicas: containerAppMaxReplicas
     targetPort: containerAppTargetPort
@@ -161,3 +189,4 @@ module containerApp 'modules/container-app.bicep' = {
 output containerAppFqdn string = containerApp.outputs.fqdn
 output containerRegistryLoginServer string = containerRegistry.outputs.loginServer
 output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceId
+output appInsightsId string = appInsights.outputs.id
