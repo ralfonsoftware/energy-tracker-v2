@@ -152,4 +152,4 @@
 - FR-25: Epic 2 — Meter Reading Regression Detection
 - FR-26: Epic 1 — Household Provisioning
 - FR-27: Epic 1 — Household Member Invitation
-- FR-28: Epic 1 — Room / Power Point / Device Management
+- FR-28: Epic 1 — Room / Power Point / Device Management (extended by Epic 2, Story 2.6 — re-parenting, added post-Epic-1-retro 2026-08-15)

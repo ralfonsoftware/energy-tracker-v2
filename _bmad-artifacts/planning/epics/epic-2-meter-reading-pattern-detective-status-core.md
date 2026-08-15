@@ -2,7 +2,7 @@
 
 The product's non-negotiable core loop: a Household member logs a Meter Reading in under a minute (with offline queuing), sets a Yearly Baseline, and sees a single trustworthy Status (within range / below baseline / trending) on the dashboard — computed from a gap-tolerant rolling baseline, with meter-rollover/reset regressions caught and classified rather than silently corrupting the pace. Fully functional with zero Smart Plug coverage. Realizes UJ-1 and UJ-2's Status half.
 
-**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25
+**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1)
 **NFRs:** NFR1 (perf tier 1), NFR7 (offline capture), NFR9 (recomputation policy), NFR10 (concurrency), NFR15 (says-less discipline)
 **Architecture:** AD-4, AD-7, AD-12, AD-14, AD-16
 **UX-DRs:** UX-DR1 (status/brand tokens), UX-DR2 (Status card), UX-DR3 (Log Reading sheet), UX-DR4 (Meter Regression prompt), UX-DR8 (primary action button), UX-DR9 (nav chrome), UX-DR13 (one-level-deep modal stacking), UX-DR14 (empty/edge states), UX-DR15 (motion contract), UX-DR16 (accessibility floor), UX-DR17 (voice/tone), UX-DR18 (regression micro-flow)
@@ -222,3 +222,39 @@ So that I know if I'm on track without hunting for the answer.
 **Given** the bottom tab bar (mobile)
 **When** the Dashboard is the active surface
 **Then** its nav item uses the brand-accent-tinted active state, never a status color; the tab bar shell carries all four top-level entries (Dashboard, Trend History, Tariff Radar, Settings) per UX-DR9, with the latter three surfaces' content filled in by later epics
+
+## Story 2.6: Room / Power Point / Device Re-parenting
+
+As a Household member,
+I want to move a Power Point to a different Room, or a Device to a different Power Point,
+So that I can reorganize my Household's tagging structure once real day-to-day use shows it no longer matches how the house is actually laid out or used.
+
+**Acceptance Criteria:**
+
+**Given** an existing Power Point
+**When** I move it to a different Room
+**Then** its Room assignment is reassigned going forward — the one deliberate exception to the init-only immutability Room/PowerPoint/Device otherwise follow (deferred in Story 1.9, reintroduced here) (FR-28)
+
+**Given** an existing Device
+**When** I move it to a different Power Point
+**Then** its Power Point assignment is reassigned going forward, following the same reassignment rule as a Power Point move (FR-28)
+
+**Given** a Power Point or Device with Smart Plug readings or Events already recorded against it before the move
+**When** the move completes
+**Then** those historical rows keep displaying the Room/Power Point/Device identity snapshotted at write time — the move is never retroactively applied to past data (AD-10)
+
+**Given** a Room, Power Point, or Device that is archived (soft-deleted)
+**When** I attempt to move a child into it, or move it as a child of another archived parent
+**Then** the move is rejected — an archived node can't become a new attachment point
+
+**Given** a Power Point or Device I'm moving
+**When** I select a destination
+**Then** only non-archived Rooms (for a Power Point) or non-archived Power Points (for a Device) within the same Household are offered — cross-Household reassignment is never possible (FR-28, AD-3)
+
+**Given** a move I've just made
+**When** I view the tagging scaffold immediately after
+**Then** the moved item appears under its new parent and is no longer listed under its old parent — never duplicated under both
+
+**Given** the Room/Power Point/Device management surface in Settings (Story 1.9)
+**When** a move is available
+**Then** it's exposed as an additive "Move to…" action on the existing management UI rather than a new standalone surface — reusing the same list/detail pattern already established

@@ -41,6 +41,18 @@ see [self-hosting.md](self-hosting.md) for what to register. (`/login` also
 accepts an optional `returnUrl`, used internally by the Household
 member-invitation flow — informational only, nothing to configure.)
 
+When you do set these for local dev, register a **separate** OIDC app for
+it — don't point `.env` at the same client the deployed Container App uses
+(that one's Client Secret lives in the `OIDC_CLIENT_SECRET` GitHub repo
+secret and is provisioned through `main.bicepparam`, per
+[../infra/README.md](../infra/README.md#oidc_client_secret--a-second-unrelated-oidc-story-15)).
+This is intentional, not a gap to close: local dev's redirect URIs
+(`http://localhost:5133/signin-oidc`, `https://localhost:5173/signin-oidc`
+per the Safari section below) have no business being registered against the
+production client, and vice versa. Two client registrations, one Authority
+(or two, if you use different providers) — that's the correct, already-in-
+place setup.
+
 ## Running the stack for development
 
 Local development runs three things side by side, each independently

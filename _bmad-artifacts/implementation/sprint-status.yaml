@@ -72,6 +72,7 @@ development_status:
   2-3-meter-reading-regression-detection-classification: backlog
   2-4-gap-tolerant-rolling-baseline-status-computation: backlog
   2-5-dashboard-status-display: backlog
+  2-6-room-power-point-device-re-parenting: backlog
   epic-2-retrospective: optional
 
   epic-3: backlog
@@ -143,8 +144,8 @@ action_items:
   - epic: 2
     action: "Add a story for Room/PowerPoint/Device re-parenting near the end of Epic 2 (deferred in Story 1.9, reintroduced due to real daily use surfacing reorganization needs)"
     owner: "John (epic definition)"
-    status: open
+    status: done
   - epic: 1
     action: "Document that the local Auth0 client registration referenced by .env is intentionally separate from the production registration (setup already correct, just undocumented)"
     owner: "Amelia (doc-only)"
-    status: open
+    status: done
