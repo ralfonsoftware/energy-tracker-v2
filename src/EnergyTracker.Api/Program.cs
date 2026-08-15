@@ -271,6 +271,7 @@ builder.Services.AddScoped<ICurrentHouseholdAccessor, CurrentHouseholdAccessor>(
 builder.Services.AddScoped<CreateHousehold>();
 builder.Services.AddScoped<CreateHouseholdInvite>();
 builder.Services.AddScoped<AcceptHouseholdInvite>();
+builder.Services.AddScoped<SetYearlyBaseline>();
 
 builder.Services.AddScoped<ITaggingScaffoldRepository, TaggingScaffoldRepository>();
 builder.Services.AddScoped<CreateRoom>();

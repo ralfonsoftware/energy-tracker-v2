@@ -63,5 +63,21 @@
     "confirmDeleteDevice": "Delete this Device? It will be archived, not removed, so any historical data stays valid.",
     "errorGeneric": "Something went wrong. Please try again.",
     "errorParentArchived": "That parent was archived in the meantime. Please refresh and try again."
+  },
+  "yearlyBaseline": {
+    "heading": "Yearly Baseline",
+    "description": "Set the amount of electricity your Household expects to use in a year. Pattern Detective measures your consumption pace against this. Changing it only affects readings from now on.",
+    "preset1": "1 person (≈{{kwh}} kWh)",
+    "preset2": "2 people (≈{{kwh}} kWh)",
+    "preset3": "3 people (≈{{kwh}} kWh)",
+    "preset4": "4 people (≈{{kwh}} kWh)",
+    "inputLabel": "Yearly Baseline (kWh)",
+    "submit": "Save",
+    "saving": "Saving…",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "errorGeneric": "Something went wrong saving your Yearly Baseline. Please try again.",
+    "errorConflict": "This Yearly Baseline was changed elsewhere in the meantime. We've loaded the latest value below — please review and save again.",
+    "errorConflictRefetchFailed": "This Yearly Baseline was changed elsewhere in the meantime, and we couldn't load the latest value. Please reload the page before saving again."
   }
 }

@@ -77,7 +77,7 @@ public static class HouseholdInviteEndpoints
                     subjectClaim.Value,
                     cancellationToken);
 
-                return Results.Ok(new HouseholdResponse(household.Id, household.Locale, household.Currency));
+                return Results.Ok(new HouseholdResponse(household.Id, household.Locale, household.Currency, household.YearlyBaselineKwh, household.Version));
             }
             catch (HouseholdInviteNotFoundException ex)
             {
