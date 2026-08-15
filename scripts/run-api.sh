@@ -21,6 +21,8 @@ set +a
 export Oidc__Authority="${OIDC_AUTHORITY:-}"
 export Oidc__ClientId="${OIDC_CLIENT_ID:-}"
 export Oidc__ClientSecret="${OIDC_CLIENT_SECRET:-}"
+export Otel__Exporter="${OTEL_EXPORTER:-Otel}"
+export Otel__OtlpEndpoint="${OTEL_OTLP_ENDPOINT:-}"
 export DataProtection__CertificateBase64="${DATA_PROTECTION_CERTIFICATE_BASE64:-}"
 export DataProtection__CertificatePassword="${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}"
 export Ai__ApiKey="${AI_API_KEY:-}"
