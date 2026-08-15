@@ -56,4 +56,4 @@ param containerAppMaxReplicas = 1
 // been decided yet (an external, not-self-provisionable choice), so main.bicep's
 // monitorAlert module simply doesn't deploy until this is filled in.
 param otelDailyIngestionCapGb = 1
-param otelAlertNotificationEmail = ''
+param otelAlertNotificationEmail = readEnvironmentVariable('AZURE_ALERT_OTEL_CAP_EMAIL', '')

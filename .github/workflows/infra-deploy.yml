@@ -77,6 +77,7 @@ jobs:
           OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+          AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)
@@ -95,6 +96,7 @@ jobs:
           OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+          AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)

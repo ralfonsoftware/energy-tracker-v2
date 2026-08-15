@@ -157,6 +157,23 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Resolve current Container App image (if any)
+        id: currentimage
+        if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
+        run: |
+          APP_NAME=$(az containerapp list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].name" -o tsv)
+          if [ -z "$APP_NAME" ]; then
+            echo "::notice::No Container App found — first deploy, placeholder image will be used"
+            echo "image=" >> "$GITHUB_OUTPUT"
+          else
+            CURRENT_IMAGE=$(az containerapp show \
+              --name "$APP_NAME" \
+              --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+              --query properties.template.containers[0].image -o tsv)
+            echo "::notice::Preserving currently-running image: $CURRENT_IMAGE"
+            echo "image=$CURRENT_IMAGE" >> "$GITHUB_OUTPUT"
+          fi
 
       # Read-only what-if only — never `az deployment group create`. That's infra-deploy.yml's
       # exclusive job, gated to push on main only. Mirrors infra-deploy.yml's manual what-if step
@@ -166,6 +183,11 @@ jobs:
         if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
         env:
           DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
+          OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
+          OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+          AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
+          CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           az deployment group what-if \
             --name "pr-review-${{ github.run_id }}" \
