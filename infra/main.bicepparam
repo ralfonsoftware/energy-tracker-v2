@@ -32,6 +32,7 @@ param oidcClientSecret = readEnvironmentVariable('OIDC_CLIENT_SECRET', '')
 param location = 'westeurope'
 
 param environmentName = 'prod'
+param customDomainName = 'energytracker.ralfonsoftware.de'
 
 // Azure SQL Basic DTU (AD-2) — the smallest/cheapest DTU model, per NFR2/NFR14 cost discipline.
 // sqlServerSkuTier is derived from sqlServerSkuName in main.bicep, not a separate parameter.
