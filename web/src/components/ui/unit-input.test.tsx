@@ -20,4 +20,21 @@ describe('UnitInput', () => {
 
     expect(handleChange).toHaveBeenCalled()
   })
+
+  it('forwards className to the underlying input and wrapperClassName to the wrapper', () => {
+    render(
+      <UnitInput
+        aria-label="Meter reading"
+        unit="kWh"
+        type="number"
+        value={100}
+        onChange={() => {}}
+        className="text-red-500"
+        wrapperClassName="max-w-xs"
+      />
+    )
+
+    expect(screen.getByRole('spinbutton', { name: 'Meter reading' })).toHaveClass('text-red-500')
+    expect(screen.getByRole('spinbutton', { name: 'Meter reading' }).closest('[data-slot="unit-input-wrap"]')).toHaveClass('max-w-xs')
+  })
 })

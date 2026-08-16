@@ -67,7 +67,7 @@ export function InviteGeneratePanel() {
       {link && (
         <div className="flex flex-col gap-2">
           <Label htmlFor="household-invite-link">{t('householdInvite.linkLabel')}</Label>
-          <div className="flex items-center gap-2 rounded-[12px] border border-[rgba(40,70,50,0.12)] bg-[rgba(255,255,255,0.5)] p-2.5 dark:border-[rgba(210,235,220,0.14)] dark:bg-[rgba(220,245,230,0.05)]">
+          <div className="flex items-center gap-2 rounded-[12px] border border-[rgba(40,70,50,0.12)] bg-[rgba(255,255,255,0.5)] p-2.5 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:border-[rgba(210,235,220,0.14)] dark:bg-[rgba(220,245,230,0.05)]">
             <Input
               id="household-invite-link"
               value={link}

@@ -16,6 +16,19 @@ describe('Button', () => {
 
     const button = screen.getByRole('button', { name: 'Archive it' })
     expect(button).toHaveAttribute('data-variant', 'glass-confirm')
-    expect(button).toHaveClass('bg-[#E2A542]')
+    expect(button).toHaveClass('bg-[#B87A1E]')
+    expect(button).toHaveClass('dark:bg-[#E2A542]')
+  })
+
+  it('glass-primary and glass-confirm keep their h-11/px-6 pill sizing at the default size', () => {
+    render(
+      <>
+        <Button variant="glass-primary">Save</Button>
+        <Button variant="glass-confirm">Archive it</Button>
+      </>
+    )
+
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('h-11', 'px-6')
+    expect(screen.getByRole('button', { name: 'Archive it' })).toHaveClass('h-11', 'px-6')
   })
 })

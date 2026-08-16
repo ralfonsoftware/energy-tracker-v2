@@ -42,6 +42,7 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-16
+# 2026-08-16: story 2-2b-design-system-foundation moved to done (code review complete: 3 decision-needed resolved, 8 patch findings fixed, 1 deferred, 14 dismissed — 54 frontend tests green, tsc/oxlint/build clean)
 # 2026-08-16: story 2-2b-design-system-foundation moved to review (dev-story implementation complete, 52 frontend tests green — 10 new — tsc/oxlint/build clean, no backend files touched)
 # 2026-08-16: story 2-2b-design-system-foundation moved to in-progress (dev-story activation)
 # 2026-08-16: story 2-2b-design-system-foundation inserted ahead of 2.3 (sprint-change-proposal-2026-08-16.md)
@@ -80,7 +81,7 @@ development_status:
   epic-2: in-progress
   2-1-yearly-baseline-configuration: done
   2-2-meter-reading-entry-with-offline-queueing: done
-  2-2b-design-system-foundation: review
+  2-2b-design-system-foundation: done
   2-3-meter-reading-regression-detection-classification: ready-for-dev
   2-4-gap-tolerant-rolling-baseline-status-computation: backlog
   2-5-dashboard-status-display: backlog

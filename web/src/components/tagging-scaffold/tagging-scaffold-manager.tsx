@@ -360,11 +360,11 @@ export function TaggingScaffoldManager() {
           {rooms.map((room) => (
             <details
               key={room.id}
-              className="group border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]"
+              className="group/room border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2">
-                  <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open:rotate-90" />
+                  <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/room:rotate-90 motion-reduce:transition-none" />
                   <span>{room.name}</span>
                 </span>
                 {room.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
@@ -388,7 +388,7 @@ export function TaggingScaffoldManager() {
                   <Trash2 aria-hidden="true" />
                 </Button>
                 {!room.archivedAt && (
-                  <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
+                  <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
                     {t('taggingScaffold.addPowerPoint')}
                   </Button>
                 )}
@@ -398,11 +398,11 @@ export function TaggingScaffoldManager() {
                 {(powerPointsByRoom.get(room.id) ?? []).map((powerPoint) => (
                   <details
                     key={powerPoint.id}
-                    className="group border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
+                    className="group/pp border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
                   >
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                       <span className="flex items-center gap-2">
-                        <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open:rotate-90" />
+                        <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/pp:rotate-90 motion-reduce:transition-none" />
                         <span>{powerPoint.name}</span>
                       </span>
                       {powerPoint.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
@@ -426,7 +426,7 @@ export function TaggingScaffoldManager() {
                         <Trash2 aria-hidden="true" />
                       </Button>
                       {!powerPoint.archivedAt && (
-                        <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
+                        <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
                           {t('taggingScaffold.addDevice')}
                         </Button>
                       )}
@@ -473,7 +473,7 @@ export function TaggingScaffoldManager() {
           {dialog?.kind === 'delete-room' && (
             <>
               <DialogHeader>
-                <DialogTitle>{t('taggingScaffold.delete')}</DialogTitle>
+                <DialogTitle>{t('taggingScaffold.archive')}</DialogTitle>
                 <DialogDescription>{t('taggingScaffold.confirmDeleteRoom')}</DialogDescription>
               </DialogHeader>
               {dialogError && <p className="text-destructive text-sm">{dialogError}</p>}
@@ -482,7 +482,7 @@ export function TaggingScaffoldManager() {
                   {t('taggingScaffold.cancel')}
                 </Button>
                 <Button variant="glass-confirm" onClick={handleDelete} disabled={submitting}>
-                  {t('taggingScaffold.delete')}
+                  {t('taggingScaffold.archive')}
                 </Button>
               </DialogFooter>
             </>
@@ -491,7 +491,7 @@ export function TaggingScaffoldManager() {
           {dialog?.kind === 'delete-power-point' && (
             <>
               <DialogHeader>
-                <DialogTitle>{t('taggingScaffold.delete')}</DialogTitle>
+                <DialogTitle>{t('taggingScaffold.archive')}</DialogTitle>
                 <DialogDescription>{t('taggingScaffold.confirmDeletePowerPoint')}</DialogDescription>
               </DialogHeader>
               {dialogError && <p className="text-destructive text-sm">{dialogError}</p>}
@@ -500,7 +500,7 @@ export function TaggingScaffoldManager() {
                   {t('taggingScaffold.cancel')}
                 </Button>
                 <Button variant="glass-confirm" onClick={handleDelete} disabled={submitting}>
-                  {t('taggingScaffold.delete')}
+                  {t('taggingScaffold.archive')}
                 </Button>
               </DialogFooter>
             </>
@@ -509,7 +509,7 @@ export function TaggingScaffoldManager() {
           {dialog?.kind === 'delete-device' && (
             <>
               <DialogHeader>
-                <DialogTitle>{t('taggingScaffold.delete')}</DialogTitle>
+                <DialogTitle>{t('taggingScaffold.archive')}</DialogTitle>
                 <DialogDescription>{t('taggingScaffold.confirmDeleteDevice')}</DialogDescription>
               </DialogHeader>
               {dialogError && <p className="text-destructive text-sm">{dialogError}</p>}
@@ -518,7 +518,7 @@ export function TaggingScaffoldManager() {
                   {t('taggingScaffold.cancel')}
                 </Button>
                 <Button variant="glass-confirm" onClick={handleDelete} disabled={submitting}>
-                  {t('taggingScaffold.delete')}
+                  {t('taggingScaffold.archive')}
                 </Button>
               </DialogFooter>
             </>
