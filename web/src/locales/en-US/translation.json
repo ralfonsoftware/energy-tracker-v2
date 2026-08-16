@@ -95,7 +95,7 @@
   },
   "meterRegression": {
     "title": "That reading is lower than the last one",
-    "description": "You entered {{kwh}} kWh, but your last reading was {{previousKwh}} kWh. This usually means the meter was reset or it rolled over its digit limit — not that your consumption went backwards. Pick which one happened.",
+    "description": "You entered {{kwh}} kWh on {{readingTime}}, but your last reading was {{previousKwh}} kWh on {{previousReadingTime}}. This usually means the meter was reset or it rolled over its digit limit — not that your consumption went backwards. Pick which one happened.",
     "resetAction": "The meter was reset",
     "resetActionDescription": "New meter installed, or a manual reset. Starts a fresh baseline sequence going forward.",
     "rolloverAction": "It rolled over",

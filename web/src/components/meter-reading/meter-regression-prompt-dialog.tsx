@@ -21,12 +21,22 @@ interface MeterRegressionPromptDialogProps {
   onResolved: () => void
 }
 
+// 404 ("someone else already resolved it") and 409 ("no longer the open prompt") both mean this
+// dialog's prompt is stale — the caller must re-sync via onResolved() rather than get stuck
+// showing an error for a prompt that will never successfully resolve again.
+function isStalePromptError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 404 || err.status === 409)
+}
+
 export function MeterRegressionPromptDialog({ prompt, onResolved }: MeterRegressionPromptDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [mode, setMode] = useState<'choice' | 'rollover'>('choice')
   const [digitCapacityKwh, setDigitCapacityKwh] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const formatTimestamp = (iso: string) =>
+    new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
 
   // A newly-arrived prompt (including the next one queued behind a just-resolved prompt, AC #6)
   // always starts back at the choice step, pre-filling the digit capacity from this new prompt's
@@ -48,6 +58,10 @@ export function MeterRegressionPromptDialog({ prompt, onResolved }: MeterRegress
       await resolveMeterRegressionPrompt(prompt.id, 'reset')
       onResolved()
     } catch (err) {
+      if (isStalePromptError(err)) {
+        onResolved()
+        return
+      }
       setError(err instanceof ApiError && err.detail ? err.detail : t('meterRegression.errorGeneric'))
     } finally {
       setSubmitting(false)
@@ -66,6 +80,10 @@ export function MeterRegressionPromptDialog({ prompt, onResolved }: MeterRegress
       await resolveMeterRegressionPrompt(prompt.id, 'rollover', Number(digitCapacityKwh))
       onResolved()
     } catch (err) {
+      if (isStalePromptError(err)) {
+        onResolved()
+        return
+      }
       setError(err instanceof ApiError && err.detail ? err.detail : t('meterRegression.errorGeneric'))
     } finally {
       setSubmitting(false)
@@ -86,7 +104,9 @@ export function MeterRegressionPromptDialog({ prompt, onResolved }: MeterRegress
               <DialogDescription>
                 {t('meterRegression.description', {
                   kwh: prompt.readingKwhValue,
+                  readingTime: formatTimestamp(prompt.readingTimestamp),
                   previousKwh: prompt.previousReadingKwhValue,
+                  previousReadingTime: formatTimestamp(prompt.previousReadingTimestamp),
                 })}
               </DialogDescription>
             </DialogHeader>

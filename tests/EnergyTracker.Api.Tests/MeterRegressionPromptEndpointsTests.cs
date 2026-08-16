@@ -219,6 +219,24 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     }
 
     [Fact]
+    public async Task GET_open_never_returns_another_households_prompt()
+    {
+        var (ownerClient, _) = await CreateHouseholdAsync();
+        var baseline = DateTimeOffset.UtcNow;
+        await PostReadingAsync(ownerClient, 14302m, baseline);
+        await PostReadingAsync(ownerClient, 412m, baseline.AddHours(1));
+
+        var (otherClient, _) = await CreateHouseholdAsync();
+        var otherOpenResponse = await otherClient.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken);
+
+        // AD-3's query filter scopes GetOpenForHouseholdAsync to the caller's own Household — the
+        // owner's open prompt must never leak into another Household's poll.
+        otherOpenResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var otherOpenBody = await otherOpenResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        otherOpenBody.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Rollover_with_no_available_digit_capacity_returns_400()
     {
         var (client, _) = await CreateHouseholdAsync();

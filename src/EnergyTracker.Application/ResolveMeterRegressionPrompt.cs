@@ -6,6 +6,8 @@ namespace EnergyTracker.Application;
 /// <summary>Resolves an open MeterRegressionPrompt as reset or rollover for the caller's own Household, enforcing AD-12's one-open-at-a-time ordering (AC #2, #3, #5, #6).</summary>
 public class ResolveMeterRegressionPrompt(IMeterRegressionPromptRepository repository)
 {
+    private const decimal MaxDigitCapacityKwh = 1_000_000_000_000_000m; // 10^15, one order below 10^16 overflow — same bound as CreateMeterReading.MaxKwhValue.
+
     public async Task<MeterRegressionPrompt> ExecuteAsync(
         Guid householdId,
         Guid promptId,
@@ -37,6 +39,12 @@ public class ResolveMeterRegressionPrompt(IMeterRegressionPromptRepository repos
                     "A positive digit capacity (kWh) is required to classify a reading as a rollover.");
             }
 
+            if (effectiveCapacity >= MaxDigitCapacityKwh)
+            {
+                throw new MeterRegressionValidationException(
+                    $"Digit capacity (kWh) must be less than {MaxDigitCapacityKwh}, got '{effectiveCapacity}'.");
+            }
+
             prompt.DigitCapacityKwh = effectiveCapacity;
             await repository.SetMainMeterDigitCapacityIfUnsetAsync(prompt.MainMeterId, effectiveCapacity.Value, cancellationToken);
         }
@@ -44,6 +52,15 @@ public class ResolveMeterRegressionPrompt(IMeterRegressionPromptRepository repos
         prompt.Classification = classification;
         prompt.ResolvedAtUtc = DateTimeOffset.UtcNow;
 
-        return await repository.ResolveAsync(prompt, cancellationToken);
+        var resolved = await repository.ResolveAsync(prompt, cancellationToken);
+        if (!resolved)
+        {
+            // Lost the race: a concurrent request resolved this same prompt between our read above
+            // and this write. Surface it the same way as "not the open prompt" — the caller should
+            // re-fetch rather than assume its classification was the one that stuck.
+            throw new MeterRegressionPromptNotOpenException($"MeterRegressionPrompt '{promptId}' was already resolved by a concurrent request.");
+        }
+
+        return prompt;
     }
 }

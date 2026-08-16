@@ -31,7 +31,7 @@ public class ResolveMeterRegressionPromptTests
         var prompt = NewOpenPrompt(householdId, mainMeterId);
         _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
         _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
-        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterRegressionPrompt>());
+        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(true);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken);
@@ -51,7 +51,7 @@ public class ResolveMeterRegressionPromptTests
         var prompt = NewOpenPrompt(householdId, mainMeterId);
         _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
         _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
-        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterRegressionPrompt>());
+        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(true);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Rollover, 99999m, TestContext.Current.CancellationToken);
@@ -70,7 +70,7 @@ public class ResolveMeterRegressionPromptTests
         _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
         _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
         _repository.GetMainMeterDigitCapacityAsync(mainMeterId, Arg.Any<CancellationToken>()).Returns(88888m);
-        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterRegressionPrompt>());
+        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(true);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Rollover, null, TestContext.Current.CancellationToken);
@@ -158,5 +158,38 @@ public class ResolveMeterRegressionPromptTests
 
         await Should.ThrowAsync<MeterRegressionPromptNotFoundException>(() =>
             sut.ExecuteAsync(householdId, promptId, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Losing_the_resolve_race_to_a_concurrent_request_throws_not_open()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeterId = Guid.NewGuid();
+        var prompt = NewOpenPrompt(householdId, mainMeterId);
+        _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
+        _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
+        // A concurrent request resolved this exact prompt between our reads above and our write —
+        // the conditional UPDATE affects zero rows.
+        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(false);
+        var sut = Sut();
+
+        await Should.ThrowAsync<MeterRegressionPromptNotOpenException>(() =>
+            sut.ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Rollover_with_a_digit_capacity_at_or_above_the_max_throws()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeterId = Guid.NewGuid();
+        var prompt = NewOpenPrompt(householdId, mainMeterId);
+        _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
+        _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
+        var sut = Sut();
+
+        await Should.ThrowAsync<MeterRegressionValidationException>(() =>
+            sut.ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Rollover, 1_000_000_000_000_000m, TestContext.Current.CancellationToken));
+
+        await _repository.DidNotReceive().ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>());
     }
 }

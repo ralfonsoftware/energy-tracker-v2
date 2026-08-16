@@ -194,6 +194,33 @@ public class CreateMeterReadingTests
     }
 
     [Fact]
+    public async Task A_reading_equal_to_the_immediately_preceding_one_does_not_raise_a_regression_prompt()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var preceding = new MeterReading
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = mainMeter.Id,
+            KwhValue = 14302m,
+            ReadingTimestamp = DateTimeOffset.UtcNow.AddDays(-1),
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        _repository.FindImmediatelyPrecedingAsync(mainMeter.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(preceding);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, 14302m, DateTimeOffset.UtcNow, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        await _regressionPromptRepository.DidNotReceive().AddAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task The_first_ever_reading_for_a_Main_Meter_does_not_raise_a_regression_prompt()
     {
         var householdId = Guid.NewGuid();

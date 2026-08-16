@@ -12,8 +12,12 @@ public interface IMeterRegressionPromptRepository
 
     Task<MeterRegressionPrompt?> FindByIdAsync(Guid householdId, Guid promptId, CancellationToken cancellationToken);
 
-    // Persists a prompt whose Classification/DigitCapacityKwh/ResolvedAtUtc the caller has already set.
-    Task<MeterRegressionPrompt> ResolveAsync(MeterRegressionPrompt prompt, CancellationToken cancellationToken);
+    // Persists a prompt whose Classification/DigitCapacityKwh/ResolvedAtUtc the caller has already set,
+    // via a conditional UPDATE ... WHERE Id = @id AND ResolvedAtUtc IS NULL. Returns false (without writing)
+    // if the prompt was resolved by a concurrent request in between the caller's read and this write —
+    // the caller must not assume its in-memory prompt instance was actually persisted just because no
+    // exception was thrown.
+    Task<bool> ResolveAsync(MeterRegressionPrompt prompt, CancellationToken cancellationToken);
 
     Task<decimal?> GetMainMeterDigitCapacityAsync(Guid mainMeterId, CancellationToken cancellationToken);
 

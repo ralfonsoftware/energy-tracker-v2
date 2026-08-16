@@ -95,7 +95,7 @@
   },
   "meterRegression": {
     "title": "Dieser Zählerstand ist niedriger als der letzte",
-    "description": "Du hast {{kwh}} kWh eingegeben, aber dein letzter Zählerstand war {{previousKwh}} kWh. Das bedeutet normalerweise, dass der Zähler zurückgesetzt wurde oder seine Ziffernkapazität überschritten hat — nicht, dass dein Verbrauch rückwärts gelaufen ist. Wähle, was passiert ist.",
+    "description": "Du hast {{kwh}} kWh am {{readingTime}} eingegeben, aber dein letzter Zählerstand war {{previousKwh}} kWh am {{previousReadingTime}}. Das bedeutet normalerweise, dass der Zähler zurückgesetzt wurde oder seine Ziffernkapazität überschritten hat — nicht, dass dein Verbrauch rückwärts gelaufen ist. Wähle, was passiert ist.",
     "resetAction": "Der Zähler wurde zurückgesetzt",
     "resetActionDescription": "Neuer Zähler installiert oder manuell zurückgesetzt. Startet ab jetzt eine neue Basiswert-Berechnung.",
     "rolloverAction": "Er ist übergelaufen",

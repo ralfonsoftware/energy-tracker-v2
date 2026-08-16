@@ -32,27 +32,35 @@ public class MeterRegressionPromptRepository(EnergyTrackerDbContext dbContext) :
         }
     }
 
-    public async Task<MeterRegressionPrompt?> GetOpenForHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
-    {
-        var openPrompts = await dbContext.MeterRegressionPrompts
+    public Task<MeterRegressionPrompt?> GetOpenForHouseholdAsync(Guid householdId, CancellationToken cancellationToken) =>
+        dbContext.MeterRegressionPrompts
             .Where(p => p.HouseholdId == householdId && p.ResolvedAtUtc == null)
             .Join(dbContext.MeterReadings, p => p.MeterReadingId, r => r.Id, (p, r) => new { Prompt = p, r.ReadingTimestamp })
+            // ReadingTimestamp alone can tie (e.g. two backfilled readings entered with the same
+            // timestamp) — break ties on the prompt's own Id so ordering is deterministic across calls
+            // and GET /open never disagrees with the resolve-time open-check.
             .OrderBy(x => x.ReadingTimestamp)
+            .ThenBy(x => x.Prompt.Id)
             .Select(x => x.Prompt)
-            .Take(1)
-            .ToListAsync(cancellationToken);
-
-        return openPrompts.SingleOrDefault();
-    }
+            .FirstOrDefaultAsync(cancellationToken);
 
     public Task<MeterRegressionPrompt?> FindByIdAsync(Guid householdId, Guid promptId, CancellationToken cancellationToken) =>
         dbContext.MeterRegressionPrompts.SingleOrDefaultAsync(p => p.HouseholdId == householdId && p.Id == promptId, cancellationToken);
 
-    public async Task<MeterRegressionPrompt> ResolveAsync(MeterRegressionPrompt prompt, CancellationToken cancellationToken)
+    public async Task<bool> ResolveAsync(MeterRegressionPrompt prompt, CancellationToken cancellationToken)
     {
-        dbContext.MeterRegressionPrompts.Update(prompt);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return prompt;
+        // Conditional UPDATE guards against a concurrent resolve of the same prompt (e.g. a double-tap
+        // on "Confirm"): only the request that still finds ResolvedAtUtc IS NULL at write time wins.
+        var rowsUpdated = await dbContext.MeterRegressionPrompts
+            .Where(p => p.Id == prompt.Id && p.ResolvedAtUtc == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(p => p.Classification, prompt.Classification)
+                    .SetProperty(p => p.DigitCapacityKwh, prompt.DigitCapacityKwh)
+                    .SetProperty(p => p.ResolvedAtUtc, prompt.ResolvedAtUtc),
+                cancellationToken);
+
+        return rowsUpdated > 0;
     }
 
     public Task<decimal?> GetMainMeterDigitCapacityAsync(Guid mainMeterId, CancellationToken cancellationToken) =>

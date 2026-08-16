@@ -127,8 +127,13 @@ function App() {
       return
     }
 
-    return registerOfflineSync()
-  }, [state.status])
+    // A reading synced from the offline queue in the background can itself raise a regression
+    // (AC #1) — nothing else re-polls for that, so it's wired to the same refresh a foreground
+    // save/resolve triggers.
+    return registerOfflineSync(() => {
+      void refreshOpenRegressionPrompt()
+    })
+  }, [state.status, refreshOpenRegressionPrompt])
 
   useEffect(() => {
     if (state.status !== 'ready') {

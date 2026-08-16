@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MeterRegressionPromptDialog } from './meter-regression-prompt-dialog'
@@ -30,13 +30,32 @@ describe('MeterRegressionPromptDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('renders the two readings\' values from the supplied prompt, announced via role and accessible name', async () => {
+  it('renders the two readings\' values and timestamps from the supplied prompt, announced via role and accessible name', async () => {
     render(<MeterRegressionPromptDialog prompt={basePrompt} onResolved={vi.fn()} />)
 
     const dialog = await screen.findByRole('dialog', { name: 'That reading is lower than the last one' })
     expect(dialog).toBeInTheDocument()
     expect(screen.getByText(/412/)).toBeInTheDocument()
     expect(screen.getByText(/14302/)).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('2026')
+  })
+
+  it('never closes on Escape or an outside click, and never calls onResolved on its own', async () => {
+    const onResolved = vi.fn()
+    const user = userEvent.setup()
+    render(<MeterRegressionPromptDialog prompt={basePrompt} onResolved={onResolved} />)
+
+    const dialog = await screen.findByRole('dialog')
+    await user.keyboard('{Escape}')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+
+    // The dialog traps focus and Radix disables pointer-events on the body while it's open, so
+    // user-event's click can't reach outside content — dispatch the raw pointerdown Radix's
+    // onPointerDownOutside listens for instead.
+    fireEvent.pointerDown(document.body)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(dialog).toBeInTheDocument()
+    expect(onResolved).not.toHaveBeenCalled()
   })
 
   it('"Meter was reset/replaced" resolves immediately with no extra input', async () => {
@@ -99,5 +118,18 @@ describe('MeterRegressionPromptDialog', () => {
         body: JSON.stringify({ classification: 'rollover', digitCapacityKwh: 99999 }),
       }),
     )
+  })
+
+  it('recovers via onResolved (rather than getting stuck) when the resolve response is 404 or 409', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ detail: 'already resolved' }, 409)))
+    vi.stubGlobal('fetch', fetchMock)
+    const onResolved = vi.fn()
+    const user = userEvent.setup()
+    render(<MeterRegressionPromptDialog prompt={basePrompt} onResolved={onResolved} />)
+
+    await user.click(await screen.findByRole('button', { name: /The meter was reset/ }))
+
+    await waitFor(() => expect(onResolved).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('Something went wrong. Please try again.')).not.toBeInTheDocument()
   })
 })

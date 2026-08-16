@@ -4,7 +4,7 @@ baseline_commit: 820130cf1afa51c73450178a1cfb0e85a96885a2
 
 # Story 2.3: Meter Reading Regression Detection & Classification
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -85,6 +85,20 @@ so that a meter swap or digit rollover doesn't corrupt my Status.
   - [x] `web/src/components/meter-reading/meter-regression-prompt-dialog.test.tsx` (new) — Vitest + Testing Library. Cover: renders the two readings' values/timestamps from a supplied prompt; "Meter was reset/replaced" resolves immediately with no extra input; "Meter rolled over" reveals the capacity field, pre-filled when `mainMeterDigitCapacityKwh` is provided, required when it's `null`; traps focus/announces on open (role + accessible name via Testing Library's accessibility queries).
   - [x] Update `web/src/components/meter-reading/log-reading-sheet.test.tsx` for the new controlled `open`/`onOpenChange`/`onSaved` props (no behavior change to the save flow itself, just how openness is driven).
   - [x] Update `web/src/App.test.tsx` (if it currently exercises the dashboard placeholder/sheet trigger) for the lifted state; add a case confirming a fetched open prompt on mount renders the regression dialog, and that opening `LogReadingSheet` while a prompt is open is prevented / that a newly-arriving open prompt closes an open sheet (AC #7 — mock `fetchOpenMeterRegressionPrompt` to control timing).
+
+### Review Findings
+
+- [x] [Review][Patch] No concurrency guard on resolving a prompt — concurrent resolve requests can double-write / silently overwrite classification [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs:47]
+- [x] [Review][Patch] Nondeterministic tiebreak in `FindImmediatelyPrecedingAsync` when two prior readings share an identical `ReadingTimestamp` [src/EnergyTracker.Infrastructure/Adapters/MeterReadingRepository.cs:77]
+- [x] [Review][Patch] Nondeterministic tiebreak in `GetOpenForHouseholdAsync` when two open prompts' readings share an identical `ReadingTimestamp` — can make `GET /open` and the resolve-time open-check disagree, producing spurious 409s [src/EnergyTracker.Infrastructure/Adapters/MeterRegressionPromptRepository.cs:35]
+- [x] [Review][Patch] No upper-bound validation on `digitCapacityKwh` — an oversized value causes an unhandled `DbUpdateException` (500) instead of a clean 400, unlike the existing `MaxKwhValue` guard for `MeterReading.KwhValue` [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs:34]
+- [x] [Review][Patch] Regression dialog gets permanently stuck on a stale/conflicting resolve response (404/409) — non-dismissible dialog shows only a generic error with no recovery path short of a full page reload [web/src/components/meter-reading/meter-regression-prompt-dialog.tsx:50]
+- [x] [Review][Patch] Offline-sync gap — a regression created by a reading flushed from the offline queue in the background never triggers a re-poll of the open-prompt endpoint; it only surfaces on the next unrelated mount/save/resolve [web/src/lib/meter-reading-sync.ts:108, web/src/App.tsx:130]
+- [x] [Review][Patch] Regression dialog omits reading timestamps, contradicting Task 6's explicit content spec ("kWh values + timestamps") — the DTO carries both timestamps but the dialog only renders the kWh values [web/src/components/meter-reading/meter-regression-prompt-dialog.tsx:86]
+- [x] [Review][Patch] `GetOpenForHouseholdAsync`'s query is needlessly convoluted (Join+OrderBy+Select+Take(1)+ToListAsync+SingleOrDefault where `FirstOrDefaultAsync` on the ordered query would do) [src/EnergyTracker.Infrastructure/Adapters/MeterRegressionPromptRepository.cs:35]
+- [x] [Review][Patch] Test-coverage gap — the equal-value boundary (`KwhValue == preceding.KwhValue`) is never asserted despite being explicitly named in Task 7 [tests/EnergyTracker.Application.Tests/CreateMeterReadingTests.cs]
+- [x] [Review][Patch] Test-coverage gap — no test asserts Escape/outside-click are actually neutralized on the regression dialog (AC #5's "never silently expires" guarantee) [web/src/components/meter-reading/meter-regression-prompt-dialog.test.tsx]
+- [x] [Review][Patch] Test-coverage gap — cross-Household isolation is tested for the resolve endpoint but not for `GET .../open`, breaking this story's own per-endpoint IDOR-test convention [tests/EnergyTracker.Api.Tests/MeterRegressionPromptEndpointsTests.cs]
 
 ## Dev Notes
 

@@ -82,13 +82,17 @@ function isPermanentRejection(status: number): boolean {
 // insert or a no-op replay. A response the server will never accept (e.g. failed validation)
 // is removed too — otherwise it would retry forever with no way for the user to see or clear it.
 // A 5xx, an auth failure, or a network-level failure is presumed transient and stays queued.
-export async function flushQueue(): Promise<void> {
+// `onSynced` fires once per successfully-sent reading — a background flush can create a regression
+// prompt (Story 2.3) that nothing else would otherwise re-poll for, so callers that care about
+// state made stale by a queued reading landing (e.g. the open-regression-prompt poll) hook in here.
+export async function flushQueue(onSynced?: () => void): Promise<void> {
   const pending = await listPending()
   for (const reading of pending) {
     try {
       const response = await post(reading)
       if (response.ok) {
         await remove(reading.idempotencyKey)
+        onSynced?.()
       } else if (isPermanentRejection(response.status)) {
         const error = await toApiError(response)
         console.error(`Discarding queued meter reading that the server rejected: ${error.detail ?? error.message}`, reading)
@@ -105,7 +109,7 @@ export async function flushQueue(): Promise<void> {
 // window-scoped listener plus an app-mount flush is sufficient for this story's AC. Guards
 // against overlapping flushes (e.g. the mount call still in flight when 'online' fires) so two
 // concurrent flushes never race to POST the same queued idempotencyKey at once.
-export function registerOfflineSync(): () => void {
+export function registerOfflineSync(onSynced?: () => void): () => void {
   let flushing = false
 
   const runFlush = () => {
@@ -113,7 +117,7 @@ export function registerOfflineSync(): () => void {
       return
     }
     flushing = true
-    void flushQueue().finally(() => {
+    void flushQueue(onSynced).finally(() => {
       flushing = false
     })
   }
