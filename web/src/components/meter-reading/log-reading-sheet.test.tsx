@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
+import { useState } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +9,16 @@ import { listPending } from '@/lib/offline-queue'
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
+}
+
+// LogReadingSheet is a controlled component (Story 2.3) — this wrapper owns the `open` state the
+// same way App.tsx does, so these tests exercise the same click-to-open/save-to-close behavior as
+// before the controlled-props change.
+function ControlledLogReadingSheet() {
+  const [open, setOpen] = useState(false)
+  return (
+    <LogReadingSheet trigger={<button>Log reading</button>} open={open} onOpenChange={setOpen} />
+  )
 }
 
 beforeEach(() => {
@@ -21,7 +32,7 @@ describe('LogReadingSheet', () => {
 
   it('opens with today\'s date/time pre-filled and editable', async () => {
     const user = userEvent.setup()
-    render(<LogReadingSheet trigger={<button>Log reading</button>} />)
+    render(<ControlledLogReadingSheet />)
 
     await user.click(screen.getByRole('button', { name: 'Log reading' }))
 
@@ -41,7 +52,7 @@ describe('LogReadingSheet', () => {
       vi.fn(() => Promise.resolve(jsonResponse({ id: 'r1', kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00+00:00' }))),
     )
     const user = userEvent.setup()
-    render(<LogReadingSheet trigger={<button>Log reading</button>} />)
+    render(<ControlledLogReadingSheet />)
 
     await user.click(screen.getByRole('button', { name: 'Log reading' }))
     await user.type(await screen.findByLabelText('kWh'), '4821.5')
@@ -54,7 +65,7 @@ describe('LogReadingSheet', () => {
   it('a simulated network failure enqueues to IndexedDB and shows the offline-queued confirmation instead of an error', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
     const user = userEvent.setup()
-    render(<LogReadingSheet trigger={<button>Log reading</button>} />)
+    render(<ControlledLogReadingSheet />)
 
     await user.click(screen.getByRole('button', { name: 'Log reading' }))
     await user.type(await screen.findByLabelText('kWh'), '4821.5')
@@ -80,7 +91,7 @@ describe('LogReadingSheet', () => {
       ),
     )
     const user = userEvent.setup()
-    render(<LogReadingSheet trigger={<button>Log reading</button>} />)
+    render(<ControlledLogReadingSheet />)
 
     await user.click(screen.getByRole('button', { name: 'Log reading' }))
     await user.type(await screen.findByLabelText('kWh'), '4821.5')
@@ -92,5 +103,20 @@ describe('LogReadingSheet', () => {
 
     resolveFetch(jsonResponse({ id: 'r1', kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00+00:00' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('calls onSaved after a successful save', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ id: 'r1', kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00+00:00' }))),
+    )
+    const onSaved = vi.fn()
+    const user = userEvent.setup()
+    render(<LogReadingSheet trigger={<button>Log reading</button>} open={true} onOpenChange={() => {}} onSaved={onSaved} />)
+
+    await user.type(await screen.findByLabelText('kWh'), '4821.5')
+    await user.click(screen.getByRole('button', { name: 'Save reading' }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
   })
 })

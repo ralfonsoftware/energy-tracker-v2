@@ -3,12 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
+// Routes only /api/session to the given response; every other call (e.g. Story 2.3's
+// meter-regression-prompts/open mount check) gets a benign 200-empty-body — the same shape the
+// real backend returns when nothing's open — rather than silently echoing back the session body.
 function mockSession(response: object | null, status = 200) {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(response === null ? null : JSON.stringify(response), { status }),
-    ),
+    vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/session') {
+        return Promise.resolve(new Response(response === null ? null : JSON.stringify(response), { status }))
+      }
+      return Promise.resolve(new Response(null, { status: 200 }))
+    }),
   )
 }
 
@@ -268,6 +275,46 @@ describe('App', () => {
 
       expect(await screen.findByText('Something went wrong creating the invite. Please try again.')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Meter Regression prompt (Story 2.3)', () => {
+    const openPromptDto = {
+      id: 'prompt-1',
+      meterReadingId: 'reading-1',
+      readingKwhValue: 412,
+      readingTimestamp: '2026-08-16T19:42:00+00:00',
+      previousMeterReadingId: 'reading-0',
+      previousReadingKwhValue: 14302,
+      previousReadingTimestamp: '2026-08-15T19:42:00+00:00',
+      mainMeterDigitCapacityKwh: null,
+    }
+
+    it('a fetched open prompt on mount renders the regression dialog', async () => {
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(openPromptDto) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByRole('dialog', { name: 'That reading is lower than the last one' })).toBeInTheDocument()
+    })
+
+    it('the Log Reading trigger is inert (not in the accessibility tree) while a regression prompt is open — the dialog supersedes rather than stacks', async () => {
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(openPromptDto) },
+      ])
+
+      render(<App />)
+
+      await screen.findByRole('dialog', { name: 'That reading is lower than the last one' })
+
+      // Radix's modal Dialog marks the rest of the page aria-hidden while open — the trigger
+      // becomes unreachable to assistive tech, which is what makes "supersedes rather than
+      // stacks" (AC #7) a real accessibility guarantee, not just a visual one.
+      expect(screen.queryByRole('button', { name: 'Log reading' })).not.toBeInTheDocument()
     })
   })
 })

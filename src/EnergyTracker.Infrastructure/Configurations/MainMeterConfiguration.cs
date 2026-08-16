@@ -15,6 +15,9 @@ public class MainMeterConfiguration : IEntityTypeConfiguration<MainMeter>
         builder.Property(m => m.CreatedAtUtc)
             .IsRequired();
 
+        builder.Property(m => m.DigitCapacityKwh)
+            .HasPrecision(18, 2);
+
         // Restrict, not Cascade — same AD-10 reasoning as Room/PowerPoint/Device's FK to Household.
         builder.HasOne<Household>()
             .WithMany()

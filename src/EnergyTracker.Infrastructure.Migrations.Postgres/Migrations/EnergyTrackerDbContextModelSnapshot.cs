@@ -165,6 +165,10 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal?>("DigitCapacityKwh")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
@@ -211,6 +215,51 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasIndex("MainMeterId");
 
                     b.ToTable("MeterReadings", (string)null);
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.MeterRegressionPrompt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Classification")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("DigitCapacityKwh")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MainMeterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MeterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PreviousMeterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("MainMeterId");
+
+                    b.HasIndex("MeterReadingId")
+                        .IsUnique();
+
+                    b.HasIndex("PreviousMeterReadingId");
+
+                    b.ToTable("MeterRegressionPrompts", (string)null);
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.PowerPoint", b =>
@@ -350,6 +399,35 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                         .HasForeignKey("MainMeterId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.MeterRegressionPrompt", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.MainMeter", null)
+                        .WithMany()
+                        .HasForeignKey("MainMeterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("MeterReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_MeterRegressionPrompts_MeterReadings_MeterReadingId");
+
+                    b.HasOne("EnergyTracker.Domain.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousMeterReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_MeterRegressionPrompts_MeterReadings_PreviousMeterReadingId");
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.PowerPoint", b =>

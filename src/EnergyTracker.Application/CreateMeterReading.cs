@@ -3,8 +3,8 @@ using EnergyTracker.Domain;
 
 namespace EnergyTracker.Application;
 
-/// <summary>Creates a Meter Reading for the caller's own Household under AD-16 idempotency-key upsert (AC #1, #2, #3, #4, #6, #7).</summary>
-public class CreateMeterReading(IMeterReadingRepository repository)
+/// <summary>Creates a Meter Reading for the caller's own Household under AD-16 idempotency-key upsert, and raises a regression-classification prompt when it's lower than the immediately preceding reading (AC #1, #4, #6).</summary>
+public class CreateMeterReading(IMeterReadingRepository repository, IMeterRegressionPromptRepository regressionPromptRepository)
 {
     // A meter reading is a cumulative lifetime total, not a small human-entered figure like
     // Yearly Baseline — no low arbitrary business cap. The bound here exists only to keep values
@@ -48,6 +48,33 @@ public class CreateMeterReading(IMeterReadingRepository repository)
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
 
-        return await repository.AddAsync(reading, cancellationToken);
+        // Capture the persisted instance, not the local `reading` — a concurrent idempotency-key
+        // race in repository.AddAsync can return a *different*, already-persisted reading than
+        // this request constructed (see AddAsync's own catch-detach-requery comment). Regression
+        // detection must run against whichever reading actually won, since two concurrent
+        // requests can both reach this point for the same winning reading.
+        var persistedReading = await repository.AddAsync(reading, cancellationToken);
+
+        // Only the immediately-preceding comparison is in scope — a backfill is never
+        // retroactively re-checked against its chronological successor.
+        var preceding = await repository.FindImmediatelyPrecedingAsync(mainMeter.Id, persistedReading.ReadingTimestamp, cancellationToken);
+        if (preceding is not null && persistedReading.KwhValue < preceding.KwhValue)
+        {
+            await regressionPromptRepository.AddAsync(
+                new MeterRegressionPrompt
+                {
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    MainMeterId = mainMeter.Id,
+                    MeterReadingId = persistedReading.Id,
+                    PreviousMeterReadingId = preceding.Id,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    Classification = null,
+                    ResolvedAtUtc = null,
+                },
+                cancellationToken);
+        }
+
+        return persistedReading;
     }
 }

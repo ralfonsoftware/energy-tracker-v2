@@ -92,5 +92,17 @@
     "savedConfirmation": "Saved: {{kwh}} kWh at {{time}}",
     "savedOffline": "Saved — will sync when you're back online",
     "errorGeneric": "Something went wrong. Please try again."
+  },
+  "meterRegression": {
+    "title": "That reading is lower than the last one",
+    "description": "You entered {{kwh}} kWh, but your last reading was {{previousKwh}} kWh. This usually means the meter was reset or it rolled over its digit limit — not that your consumption went backwards. Pick which one happened.",
+    "resetAction": "The meter was reset",
+    "resetActionDescription": "New meter installed, or a manual reset. Starts a fresh baseline sequence going forward.",
+    "rolloverAction": "It rolled over",
+    "rolloverActionDescription": "Old meter hit its max digit count and wrapped back to zero. Consumption is computed across the wrap.",
+    "digitCapacityLabel": "Meter's digit capacity (kWh)",
+    "confirm": "Confirm",
+    "confirming": "Confirming…",
+    "errorGeneric": "Something went wrong. Please try again."
   }
 }

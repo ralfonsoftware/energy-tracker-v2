@@ -10,4 +10,8 @@ public class MainMeter
     public required Guid HouseholdId { get; init; }
 
     public required DateTimeOffset CreatedAtUtc { get; init; }
+
+    // Nullable — unset until a Story 2.3 rollover classification captures it the first time
+    // (AD-15: no hardcoded household-specific values). Mutable, like Household.YearlyBaselineKwh.
+    public decimal? DigitCapacityKwh { get; set; }
 }

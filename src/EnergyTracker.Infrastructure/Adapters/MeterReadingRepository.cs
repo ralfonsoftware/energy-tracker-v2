@@ -73,4 +73,13 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
             return winner;
         }
     }
+
+    public Task<MeterReading?> FindImmediatelyPrecedingAsync(Guid mainMeterId, DateTimeOffset readingTimestamp, CancellationToken cancellationToken) =>
+        dbContext.MeterReadings
+            .Where(r => r.MainMeterId == mainMeterId && r.ReadingTimestamp < readingTimestamp)
+            .OrderByDescending(r => r.ReadingTimestamp)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<MeterReading?> FindByIdAsync(Guid readingId, CancellationToken cancellationToken) =>
+        dbContext.MeterReadings.SingleOrDefaultAsync(r => r.Id == readingId, cancellationToken);
 }
