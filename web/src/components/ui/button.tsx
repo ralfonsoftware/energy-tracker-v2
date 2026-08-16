@@ -19,6 +19,15 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        "glass-primary":
+          "h-11 min-w-11 rounded-full border-0 bg-gradient-to-br from-[#227A61] to-[#145A47] px-6 text-primary-foreground shadow-lg shadow-primary/30 " +
+          "transition-[transform,box-shadow] duration-150 ease-out hover:from-[#227A61] hover:to-[#145A47] " +
+          "dark:from-[#6FE3C4] dark:to-[#2FB397] dark:hover:from-[#6FE3C4] dark:hover:to-[#2FB397] " +
+          "active:scale-[0.965] active:shadow-sm motion-reduce:transition-none",
+        "glass-confirm":
+          "h-11 min-w-11 rounded-full border-0 bg-[#E2A542] px-6 text-[#16210F] shadow-lg shadow-[#E2A542]/30 " +
+          "transition-[transform,box-shadow] duration-150 ease-out hover:bg-[#E2A542] " +
+          "active:scale-[0.965] active:shadow-sm motion-reduce:transition-none",
       },
       size: {
         default:

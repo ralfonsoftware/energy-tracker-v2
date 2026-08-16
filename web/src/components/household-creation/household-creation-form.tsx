@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -91,41 +92,43 @@ export function HouseholdCreationForm({ onCreated }: HouseholdCreationFormProps)
           <p className="text-muted-foreground text-sm">{t('householdCreation.description')}</p>
         </div>
 
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="household-locale">{t('householdCreation.localeLabel')}</Label>
-            <Select value={locale} onValueChange={handleLocaleChange}>
-              <SelectTrigger id="household-locale">
-                <SelectValue placeholder={t('householdCreation.localeLabel')} />
-              </SelectTrigger>
-              <SelectContent>
-                {SUPPORTED_LOCALES.map((supportedLocale) => (
-                  <SelectItem key={supportedLocale} value={supportedLocale}>
-                    {t(`householdCreation.localeOption.${supportedLocale}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <GlassCard>
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="household-locale">{t('householdCreation.localeLabel')}</Label>
+              <Select value={locale} onValueChange={handleLocaleChange}>
+                <SelectTrigger id="household-locale">
+                  <SelectValue placeholder={t('householdCreation.localeLabel')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_LOCALES.map((supportedLocale) => (
+                    <SelectItem key={supportedLocale} value={supportedLocale}>
+                      {t(`householdCreation.localeOption.${supportedLocale}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="household-currency">{t('householdCreation.currencyLabel')}</Label>
-            <Input
-              id="household-currency"
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value.toUpperCase())}
-              placeholder={t('householdCreation.currencyPlaceholder')}
-              maxLength={3}
-              required
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="household-currency">{t('householdCreation.currencyLabel')}</Label>
+              <Input
+                id="household-currency"
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+                placeholder={t('householdCreation.currencyPlaceholder')}
+                maxLength={3}
+                required
+              />
+            </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
 
-          <Button type="submit" disabled={submitting || !locale || !currency}>
-            {submitting ? t('householdCreation.submitting') : t('householdCreation.submit')}
-          </Button>
-        </form>
+            <Button type="submit" variant="glass-primary" disabled={submitting || !locale || !currency}>
+              {submitting ? t('householdCreation.submitting') : t('householdCreation.submit')}
+            </Button>
+          </form>
+        </GlassCard>
       </div>
     </main>
   )

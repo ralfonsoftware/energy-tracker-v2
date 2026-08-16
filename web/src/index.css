@@ -45,6 +45,24 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    /* DESIGN.md glass-panel component layer — Story 2.2b */
+    --color-surface-glass: var(--surface-glass);
+    --color-surface-panel-back: var(--surface-panel-back);
+    --color-status-within-range: var(--status-within-range);
+    --color-status-within-range-badge-bg: var(--status-within-range-badge-bg);
+    --color-status-within-range-badge-text: var(--status-within-range-badge-text);
+    --color-status-below-baseline: var(--status-below-baseline);
+    --color-status-below-baseline-badge-bg: var(--status-below-baseline-badge-bg);
+    --color-status-below-baseline-badge-text: var(--status-below-baseline-badge-text);
+    --color-status-trending: var(--status-trending);
+    --color-status-trending-badge-bg: var(--status-trending-badge-bg);
+    --color-status-trending-badge-text: var(--status-trending-badge-text);
+    --radius-glass-sm: 14px;
+    --radius-glass-md: 18px;
+    --radius-glass-lg: 28px;
+    --spacing-card-padding: 24px;
+    --spacing-card-gap: 18px;
+    --spacing-mobile-margin: 19px;
 }
 
 :root {
@@ -86,6 +104,20 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    /* DESIGN.md glass-panel component layer — Story 2.2b, values verbatim from
+       mockups/direction-green-eco.html (colors.md: "Spine wins on conflict with
+       any mock" — this direction superseded all other explorations) */
+    --surface-glass: rgba(255, 255, 255, 0.72);
+    --surface-panel-back: rgba(255, 255, 255, 0.55);
+    --status-within-range: #6B8656;
+    --status-within-range-badge-bg: rgba(107, 134, 86, 0.14);
+    --status-within-range-badge-text: #41603A;
+    --status-below-baseline: #2F9E52;
+    --status-below-baseline-badge-bg: rgba(47, 158, 82, 0.15);
+    --status-below-baseline-badge-text: #1F7038;
+    --status-trending: #B87A1E;
+    --status-trending-badge-bg: rgba(184, 122, 30, 0.16);
+    --status-trending-badge-text: #8A5A14;
 }
 
 .dark {
@@ -124,6 +156,20 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+    /* DESIGN.md glass-panel component layer — Story 2.2b, values verbatim from
+       mockups/direction-green-eco.html (colors.md: "Spine wins on conflict with
+       any mock" — this direction superseded all other explorations) */
+    --surface-glass: rgba(220, 245, 230, 0.07);
+    --surface-panel-back: rgba(28, 44, 36, 0.55);
+    --status-within-range: #9FBB8A;
+    --status-within-range-badge-bg: rgba(159, 187, 138, 0.16);
+    --status-within-range-badge-text: #C7DCBB;
+    --status-below-baseline: #4FCA72;
+    --status-below-baseline-badge-bg: rgba(79, 202, 114, 0.17);
+    --status-below-baseline-badge-text: #B9EFC7;
+    --status-trending: #E2A542;
+    --status-trending-badge-bg: rgba(226, 165, 66, 0.18);
+    --status-trending-badge-text: #F5CE93;
 }
 
 @layer base {

@@ -24,8 +24,10 @@ export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
         </Button>
       </div>
 
-      <YearlyBaselineForm householdId={householdId} />
-      <TaggingScaffoldManager />
+      <div className="flex flex-col gap-[var(--spacing-card-gap)]">
+        <YearlyBaselineForm householdId={householdId} />
+        <TaggingScaffoldManager />
+      </div>
     </main>
   )
 }

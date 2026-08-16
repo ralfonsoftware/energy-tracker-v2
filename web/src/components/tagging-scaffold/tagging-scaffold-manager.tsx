@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronRight, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -11,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 
 interface RoomDto {
   id: string
@@ -352,74 +355,121 @@ export function TaggingScaffoldManager() {
         <p className="text-muted-foreground text-sm">{t('taggingScaffold.roomsEmpty')}</p>
       )}
 
-      <div className="flex flex-col gap-2">
-        {rooms.map((room) => (
-          <details key={room.id} className="rounded-lg border border-border p-3">
-            <summary className="cursor-pointer font-medium">
-              {room.name} {room.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
-            </summary>
+      {rooms.length > 0 && (
+        <GlassCard className="gap-0 p-0">
+          {rooms.map((room) => (
+            <details
+              key={room.id}
+              className="group border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2">
+                  <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open:rotate-90" />
+                  <span>{room.name}</span>
+                </span>
+                {room.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
+              </summary>
 
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'rename-room', room })}>
-                {t('taggingScaffold.rename')}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'delete-room', room })}>
-                {t('taggingScaffold.delete')}
-              </Button>
-              {!room.archivedAt && (
-                <Button size="sm" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
-                  {t('taggingScaffold.addPowerPoint')}
+              <div className="flex flex-wrap items-center gap-1 px-3.5 pt-1 pb-3 pl-8">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('taggingScaffold.rename')}
+                  onClick={() => openDialog({ kind: 'rename-room', room })}
+                >
+                  <Pencil aria-hidden="true" />
                 </Button>
-              )}
-            </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('taggingScaffold.delete')}
+                  onClick={() => openDialog({ kind: 'delete-room', room })}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+                {!room.archivedAt && (
+                  <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
+                    {t('taggingScaffold.addPowerPoint')}
+                  </Button>
+                )}
+              </div>
 
-            <div className="mt-2 flex flex-col gap-2 pl-4">
-              {(powerPointsByRoom.get(room.id) ?? []).map((powerPoint) => (
-                <details key={powerPoint.id} className="rounded-md border border-border p-2">
-                  <summary className="cursor-pointer font-medium">
-                    {powerPoint.name} {powerPoint.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
-                  </summary>
+              <div className="flex flex-col pl-4">
+                {(powerPointsByRoom.get(room.id) ?? []).map((powerPoint) => (
+                  <details
+                    key={powerPoint.id}
+                    className="group border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                      <span className="flex items-center gap-2">
+                        <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open:rotate-90" />
+                        <span>{powerPoint.name}</span>
+                      </span>
+                      {powerPoint.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
+                    </summary>
 
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'rename-power-point', powerPoint })}>
-                      {t('taggingScaffold.rename')}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'delete-power-point', powerPoint })}>
-                      {t('taggingScaffold.delete')}
-                    </Button>
-                    {!powerPoint.archivedAt && (
-                      <Button size="sm" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
-                        {t('taggingScaffold.addDevice')}
+                    <div className="flex flex-wrap items-center gap-1 px-3.5 pt-1 pb-2.5 pl-8">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('taggingScaffold.rename')}
+                        onClick={() => openDialog({ kind: 'rename-power-point', powerPoint })}
+                      >
+                        <Pencil aria-hidden="true" />
                       </Button>
-                    )}
-                  </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('taggingScaffold.delete')}
+                        onClick={() => openDialog({ kind: 'delete-power-point', powerPoint })}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                      {!powerPoint.archivedAt && (
+                        <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
+                          {t('taggingScaffold.addDevice')}
+                        </Button>
+                      )}
+                    </div>
 
-                  <div className="mt-2 flex flex-col gap-2 pl-4">
-                    {(devicesByPowerPoint.get(powerPoint.id) ?? []).map((device) => (
-                      <div key={device.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
-                        <span>
-                          {device.name} {device.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
-                        </span>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'rename-device', device })}>
-                            {t('taggingScaffold.rename')}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => openDialog({ kind: 'delete-device', device })}>
-                            {t('taggingScaffold.delete')}
-                          </Button>
+                    <div className="flex flex-col gap-0.5 pb-2 pl-8">
+                      {(devicesByPowerPoint.get(powerPoint.id) ?? []).map((device) => (
+                        <div key={device.id} className="flex items-center justify-between gap-2 px-3.5 py-1 text-sm">
+                          <span className="flex items-center gap-2">
+                            <span aria-hidden="true" className="size-1 shrink-0 rounded-full bg-[rgba(30,42,28,0.3)] dark:bg-[rgba(234,245,238,0.3)]" />
+                            {device.name} {device.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t('taggingScaffold.rename')}
+                              onClick={() => openDialog({ kind: 'rename-device', device })}
+                            >
+                              <Pencil aria-hidden="true" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t('taggingScaffold.delete')}
+                              onClick={() => openDialog({ kind: 'delete-device', device })}
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </details>
-        ))}
-      </div>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </details>
+          ))}
+        </GlassCard>
+      )}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && !submitting && closeDialog()}>
-        <DialogContent>
+        <DialogContent className={GLASS_MODAL_CLASSNAME}>
           {dialog?.kind === 'delete-room' && (
             <>
               <DialogHeader>
@@ -431,7 +481,7 @@ export function TaggingScaffoldManager() {
                 <Button variant="outline" onClick={closeDialog} disabled={submitting}>
                   {t('taggingScaffold.cancel')}
                 </Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
+                <Button variant="glass-confirm" onClick={handleDelete} disabled={submitting}>
                   {t('taggingScaffold.delete')}
                 </Button>
               </DialogFooter>
@@ -449,7 +499,7 @@ export function TaggingScaffoldManager() {
                 <Button variant="outline" onClick={closeDialog} disabled={submitting}>
                   {t('taggingScaffold.cancel')}
                 </Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
+                <Button variant="glass-confirm" onClick={handleDelete} disabled={submitting}>
                   {t('taggingScaffold.delete')}
                 </Button>
               </DialogFooter>
@@ -467,7 +517,7 @@ export function TaggingScaffoldManager() {
                 <Button variant="outline" onClick={closeDialog} disabled={submitting}>
                   {t('taggingScaffold.cancel')}
                 </Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
+                <Button variant="glass-confirm" onClick={handleDelete} disabled={submitting}>
                   {t('taggingScaffold.delete')}
                 </Button>
               </DialogFooter>
@@ -508,7 +558,7 @@ export function TaggingScaffoldManager() {
                   <Button type="button" variant="outline" onClick={closeDialog} disabled={submitting}>
                     {t('taggingScaffold.cancel')}
                   </Button>
-                  <Button type="submit" disabled={submitting || !nameInput.trim()}>
+                  <Button type="submit" variant="glass-primary" disabled={submitting || !nameInput.trim()}>
                     {submitting ? t('taggingScaffold.saving') : t('taggingScaffold.save')}
                   </Button>
                 </DialogFooter>
