@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { HouseholdCreationForm, type CreatedHousehold } from '@/components/household-creation/household-creation-form'
@@ -6,7 +6,9 @@ import { InviteGeneratePanel } from '@/components/household-invite/invite-genera
 import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
 import { SettingsPage } from '@/components/settings/settings-page'
 import { LogReadingSheet } from '@/components/meter-reading/log-reading-sheet'
+import { MeterRegressionPromptDialog } from '@/components/meter-reading/meter-regression-prompt-dialog'
 import { registerOfflineSync } from '@/lib/meter-reading-sync'
+import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -37,6 +39,33 @@ function App() {
   // OIDC redirect round trip).
   const [view, setView] = useState<'dashboard' | 'settings'>('dashboard')
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
+  const [openRegressionPrompt, setOpenRegressionPrompt] = useState<MeterRegressionPromptDto | null>(null)
+  const [logSheetOpen, setLogSheetOpen] = useState(false)
+
+  // Single source of truth for "what's currently open" (AC #7): re-polling after every save/
+  // resolve, rather than trusting the create-reading response, mirrors the "drill-down data is
+  // always a separate endpoint" convention already used for Status.
+  const refreshOpenRegressionPrompt = useCallback(async () => {
+    try {
+      const prompt = await fetchOpenMeterRegressionPrompt()
+      setOpenRegressionPrompt(prompt)
+      if (prompt) {
+        // A newly-raised (or still-open) prompt supersedes the Log Reading sheet rather than
+        // stacking on top of it — force it closed in the same state update.
+        setLogSheetOpen(false)
+      }
+    } catch {
+      // Best-effort — a transient failure here just means the prompt (if any) surfaces on the
+      // next poll/mount instead of immediately; it must not block the rest of the dashboard.
+    }
+  }, [])
+
+  const handleLogSheetOpenChange = (next: boolean) => {
+    if (next && openRegressionPrompt) {
+      return
+    }
+    setLogSheetOpen(next)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -98,8 +127,20 @@ function App() {
       return
     }
 
-    return registerOfflineSync()
-  }, [state.status])
+    // A reading synced from the offline queue in the background can itself raise a regression
+    // (AC #1) — nothing else re-polls for that, so it's wired to the same refresh a foreground
+    // save/resolve triggers.
+    return registerOfflineSync(() => {
+      void refreshOpenRegressionPrompt()
+    })
+  }, [state.status, refreshOpenRegressionPrompt])
+
+  useEffect(() => {
+    if (state.status !== 'ready') {
+      return
+    }
+    void refreshOpenRegressionPrompt()
+  }, [state.status, refreshOpenRegressionPrompt])
 
   useEffect(() => {
     if (state.status === 'unauthenticated') {
@@ -176,11 +217,24 @@ function App() {
       {/* Plain trigger only — the polished pill/gradient Dashboard button (UX-DR8) is Story 2.5's
           own deliverable; this just gives the Log Reading sheet (Story 2.2) somewhere to open
           from and something to return focus to (AC #9). */}
-      <LogReadingSheet trigger={<Button variant="outline">{t('meterReading.trigger')}</Button>} />
+      <LogReadingSheet
+        trigger={<Button variant="outline">{t('meterReading.trigger')}</Button>}
+        open={logSheetOpen}
+        onOpenChange={handleLogSheetOpenChange}
+        onSaved={() => {
+          void refreshOpenRegressionPrompt()
+        }}
+      />
       <InviteGeneratePanel />
       <Button variant="outline" onClick={() => setView('settings')}>
         {t('settings.heading')}
       </Button>
+      <MeterRegressionPromptDialog
+        prompt={openRegressionPrompt}
+        onResolved={() => {
+          void refreshOpenRegressionPrompt()
+        }}
+      />
     </main>
   )
 }

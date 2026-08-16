@@ -22,9 +22,18 @@ function toDateTimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
+interface LogReadingSheetProps {
+  trigger: ReactNode
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  // Fired after a successful save or offline-enqueue — App.tsx uses this to re-poll for a
+  // newly-raised regression prompt (Story 2.3's Task 2 detection) immediately after a save,
+  // rather than waiting for the next unrelated re-render.
+  onSaved?: () => void
+}
+
+export function LogReadingSheet({ trigger, open, onOpenChange, onSaved }: LogReadingSheetProps) {
   const { t, i18n } = useTranslation()
-  const [open, setOpen] = useState(false)
   const [kwhValue, setKwhValue] = useState('')
   const [readingTimestamp, setReadingTimestamp] = useState(() => toDateTimeLocalValue(new Date()))
   const [submitting, setSubmitting] = useState(false)
@@ -41,7 +50,7 @@ export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
       setError(null)
       setConfirmation(null)
     }
-    setOpen(next)
+    onOpenChange(next)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -70,7 +79,8 @@ export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
         setConfirmation(t('meterReading.savedOffline'))
       }
 
-      setOpen(false)
+      onOpenChange(false)
+      onSaved?.()
     } catch (err) {
       setError(err instanceof ApiError && err.detail ? err.detail : t('meterReading.errorGeneric'))
     } finally {

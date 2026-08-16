@@ -73,4 +73,16 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
             return winner;
         }
     }
+
+    public Task<MeterReading?> FindImmediatelyPrecedingAsync(Guid mainMeterId, DateTimeOffset readingTimestamp, CancellationToken cancellationToken) =>
+        dbContext.MeterReadings
+            .Where(r => r.MainMeterId == mainMeterId && r.ReadingTimestamp < readingTimestamp)
+            // ReadingTimestamp alone can tie (e.g. two backfilled readings entered with the same
+            // timestamp) — break ties on Id so "immediately preceding" is deterministic across calls.
+            .OrderByDescending(r => r.ReadingTimestamp)
+            .ThenByDescending(r => r.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<MeterReading?> FindByIdAsync(Guid readingId, CancellationToken cancellationToken) =>
+        dbContext.MeterReadings.SingleOrDefaultAsync(r => r.Id == readingId, cancellationToken);
 }

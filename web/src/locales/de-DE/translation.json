@@ -92,5 +92,17 @@
     "savedConfirmation": "Gespeichert: {{kwh}} kWh um {{time}}",
     "savedOffline": "Gespeichert — wird synchronisiert, sobald du wieder online bist",
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+  },
+  "meterRegression": {
+    "title": "Dieser Zählerstand ist niedriger als der letzte",
+    "description": "Du hast {{kwh}} kWh am {{readingTime}} eingegeben, aber dein letzter Zählerstand war {{previousKwh}} kWh am {{previousReadingTime}}. Das bedeutet normalerweise, dass der Zähler zurückgesetzt wurde oder seine Ziffernkapazität überschritten hat — nicht, dass dein Verbrauch rückwärts gelaufen ist. Wähle, was passiert ist.",
+    "resetAction": "Der Zähler wurde zurückgesetzt",
+    "resetActionDescription": "Neuer Zähler installiert oder manuell zurückgesetzt. Startet ab jetzt eine neue Basiswert-Berechnung.",
+    "rolloverAction": "Er ist übergelaufen",
+    "rolloverActionDescription": "Der alte Zähler hat seine maximale Ziffernanzahl erreicht und ist auf Null zurückgesprungen. Der Verbrauch wird über den Überlauf hinweg berechnet.",
+    "digitCapacityLabel": "Ziffernkapazität des Zählers (kWh)",
+    "confirm": "Bestätigen",
+    "confirming": "Wird bestätigt…",
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   }
 }
