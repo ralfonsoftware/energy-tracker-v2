@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Log Reading Sheet &amp; Meter Regression Prompt (Green Eco, Dark)</title>
+<style>
+/*
+  KEY SCREEN — LOG READING SHEET + METER REGRESSION PROMPT
+  (Story 2.2, Story 2.3, FR-1, FR-25, AD-16, AD-12)
+  ==========================================================================
+  Governing spine sections: EXPERIENCE.md -> Information Architecture ("Log
+  Reading — Sheet/modal over the Dashboard — not its own route"),
+  Component Patterns ("Log Reading sheet", "Meter regression prompt"),
+  Micro-Flow: Meter Reading Regression Classification, Key Flow UJ-1.
+  DESIGN.md -> Components -> "Log Reading sheet" / "Meter regression
+  prompt", Shapes ("The Log Reading sheet is the one asymmetric case:
+  {rounded.lg} on its top corners, flush (0px) on the bottom").
+
+  Frame 1 renders UJ-1's actual moment: Sam, standing at the meter, taps
+  Log Reading and the sheet slides up over a backdrop-blurred Dashboard
+  (still visible/dimmed behind it — this is a layered sheet, never a
+  route). Single kWh field, today's date/time pre-selected and editable
+  (the backfill case), one Save action.
+
+  Frame 2 renders the load-bearing branch this flow can hit: FR-25's
+  regression classification. Per EXPERIENCE.md's Micro-Flow and UX-DR13,
+  this modal SUPERSEDES the Log Reading sheet rather than stacking on top
+  of it — so frame 2 shows the sheet already dismissed, replaced by the
+  centered modal dialog, still over the same dimmed Dashboard backdrop.
+  Deliberately neutral/informational styling (shadcn Dialog + the same
+  glass-panel language as everywhere else) — NOT destructive/red, per
+  DESIGN.md's explicit instruction that "a meter rollover or a fresh meter
+  install is a normal, expected classification step... not a system
+  error." Two plain, equally-weighted actions (reset / rollover), no
+  default/pre-selected choice, matching FR-25's AC that it "never silently
+  expires or defaults to either classification."
+
+  Dark-only in this file. DESIGN.md's own Log Reading sheet component note
+  flags light-mode sheet fill as [ASSUMPTION]/not separately rendered this
+  session — kept consistent here rather than inventing a light variant
+  this pass.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 44px 28px 90px;
+}
+.wrap { max-width: 1000px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; }
+.intro { max-width: 840px; font-size: 14.5px; line-height: 1.6; color: rgba(234,245,238,0.62); margin-bottom: 38px; }
+.intro code { color: rgba(234,245,238,0.82); }
+
+.frames { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.frame-col { flex: 1 1 340px; max-width: 360px; }
+.frame-label { font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #9FBB8A; margin-bottom: 4px; }
+.frame-sub { font-size: 12px; color: rgba(234,245,238,0.42); margin-bottom: 16px; line-height: 1.5; }
+
+.phone { width: 100%; border-radius: 46px; padding: 11px; background: linear-gradient(160deg, #1C2C24, #0F1A15); box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.08); }
+.screen { border-radius: 36px; background: radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); height: 680px; position: relative; overflow: hidden; }
+
+/* ---------- dimmed Dashboard backdrop, visible behind the sheet/modal ---------- */
+.backdrop { position: absolute; inset: 0; padding: 26px 19px 0; filter: blur(3px) saturate(90%) brightness(0.65); }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.wordmark-row { display: flex; align-items: center; gap: 8px; }
+.mark { width: 20px; height: 20px; border-radius: 8px; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); }
+.wordmark { font-size: 14px; font-weight: 700; color: #EAF5EE; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.55); }
+.panel-stack { position: relative; margin-bottom: 18px; }
+.panel-back { position: absolute; inset: 9px -6px -13px 9px; border-radius: 28px; background: rgba(28,44,36,0.55); border: 1px solid rgba(210,235,220,0.10); }
+.status-card { position: relative; border-radius: 28px; padding: 25px 22px 23px; background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.16); }
+.status-row { display: flex; align-items: center; gap: 9px; margin-bottom: 15px; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #9FBB8A; }
+.status-badge { font-size: 11px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; padding: 4px 11px; border-radius: 20px; color: #C7DCBB; background: rgba(159,187,138,0.16); }
+.status-headline { font-size: 25px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 9px; color: #F3FBF5; }
+.status-body { font-size: 13.5px; line-height: 1.55; color: rgba(234,245,238,0.64); }
+
+/* ---------- overlay scrim on top of the blurred backdrop ---------- */
+/* a11y note 2026-08-16 (dev handoff, not fixable in a static mock): in the
+   real implementation, `.backdrop` must be marked `inert` (or
+   `aria-hidden="true"` + a JS focus trap) whenever the sheet/modal is
+   open, and focus must move to the sheet/modal on open — otherwise a
+   keyboard/AT user can tab into the visually-dimmed Dashboard content
+   behind it. */
+.scrim { position: absolute; inset: 0; background: rgba(6,12,9,0.45); }
+
+/* ---------- Log Reading sheet ---------- */
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  border-radius: 28px 28px 0 0; /* {rounded.lg} top, flush bottom */
+  background: rgba(20,32,26,0.92);
+  border: 1px solid rgba(210,235,220,0.16);
+  border-bottom: none;
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 -20px 50px rgba(0,0,0,0.5);
+  padding: 12px 22px 26px;
+}
+.sheet-handle { width: 36px; height: 4px; border-radius: 4px; background: rgba(210,235,220,0.22); margin: 0 auto 18px; }
+.sheet-title { font-size: 17px; font-weight: 700; color: #F3FBF5; margin-bottom: 4px; }
+.sheet-sub { font-size: 12px; color: rgba(234,245,238,0.5); margin-bottom: 20px; }
+.field-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: rgba(234,245,238,0.5); margin-bottom: 6px; }
+.datetime-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.datetime-row .field-input { flex: 1 1 0; }
+.field-input { font-family: inherit; font-size: 13.5px; font-weight: 600; color: #EAF5EE; background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.18); border-radius: 12px; padding: 13px 12px; } /* a11y fix 2026-08-16: vertical padding 10px->13px, was ~36px tall */
+.kwh-row { margin-bottom: 22px; }
+.kwh-input-wrap { display: flex; align-items: baseline; gap: 8px; border-radius: 16px; background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.2); padding: 14px 16px; }
+.kwh-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 700; color: #EAF5EE; background: transparent; border: none; width: 100%; }
+.kwh-unit { font-size: 14px; font-weight: 600; color: rgba(234,245,238,0.5); }
+.save-btn { display: block; text-align: center; font-family: inherit; font-size: 15px; font-weight: 700; border: none; border-radius: 999px; padding: 14px 20px; background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; box-shadow: 0 10px 22px rgba(47,179,151,0.35); }
+
+/* ---------- Meter regression prompt (modal, one level deep, supersedes the sheet) ---------- */
+.modal-card {
+  position: absolute; left: 22px; right: 22px; top: 50%; transform: translateY(-50%);
+  border-radius: 28px; /* {rounded.lg} */
+  background: rgba(24,38,31,0.94);
+  border: 1px solid rgba(210,235,220,0.18);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.55);
+  padding: 24px 22px 22px;
+}
+.modal-icon { width: 40px; height: 40px; border-radius: 14px; background: rgba(220,245,230,0.08); border: 1px solid rgba(210,235,220,0.16); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.modal-icon svg { width: 20px; height: 20px; stroke: #9FBB8A; }
+.modal-title { font-size: 17px; font-weight: 700; color: #F3FBF5; margin-bottom: 8px; }
+.modal-body { font-size: 12.5px; line-height: 1.55; color: rgba(234,245,238,0.62); margin-bottom: 20px; }
+.modal-body b { color: #EAF5EE; }
+.choice-btn { display: block; width: 100%; text-align: left; font-family: inherit; border-radius: 16px; border: 1px solid rgba(210,235,220,0.16); background: rgba(220,245,230,0.04); padding: 13px 15px; margin-bottom: 10px; }
+.choice-btn:last-of-type { margin-bottom: 0; }
+.choice-title { font-size: 13.5px; font-weight: 700; color: #EAF5EE; margin-bottom: 2px; }
+.choice-sub { font-size: 11.5px; line-height: 1.4; color: rgba(234,245,238,0.55); } /* a11y fix 2026-08-16: was 0.5 (~4.38:1, just under AA) */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Log Reading Sheet &amp; Meter Regression Prompt — Key Screens</h1>
+  <p class="intro">
+    The core loop's two states, both layered over the same Dashboard (never their own route,
+    <code>UX-DR13</code>). Frame 1 is <code>UJ-1</code>'s everyday path. Frame 2 is the load-bearing
+    branch (<code>FR-25</code>) — the regression prompt supersedes the sheet rather than stacking on it,
+    so the sheet is gone here, replaced by the neutral classification modal.
+  </p>
+
+  <div class="frames">
+
+    <!-- ================= FRAME 1 — Log Reading sheet ================= -->
+    <div class="frame-col">
+      <div class="frame-label">1 · Log Reading sheet</div>
+      <div class="frame-sub">Today pre-selected, editable. Single kWh field. One confirmation tap (FR-1).</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="backdrop">
+            <div class="topbar"><div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div><span class="date">Sun, Aug 16</span></div>
+            <div class="panel-stack">
+              <div class="panel-back"></div>
+              <div class="status-card">
+                <div class="status-row"><span class="status-dot"></span><span class="status-badge">Within range</span></div>
+                <div class="status-headline">Quiet week.</div>
+                <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+              </div>
+            </div>
+          </div>
+          <div class="scrim"></div>
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">Log a reading</div>
+            <div class="sheet-sub">Main Meter</div>
+            <div class="datetime-row">
+              <div>
+                <span class="field-label">Date</span>
+                <input class="field-input" value="16 Aug 2026">
+              </div>
+              <div>
+                <span class="field-label">Time</span>
+                <input class="field-input" value="19:42">
+              </div>
+            </div>
+            <div class="kwh-row">
+              <span class="field-label">Meter reading</span>
+              <div class="kwh-input-wrap">
+                <input class="kwh-input" value="14 302">
+                <span class="kwh-unit">kWh</span>
+              </div>
+            </div>
+            <span class="save-btn">Save reading</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= FRAME 2 — Meter regression prompt ================= -->
+    <div class="frame-col">
+      <div class="frame-label">2 · Meter regression prompt</div>
+      <div class="frame-sub">Supersedes the sheet — neutral classification, not an error (FR-25, UX-DR4/18).</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="backdrop">
+            <div class="topbar"><div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div><span class="date">Sun, Aug 16</span></div>
+            <div class="panel-stack">
+              <div class="panel-back"></div>
+              <div class="status-card">
+                <div class="status-row"><span class="status-dot"></span><span class="status-badge">Within range</span></div>
+                <div class="status-headline">Quiet week.</div>
+                <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+              </div>
+            </div>
+          </div>
+          <div class="scrim"></div>
+          <div class="modal-card">
+            <div class="modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4M3 12v-1a4 4 0 014-4h14M7 21.9l-4-4 4-4M21 12v1a4 4 0 01-4 4H3"/></svg></div>
+            <div class="modal-title">That reading is lower than the last one</div>
+            <div class="modal-body">
+              You entered <b>00 412 kWh</b>, but your last reading was <b>14 302 kWh</b>. This usually means the meter was <b>reset</b> or it <b>rolled over</b> its digit limit — not that your consumption went backwards. Pick which one happened.
+            </div>
+            <span class="choice-btn">
+              <div class="choice-title">The meter was reset</div>
+              <div class="choice-sub">New meter installed, or a manual reset. Starts a fresh baseline sequence going forward.</div>
+            </span>
+            <span class="choice-btn">
+              <div class="choice-title">It rolled over</div>
+              <div class="choice-sub">Old meter hit its max digit count and wrapped back to zero. Consumption is computed across the wrap.</div>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

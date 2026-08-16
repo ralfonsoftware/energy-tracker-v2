@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Onboarding / Household Setup (Green Eco, Dark)</title>
+<style>
+/*
+  KEY SCREEN — ONBOARDING / HOUSEHOLD SETUP (Story 1.5, Story 2.1, FR-2, FR-26)
+  ==========================================================================
+  Governing spine sections: EXPERIENCE.md -> Information Architecture
+  ("Onboarding / Household Setup — First authenticated visit to a fresh
+  deployment... Household creation (FR-26), Yearly Baseline presets (FR-2),
+  first-run empty state before any Status exists (FR-7)").
+
+  Two-step sequence, one screen per step (a progress dots indicator ties
+  them together — no route/back-button complexity needed, this is a
+  first-run wizard, not a navigable surface):
+
+  Frame 1 — Household creation. Story 1.5's AC is explicit that Locale and
+  currency are "explicit choices made at creation time... never a
+  silently-applied hardcoded default" (AD-15, NFR5, NFR6) — both fields
+  render with no pre-selected value, forcing a tap, rather than a
+  convenient-looking default that would violate the spine outright.
+
+  Frame 2 — Yearly Baseline. Reuses the exact household-size icon-preset /
+  unit-inside-field pattern from key-settings.html's Yearly Baseline card
+  (same component, same rules — Story 2.1's AC applies identically here:
+  "presets... offered as starting suggestions, never silently applied as a
+  default"), so this component reads as the same thing whether it's
+  reached from onboarding or from Settings later.
+
+  Both frames use the primary-action-button pill/gradient system
+  ({components.primary-action-button}) for their forward action, since
+  each is the one deliberate action on its screen — same visual grammar as
+  the Dashboard's Log Reading trigger.
+
+  Dark-only, consistent with key-tariff-radar.html / key-smart-plug-
+  import.html precedent for secondary/setup-flow key screens (Dashboard
+  and Settings got the full Dark+Light treatment this session since those
+  are the two screens the current screenshots called out directly).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 44px 28px 90px;
+}
+.wrap { max-width: 1000px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; }
+.intro { max-width: 840px; font-size: 14.5px; line-height: 1.6; color: rgba(234,245,238,0.62); margin-bottom: 38px; }
+.intro code { color: rgba(234,245,238,0.82); }
+
+.frames { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.frame-col { flex: 1 1 340px; max-width: 360px; }
+.frame-label { font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #9FBB8A; margin-bottom: 4px; }
+.frame-sub { font-size: 12px; color: rgba(234,245,238,0.42); margin-bottom: 16px; line-height: 1.5; }
+
+.phone { width: 100%; border-radius: 46px; padding: 11px; background: linear-gradient(160deg, #1C2C24, #0F1A15); box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.08); }
+.screen { border-radius: 36px; background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); padding: 30px 22px 26px; min-height: 640px; display: flex; flex-direction: column; }
+
+.wordmark-row { display: flex; align-items: center; gap: 8px; margin-bottom: 28px; }
+.mark { width: 22px; height: 22px; border-radius: 9px; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); box-shadow: 0 2px 8px rgba(47,179,151,0.55); }
+.wordmark { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+
+.step-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #9FBB8A; margin-bottom: 6px; }
+.step-title { font-size: 21px; font-weight: 700; letter-spacing: -0.3px; color: #F3FBF5; margin-bottom: 8px; line-height: 1.2; }
+.step-body { font-size: 13px; line-height: 1.55; color: rgba(234,245,238,0.6); margin-bottom: 24px; }
+
+.field { margin-bottom: 16px; }
+.field-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: rgba(234,245,238,0.5); margin-bottom: 6px; }
+.field-input { width: 100%; font-family: inherit; font-size: 14px; font-weight: 600; color: #EAF5EE; background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.18); border-radius: 14px; padding: 12px 14px; }
+
+.choice-row { display: flex; gap: 8px; }
+.choice-pill { flex: 1 1 0; text-align: center; font-size: 13px; font-weight: 700; padding: 13px 8px; border-radius: 14px; color: rgba(234,245,238,0.55); background: rgba(220,245,230,0.04); border: 1px solid rgba(210,235,220,0.14); } /* a11y fix 2026-08-16: vertical padding 10px->13px, was ~35.6px tall */
+.choice-pill.picked { color: #C7DCBB; background: rgba(159,187,138,0.16); border-color: rgba(159,187,138,0.4); }
+
+.helper-note { font-size: 11.5px; line-height: 1.5; color: rgba(234,245,238,0.55); margin-top: -4px; margin-bottom: 4px; } /* a11y fix 2026-08-16: was 0.4 (~3.5:1), fails AA */
+
+/* ---------- household-size presets (2026-08-16 redesign) — same
+   component/rules as key-settings.html's Yearly Baseline card, see that
+   file's CSS comment for the full rationale. ---------- */
+.hh-preset-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.hh-preset { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px 9px; border-radius: 14px; font-family: inherit; background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.14); }
+.hh-preset-icon { position: relative; width: 22px; height: 22px; }
+.hh-preset-icon svg { width: 100%; height: 100%; stroke: rgba(234,245,238,0.55); }
+.hh-preset-count { position: absolute; top: -5px; right: -7px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px; font-size: 8.5px; font-weight: 700; line-height: 14px; text-align: center; color: rgba(234,245,238,0.65); background: rgba(8,16,12,0.65); }
+.hh-preset-kwh { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: rgba(234,245,238,0.6); }
+.hh-preset.active { background: rgba(159,187,138,0.16); border-color: rgba(159,187,138,0.4); }
+.hh-preset.active .hh-preset-icon svg { stroke: #C7DCBB; }
+.hh-preset.active .hh-preset-count { color: #16210F; background: #C7DCBB; }
+.hh-preset.active .hh-preset-kwh { color: #C7DCBB; }
+
+/* ---------- unit-inside-field pattern (2026-08-16) — same as
+   key-settings.html, see that file's CSS comment for rationale. ---------- */
+.baseline-input-wrap { display: flex; align-items: baseline; gap: 6px; border-radius: 14px; padding: 11px 14px; margin-bottom: 4px; background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.18); }
+.baseline-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; color: #EAF5EE; background: transparent; border: none; padding: 0; width: 100%; }
+.unit { font-size: 12px; font-weight: 600; color: rgba(234,245,238,0.5); flex: 0 0 auto; }
+
+.spacer { flex: 1 1 auto; }
+
+.progress-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 16px; }
+.progress-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(210,235,220,0.18); }
+.progress-dots span.on { background: #9FBB8A; }
+
+.primary-btn { display: block; text-align: center; font-family: inherit; font-size: 14px; font-weight: 700; border: none; border-radius: 999px; padding: 13px 20px; background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; box-shadow: 0 10px 22px rgba(47,179,151,0.35); }
+.skip-link { display: block; text-align: center; font-size: 12px; font-weight: 600; color: rgba(234,245,238,0.62); margin-top: 4px; padding: 10px 12px; } /* a11y fix 2026-08-16: was 0.4 (~3.5:1) with no padding (~14px hit area) */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Onboarding / Household Setup — Key Screens</h1>
+  <p class="intro">
+    First authenticated visit to a fresh deployment (<code>Story 1.5</code>), immediately followed by
+    the Yearly Baseline step (<code>Story 2.1</code>) before the household ever sees the Dashboard.
+    Both explicit-choice requirements from the acceptance criteria are rendered literally: nothing is
+    pre-selected on Locale, currency, or the baseline value.
+  </p>
+
+  <div class="frames">
+
+    <div class="frame-col">
+      <div class="frame-label">1 · Create your household</div>
+      <div class="frame-sub">First visitor to a fresh deployment. No second party, invite code, or manual DB step required (FR-26).</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+          <div class="progress-dots"><span class="on"></span><span></span></div>
+          <div class="step-eyebrow">Step 1 of 2</div>
+          <div class="step-title">Set up your household</div>
+          <div class="step-body">This is the only setup step — no invite code, no admin, no database step.</div>
+
+          <div class="field">
+            <span class="field-label">Household name</span>
+            <input class="field-input" value="Ehlert Household">
+          </div>
+          <div class="field">
+            <span class="field-label">Language &amp; region</span>
+            <div class="choice-row">
+              <span class="choice-pill picked">Deutsch (DE)</span>
+              <span class="choice-pill">English (US)</span>
+            </div>
+            <p class="helper-note">An explicit choice — never silently defaulted (AD-15).</p>
+          </div>
+          <div class="field">
+            <span class="field-label">Currency</span>
+            <div class="choice-row">
+              <span class="choice-pill picked">EUR €</span>
+              <span class="choice-pill">USD $</span>
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+          <span class="primary-btn">Continue</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame-col">
+      <div class="frame-label">2 · Set your Yearly Baseline</div>
+      <div class="frame-sub">Same presets/custom pattern as Settings (Story 2.1) — offered as a starting suggestion, never silently applied.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+          <div class="progress-dots"><span></span><span class="on"></span></div>
+          <div class="step-eyebrow">Step 2 of 2</div>
+          <div class="step-title">Set a Yearly Baseline</div>
+          <div class="step-body">Roughly how much electricity your household expects to use in a year — Pattern Detective measures your pace against this. Change it any time in Settings.</div>
+
+          <div class="hh-preset-row">
+            <button class="hh-preset" aria-label="1 person, about 1500 kWh per year">
+              <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">1</span></span>
+              <span class="hh-preset-kwh">1500</span>
+            </button>
+            <button class="hh-preset active" aria-label="2 people, about 2500 kWh per year, currently selected">
+              <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">2</span></span>
+              <span class="hh-preset-kwh">2500</span>
+            </button>
+            <button class="hh-preset" aria-label="3 people, about 3500 kWh per year">
+              <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">3</span></span>
+              <span class="hh-preset-kwh">3500</span>
+            </button>
+            <button class="hh-preset" aria-label="4 people, about 4250 kWh per year">
+              <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">4</span></span>
+              <span class="hh-preset-kwh">4250</span>
+            </button>
+          </div>
+          <span class="field-label">Yearly Baseline (kWh)</span>
+          <div class="baseline-input-wrap">
+            <input class="baseline-input" value="2500">
+            <span class="unit">kWh</span>
+          </div>
+          <p class="helper-note">Picked a preset above, or type your own — nothing is applied until you continue.</p>
+
+          <div class="spacer"></div>
+          <span class="primary-btn">Finish setup</span>
+          <span class="skip-link">I'll set this later</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

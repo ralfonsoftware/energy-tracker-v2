@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Household Member Invitation (Green Eco, Dark)</title>
+<style>
+/*
+  KEY SCREEN — HOUSEHOLD MEMBER INVITATION (Story 1.8, FR-27)
+  ==========================================================================
+  Reached from Settings ("Invite a member" row in key-settings.html).
+  Governing spine: Story 1.8's AC — any member can invite (no admin/owner
+  role: "all members have equal, full access"), the invited person joins
+  after authenticating via the configured OIDC provider. Rendered as a
+  sheet ({rounded.lg} top corners, same shadcn-Dialog-derived glass
+  language as the Meter regression prompt) rather than its own route,
+  consistent with this product's general preference for layered
+  sheets/modals over full navigations for short, single-purpose actions
+  (DESIGN.md -> Components -> "Everything else": standard shadcn Dialog
+  used unmodified for this kind of surface).
+
+  Frame 1 — the invite action itself: a shareable link (works without a
+  per-person email system existing) plus an optional direct-email field.
+  Copy states the equal-access framing directly, so it's never ambiguous
+  that this isn't a lesser "guest" role. Frame 2 — after sending, showing
+  the pending invite in the household's member list, so it's clear the
+  action had a visible, persistent effect rather than disappearing into a
+  toast.
+
+  Dark-only, consistent with the other secondary-flow key screens in this
+  set (Onboarding, Log Reading/Regression).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  min-height: 100vh;
+  padding: 44px 28px 90px;
+}
+.wrap { max-width: 1000px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; }
+.intro { max-width: 840px; font-size: 14.5px; line-height: 1.6; color: rgba(234,245,238,0.62); margin-bottom: 38px; }
+.intro code { color: rgba(234,245,238,0.82); }
+
+.frames { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.frame-col { flex: 1 1 340px; max-width: 360px; }
+.frame-label { font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #9FBB8A; margin-bottom: 4px; }
+.frame-sub { font-size: 12px; color: rgba(234,245,238,0.42); margin-bottom: 16px; line-height: 1.5; }
+
+.phone { width: 100%; border-radius: 46px; padding: 11px; background: linear-gradient(160deg, #1C2C24, #0F1A15); box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.08); }
+.screen { border-radius: 36px; background: radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); height: 640px; position: relative; overflow: hidden; }
+.backdrop { position: absolute; inset: 0; padding: 26px 19px 0; filter: blur(3px) saturate(90%) brightness(0.65); }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.crumb { display: inline-block; font-size: 12px; color: rgba(234,245,238,0.42); padding: 10px 4px; margin: -10px 0 -10px -4px; } /* a11y fix 2026-08-16: added hit-area padding, was ~14px tall */
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.55); }
+.page-title { font-size: 19px; font-weight: 700; color: #F3FBF5; margin-bottom: 16px; }
+.settings-row { display: flex; justify-content: space-between; padding: 12px 4px; font-size: 13px; color: rgba(234,245,238,0.7); border-bottom: 1px solid rgba(210,235,220,0.08); }
+/* a11y note 2026-08-16 (dev handoff, not fixable in a static mock): `.backdrop`
+   must be `inert` (or `aria-hidden` + focus trap) whenever the sheet is open. */
+.scrim { position: absolute; inset: 0; background: rgba(6,12,9,0.45); }
+
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  border-radius: 28px 28px 0 0;
+  background: rgba(20,32,26,0.92);
+  border: 1px solid rgba(210,235,220,0.16);
+  border-bottom: none;
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 -20px 50px rgba(0,0,0,0.5);
+  padding: 12px 22px 26px;
+}
+.sheet-handle { width: 36px; height: 4px; border-radius: 4px; background: rgba(210,235,220,0.22); margin: 0 auto 18px; }
+.sheet-title { font-size: 17px; font-weight: 700; color: #F3FBF5; margin-bottom: 6px; }
+.sheet-sub { font-size: 12px; line-height: 1.5; color: rgba(234,245,238,0.55); margin-bottom: 20px; }
+
+.field-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: rgba(234,245,238,0.5); margin-bottom: 6px; }
+.field-input { width: 100%; font-family: inherit; font-size: 13.5px; font-weight: 600; color: #EAF5EE; background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.18); border-radius: 12px; padding: 11px 12px; }
+
+.link-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 18px; border-radius: 12px; background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.14); padding: 10px 12px; }
+.link-text { flex: 1 1 auto; font-size: 12px; color: rgba(234,245,238,0.65); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-btn { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #6FD1B1; padding: 8px 10px; border-radius: 8px; margin: -8px -10px -8px 0; } /* a11y fix 2026-08-16: own hit-area padding added, was ~20x34px */
+
+.divider-row { display: flex; align-items: center; gap: 10px; margin: 18px 0 16px; }
+.divider-row .line { flex: 1 1 auto; height: 1px; background: rgba(210,235,220,0.1); }
+.divider-row span.or { font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(234,245,238,0.5); } /* a11y fix 2026-08-16: was 0.35 (~3.0:1), fails AA */
+
+.equal-note { font-size: 11.5px; line-height: 1.55; color: rgba(234,245,238,0.58); margin: 16px 0 20px; padding-top: 14px; border-top: 1px solid rgba(210,235,220,0.08); } /* a11y fix 2026-08-16: was 0.42 (~3.74:1), fails AA */
+.primary-btn { display: block; text-align: center; font-family: inherit; font-size: 14px; font-weight: 700; border: none; border-radius: 999px; padding: 13px 20px; background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; box-shadow: 0 10px 22px rgba(47,179,151,0.35); }
+
+/* ---------- frame 2: member list with pending invite ---------- */
+.member-list { border-radius: 18px; overflow: hidden; margin-bottom: 6px; }
+.member-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid rgba(210,235,220,0.08); background: rgba(220,245,230,0.04); }
+.member-row:last-child { border-bottom: none; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: rgba(159,187,138,0.18); color: #C7DCBB; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: 0 0 auto; }
+.member-meta { flex: 1 1 auto; }
+.member-name { font-size: 13px; font-weight: 700; color: #EAF5EE; }
+.member-role { font-size: 11px; color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.42 (~3.62:1), fails AA — the only pending/joined indicator */
+.pending-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #F5CE93; background: rgba(226,165,66,0.18); padding: 4px 9px; border-radius: 999px; }
+.toast { display: flex; align-items: center; gap: 8px; border-radius: 14px; background: rgba(159,187,138,0.14); border: 1px solid rgba(159,187,138,0.3); padding: 11px 13px; font-size: 12.5px; color: #C7DCBB; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Household Member Invitation — Key Screens</h1>
+  <p class="intro">
+    Reached from Settings' "Invite a member" row (<code>Story 1.8</code>). Every member has equal, full
+    access — there is no admin/owner role, so the invite flow's copy says that outright rather than
+    implying a hierarchy that doesn't exist.
+  </p>
+
+  <div class="frames">
+
+    <div class="frame-col">
+      <div class="frame-label">1 · Send an invite</div>
+      <div class="frame-sub">Shareable link works without email delivery; direct email is optional.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="backdrop">
+            <div class="topbar"><span class="crumb">← Settings</span><span class="date">Sun, Aug 16</span></div>
+            <div class="page-title">Household</div>
+            <div class="settings-row"><span>Members (2)</span><span>→</span></div>
+            <div class="settings-row"><span>Rooms &amp; Devices</span><span>→</span></div>
+          </div>
+          <div class="scrim"></div>
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">Invite a member</div>
+            <div class="sheet-sub">They'll get full access to this household's data once they join — the same as you, no separate admin role.</div>
+
+            <span class="field-label">Shareable link</span>
+            <div class="link-row">
+              <span class="link-text">energytracker.ehlert.haus/join/8f2c-91a</span>
+              <span class="copy-btn">Copy</span>
+            </div>
+
+            <div class="divider-row"><span class="line"></span><span class="or">or invite by email</span><span class="line"></span></div>
+
+            <span class="field-label">Email address</span>
+            <input class="field-input" value="anna@ehlert.haus" style="margin-bottom:20px;">
+
+            <span class="primary-btn">Send invite</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame-col">
+      <div class="frame-label">2 · Invite sent</div>
+      <div class="frame-sub">Visible, persistent effect in the member list — not a toast that disappears.</div>
+      <div class="phone">
+        <div class="screen">
+          <div style="position:relative; padding: 26px 19px 0; height:100%;">
+            <div class="topbar"><span class="crumb">← Settings</span><span class="date">Sun, Aug 16</span></div>
+            <div class="page-title">Household</div>
+            <div class="toast">✓&nbsp; Invite sent to anna@ehlert.haus</div>
+            <div class="member-list">
+              <div class="member-row">
+                <div class="avatar">RE</div>
+                <div class="member-meta"><div class="member-name">Ralf Ehlert</div><div class="member-role">Joined 2 Aug 2026</div></div>
+              </div>
+              <div class="member-row">
+                <div class="avatar">A</div>
+                <div class="member-meta"><div class="member-name">anna@ehlert.haus</div><div class="member-role">Invited — hasn't joined yet</div></div>
+                <span class="pending-badge">Pending</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

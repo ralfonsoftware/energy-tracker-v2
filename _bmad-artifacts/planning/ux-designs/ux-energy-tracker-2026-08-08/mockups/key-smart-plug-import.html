@@ -103,7 +103,7 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 }
 
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-.crumb { font-size: 12px; color: rgba(234,245,238,0.42); text-decoration: none; }
+.crumb { display: inline-block; font-size: 12px; color: rgba(234,245,238,0.42); text-decoration: none; padding: 10px 4px; margin: -10px 0 -10px -4px; } /* a11y fix 2026-08-16: added hit-area padding, was ~14px tall */
 .crumb a { color: #6FD1B1; text-decoration: none; }
 .date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(234,245,238,0.55); } /* was 0.34 = ~2.9:1, fails AA; corrected to text-quiet-dark */
 .page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: #F3FBF5; margin-bottom: 16px; }
@@ -232,6 +232,58 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 
 .footer-note { font-size: 11px; line-height: 1.5; color: rgba(234,245,238,0.55); margin-top: 6px; } /* was 0.3 = ~2.6:1, fails AA; corrected to text-quiet-dark */
 
+/* ---------- Frame 3 addendum (added this session) — Story 3.2 mapping prompt.
+   An import tagged to a Power Point that doesn't exist yet must prompt
+   create-or-map rather than silently failing (FR-4). Rendered as a modal
+   over the same dimmed State-1 screen it interrupts, reusing the neutral
+   glass-dialog language already established for the Meter regression
+   prompt (key-log-reading-flow.html) — not destructive/red, since an
+   unrecognized Power Point tag is an expected mapping step, not an error. ---------- */
+.backdrop-dim { filter: blur(2px) saturate(85%) brightness(0.55); }
+/* a11y note 2026-08-16 (dev handoff, not fixable in a static mock): `.backdrop-dim`
+   must be `inert` (or `aria-hidden` + focus trap) whenever the modal is open. */
+.scrim { position: absolute; inset: 0; background: rgba(6,12,9,0.5); border-radius: 36px; }
+.modal-card {
+  position: absolute; left: 20px; right: 20px; top: 50%; transform: translateY(-50%);
+  border-radius: 18px; /* {rounded.md} */
+  background: rgba(24,38,31,0.94);
+  border: 1px solid rgba(210,235,220,0.18);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.55);
+  padding: 20px 18px 18px;
+}
+.modal-icon { width: 36px; height: 36px; border-radius: 12px; background: rgba(220,245,230,0.08); border: 1px solid rgba(210,235,220,0.16); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.modal-icon svg { width: 18px; height: 18px; stroke: #9FBB8A; }
+.modal-title { font-size: 15px; font-weight: 700; color: #F3FBF5; margin-bottom: 6px; }
+.modal-body { font-size: 12px; line-height: 1.5; color: rgba(234,245,238,0.6); margin-bottom: 16px; }
+.modal-body b { color: #EAF5EE; }
+.map-choose-btn { display: block; width: 100%; text-align: center; font-family: inherit; font-size: 13px; font-weight: 700; color: #06120D; background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); border: none; border-radius: 999px; padding: 13px 16px; margin-bottom: 12px; } /* a11y fix 2026-08-16: vertical padding 11px->13px, was ~37.6px tall */
+.map-divider { font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(234,245,238,0.55); text-align: center; margin-bottom: 10px; } /* a11y fix 2026-08-16: was 0.35 (~2.96:1) — same fix already applied twice elsewhere in this file, missed here */
+.map-existing { border-radius: 12px; overflow: hidden; border: 1px solid rgba(210,235,220,0.14); }
+.map-existing-row { display: flex; justify-content: space-between; padding: 12px; font-size: 12.5px; color: rgba(234,245,238,0.75); border-bottom: 1px solid rgba(210,235,220,0.08); } /* a11y fix 2026-08-16: vertical padding 10px->12px */
+.map-existing-row:last-child { border-bottom: none; }
+
+/* ---------- Frame 4/5 additions (added this session) — the two FR-24
+   sub-cases the original two states didn't cover: a gap at the very
+   start of a household's first-ever import (nothing preceding to average
+   from, so left unfilled rather than estimated), and an import that's
+   entirely gaps (flagged for review rather than wholesale-interpolated).
+   Both reuse the same amber "flagged/uncertain" vocabulary as State 2's
+   .gap-card — this is still the same underlying meaning (data that isn't
+   real, flagged rather than hidden), never escalated to destructive/red. ---------- */
+.gap-badge.missing { color: rgba(234,245,238,0.7); background: rgba(220,245,230,0.08); } /* distinct from the amber "estimated" badge — this one was never filled at all */
+.review-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.review-icon {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px;
+  background: rgba(226,165,66,0.16); border: 1px solid rgba(226,165,66,0.28);
+  display: flex; align-items: center; justify-content: center;
+}
+.review-icon svg { width: 15px; height: 15px; stroke: #E2A542; }
+.review-title { font-size: 15px; font-weight: 700; color: #F3FBF5; }
+.review-sub { font-size: 12px; color: rgba(234,245,238,0.5); margin-top: 1px; }
+.outline-btn { display: block; text-align: center; font-family: inherit; font-size: 13px; font-weight: 700; color: rgba(234,245,238,0.8); background: transparent; border: 1px solid rgba(210,235,220,0.2); border-radius: 999px; padding: 12px 16px; margin-top: 4px; }
+
 /* ---------- calm motion on the processing dot only — gated per EXPERIENCE.md's
    Interaction Primitives contract; static (no pulse) under reduced motion ---------- */
 @media (prefers-reduced-motion: no-preference) {
@@ -247,11 +299,14 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 <div class="wrap">
   <h1>Smart Plug Import — Key Screens</h1>
   <p class="intro">
-    Two states of the same flow (<code>FR-4</code>, <code>FR-24</code>), reached from Settings.
-    State 1 shows the moment right after a file is selected — upload confirms immediately, parsing
-    runs in the background, and the rest of the screen stays fully usable. State 2 shows the
-    load-bearing alternate: the import finishes and part of its range came back with missing
-    interval data, handled honestly rather than silently smoothed over.
+    Five states of the same flow (<code>FR-4</code>, <code>FR-24</code>, <code>Story 3.2</code>), reached
+    from Settings. State 1 shows the moment right after a file is selected — upload confirms
+    immediately, parsing runs in the background, and the rest of the screen stays fully usable. State 2
+    shows a mid-range gap with prior history to average from, handled honestly rather than silently
+    smoothed over. State 3 is the other load-bearing branch from parsing itself — the file's tag doesn't
+    match any existing Power Point, so parsing pauses to ask rather than silently dropping or misfiling
+    the data. States 4 and 5 (added this session) are FR-24's two remaining edge cases: a gap with
+    nothing preceding it to average from, and an import that's entirely gaps.
   </p>
 
   <div class="frames">
@@ -347,6 +402,138 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
           </div>
 
           <p class="footer-note">Baseline sharpening uses the flagged figure as a bounded estimate only — it's never presented as a real reading.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 3 — unmatched Power Point, create/map prompt (added this session, Story 3.2) ================= -->
+    <div class="frame-col">
+      <div class="frame-label">3 · Unmatched tag, create or map</div>
+      <div class="frame-sub">The file's device tag doesn't match an existing Power Point — pauses to ask instead of silently dropping the data (FR-4).</div>
+      <div class="phone">
+        <div class="screen" style="position:relative;">
+          <div class="backdrop-dim">
+            <div class="topbar">
+              <a class="crumb" href="#">← Settings</a>
+              <span class="date">Sun, Aug 9</span>
+            </div>
+            <div class="page-title">Smart Plug Import</div>
+            <div class="card">
+              <div class="file-row">
+                <span class="file-icon">CSV</span>
+                <div class="file-meta">
+                  <div class="file-name">Power Monitor Day Data - Office Desk - 20260809.csv</div>
+                  <div class="file-sub">61 KB · Meross export</div>
+                </div>
+              </div>
+              <div class="processing-row"><span class="processing-pill"><span class="processing-dot"></span>Processing</span></div>
+            </div>
+          </div>
+          <div class="scrim"></div>
+          <div class="modal-card">
+            <div class="modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 014 4c0 2-2 3-2 5H10c0-2-2-3-2-5a4 4 0 014-4zM12 21v-2M8 21h8"/></svg></div>
+            <div class="modal-title">New Power Point: "Office Desk"</div>
+            <div class="modal-body">
+              This file is tagged to a Power Point that doesn't exist in your household yet. Create it, or map this data to one you already have — nothing is imported until you choose.
+            </div>
+            <span class="map-choose-btn">Create Power Point "Office Desk"</span>
+            <div class="map-divider">or map to an existing one</div>
+            <div class="map-existing">
+              <div class="map-existing-row"><span>Wohnzimmer → Schreibtisch</span><span aria-hidden="true">→</span></div>
+              <div class="map-existing-row"><span>Wohnzimmer → Wand PC-Ecke</span><span aria-hidden="true">→</span></div>
+              <div class="map-existing-row"><span>Küche → Kühlschrank</span><span aria-hidden="true">→</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 4 — first-ever import, gap unfilled (added this session, FR-24 sub-case b) ================= -->
+    <div class="frame-col">
+      <div class="frame-label">4 · First import, gap left unfilled</div>
+      <div class="frame-sub">No preceding week exists to average from — left unfilled and flagged as missing, never interpolated from nothing.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Settings</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Smart Plug Import</div>
+
+          <div class="complete-banner">
+            <span class="complete-check">✓</span>
+            <div>
+              <div class="complete-title">Import complete</div>
+              <div class="complete-sub">EveHome-OfficeDesk-Aug2026.xlsx</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Summary</h3>
+            <p class="gap-detail" style="margin-bottom:0;">
+              <b>9 days</b> of Office Desk data added, Aug&nbsp;1 – 9&nbsp;2026 — your first-ever import for this Power Point.
+            </p>
+          </div>
+
+          <div class="gap-card">
+            <div class="gap-head">
+              <span class="gap-badge missing">Missing, not estimated</span>
+              <span class="gap-range">Aug 1–3</span>
+            </div>
+            <p class="gap-detail">
+              <b>No data received</b> from this plug for the first 3 days. There's no prior Office Desk history to average from, so this range is left <b>unfilled and flagged as missing</b> — not interpolated from nothing.
+            </p>
+            <p class="gap-subcase-note">
+              This is the other FR-24 sub-case, distinct from State 2's gap: a mid-range gap with 8 months of prior history behind it gets a bounded estimate; a gap at the very start of a first-ever import gets no estimate at all.
+            </p>
+          </div>
+
+          <p class="footer-note">Baseline sharpening treats this range as absent, not zero — a missing 3 days is never assumed to mean no consumption.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 5 — entirely gaps, flagged for review (added this session, FR-24) ================= -->
+    <div class="frame-col">
+      <div class="frame-label">5 · Entirely gaps, flagged for review</div>
+      <div class="frame-sub">Nothing here is wholesale-interpolated — the whole file is held for the household to look at.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Settings</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Smart Plug Import</div>
+
+          <div class="review-banner">
+            <span class="review-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></span>
+            <div>
+              <div class="review-title">Needs a look before it's used</div>
+              <div class="review-sub">MerossCsv-Garage-Aug2026.csv</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>What happened</h3>
+            <p class="gap-detail" style="margin-bottom:0;">
+              Every day in this file's date range (Aug&nbsp;1–9) came back with <b>no interval data at all</b> — this isn't a partial gap, the whole import is empty.
+            </p>
+          </div>
+
+          <div class="gap-card">
+            <div class="gap-head">
+              <span class="gap-badge">Flagged for review</span>
+              <span class="gap-range">Aug 1–9 (9/9 days)</span>
+            </div>
+            <p class="gap-detail">
+              Nothing here has been used to sharpen your Status. An import that's entirely gaps is never wholesale-interpolated — that would mean sharpening your baseline with data no plug actually measured.
+            </p>
+            <p class="gap-subcase-note">
+              Common causes: the plug was offline the whole period, or the file's device tag doesn't match what you expected. Worth checking the plug and re-exporting before trying again.
+            </p>
+          </div>
+
+          <span class="outline-btn">Review file details</span>
         </div>
       </div>
     </div>

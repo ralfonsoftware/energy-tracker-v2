@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Settings (Green Eco, Dark + Light)</title>
+<style>
+/*
+  KEY SCREEN — SETTINGS (Story 1.9, Story 2.1, Story 2.6, FR-2, FR-27, FR-28)
+  ==========================================================================
+  Direct response to the pasted screenshot of the current implementation:
+  a flat, unstyled list of plain shadcn Buttons for every room/power-point/
+  device row (every node rendered as a full-width solid-bordered button,
+  no hierarchy signal beyond indentation and a triangle glyph, no card
+  surface, no spacing discipline). DESIGN.md -> Components -> "Everything
+  else" says this surface inherits shadcn's defaults UNMODIFIED except for
+  the brand-layer deltas this document names -- but "unmodified" still
+  means using shadcn's actual list/accordion/ghost-button primitives with
+  DESIGN.md's spacing and surface tokens, not literally one <Button> per
+  row at every depth. This mock renders what that restraint looks like:
+  a {rounded.md} glass card list, {rounded.sm} pill preset chips for the
+  Yearly Baseline, and quiet icon-only actions that surface on the
+  expanded/selected node rather than as permanent full-width buttons.
+
+  Governing spine sections: EXPERIENCE.md -> Information Architecture
+  ("Settings"), Component Patterns ("Everything else" = standard shadcn).
+  DESIGN.md -> Layout & Spacing ({spacing.card-padding}, {spacing.card-gap}),
+  Shapes ({rounded.sm} inputs/pills, {rounded.md} drill-down cards),
+  Colors (brand-accent for the active preset pill and section links only --
+  never a status-triad color, since nothing on this screen is a Pattern
+  Detective Status).
+
+  Yearly Baseline card directly renders Story 2.1's AC: "household-size
+  presets... offered as starting suggestions, never silently applied as a
+  default" -- so the custom field is editable independent of the pills, and
+  no pill is force-selected on load if the stored value doesn't exactly
+  match one (shown here with 1700 kWh entered as a custom value, no preset
+  highlighted, matching the screenshot's own 1700 value which sits between
+  the 1-person and 2-person presets).
+
+  Room/Power Point/Device tree renders one room (Wohnzimmer) expanded, one
+  power point (Tür) within it expanded to its devices, matching the
+  screenshot's own expansion state -- collapsed rooms/power-points show
+  only a name + child count + chevron, no actions. The expanded Tür row's
+  three devices (Ventilator, Schreibtisch, Drucker) each get a quiet
+  rename/delete icon pair and the "Move to..." action from Story 2.6
+  ("exposed as an additive action on the existing management UI rather
+  than a new standalone surface"), rendered as a third icon rather than a
+  fourth full-width green button.
+
+  Dark-only in this file, consistent with key-tariff-radar.html /
+  key-smart-plug-import.html precedent (Settings-area surfaces validated
+  dark-only this pass) -- EXCEPT this file also renders Light, because the
+  screenshot that motivated this whole file was taken in Light mode and
+  the point is to show this exact screen looking intentional there too.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #E4EBDA;
+  color: #1E2A1C;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+.intro { max-width: 840px; font-size: 14.5px; line-height: 1.6; color: rgba(30,42,28,0.75); margin-bottom: 40px; }
+.intro code { color: #16210F; }
+
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.theme { flex: 1 1 340px; border-radius: 28px; padding: 36px 28px 44px; min-width: 320px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 24px; }
+
+.phone { width: 320px; margin: 0 auto; border-radius: 52px; padding: 11px; }
+.screen { border-radius: 41px; height: 780px; overflow-y: auto; padding: 26px 19px 24px; }
+.screen::-webkit-scrollbar { display: none; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.crumb { font-size: 12px; text-decoration: none; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 18px; }
+
+.section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; margin: 20px 0 8px; }
+.section-label:first-of-type { margin-top: 0; }
+
+/* ---------- generic glass card ---------- */
+.card { border-radius: 18px; padding: 18px 16px 16px; margin-bottom: 4px; }
+.card p.help { font-size: 12px; line-height: 1.55; margin-bottom: 14px; }
+
+/* ---------- household-size presets (2026-08-16 redesign) ----------
+   Was 4 full-text pills ("1 person ≈1500 kWh"...) that wrapped to two rows
+   at phone width. Replaced with a compact single-row icon strip — tap a
+   household size to load its typical kWh straight into the field below;
+   the pill's own former wording moves into a tiny caption under the icon,
+   and the field stays the single source of truth (Story 2.1: presets are
+   "starting suggestions, never silently applied" — nothing here writes to
+   the field without a tap, and the field is still freely editable after). */
+.hh-preset-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.hh-preset { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px 9px; border-radius: 14px; font-family: inherit; }
+.hh-preset-icon { position: relative; width: 22px; height: 22px; }
+.hh-preset-icon svg { width: 100%; height: 100%; }
+.hh-preset-count {
+  position: absolute; top: -5px; right: -7px;
+  min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px;
+  font-size: 8.5px; font-weight: 700; line-height: 14px; text-align: center;
+}
+.hh-preset-kwh { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.field-label { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 6px; display: block; }
+
+/* ---------- unit-inside-field pattern (2026-08-16) ----------
+   Was a separate "kWh" label sitting outside the input, side by side —
+   two elements that could wrap independently at narrow widths. Now one
+   bordered field contains both, same composed-field pattern as the Log
+   Reading sheet's kWh entry (key-log-reading-flow.html's
+   .kwh-input-wrap) — the unit reads as part of the value, not a second
+   floating label, and can never wrap onto its own line. */
+.baseline-input-wrap { display: flex; align-items: baseline; gap: 6px; border-radius: 14px; padding: 11px 14px; margin-bottom: 14px; }
+.baseline-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; background: transparent; border: none; padding: 0; width: 100%; }
+.unit { font-size: 12px; font-weight: 600; flex: 0 0 auto; }
+.save-btn { display: inline-block; font-family: inherit; font-size: 12.5px; font-weight: 700; border: none; border-radius: 999px; padding: 12px 20px; } /* a11y fix 2026-08-16: vertical padding 9px->12px, was ~33px tall */
+
+/* ---------- simple settings rows (household/export/etc) ---------- */
+.settings-list { border-radius: 18px; overflow: hidden; margin-bottom: 4px; }
+.settings-row { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; font-size: 13px; }
+.settings-row:not(:last-child) { border-bottom: 1px solid; }
+.settings-row .arrow { font-size: 12px; }
+.crumb { display: inline-block; padding: 10px 4px; margin: -10px 0 -10px -4px; } /* a11y fix 2026-08-16: crumb link had no padding, ~14px hit area */
+
+/* ---------- room/power point/device tree ---------- */
+.tree-card { border-radius: 18px; overflow: hidden; }
+.tree-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-size: 13px; font-weight: 600; cursor: default; }
+.tree-row:not(:last-child) { border-bottom: 1px solid; }
+.tree-row .left { display: flex; align-items: center; gap: 9px; }
+.chevron { font-size: 9px; transition: none; }
+.chevron.down { transform: rotate(90deg); }
+.count { font-size: 11px; font-weight: 500; }
+
+.tree-children { padding: 0 0 4px; }
+.pp-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 10px 30px; font-size: 12.5px; font-weight: 600; }
+.pp-row:not(:last-child) { border-bottom: 1px solid; }
+.pp-row .left { display: flex; align-items: center; gap: 8px; }
+
+.device-children { padding: 2px 0 8px; }
+.device-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 8px 46px; font-size: 12px; }
+.device-row .left { display: flex; align-items: center; gap: 8px; }
+.dot { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto; }
+.device-actions { display: flex; align-items: center; gap: 8px; } /* a11y fix 2026-08-16: gap 2px->8px, was multiplying mis-tap risk between adjacent icon buttons */
+.icon-btn { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; } /* a11y fix 2026-08-16: was 24x24px, under the ~44px tap-target floor */
+.icon-btn svg { width: 15px; height: 15px; }
+.add-row { display: flex; align-items: center; gap: 6px; padding: 10px 14px 12px 46px; font-size: 11.5px; font-weight: 700; }
+
+.footer-note { font-size: 11px; line-height: 1.5; margin-top: 16px; }
+
+/* ============ DARK THEME ============ */
+.theme.dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
+.theme.dark .theme-label { color: rgba(234,245,238,0.4); }
+.theme.dark .phone { background: linear-gradient(160deg, #1C2C24, #0F1A15); box-shadow: 0 40px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.08); }
+.theme.dark .screen { background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); }
+.theme.dark .crumb { color: #6FD1B1; }
+.theme.dark .date { color: rgba(234,245,238,0.55); }
+.theme.dark .page-title { color: #F3FBF5; }
+.theme.dark .section-label { color: rgba(234,245,238,0.4); }
+.theme.dark .card { background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.14); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); }
+.theme.dark .card p.help { color: rgba(234,245,238,0.55); }
+.theme.dark .hh-preset { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.14); }
+.theme.dark .hh-preset-icon svg { stroke: rgba(234,245,238,0.55); }
+.theme.dark .hh-preset-count { color: rgba(234,245,238,0.65); background: rgba(8,16,12,0.65); }
+.theme.dark .hh-preset-kwh { color: rgba(234,245,238,0.6); }
+.theme.dark .hh-preset.active { background: rgba(159,187,138,0.16); border-color: rgba(159,187,138,0.4); }
+.theme.dark .hh-preset.active .hh-preset-icon svg { stroke: #C7DCBB; }
+.theme.dark .hh-preset.active .hh-preset-count { color: #16210F; background: #C7DCBB; }
+.theme.dark .hh-preset.active .hh-preset-kwh { color: #C7DCBB; }
+.theme.dark .field-label { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.45 (~3.56:1 against .card), fails AA */
+.theme.dark .baseline-input-wrap { background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.18); }
+.theme.dark .baseline-input { color: #EAF5EE; }
+.theme.dark .unit { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.5 (~4.06:1 against .card, borderline) */
+.theme.dark .save-btn { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; }
+.theme.dark .settings-list, .theme.dark .tree-card { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.12); }
+.theme.dark .settings-row { color: rgba(234,245,238,0.8); border-color: rgba(210,235,220,0.08) !important; }
+.theme.dark .settings-row .arrow { color: rgba(234,245,238,0.5); } /* a11y fix 2026-08-16: was 0.3 (~2.5:1), fails AA */
+.theme.dark .tree-row { color: #EAF5EE; border-color: rgba(210,235,220,0.1) !important; }
+.theme.dark .tree-row.expanded { background: rgba(220,245,230,0.04); }
+.theme.dark .chevron { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.4 (~3.4:1 against tree-card), fails AA */
+.theme.dark .count { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.4 */
+.theme.dark .pp-row { color: rgba(234,245,238,0.85); border-color: rgba(210,235,220,0.08) !important; }
+.theme.dark .pp-row.expanded { background: rgba(220,245,230,0.03); }
+.theme.dark .device-row { color: rgba(234,245,238,0.72); }
+.theme.dark .dot { background: rgba(234,245,238,0.3); }
+.theme.dark .icon-btn svg { stroke: rgba(234,245,238,0.42); }
+.theme.dark .icon-btn:hover svg { stroke: #9FBB8A; }
+.theme.dark .add-row { color: #6FD1B1; }
+.theme.dark .footer-note { color: rgba(234,245,238,0.5); }
+
+/* ============ LIGHT THEME ============ */
+.theme.light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; box-shadow: 0 24px 60px rgba(40,70,30,0.14); border: 1px solid rgba(255,255,255,0.6); }
+.theme.light .theme-label { color: rgba(30,42,28,0.46); }
+.theme.light .phone { background: linear-gradient(160deg, #FFFFFA, #E3EDD8); box-shadow: 0 30px 60px rgba(40,70,30,0.22), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.14); }
+.theme.light .screen { background: radial-gradient(130% 60% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
+.theme.light .crumb { color: #1E7A61; }
+.theme.light .date { color: rgba(30,42,28,0.65); }
+.theme.light .page-title { color: #16210F; }
+.theme.light .section-label { color: rgba(30,42,28,0.5); }
+.theme.light .card { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); }
+.theme.light .card p.help { color: rgba(30,42,28,0.62); }
+.theme.light .hh-preset { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.14); }
+.theme.light .hh-preset-icon svg { stroke: rgba(30,42,28,0.6); }
+.theme.light .hh-preset-count { color: rgba(30,42,28,0.7); background: rgba(255,255,255,0.85); }
+.theme.light .hh-preset-kwh { color: rgba(30,42,28,0.65); }
+.theme.light .hh-preset.active { background: rgba(107,134,86,0.16); border-color: rgba(107,134,86,0.4); }
+.theme.light .hh-preset.active .hh-preset-icon svg { stroke: #41603A; }
+.theme.light .hh-preset.active .hh-preset-count { color: #FFFFFF; background: #41603A; }
+.theme.light .hh-preset.active .hh-preset-kwh { color: #41603A; }
+.theme.light .field-label { color: rgba(30,42,28,0.62); } /* a11y fix 2026-08-16: was 0.5 (~3.07:1 against .card), fails AA */
+.theme.light .baseline-input-wrap { background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.16); }
+.theme.light .baseline-input { color: #1E2A1C; }
+.theme.light .unit { color: rgba(30,42,28,0.62); } /* a11y fix 2026-08-16: was 0.55 */
+.theme.light .save-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; } /* a11y fix 2026-08-16: darkened gradient, was ~3.4:1 at lighter stop against white text */
+.theme.light .settings-list, .theme.light .tree-card { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.1); }
+.theme.light .settings-row { color: rgba(30,42,28,0.85); border-color: rgba(40,70,50,0.08) !important; }
+.theme.light .settings-row .arrow { color: rgba(30,42,28,0.55); } /* a11y fix 2026-08-16: was 0.32 (~2.1:1), fails AA */
+.theme.light .tree-row { color: #16210F; border-color: rgba(40,70,50,0.09) !important; }
+.theme.light .tree-row.expanded { background: rgba(255,255,255,0.4); }
+.theme.light .chevron { color: rgba(30,42,28,0.68); } /* a11y fix 2026-08-16: was 0.42 (~2.5:1 against tree-card), fails AA */
+.theme.light .count { color: rgba(30,42,28,0.68); } /* a11y fix 2026-08-16: was 0.42 */
+.theme.light .pp-row { color: rgba(30,42,28,0.88); border-color: rgba(40,70,50,0.08) !important; }
+.theme.light .pp-row.expanded { background: rgba(255,255,255,0.3); }
+.theme.light .device-row { color: rgba(30,42,28,0.75); }
+.theme.light .dot { background: rgba(30,42,28,0.3); }
+.theme.light .icon-btn svg { stroke: rgba(30,42,28,0.42); }
+.theme.light .icon-btn:hover svg { stroke: #6B8656; }
+.theme.light .add-row { color: #1E7A61; }
+.theme.light .footer-note { color: rgba(30,42,28,0.55); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Settings — Key Screen</h1>
+  <p class="intro">
+    Direct answer to the current implementation screenshot: same content (Yearly Baseline presets +
+    custom value; Room → Power Point → Device tree with Wohnzimmer / Tür expanded, same three devices),
+    rendered as a spaced, hierarchical glass-card list instead of one identical bordered button per row
+    at every depth. <code>Story 2.1</code>, <code>Story 1.9</code>, <code>Story 2.6</code>.
+  </p>
+  <div class="theme-row">
+
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a><span class="date">Sun, Aug 16</span></div>
+          <div class="page-title">Settings</div>
+
+          <div class="section-label">Yearly Baseline</div>
+          <div class="card">
+            <p class="help">How much electricity your household expects to use in a year. Pattern Detective measures your pace against it. Changing it only affects future readings.</p>
+            <div class="hh-preset-row">
+              <button class="hh-preset" aria-label="1 person, about 1500 kWh per year">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">1</span></span>
+                <span class="hh-preset-kwh">1500</span>
+              </button>
+              <button class="hh-preset active" aria-label="2 people, about 2500 kWh per year, currently selected">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">2</span></span>
+                <span class="hh-preset-kwh">2500</span>
+              </button>
+              <button class="hh-preset" aria-label="3 people, about 3500 kWh per year">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">3</span></span>
+                <span class="hh-preset-kwh">3500</span>
+              </button>
+              <button class="hh-preset" aria-label="4 people, about 4250 kWh per year">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">4</span></span>
+                <span class="hh-preset-kwh">4250</span>
+              </button>
+            </div>
+            <span class="field-label">Yearly Baseline (kWh)</span>
+            <div class="baseline-input-wrap">
+              <input class="baseline-input" value="2500">
+              <span class="unit">kWh</span>
+            </div>
+            <span class="save-btn">Save</span>
+          </div>
+
+          <div class="section-label">Household</div>
+          <div class="settings-list">
+            <div class="settings-row"><span>Invite a member</span><span class="arrow" aria-hidden="true">→</span></div>
+            <div class="settings-row"><span>Tariff Radar</span><span class="arrow" aria-hidden="true">→</span></div>
+            <div class="settings-row"><span>Smart Plug import</span><span class="arrow" aria-hidden="true">→</span></div>
+            <div class="settings-row"><span>Data export &amp; import</span><span class="arrow" aria-hidden="true">→</span></div>
+          </div>
+
+          <div class="section-label">Rooms, Power Points &amp; Devices</div>
+          <div class="tree-card">
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Küche</span></div><span class="count">2 power points</span></div>
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Flur</span></div><span class="count">1 power point</span></div>
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Bad</span></div><span class="count">1 power point</span></div>
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Schlafzimmer</span></div><span class="count">2 power points</span></div>
+            <div class="tree-row expanded"><div class="left"><span class="chevron down">›</span><span>Wohnzimmer</span></div><span class="count">5 power points</span></div>
+            <div class="tree-children">
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Schreibtisch</span></div><span class="count">2 devices</span></div>
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Couch</span></div><span class="count">1 device</span></div>
+              <div class="pp-row expanded"><div class="left"><span class="chevron down">›</span><span>Tür</span></div><span class="count">3 devices</span></div>
+              <div class="device-children">
+                <div class="device-row"><div class="left"><span class="dot"></span><span>Ventilator</span></div>
+                  <div class="device-actions">
+                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                </div>
+                <div class="device-row"><div class="left"><span class="dot"></span><span>Schreibtisch</span></div>
+                  <div class="device-actions">
+                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                </div>
+                <div class="device-row"><div class="left"><span class="dot"></span><span>Drucker</span></div>
+                  <div class="device-actions">
+                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                </div>
+                <div class="add-row">+ Add device to Tür</div>
+              </div>
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Wand PC-Ecke</span></div><span class="count">1 device</span></div>
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>HiFi</span></div><span class="count">2 devices</span></div>
+            </div>
+          </div>
+          <p class="footer-note">+ Add room</p>
+
+        </div>
+      </div>
+    </section>
+
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a><span class="date">Sun, Aug 16</span></div>
+          <div class="page-title">Settings</div>
+
+          <div class="section-label">Yearly Baseline</div>
+          <div class="card">
+            <p class="help">How much electricity your household expects to use in a year. Pattern Detective measures your pace against it. Changing it only affects future readings.</p>
+            <div class="hh-preset-row">
+              <button class="hh-preset" aria-label="1 person, about 1500 kWh per year">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">1</span></span>
+                <span class="hh-preset-kwh">1500</span>
+              </button>
+              <button class="hh-preset active" aria-label="2 people, about 2500 kWh per year, currently selected">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">2</span></span>
+                <span class="hh-preset-kwh">2500</span>
+              </button>
+              <button class="hh-preset" aria-label="3 people, about 3500 kWh per year">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">3</span></span>
+                <span class="hh-preset-kwh">3500</span>
+              </button>
+              <button class="hh-preset" aria-label="4 people, about 4250 kWh per year">
+                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">4</span></span>
+                <span class="hh-preset-kwh">4250</span>
+              </button>
+            </div>
+            <span class="field-label">Yearly Baseline (kWh)</span>
+            <div class="baseline-input-wrap">
+              <input class="baseline-input" value="2500">
+              <span class="unit">kWh</span>
+            </div>
+            <span class="save-btn">Save</span>
+          </div>
+
+          <div class="section-label">Household</div>
+          <div class="settings-list">
+            <div class="settings-row"><span>Invite a member</span><span class="arrow" aria-hidden="true">→</span></div>
+            <div class="settings-row"><span>Tariff Radar</span><span class="arrow" aria-hidden="true">→</span></div>
+            <div class="settings-row"><span>Smart Plug import</span><span class="arrow" aria-hidden="true">→</span></div>
+            <div class="settings-row"><span>Data export &amp; import</span><span class="arrow" aria-hidden="true">→</span></div>
+          </div>
+
+          <div class="section-label">Rooms, Power Points &amp; Devices</div>
+          <div class="tree-card">
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Küche</span></div><span class="count">2 power points</span></div>
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Flur</span></div><span class="count">1 power point</span></div>
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Bad</span></div><span class="count">1 power point</span></div>
+            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Schlafzimmer</span></div><span class="count">2 power points</span></div>
+            <div class="tree-row expanded"><div class="left"><span class="chevron down">›</span><span>Wohnzimmer</span></div><span class="count">5 power points</span></div>
+            <div class="tree-children">
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Schreibtisch</span></div><span class="count">2 devices</span></div>
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Couch</span></div><span class="count">1 device</span></div>
+              <div class="pp-row expanded"><div class="left"><span class="chevron down">›</span><span>Tür</span></div><span class="count">3 devices</span></div>
+              <div class="device-children">
+                <div class="device-row"><div class="left"><span class="dot"></span><span>Ventilator</span></div>
+                  <div class="device-actions">
+                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                </div>
+                <div class="device-row"><div class="left"><span class="dot"></span><span>Schreibtisch</span></div>
+                  <div class="device-actions">
+                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                </div>
+                <div class="device-row"><div class="left"><span class="dot"></span><span>Drucker</span></div>
+                  <div class="device-actions">
+                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                </div>
+                <div class="add-row">+ Add device to Tür</div>
+              </div>
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Wand PC-Ecke</span></div><span class="count">1 device</span></div>
+              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>HiFi</span></div><span class="count">2 devices</span></div>
+            </div>
+          </div>
+          <p class="footer-note">+ Add room</p>
+
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Dashboard (Green Eco, Dark + Light)</title>
+<style>
+/*
+  KEY SCREEN — DASHBOARD, FULL CHROME (FR-6, FR-7, Story 2.5)
+  ==========================================================================
+  Governing spine sections: EXPERIENCE.md -> Information Architecture
+  ("Dashboard"), Component Patterns ("Status card", "Tariff Check prompt
+  card", "Primary action button", "Nav chrome"), State Patterns
+  ("First-ever load, no computable Status"), Key Flows UJ-2.
+  DESIGN.md -> Components -> Status card / Primary action button / Nav
+  chrome; Colors; Elevation & Depth; Shapes.
+
+  What this file adds beyond the existing direction-green-eco.html isolated
+  component study: that file renders the Status card ALONE, three times, to
+  compare the three semantic states. This file renders the Status card
+  inside its REAL screen -- topbar, Tariff Check card, primary action
+  button, and the bottom tab bar nav chrome -- because Story 2.5's own
+  acceptance criteria are about the Dashboard as a composed whole ("the
+  Status card remains the single highest-visual-weight surface on the
+  Dashboard -- nothing else visually competes with it", "the bottom tab
+  bar... carries all four top-level entries"). A card in isolation can't
+  show that discipline; a full screen can.
+
+  Four frames: Dark/populated, Dark/first-run-empty, Light/populated,
+  Light/first-run-empty. Populated frames reuse the exact Status-card and
+  Tariff-check-card token values already confirmed in
+  direction-green-eco.html (both themes) -- not re-derived here. The empty
+  frames render Story 2.5's AC directly: "shows an onboarding prompt
+  (\"log your first reading to get started\") rather than blank space or a
+  default Status value."
+
+  ---- NAV CHROME TOKENS (new in this file; not yet rendered elsewhere) ----
+  DESIGN.md's Components -> Nav chrome names {components.nav-chrome.active-bg}
+  / {-active-foreground} abstractly but no concrete hex had been rendered
+  before this session. Resolved here as a direct derivation from the
+  already-confirmed brand-accent tokens (Colors: "brand accent... exclusively
+  for chrome and interactive elements... active nav state"), reusing values
+  already present elsewhere in this file set rather than inventing new ones:
+    Dark  active-bg: rgba(47,179,151,0.16)   (identical to brand-accent-bg-dark,
+                      already used for the processing pill in
+                      key-smart-plug-import.html)
+    Dark  active-fg: #6FD1B1                 (identical to the existing link
+                      color already used in this file set)
+    Light active-bg: rgba(30,122,97,0.14)    (brand-accent badge-bg light,
+                      per DESIGN.md Colors "badge bg rgba(30,122,97,0.14)")
+    Light active-fg: #1E7A61                 (brand-accent light, the exact
+                      hex already confirmed in direction-green-eco.html)
+  Inactive tabs use text-quiet in both themes -- never a status color, per
+  DESIGN.md Do's/Don'ts ("brand-accent-tinted chrome, same discipline as
+  everywhere else: this is navigation, never a status signal").
+
+  [ASSUMPTION] Light-mode primary-action-button gradient: DESIGN.md's
+  Components -> Primary action button only specifies the dark gradient
+  (#6FE3C4 -> #2FB397) rendered in key-smart-plug-import.html's
+  .choose-btn. No light-mode button fill was rendered this session. Derived
+  here as a darker-stop gradient of the same two brand-accent hues
+  (consistent with how every other light-mode token in this file set is a
+  darkened/desaturated version of its dark-mode pair, per Elevation & Depth's
+  documented degradation path) with white text, since the fill is
+  substantially darker/more saturated than the dark-mode mint fill (which
+  paired with near-black text instead). Flagged for confirmation, same as
+  any other new token introduced in a key-screen mock.
+
+  [ASSUMPTION] Light-mode generic ".card" surface: direction-green-eco.html
+  only rendered the Status card and the quiet .tariff-quiet row in Light: no
+  {rounded.md} secondary card was rendered. Derived here as a lighter-weight
+  degradation than the Status card itself (weaker blur, lower fill opacity),
+  matching the same relative weight relationship {colors.surface-glass} has
+  to {colors.surface-quiet} in Dark.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #E4EBDA;
+  color: #1E2A1C;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+.intro { max-width: 840px; font-size: 14.5px; line-height: 1.6; color: rgba(30,42,28,0.75); margin-bottom: 40px; }
+.intro code { color: #16210F; }
+
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.theme { flex: 1 1 640px; border-radius: 28px; padding: 36px 28px 44px; min-width: 340px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 24px; }
+
+.stage { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; justify-content: center; }
+.frame-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.frame-label { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 600; }
+
+/* ---------- phone shell ---------- */
+.phone { width: 320px; border-radius: 52px; padding: 11px; }
+.screen {
+  border-radius: 41px;
+  height: 700px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.screen-content { flex: 1 1 auto; overflow: hidden; padding: 26px 19px 0; display: flex; flex-direction: column; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.wordmark-row { display: flex; align-items: center; gap: 8px; }
+.mark { width: 20px; height: 20px; border-radius: 8px; }
+.wordmark { font-size: 14px; font-weight: 700; letter-spacing: 0.2px; }
+.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
+
+/* ---------- Status card ---------- */
+.panel-stack { position: relative; margin-bottom: 18px; }
+.panel-back { position: absolute; inset: 9px -6px -13px 9px; border-radius: 28px; z-index: 1; }
+.status-card { position: relative; z-index: 2; border-radius: 28px; padding: 25px 22px 23px; overflow: hidden; }
+.status-card::before { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.status-row { display: flex; align-items: center; gap: 9px; margin-bottom: 15px; position: relative; z-index: 1; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; }
+.status-badge { font-size: 11px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; padding: 4px 11px; border-radius: 20px; }
+.status-headline { font-size: 25px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 9px; line-height: 1.16; position: relative; z-index: 1; }
+.status-body { font-size: 13.5px; font-weight: 400; line-height: 1.55; position: relative; z-index: 1; }
+
+/* ---------- Tariff Check quiet card ---------- */
+.tariff-quiet { font-size: 12px; font-weight: 400; padding: 12px 6px; margin-bottom: 18px; border-radius: 15px; text-align: center; }
+
+/* ---------- primary action button ---------- */
+.primary-btn-row { display: flex; justify-content: center; margin-bottom: 8px; }
+.primary-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  border: none; border-radius: 999px;
+  padding: 13px 26px;
+}
+.primary-btn .plus { font-size: 16px; line-height: 1; }
+
+.spacer { flex: 1 1 auto; }
+
+/* ---------- empty state ---------- */
+.empty-wrap { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 8px; }
+.empty-icon { width: 56px; height: 56px; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+.empty-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.2px; }
+.empty-body { font-size: 13px; line-height: 1.55; max-width: 220px; margin-bottom: 22px; }
+
+/* ---------- nav chrome ---------- */
+.nav-chrome { display: flex; align-items: stretch; justify-content: space-around; padding: 10px 8px 16px; margin-top: auto; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 14px; min-width: 56px; }
+.nav-item svg { width: 20px; height: 20px; }
+.nav-item span { font-size: 9.5px; font-weight: 600; letter-spacing: 0.2px; }
+
+/* ============ DARK THEME ============ */
+.theme.dark {
+  background: linear-gradient(180deg, #10201A 0%, #0B1712 100%);
+  color: #EAF5EE;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+}
+.theme.dark .theme-label { color: rgba(234,245,238,0.4); }
+.theme.dark .frame-label { color: rgba(234,245,238,0.42); }
+.theme.dark .phone { background: linear-gradient(160deg, #1C2C24, #0F1A15); box-shadow: 0 40px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.08); }
+.theme.dark .screen { background: radial-gradient(130% 90% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); }
+.theme.dark .mark { background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); box-shadow: 0 2px 8px rgba(47,179,151,0.55); }
+.theme.dark .wordmark { color: #EAF5EE; }
+.theme.dark .date { color: rgba(234,245,238,0.55); }
+.theme.dark .panel-back { background: rgba(28,44,36,0.55); border: 1px solid rgba(210,235,220,0.10); }
+.theme.dark .status-card { background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.16); backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%); box-shadow: 0 30px 60px rgba(5,15,10,0.55), inset 0 1px 0 rgba(220,245,230,0.09); }
+.theme.dark .status-card::before { background: linear-gradient(115deg, transparent 30%, rgba(220,245,230,0.14) 46%, transparent 62%); }
+.theme.dark .status-dot { background: #9FBB8A; box-shadow: 0 0 0 6px rgba(159,187,138,0.18), 0 0 16px rgba(159,187,138,0.4); }
+.theme.dark .status-badge { color: #C7DCBB; background: rgba(159,187,138,0.16); }
+.theme.dark .status-headline { color: #F3FBF5; }
+.theme.dark .status-body { color: rgba(234,245,238,0.64); }
+.theme.dark .tariff-quiet { color: rgba(234,245,238,0.55); background: rgba(220,245,230,0.03); border: 1px solid rgba(210,235,220,0.05); }
+.theme.dark .primary-btn { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; box-shadow: 0 10px 22px rgba(47,179,151,0.35); }
+.theme.dark .nav-chrome { border-top: 1px solid rgba(210,235,220,0.08); }
+.theme.dark .nav-item { color: rgba(234,245,238,0.58); } /* a11y fix 2026-08-16: was 0.42 (~3.8:1, fails AA) */
+.theme.dark .nav-item svg { stroke: rgba(234,245,238,0.58); }
+.theme.dark .nav-item.active { background: rgba(47,179,151,0.16); color: #6FD1B1; }
+.theme.dark .nav-item.active svg { stroke: #6FD1B1; }
+.theme.dark .empty-icon { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.14); }
+.theme.dark .empty-icon svg { stroke: #9FBB8A; }
+.theme.dark .empty-title { color: #F3FBF5; }
+.theme.dark .empty-body { color: rgba(234,245,238,0.6); }
+
+/* ============ LIGHT THEME ============ */
+.theme.light {
+  background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%);
+  color: #1E2A1C;
+  box-shadow: 0 24px 60px rgba(40,70,30,0.14);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+.theme.light .theme-label { color: rgba(30,42,28,0.46); }
+.theme.light .frame-label { color: rgba(30,42,28,0.5); }
+.theme.light .phone { background: linear-gradient(160deg, #FFFFFA, #E3EDD8); box-shadow: 0 30px 60px rgba(40,70,30,0.22), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.14); }
+.theme.light .screen { background: radial-gradient(130% 90% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
+.theme.light .mark { background: radial-gradient(60% 60% at 35% 30%, #A6E8D2, #24997B 60%, #16604D 100%); box-shadow: 0 2px 6px rgba(30,122,97,0.4); }
+.theme.light .wordmark { color: #1E2A1C; }
+.theme.light .date { color: rgba(30,42,28,0.65); }
+.theme.light .panel-back { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.10); }
+.theme.light .status-card { background: rgba(255,255,255,0.72); border: 1px solid rgba(255,255,255,0.85); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 20px 40px rgba(40,70,30,0.16), inset 0 1px 0 rgba(255,255,255,0.9); }
+.theme.light .status-card::before { background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.6) 48%, transparent 60%); }
+.theme.light .status-dot { background: #6B8656; box-shadow: 0 3px 8px rgba(107,134,86,0.4), 0 0 0 5px rgba(107,134,86,0.12); }
+.theme.light .status-badge { color: #41603A; background: rgba(107,134,86,0.14); }
+.theme.light .status-headline { color: #16210F; }
+.theme.light .status-body { color: rgba(30,42,28,0.66); }
+.theme.light .tariff-quiet { color: rgba(30,42,28,0.65); background: rgba(255,255,255,0.4); border: 1px solid rgba(40,70,50,0.08); }
+.theme.light .primary-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; box-shadow: 0 10px 22px rgba(30,122,97,0.35); } /* a11y fix 2026-08-16: was #2E9B7E->#1E7A61, dropped to ~3.4:1 at the lighter gradient stop against white text */
+.theme.light .nav-chrome { border-top: 1px solid rgba(40,70,50,0.10); }
+.theme.light .nav-item { color: rgba(30,42,28,0.66); } /* a11y fix 2026-08-16: was 0.5 (~3.0:1, fails AA) */
+.theme.light .nav-item svg { stroke: rgba(30,42,28,0.66); }
+.theme.light .nav-item.active { background: rgba(30,122,97,0.14); color: #1E7A61; }
+.theme.light .nav-item.active svg { stroke: #1E7A61; }
+.theme.light .empty-icon { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.12); }
+.theme.light .empty-icon svg { stroke: #6B8656; }
+.theme.light .empty-title { color: #16210F; }
+.theme.light .empty-body { color: rgba(30,42,28,0.62); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dashboard — Key Screen (full chrome)</h1>
+  <p class="intro">
+    The Dashboard composed as a real screen, not an isolated card study: topbar, Status card (identical
+    tokens to <code>direction-green-eco.html</code>'s "within range" frame), the Tariff Check quiet line
+    (<code>FR-15</code> gate closed here — nothing due), the primary Log Reading trigger, and the bottom tab
+    bar nav chrome (<code>Dashboard</code> active, brand-accent-tinted per <code>DESIGN.md</code>). The
+    second frame in each theme is <code>FR-7</code>'s first-run empty state — no computable Status yet.
+  </p>
+  <div class="theme-row">
+
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="stage">
+
+        <div class="frame-col">
+          <span class="frame-label">Populated · within range</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="screen-content">
+                <div class="topbar">
+                  <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+                  <span class="date">Sun, Aug 16</span>
+                </div>
+                <div class="panel-stack">
+                  <div class="panel-back"></div>
+                  <div class="status-card">
+                    <div class="status-row"><span class="status-dot"></span><span class="status-badge">Within range</span></div>
+                    <div class="status-headline">Quiet week.</div>
+                    <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+                  </div>
+                </div>
+                <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+                <div class="primary-btn-row"><span class="primary-btn"><span class="plus">+</span> Log reading</span></div>
+                <div class="spacer"></div>
+              </div>
+              <nav class="nav-chrome">
+                <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg><span>Dashboard</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M12 19V5M20 19v-7"/></svg><span>Trends</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>Tariff</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008.5 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.14 15a1.7 1.7 0 00-1.55-1H2.5a2 2 0 110-4h.09A1.7 1.7 0 004.14 9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 116.57 4.24l.06.06A1.7 1.7 0 008.5 4.64a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87 1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.55 1z"/></svg><span>Settings</span></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+
+        <div class="frame-col">
+          <span class="frame-label">First-run · empty (FR-7)</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="screen-content">
+                <div class="topbar">
+                  <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+                  <span class="date">Sun, Aug 16</span>
+                </div>
+                <div class="empty-wrap">
+                  <div class="empty-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg></div>
+                  <div class="empty-title">No Status yet</div>
+                  <div class="empty-body">Log your first reading to get started — Pattern Detective needs at least two to find your pace.</div>
+                  <span class="primary-btn"><span class="plus">+</span> Log reading</span>
+                </div>
+              </div>
+              <nav class="nav-chrome">
+                <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg><span>Dashboard</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M12 19V5M20 19v-7"/></svg><span>Trends</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>Tariff</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008.5 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.14 15a1.7 1.7 0 00-1.55-1H2.5a2 2 0 110-4h.09A1.7 1.7 0 004.14 9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 116.57 4.24l.06.06A1.7 1.7 0 008.5 4.64a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87 1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.55 1z"/></svg><span>Settings</span></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="stage">
+
+        <div class="frame-col">
+          <span class="frame-label">Populated · within range</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="screen-content">
+                <div class="topbar">
+                  <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+                  <span class="date">Sun, Aug 16</span>
+                </div>
+                <div class="panel-stack">
+                  <div class="panel-back"></div>
+                  <div class="status-card">
+                    <div class="status-row"><span class="status-dot"></span><span class="status-badge">Within range</span></div>
+                    <div class="status-headline">Quiet week.</div>
+                    <div class="status-body">240&nbsp;kWh under pace, Saturday's gaming session already absorbed.</div>
+                  </div>
+                </div>
+                <div class="tariff-quiet">Tariff check — nothing due right now.</div>
+                <div class="primary-btn-row"><span class="primary-btn"><span class="plus">+</span> Log reading</span></div>
+                <div class="spacer"></div>
+              </div>
+              <nav class="nav-chrome">
+                <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg><span>Dashboard</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M12 19V5M20 19v-7"/></svg><span>Trends</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>Tariff</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008.5 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.14 15a1.7 1.7 0 00-1.55-1H2.5a2 2 0 110-4h.09A1.7 1.7 0 004.14 9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 116.57 4.24l.06.06A1.7 1.7 0 008.5 4.64a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87 1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.55 1z"/></svg><span>Settings</span></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+
+        <div class="frame-col">
+          <span class="frame-label">First-run · empty (FR-7)</span>
+          <div class="phone">
+            <div class="screen">
+              <div class="screen-content">
+                <div class="topbar">
+                  <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+                  <span class="date">Sun, Aug 16</span>
+                </div>
+                <div class="empty-wrap">
+                  <div class="empty-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg></div>
+                  <div class="empty-title">No Status yet</div>
+                  <div class="empty-body">Log your first reading to get started — Pattern Detective needs at least two to find your pace.</div>
+                  <span class="primary-btn"><span class="plus">+</span> Log reading</span>
+                </div>
+              </div>
+              <nav class="nav-chrome">
+                <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg><span>Dashboard</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M12 19V5M20 19v-7"/></svg><span>Trends</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>Tariff</span></div>
+                <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008.5 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.14 15a1.7 1.7 0 00-1.55-1H2.5a2 2 0 110-4h.09A1.7 1.7 0 004.14 9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 116.57 4.24l.06.06A1.7 1.7 0 008.5 4.64a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87 1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.55 1z"/></svg><span>Settings</span></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>
