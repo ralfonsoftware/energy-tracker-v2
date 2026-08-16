@@ -56,6 +56,7 @@
     "cancel": "Abbrechen",
     "rename": "Umbenennen",
     "delete": "Löschen",
+    "archive": "Archivieren",
     "archivedBadge": "Archiviert",
     "loading": "Wird geladen…",
     "confirmDeleteRoom": "Diesen Raum löschen? Er wird archiviert statt entfernt, damit historische Daten gültig bleiben.",

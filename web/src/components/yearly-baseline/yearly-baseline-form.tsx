@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Label } from '@/components/ui/label'
+import { UnitInput } from '@/components/ui/unit-input'
+import { HouseholdSizePresetRow, PRESETS } from './household-size-preset-row'
 
 interface HouseholdDetails {
   id: string
@@ -35,18 +37,6 @@ async function toApiError(response: Response): Promise<ApiError> {
     return new ApiError(response.status, null)
   }
 }
-
-// Household-size presets (AD-15) — starting suggestions only. Clicking one only fills the input,
-// it never auto-applies or auto-submits (AC #1). Plain frontend constants: there is no backend
-// endpoint for these, only the chosen final value is persisted. The kWh number is interpolated
-// into the translation string (`{{kwh}}`) rather than hand-duplicated per locale, so this array
-// stays the single source of truth.
-const PRESETS = [
-  { key: 'preset1', kwh: 1500 },
-  { key: 'preset2', kwh: 2500 },
-  { key: 'preset3', kwh: 3500 },
-  { key: 'preset4', kwh: 4250 },
-] as const
 
 // Mirrors SetYearlyBaseline's server-side MaxYearlyBaselineKwh — keeps the value inside the
 // decimal(18,2) column's range and rejects an Infinity-producing input before it ever reaches
@@ -153,45 +143,41 @@ export function YearlyBaselineForm({ householdId }: YearlyBaselineFormProps) {
   }
 
   if (loading) {
-    return <p className="text-muted-foreground text-sm">{t('yearlyBaseline.loading')}</p>
+    return (
+      <GlassCard>
+        <p className="text-muted-foreground text-sm">{t('yearlyBaseline.loading')}</p>
+      </GlassCard>
+    )
   }
 
   if (loadError) {
     return (
-      <div className="flex flex-col items-start gap-2">
+      <GlassCard className="flex flex-col items-start gap-2">
         <p className="text-destructive text-sm">{t('yearlyBaseline.errorGeneric')}</p>
         <Button type="button" variant="outline" size="sm" onClick={() => setLoadNonce((n) => n + 1)}>
           {t('yearlyBaseline.retry')}
         </Button>
-      </div>
+      </GlassCard>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <GlassCard className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold">{t('yearlyBaseline.heading')}</h2>
       <p className="text-muted-foreground text-sm">{t('yearlyBaseline.description')}</p>
 
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((preset) => (
-          <Button
-            key={preset.key}
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={submitting}
-            onClick={() => setInput(String(preset.kwh))}
-          >
-            {t(`yearlyBaseline.${preset.key}`, { kwh: preset.kwh })}
-          </Button>
-        ))}
-      </div>
+      <HouseholdSizePresetRow
+        presets={PRESETS}
+        selectedKwh={input ? Number(input) : null}
+        onSelect={(kwh) => setInput(String(kwh))}
+      />
 
       <form className="flex flex-col gap-2" onSubmit={handleSubmit}>
         <Label htmlFor="yearly-baseline-input">{t('yearlyBaseline.inputLabel')}</Label>
-        <Input
+        <UnitInput
           id="yearly-baseline-input"
           type="number"
+          unit="kWh"
           min="0"
           max={MAX_KWH}
           step="1"
@@ -203,10 +189,10 @@ export function YearlyBaselineForm({ householdId }: YearlyBaselineFormProps) {
 
         {error && <p className="text-destructive text-sm">{error}</p>}
 
-        <Button type="submit" disabled={submitting || !input} className="self-start">
+        <Button type="submit" variant="glass-primary" disabled={submitting || !input} className="self-start">
           {submitting ? t('yearlyBaseline.saving') : t('yearlyBaseline.submit')}
         </Button>
       </form>
-    </div>
+    </GlassCard>
   )
 }

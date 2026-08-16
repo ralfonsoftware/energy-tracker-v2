@@ -11,6 +11,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import { UnitInput } from '@/components/ui/unit-input'
+import { GLASS_SHEET_CLASSNAME } from '@/lib/glass-classnames'
 import { attemptSend, ApiError } from '@/lib/meter-reading-sync'
 
 // datetime-local's value format is local time with no offset (YYYY-MM-DDTHH:mm) — this is what
@@ -19,15 +21,6 @@ function toDateTimeLocalValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
-
-// UX-DR8's pill/gradient primary-action-button system, reused here — this story's only budget
-// for that styling (Dev Notes: the polished Dashboard trigger itself is Story 2.5's deliverable).
-// {components.primary-action-button.*} has no rendered mock/literal token values yet (Dev Notes),
-// so this is a reasonable interpretation off the wired --primary token, not a documented spec.
-const SAVE_BUTTON_CLASSNAME =
-  'h-11 min-w-11 rounded-full border-0 bg-gradient-to-b from-primary to-primary/85 px-6 text-primary-foreground shadow-lg shadow-primary/30 ' +
-  'transition-[transform,box-shadow] duration-150 ease-out hover:from-primary hover:to-primary/85 ' +
-  'active:scale-[0.965] active:shadow-sm motion-reduce:transition-none'
 
 export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
   const { t, i18n } = useTranslation()
@@ -89,7 +82,7 @@ export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
     <div className="flex flex-col items-center gap-2">
       <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>{trigger}</SheetTrigger>
-        <SheetContent side="bottom" className="rounded-t-[28px] rounded-b-none">
+        <SheetContent side="bottom" className={GLASS_SHEET_CLASSNAME}>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-4">
             <SheetHeader className="px-0">
               <SheetTitle>{t('meterReading.sheetTitle')}</SheetTitle>
@@ -98,13 +91,13 @@ export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="meter-reading-kwh">{t('meterReading.kwhLabel')}</Label>
-              <Input
+              <UnitInput
                 id="meter-reading-kwh"
                 type="number"
                 inputMode="decimal"
+                unit="kWh"
                 step="0.01"
                 min="0.01"
-                className="tabular-nums"
                 value={kwhValue}
                 onChange={(event) => setKwhValue(event.target.value)}
                 disabled={submitting}
@@ -127,7 +120,7 @@ export function LogReadingSheet({ trigger }: { trigger: ReactNode }) {
 
             {error && <p className="text-destructive text-sm">{error}</p>}
 
-            <Button type="submit" className={SAVE_BUTTON_CLASSNAME} disabled={submitting || !kwhValue}>
+            <Button type="submit" variant="glass-primary" disabled={submitting || !kwhValue}>
               {submitting ? t('meterReading.saving') : t('meterReading.save')}
             </Button>
           </form>

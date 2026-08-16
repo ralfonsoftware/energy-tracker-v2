@@ -110,7 +110,7 @@ describe('TaggingScaffoldManager', () => {
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[0])
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: 'Archive' }))
 
     expect(await screen.findByText('Archived')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add Power Point' })).not.toBeInTheDocument()
@@ -222,7 +222,7 @@ describe('TaggingScaffoldManager', () => {
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[1])
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: 'Archive' }))
 
     expect(await screen.findByText('Archived')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add Device' })).not.toBeInTheDocument()
@@ -304,7 +304,7 @@ describe('TaggingScaffoldManager', () => {
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[2])
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: 'Archive' }))
 
     expect(await screen.findByText('Archived')).toBeInTheDocument()
   })

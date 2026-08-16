@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -56,9 +57,9 @@ export function InviteGeneratePanel() {
   }
 
   return (
-    <div className="flex w-full max-w-sm flex-col gap-2">
+    <GlassCard className="flex w-full max-w-sm flex-col gap-2">
       {!link && (
-        <Button onClick={handleGenerate} disabled={generating}>
+        <Button variant="glass-primary" onClick={handleGenerate} disabled={generating}>
           {generating ? t('householdInvite.generating') : t('householdInvite.generateButton')}
         </Button>
       )}
@@ -66,9 +67,14 @@ export function InviteGeneratePanel() {
       {link && (
         <div className="flex flex-col gap-2">
           <Label htmlFor="household-invite-link">{t('householdInvite.linkLabel')}</Label>
-          <div className="flex gap-2">
-            <Input id="household-invite-link" value={link} readOnly />
-            <Button type="button" variant="outline" onClick={handleCopy}>
+          <div className="flex items-center gap-2 rounded-[12px] border border-[rgba(40,70,50,0.12)] bg-[rgba(255,255,255,0.5)] p-2.5 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:border-[rgba(210,235,220,0.14)] dark:bg-[rgba(220,245,230,0.05)]">
+            <Input
+              id="household-invite-link"
+              value={link}
+              readOnly
+              className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+            />
+            <Button type="button" variant="ghost" size="sm" onClick={handleCopy}>
               {copied ? t('householdInvite.copied') : t('householdInvite.copyButton')}
             </Button>
           </div>
@@ -77,6 +83,6 @@ export function InviteGeneratePanel() {
       )}
 
       {error && <p className="text-destructive text-sm">{error}</p>}
-    </div>
+    </GlassCard>
   )
 }
