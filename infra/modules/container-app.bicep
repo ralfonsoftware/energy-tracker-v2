@@ -46,10 +46,13 @@ param oidcAuthority string = ''
 @description('OIDC provider Client ID (not secret) — blank until a real OIDC provider is registered.')
 param oidcClientId string = ''
 
-@description('Custom domain hostname to bind to the Container App (e.g. app.example.com) — blank until DNS is manually verified with the external DNS provider (docs/local-vs-azure-deltas.md#D5) and a managed certificate exists. Threads into the ingress customDomains binding only when non-blank.')
+@description('Custom domain hostname to claim on this Container App (e.g. app.example.com) — blank until DNS is manually verified with the external DNS provider (docs/local-vs-azure-deltas.md#D5). When non-blank, always claims the hostname on ingress; whether that claim is TLS-bound depends on customDomainCertificateReady.')
 param customDomainName string = ''
 
-@description('Resource ID of the managed certificate to bind for customDomainName — sourced from container-apps-environment.bicep\'s managedCertificateId output. Ignored when customDomainName is blank.')
+@description('Whether a managed certificate for customDomainName already exists (see container-apps-environment.bicep). false: the hostname is claimed with bindingType Disabled and no certificate, which is required before Azure will let a certificate be created for it (RequireCustomHostnameInEnvironment). true: the claim is upgraded to bindingType SniEnabled with the real certificate. Never set via main.bicepparam.')
+param customDomainCertificateReady bool = false
+
+@description('Resource ID of the managed certificate to bind for customDomainName — sourced from container-apps-environment.bicep\'s managedCertificateId output. Ignored when customDomainCertificateReady is false.')
 param managedCertificateId string = ''
 
 @description('Scale-to-zero minimum replica count (AD-6/AD-7)')
@@ -87,14 +90,19 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
         external: true
         targetPort: targetPort
         transport: 'auto'
-        // Bound only once customDomainName is explicitly overridden at deploy time (never via
+        // Claimed only once customDomainName is explicitly overridden at deploy time (never via
         // main.bicepparam — see docs/local-vs-azure-deltas.md#D5). Empty by default, so ingress
         // behavior is unchanged until DNS is manually verified with the external DNS provider.
+        // The hostname claim (Disabled, no cert) must land on its own deploy before Azure will
+        // allow a managed certificate to be created for it — see customDomainCertificateReady.
         customDomains: !empty(trimmedCustomDomainName) ? [
-          {
+          customDomainCertificateReady ? {
             name: trimmedCustomDomainName
             certificateId: managedCertificateId
             bindingType: 'SniEnabled'
+          } : {
+            name: trimmedCustomDomainName
+            bindingType: 'Disabled'
           }
         ] : []
       }

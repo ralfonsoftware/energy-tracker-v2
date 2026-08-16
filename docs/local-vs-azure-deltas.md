@@ -222,14 +222,30 @@ Container App's `ingress.customDomains` binding are not deployed at all, same id
 output is available immediately after any deploy (no DNS dependency) so the TXT record value can
 be read before any DNS work starts.
 
-**What this means for a story:** never set a non-empty default for `customDomainName`, and never
-add it to `infra/main.bicepparam` — `infra-deploy.yml` applies on every push to `main`, so a live
-value there fails the `managedCertificates` create on every push until DNS is fixed or the param
-is reverted (the same eager-validation-before-dependency-exists shape as D3). A real value is only
-ever supplied as a one-off `az deployment group create -p customDomainName=...` override, and only
-after confirming both DNS records resolve publicly (`dig @8.8.8.8 CNAME`/`TXT` against a public
-resolver, not local cache) — do not trust `bicep what-if` to confirm DNS readiness, it doesn't
-check it.
+A second param, `customDomainCertificateReady` (also defaulting to `false` at every layer), gates
+the actual certificate creation separately from claiming the hostname. Azure's
+`RequireCustomHostnameInEnvironment` validation rejects `managedCertificates` creation outright
+unless the target hostname is *already* registered as a custom domain on a container app in the
+environment — a precondition this groundwork initially got backwards (managed cert declared before
+the Container App ever claimed the hostname), confirmed by a real failed deployment. With
+`customDomainCertificateReady=false`, `infra/modules/container-app.bicep`'s `ingress.customDomains`
+still claims the hostname (`bindingType: 'Disabled'`, no certificate) whenever `customDomainName`
+is set — this is the step that has to land and persist *before* a certificate can be created for
+it. Only once that's confirmed live does flipping `customDomainCertificateReady=true` on a second
+deploy create the certificate and upgrade the binding to `bindingType: 'SniEnabled'`.
+
+**What this means for a story:** never set a non-empty default for `customDomainName` or `true`
+for `customDomainCertificateReady`, and never add either to `infra/main.bicepparam` —
+`infra-deploy.yml` applies on every push to `main`, so live values there fail the
+`managedCertificates` create on every push until DNS is fixed or the params are reverted (the same
+eager-validation-before-dependency-exists shape as D3). Real values are only ever supplied as
+one-off `az deployment group create -p ...` overrides — and always as **two separate deploys**:
+first `customDomainName=<host>` alone (claims the hostname, `customDomainCertificateReady` stays
+`false`), confirmed live; only then a second deploy adds `customDomainCertificateReady=true`.
+Before the first deploy, confirm both DNS records resolve publicly (`dig @8.8.8.8 CNAME`/`TXT`
+against a public resolver, not local cache) — do not trust `bicep what-if` to confirm DNS
+readiness, it doesn't check it, and it doesn't catch the `RequireCustomHostnameInEnvironment`
+ordering requirement either (that's a live validation, not a template-shape one).
 
 The CLI override is not durable: `infra-deploy.yml` only ever passes `infra/main.bicepparam`, with
 no `customDomainName` entry in it, so the *next* ordinary CI-triggered infra deploy — even one
@@ -256,7 +272,11 @@ than one atomic operation; after the one-off deploy, check the certificate's sta
 or `az containerapp env certificate list`) before assuming the domain is actually serving traffic,
 and retry the deploy if the bind didn't take.
 
-**Incident record:** N/A — proactive, not yet incident-caused.
+**Incident record:** first manual deploy attempt (against `feature/enable-custom-domain`, never
+merged to `main`) failed with `RequireCustomHostnameInEnvironment` — caught before it ever reached
+CI, per this doc's own recommendation to dry-run the first bind manually rather than let
+`infra-deploy.yml` attempt it unsupervised. Fixed by splitting the deploy into the two-phase
+`customDomainCertificateReady` sequence described above.
 
 ---
 
@@ -268,4 +288,4 @@ and retry the deploy if the bind didn't take.
 | D2 | Postgres region restriction | No region concept | Provisioning blocked in some regions (e.g. `germanywestcentral`) regardless of resource group's own region | 1.2 |
 | D3 | ACR credential timing | No registry/identity involved | Fresh-deploy `AcrPull` role assignment race if `registries` is declared too early | 1.2 (bootstrap), 1.3 (re-added) |
 | D4 | Empty-secret ACA validation | Blank env var is fine | ACA rejects a `secrets` entry with an empty value | 1.2 |
-| D5 | Custom domain / managed cert DNS timing | No domain-binding concept | Managed cert issuance requires externally-verified DNS (non-Azure provider); CNAME must be direct, CAA must allow DigiCert | N/A (proactive) |
+| D5 | Custom domain / managed cert DNS timing | No domain-binding concept | Managed cert issuance requires externally-verified DNS (non-Azure provider) and the hostname pre-registered on the app (two-phase deploy); CNAME must be direct, CAA must allow DigiCert | N/A (caught pre-CI, see below) |
