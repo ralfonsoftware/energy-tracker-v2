@@ -62,6 +62,9 @@ param oidcAuthority string = ''
 @description('OIDC provider Client ID (not secret) — see oidcAuthority.')
 param oidcClientId string = ''
 
+@description('Custom domain hostname to bind to the Container App (e.g. app.example.com) — blank until DNS is manually verified with the external DNS provider (docs/local-vs-azure-deltas.md#D5). Deliberately not set in main.bicepparam; supply as a one-off deploy-time override only after verification.')
+param customDomainName string = ''
+
 @description('OIDC provider Client Secret — supplied at deploy time from a GitHub Actions secret, never committed. Defaults to the non-empty \'unset\' sentinel container-app.bicep requires when no real value exists yet.')
 @secure()
 param oidcClientSecret string = 'unset'
@@ -119,6 +122,7 @@ module containerAppsEnvironment 'modules/container-apps-environment.bicep' = {
     location: location
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
     logAnalyticsCustomerId: logAnalytics.outputs.customerId
+    customDomainName: customDomainName
   }
 }
 
@@ -183,10 +187,13 @@ module containerApp 'modules/container-app.bicep' = {
     minReplicas: containerAppMinReplicas
     maxReplicas: containerAppMaxReplicas
     targetPort: containerAppTargetPort
+    customDomainName: customDomainName
+    managedCertificateId: containerAppsEnvironment.outputs.managedCertificateId
   }
 }
 
 output containerAppFqdn string = containerApp.outputs.fqdn
+output customDomainVerificationId string = containerApp.outputs.customDomainVerificationId
 output containerRegistryLoginServer string = containerRegistry.outputs.loginServer
 output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceId
 output appInsightsId string = appInsights.outputs.id

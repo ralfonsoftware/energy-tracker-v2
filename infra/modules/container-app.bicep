@@ -46,6 +46,12 @@ param oidcAuthority string = ''
 @description('OIDC provider Client ID (not secret) — blank until a real OIDC provider is registered.')
 param oidcClientId string = ''
 
+@description('Custom domain hostname to bind to the Container App (e.g. app.example.com) — blank until DNS is manually verified with the external DNS provider (docs/local-vs-azure-deltas.md#D5) and a managed certificate exists. Threads into the ingress customDomains binding only when non-blank.')
+param customDomainName string = ''
+
+@description('Resource ID of the managed certificate to bind for customDomainName — sourced from container-apps-environment.bicep\'s managedCertificateId output. Ignored when customDomainName is blank.')
+param managedCertificateId string = ''
+
 @description('Scale-to-zero minimum replica count (AD-6/AD-7)')
 param minReplicas int = 0
 
@@ -57,6 +63,10 @@ param targetPort int = 8080
 
 // Well-known built-in role definition ID for "AcrPull" — stable across subscriptions/tenants.
 var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+
+// Trimmed so a whitespace-only override (e.g. accidental ' ') doesn't pass !empty() and bind a
+// garbage hostname — matches the same guard in container-apps-environment.bicep.
+var trimmedCustomDomainName = trim(customDomainName)
 
 resource registry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = {
   name: containerRegistryName
@@ -77,6 +87,16 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
         external: true
         targetPort: targetPort
         transport: 'auto'
+        // Bound only once customDomainName is explicitly overridden at deploy time (never via
+        // main.bicepparam — see docs/local-vs-azure-deltas.md#D5). Empty by default, so ingress
+        // behavior is unchanged until DNS is manually verified with the external DNS provider.
+        customDomains: !empty(trimmedCustomDomainName) ? [
+          {
+            name: trimmedCustomDomainName
+            certificateId: managedCertificateId
+            bindingType: 'SniEnabled'
+          }
+        ] : []
       }
       // ACR pull credential via the Container App's own system-assigned identity — no shared
       // admin credentials. Story 1.2 deliberately omitted this entry on the from-scratch
@@ -206,3 +226,7 @@ resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
 output id string = containerApp.id
 output name string = containerApp.name
 output fqdn string = containerApp.properties.configuration.ingress.fqdn
+// Available immediately after any deploy, regardless of customDomainName — needed to create the
+// asuid.<subdomain> TXT record at the external DNS provider before a managed certificate can be
+// requested (docs/local-vs-azure-deltas.md#D5).
+output customDomainVerificationId string = containerApp.properties.customDomainVerificationId
