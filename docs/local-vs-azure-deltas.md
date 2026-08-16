@@ -193,6 +193,73 @@ became a real outage.
 
 ---
 
+## D5 — Custom domain / managed certificate DNS timing
+
+**Local/self-host:** no domain-binding concept exists — self-host is reached by IP/hostname
+directly, no managed certificate or DNS ownership verification is involved.
+
+**Azure:** binding a custom domain to the Container App requires a free managed certificate
+(`Microsoft.App/managedEnvironments/managedCertificates`), which Azure will only issue once it
+can itself resolve DNS proving ownership — a CNAME pointing at the Container App's generated FQDN
+plus an `asuid.<subdomain>` TXT record carrying the environment's
+`customDomainVerificationId`. This project's DNS provider is not Azure DNS, so those records
+cannot be created by Bicep/ARM at all; they're a manual step at the external provider, and Azure's
+validation only ever happens against whatever is *actually* publicly resolvable at deploy time.
+
+**Why it bites:** `bicep build`/lint stays clean regardless of whether the DNS records exist —
+same shape as D2/D3/D4, this only surfaces via a live `managedCertificates` deployment. Two
+specific DNS quirks aren't caught by any static check either: the CNAME must point *directly* at
+the Container App's FQDN (an intermediate CNAME — a traffic manager, Cloudflare-proxied record —
+silently blocks issuance and renewal), and any pre-existing CAA record on the domain must
+explicitly allow `digicert.com` as an issuer or issuance fails with no useful error at the Bicep
+layer.
+
+**Fix in place:** `customDomainName` defaults to `''` at every layer
+(`infra/main.bicep`, `infra/modules/container-apps-environment.bicep`,
+`infra/modules/container-app.bicep`) — blank means the `managedCertificates` resource and the
+Container App's `ingress.customDomains` binding are not deployed at all, same idiom as
+`oidcAuthority`/`otelAlertNotificationEmail`. `infra/main.bicep`'s `customDomainVerificationId`
+output is available immediately after any deploy (no DNS dependency) so the TXT record value can
+be read before any DNS work starts.
+
+**What this means for a story:** never set a non-empty default for `customDomainName`, and never
+add it to `infra/main.bicepparam` — `infra-deploy.yml` applies on every push to `main`, so a live
+value there fails the `managedCertificates` create on every push until DNS is fixed or the param
+is reverted (the same eager-validation-before-dependency-exists shape as D3). A real value is only
+ever supplied as a one-off `az deployment group create -p customDomainName=...` override, and only
+after confirming both DNS records resolve publicly (`dig @8.8.8.8 CNAME`/`TXT` against a public
+resolver, not local cache) — do not trust `bicep what-if` to confirm DNS readiness, it doesn't
+check it.
+
+The CLI override is not durable: `infra-deploy.yml` only ever passes `infra/main.bicepparam`, with
+no `customDomainName` entry in it, so the *next* ordinary CI-triggered infra deploy — even one
+triggered by an unrelated `infra/**` change — silently redeploys with the default `''` and unbinds
+the domain again. Treat a successful one-off bind as temporary, not a permanent state change; if
+the domain needs to stay bound after a subsequent `infra-deploy.yml` run, the CLI override must be
+re-applied. (A future story could thread a durable value through as a repo variable consumed by
+`infra-deploy.yml` itself, but that's out of scope for this groundwork.)
+
+Same reasoning applies in reverse: because `az deployment group create` runs in incremental mode
+(no `--mode Complete`), reverting `customDomainName` back to `''` or changing it to a different
+hostname does not delete the previously-created `managedCertificates` resource — incremental mode
+only adds/updates resources present in the current template, it never prunes one whose branch was
+dropped. This is the same orphaning behavior `infra/README.md` already documents for switching
+`databaseProvider`; delete the stale certificate manually (`az containerapp env certificate
+delete`) after confirming the new state is live.
+
+Managed-certificate issuance is asynchronous — the `managedCertificates` resource's ARM PUT can
+complete before the certificate itself reaches an issued state. If a deploy binds
+`ingress.customDomains` to a certificate that hasn't finished issuing yet, the bind can fail or
+briefly serve without a valid cert — the same eager-validation-before-dependency-ready shape as D3.
+Azure's own CLI flow treats this as two explicit steps (`hostname add` then `hostname bind`) rather
+than one atomic operation; after the one-off deploy, check the certificate's status (Azure Portal
+or `az containerapp env certificate list`) before assuming the domain is actually serving traffic,
+and retry the deploy if the bind didn't take.
+
+**Incident record:** N/A — proactive, not yet incident-caused.
+
+---
+
 ## Quick-reference table
 
 | # | Delta | Local/self-host behavior | Azure behavior | Governing story |
@@ -201,3 +268,4 @@ became a real outage.
 | D2 | Postgres region restriction | No region concept | Provisioning blocked in some regions (e.g. `germanywestcentral`) regardless of resource group's own region | 1.2 |
 | D3 | ACR credential timing | No registry/identity involved | Fresh-deploy `AcrPull` role assignment race if `registries` is declared too early | 1.2 (bootstrap), 1.3 (re-added) |
 | D4 | Empty-secret ACA validation | Blank env var is fine | ACA rejects a `secrets` entry with an empty value | 1.2 |
+| D5 | Custom domain / managed cert DNS timing | No domain-binding concept | Managed cert issuance requires externally-verified DNS (non-Azure provider); CNAME must be direct, CAA must allow DigiCert | N/A (proactive) |

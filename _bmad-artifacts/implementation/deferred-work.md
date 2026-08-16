@@ -88,3 +88,12 @@
 ## Deferred from: code review of story-2-2b-design-system-foundation (2026-08-16)
 
 - AC #1's "AA-verified badge-text pairs" claim for the new status-triad tokens is asserted in a code comment but not demonstrated (no consumer, no contrast test) [web/src/index.css — status-within-range/below-baseline/trending tokens] — deferred, pre-existing verification gap with zero current consumer; actionable once Story 2.5 adds a real StatusBadge consumer.
+
+## Deferred from: code review of spec-custom-domain-managed-cert (2026-08-16)
+
+- source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
+  summary: No renewal-failure alerting exists for the custom-domain managed certificate — an indirect CNAME or a missing CAA record silently blocks issuance/renewal (per D5), and nothing surfaces that until TLS actually starts failing in production.
+  evidence: This story only scaffolds the dormant Bicep constructs (customDomainName defaults to ''); the feature has no live consumer yet, so there's nothing to alert on today. The existing `monitorAlert`/`otelAlertNotificationEmail` pattern in `infra/main.bicep` is the natural template to extend once a real custom domain is actually bound and worth monitoring.
+- source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
+  summary: The "never add customDomainName to infra/main.bicepparam" rule (docs/local-vs-azure-deltas.md#D5) has no guard at all in `infra/main.bicepparam` itself — unlike every other "leave blank for now" param there (oidcAuthority, otelAlertNotificationEmail), which carries an inline comment explaining why. No bicep-lint rule, CI check, or pre-commit guard stops a future story from adding a live value either.
+  evidence: This story's own spec explicitly forbids touching `infra/main.bicepparam` at all (frozen Boundaries, approved at Checkpoint 1), so even an explanatory comment-only addition is out of scope here without a human-approved spec change. A future story revisiting `main.bicepparam` should add that comment (mirroring the oidcAuthority/otelAlertNotificationEmail style) and/or build an automated guard (lint rule or `validate-infra` check) if this class of "blank-by-convention-only" param proliferates further.
