@@ -13,6 +13,9 @@ param logAnalyticsCustomerId string
 @description('Custom domain hostname to issue a free managed certificate for (e.g. app.example.com) — blank until DNS is manually verified with the external DNS provider (docs/local-vs-azure-deltas.md#D5). Never set via main.bicepparam; supply as a one-off deploy-time override only after verification.')
 param customDomainName string = ''
 
+@description('Gates managed-certificate creation. Azure requires the hostname to already be registered as a custom domain on a container app in this environment before it will create a certificate for it (RequireCustomHostnameInEnvironment) — so this must stay false on the first deploy that sets customDomainName (which only claims the hostname, no cert yet), and only flip to true on a second, later deploy once that claim has landed live. See docs/local-vs-azure-deltas.md#D5. Never set via main.bicepparam.')
+param customDomainCertificateReady bool = false
+
 // Api version pinned to the workspace's api version so listKeys() resolves against the same contract.
 var logAnalyticsApiVersion = '2026-03-01'
 
@@ -41,14 +44,16 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2026-01-01'
   }
 }
 
-// Created only once customDomainName is explicitly overridden at deploy time — requires the
-// CNAME/asuid TXT records to already resolve publicly at the external DNS provider, or issuance
-// fails outright (docs/local-vs-azure-deltas.md#D5). Dormant (not deployed) by default.
+// Created only once customDomainCertificateReady is explicitly flipped to true on a second deploy
+// — requires the CNAME/asuid TXT records to already resolve publicly at the external DNS
+// provider (or issuance fails outright), AND requires customDomainName to already be a live,
+// registered custom domain on a container app in this environment from a prior completed deploy
+// (RequireCustomHostnameInEnvironment — docs/local-vs-azure-deltas.md#D5). Dormant by default.
 // Name is a fixed literal, not derived from customDomainName: Microsoft.App resource names only
 // allow lowercase letters, numbers, and hyphens, and a dotted hostname (e.g. app.example.com)
 // would fail ARM name validation if interpolated directly. This groundwork supports exactly one
 // bound custom domain, so a static name is sufficient.
-resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2026-01-01' = if (!empty(trimmedCustomDomainName)) {
+resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2026-01-01' = if (!empty(trimmedCustomDomainName) && customDomainCertificateReady) {
   parent: containerAppsEnvironment
   name: 'custom-domain-cert'
   location: location
@@ -60,4 +65,4 @@ resource managedCert 'Microsoft.App/managedEnvironments/managedCertificates@2026
 
 output id string = containerAppsEnvironment.id
 output name string = containerAppsEnvironment.name
-output managedCertificateId string = !empty(trimmedCustomDomainName) ? managedCert.id : ''
+output managedCertificateId string = (!empty(trimmedCustomDomainName) && customDomainCertificateReady) ? managedCert.id : ''

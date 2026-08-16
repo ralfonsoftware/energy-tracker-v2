@@ -65,6 +65,9 @@ param oidcClientId string = ''
 @description('Custom domain hostname to bind to the Container App (e.g. app.example.com) — blank until DNS is manually verified with the external DNS provider (docs/local-vs-azure-deltas.md#D5). Deliberately not set in main.bicepparam; supply as a one-off deploy-time override only after verification.')
 param customDomainName string = ''
 
+@description('Whether the managed certificate for customDomainName should be created. Must stay false on the first deploy that sets customDomainName (claims the hostname only) and only flip to true on a second, later deploy once that claim is live — Azure requires the hostname already registered before it will create a certificate for it (docs/local-vs-azure-deltas.md#D5). Deliberately not set in main.bicepparam.')
+param customDomainCertificateReady bool = false
+
 @description('OIDC provider Client Secret — supplied at deploy time from a GitHub Actions secret, never committed. Defaults to the non-empty \'unset\' sentinel container-app.bicep requires when no real value exists yet.')
 @secure()
 param oidcClientSecret string = 'unset'
@@ -123,6 +126,7 @@ module containerAppsEnvironment 'modules/container-apps-environment.bicep' = {
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
     logAnalyticsCustomerId: logAnalytics.outputs.customerId
     customDomainName: customDomainName
+    customDomainCertificateReady: customDomainCertificateReady
   }
 }
 
@@ -188,6 +192,7 @@ module containerApp 'modules/container-app.bicep' = {
     maxReplicas: containerAppMaxReplicas
     targetPort: containerAppTargetPort
     customDomainName: customDomainName
+    customDomainCertificateReady: customDomainCertificateReady
     managedCertificateId: containerAppsEnvironment.outputs.managedCertificateId
   }
 }
