@@ -57,12 +57,49 @@
     --color-status-trending: var(--status-trending);
     --color-status-trending-badge-bg: var(--status-trending-badge-bg);
     --color-status-trending-badge-text: var(--status-trending-badge-text);
+    /* Nav chrome active-tab tokens (Story 2.5) — brand-accent-tinted, never a status color */
+    --color-nav-chrome-active-bg: var(--nav-chrome-active-bg);
+    --color-nav-chrome-active-foreground: var(--nav-chrome-active-foreground);
     --radius-glass-sm: 14px;
     --radius-glass-md: 18px;
     --radius-glass-lg: 28px;
     --spacing-card-padding: 24px;
     --spacing-card-gap: 18px;
     --spacing-mobile-margin: 19px;
+    /* Status card entrance/settle + specular sweep (Story 2.5) — values verbatim from
+       mockups/motion-demo.html's real (non-looping) segment. Applied only via `motion-safe:`
+       (Tailwind's built-in `prefers-reduced-motion: no-preference` variant) — the unconditioned
+       base state is already the final settled look (see status-card.tsx), matching the mock
+       file's "base = final state, animation is additive" structure. */
+    --animate-status-card-entrance: status-card-entrance 1.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    --animate-status-card-specular-sweep: status-card-specular-sweep 2.2s ease-in-out 1.28s 1 both;
+}
+
+@keyframes status-card-entrance {
+    0% {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes status-card-specular-sweep {
+    0%,
+    15% {
+        opacity: 0;
+        transform: translateX(-40%);
+    }
+    30%,
+    70% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(70%);
+    }
 }
 
 :root {
@@ -118,6 +155,13 @@
     --status-trending: #B87A1E;
     --status-trending-badge-bg: rgba(184, 122, 30, 0.16);
     --status-trending-badge-text: #8A5A14;
+    /* Status card specular-sweep overlay gradient — Story 2.5, verbatim from
+       direction-green-eco.html's light variant */
+    --status-card-specular-overlay: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.6) 48%, transparent 60%);
+    /* Nav chrome active-tab — Story 2.5, resolved in mockups/key-dashboard.html's own header
+       comment as a direct reuse of the already-confirmed brand-accent badge tokens */
+    --nav-chrome-active-bg: rgba(30, 122, 97, 0.14);
+    --nav-chrome-active-foreground: #1E7A61;
 }
 
 .dark {
@@ -170,6 +214,13 @@
     --status-trending: #E2A542;
     --status-trending-badge-bg: rgba(226, 165, 66, 0.18);
     --status-trending-badge-text: #F5CE93;
+    /* Status card specular-sweep overlay gradient — Story 2.5, verbatim from
+       direction-green-eco.html's dark variant */
+    --status-card-specular-overlay: linear-gradient(115deg, transparent 30%, rgba(220, 245, 230, 0.14) 46%, transparent 62%);
+    /* Nav chrome active-tab — Story 2.5, verbatim from mockups/key-dashboard.html's own header
+       comment (identical to the brand-accent badge-bg / existing link color already used) */
+    --nav-chrome-active-bg: rgba(47, 179, 151, 0.16);
+    --nav-chrome-active-foreground: #6FD1B1;
 }
 
 @layer base {

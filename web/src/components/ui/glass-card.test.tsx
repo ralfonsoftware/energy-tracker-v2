@@ -26,4 +26,22 @@ describe('GlassCard', () => {
 
     expect(screen.getByTestId('glass-card')).toHaveClass('custom-class')
   })
+
+  it('size="lg" applies the rounded.lg hero radius', () => {
+    render(
+      <GlassCard data-testid="glass-card" size="lg">
+        content
+      </GlassCard>,
+    )
+
+    expect(screen.getByTestId('glass-card')).toHaveClass('rounded-glass-lg')
+    expect(screen.getByTestId('glass-card')).not.toHaveClass('rounded-glass-md')
+  })
+
+  it('defaults to the rounded.md drill-down-card radius when size is omitted', () => {
+    render(<GlassCard data-testid="glass-card">content</GlassCard>)
+
+    expect(screen.getByTestId('glass-card')).toHaveClass('rounded-glass-md')
+    expect(screen.getByTestId('glass-card')).not.toHaveClass('rounded-glass-lg')
+  })
 })

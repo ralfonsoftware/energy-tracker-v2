@@ -230,6 +230,19 @@ describe('App', () => {
   })
 
   describe('invite-generation panel', () => {
+    // Relocated to Settings by a code review of Story 2.5 (was previously on the Dashboard
+    // placeholder shell, before a real Settings surface existed) — reach it via Settings nav.
+    const settingsRoutes = [
+      { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([]) },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+      {
+        method: 'GET',
+        url: '/api/households/11111111-1111-1111-1111-111111111111',
+        respond: () => jsonResponse({ id: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }),
+      },
+    ]
+
     it('generates a shareable link and copies it to the clipboard', async () => {
       const user = userEvent.setup()
       const writeText = vi.fn().mockResolvedValue(undefined)
@@ -237,10 +250,13 @@ describe('App', () => {
 
       mockFetchRoutes([
         { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        ...settingsRoutes,
         { method: 'POST', url: '/api/household-invites', respond: () => jsonResponse({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }) },
       ])
 
       render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
 
       const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
       await user.click(generateButton)
@@ -262,10 +278,13 @@ describe('App', () => {
 
       mockFetchRoutes([
         { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        ...settingsRoutes,
         { method: 'POST', url: '/api/household-invites', respond: () => jsonResponse({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }) },
       ])
 
       render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
 
       const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
       await user.click(generateButton)
@@ -315,6 +334,86 @@ describe('App', () => {
       // becomes unreachable to assistive tech, which is what makes "supersedes rather than
       // stacks" (AC #7) a real accessibility guarantee, not just a visual one.
       expect(screen.queryByRole('button', { name: 'Log reading' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Status card wiring (Story 2.5)', () => {
+    it('shows a skeleton before the Status fetch resolves, then the populated Status card', async () => {
+      let resolveStatus: (value: Response) => void = () => {}
+      const statusPromise = new Promise<Response>((resolve) => {
+        resolveStatus = resolve
+      })
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: string | URL | Request) => {
+          const url = String(input)
+          if (url === '/api/session') {
+            return Promise.resolve(
+              jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }),
+            )
+          }
+          if (url === '/api/status') {
+            return statusPromise
+          }
+          return Promise.resolve(new Response(null, { status: 200 }))
+        }),
+      )
+
+      render(<App />)
+
+      expect(await screen.findByTestId('status-card-skeleton')).toBeInTheDocument()
+
+      resolveStatus(jsonResponse({ status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }))
+
+      expect(await screen.findByText('Quiet week.')).toBeInTheDocument()
+      expect(screen.queryByTestId('status-card-skeleton')).not.toBeInTheDocument()
+    })
+
+    it('shows the onboarding empty state when GET /api/status resolves with an empty body', async () => {
+      mockSession({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' })
+
+      render(<App />)
+
+      expect(await screen.findByText('No Status yet')).toBeInTheDocument()
+    })
+
+    it('saving a reading via the Log Reading sheet re-fetches Status', async () => {
+      const user = userEvent.setup()
+      let statusCallCount = 0
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: string | URL | Request, init?: RequestInit) => {
+          const url = String(input)
+          const method = (init?.method ?? 'GET').toUpperCase()
+
+          if (url === '/api/session') {
+            return Promise.resolve(
+              jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }),
+            )
+          }
+          if (url === '/api/status') {
+            statusCallCount += 1
+            return Promise.resolve(jsonResponse(null))
+          }
+          if (url === '/api/meter-readings' && method === 'POST') {
+            return Promise.resolve(jsonResponse({ id: 'r1', kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00+00:00' }))
+          }
+          return Promise.resolve(new Response(null, { status: 200 }))
+        }),
+      )
+
+      render(<App />)
+
+      await screen.findByText('No Status yet')
+      expect(statusCallCount).toBe(1)
+
+      await user.click(screen.getByRole('button', { name: /Log reading/ }))
+      await user.type(await screen.findByLabelText('kWh'), '4821.5')
+      await user.click(screen.getByRole('button', { name: 'Save reading' }))
+
+      await vi.waitFor(() => expect(statusCallCount).toBe(2))
     })
   })
 })

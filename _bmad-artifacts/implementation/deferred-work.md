@@ -98,6 +98,10 @@
   summary: The "never add customDomainName to infra/main.bicepparam" rule (docs/local-vs-azure-deltas.md#D5) has no guard at all in `infra/main.bicepparam` itself — unlike every other "leave blank for now" param there (oidcAuthority, otelAlertNotificationEmail), which carries an inline comment explaining why. No bicep-lint rule, CI check, or pre-commit guard stops a future story from adding a live value either.
   evidence: This story's own spec explicitly forbids touching `infra/main.bicepparam` at all (frozen Boundaries, approved at Checkpoint 1), so even an explanatory comment-only addition is out of scope here without a human-approved spec change. A future story revisiting `main.bicepparam` should add that comment (mirroring the oidcAuthority/otelAlertNotificationEmail style) and/or build an automated guard (lint rule or `validate-infra` check) if this class of "blank-by-convention-only" param proliferates further.
 
+## Deferred from: code review of story-2-5-dashboard-status-display (2026-08-17)
+
+- Concurrent `refreshStatus()` calls (e.g. offline-sync flush racing the mount-effect fetch) aren't sequenced — a slower, earlier-triggered response can resolve after a newer one and silently overwrite Status with stale data [web/src/App.tsx:49-58,148-160] — identical unsequenced-fetch pattern already exists in `refreshOpenRegressionPrompt`, not introduced by this diff; revisit both together if this class of bug is ever prioritized.
+
 ## Deferred from: code review of story-2.4 (2026-08-17)
 
 - Full-history read/walk on every meter-reading save is a latent NFR1 Tier-1 (≤2s) performance risk that grows unboundedly for long-lived households, compounding the lifetime-anchoring design question raised in this review [src/EnergyTracker.Application/GetCurrentStatus.cs:36, src/EnergyTracker.Application/CreateMeterReading.cs:107] — pre-existing pattern extended, not yet a measured problem at current data volumes.
