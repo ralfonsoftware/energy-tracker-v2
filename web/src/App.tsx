@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
 import { HouseholdCreationForm, type CreatedHousehold } from '@/components/household-creation/household-creation-form'
-import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
 import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
 import { SettingsPage } from '@/components/settings/settings-page'
-import { LogReadingSheet } from '@/components/meter-reading/log-reading-sheet'
-import { MeterRegressionPromptDialog } from '@/components/meter-reading/meter-regression-prompt-dialog'
+import { DashboardPage } from '@/components/dashboard/dashboard-page'
 import { registerOfflineSync } from '@/lib/meter-reading-sync'
 import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
+import { fetchCurrentStatus, type StatusDto } from '@/lib/status-api'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -41,6 +39,41 @@ function App() {
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
   const [openRegressionPrompt, setOpenRegressionPrompt] = useState<MeterRegressionPromptDto | null>(null)
   const [logSheetOpen, setLogSheetOpen] = useState(false)
+  const [status, setStatus] = useState<StatusDto | null>(null)
+  const [statusLoading, setStatusLoading] = useState(true)
+
+  // Tracks the last Status value the entrance/specular-sweep animation already played for, in a
+  // ref that lives here (App never unmounts) rather than inside StatusCard/DashboardPage (which
+  // do — the whole subtree unmounts and remounts on every Settings round trip). Without this,
+  // there's no way to tell "Status actually changed" apart from "the component just remounted
+  // after an unrelated navigation" — a remount always looks identical to a fresh mount from the
+  // inside, so the animation would replay every time the user returns from Settings (AC #6 only
+  // wants it on cold load or a real recompute).
+  const lastAnimatedStatusFingerprintRef = useRef<string | null>(null)
+  const statusFingerprint = status
+    ? `${status.status}-${status.paceToDateKwh}-${status.baselineToDateKwh}-${status.isLowConfidence}`
+    : null
+  const playStatusEntranceAnimation =
+    statusFingerprint !== null && statusFingerprint !== lastAnimatedStatusFingerprintRef.current
+
+  useEffect(() => {
+    lastAnimatedStatusFingerprintRef.current = statusFingerprint
+  }, [statusFingerprint])
+
+  // Mirrors refreshOpenRegressionPrompt below: re-fetches the live, request-time Status (AD-7)
+  // after anything that could change it, rather than polling on a timer. A fetch failure
+  // degrades to the same onboarding-empty treatment as a genuinely undefined Status (Task 5) —
+  // never a stuck skeleton, never a fabricated real state.
+  const refreshStatus = useCallback(async () => {
+    try {
+      const result = await fetchCurrentStatus()
+      setStatus(result)
+    } catch {
+      setStatus(null)
+    } finally {
+      setStatusLoading(false)
+    }
+  }, [])
 
   // Single source of truth for "what's currently open" (AC #7): re-polling after every save/
   // resolve, rather than trusting the create-reading response, mirrors the "drill-down data is
@@ -128,19 +161,21 @@ function App() {
     }
 
     // A reading synced from the offline queue in the background can itself raise a regression
-    // (AC #1) — nothing else re-polls for that, so it's wired to the same refresh a foreground
-    // save/resolve triggers.
+    // (AC #1) or change Status — nothing else re-polls for either, so both are wired to the same
+    // refresh a foreground save/resolve triggers.
     return registerOfflineSync(() => {
       void refreshOpenRegressionPrompt()
+      void refreshStatus()
     })
-  }, [state.status, refreshOpenRegressionPrompt])
+  }, [state.status, refreshOpenRegressionPrompt, refreshStatus])
 
   useEffect(() => {
     if (state.status !== 'ready') {
       return
     }
     void refreshOpenRegressionPrompt()
-  }, [state.status, refreshOpenRegressionPrompt])
+    void refreshStatus()
+  }, [state.status, refreshOpenRegressionPrompt, refreshStatus])
 
   useEffect(() => {
     if (state.status === 'unauthenticated') {
@@ -208,34 +243,25 @@ function App() {
     return <SettingsPage householdId={state.household.id} onBack={() => setView('dashboard')} />
   }
 
-  // Real Dashboard is Epic 2, out of scope here — AC #1 only requires "never a broken or empty
-  // dashboard," not a built one. This placeholder is Story 1.1's existing skeleton content.
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-4">
-      <h1 className="text-2xl font-semibold">{t('app.title')}</h1>
-      <Button>{t('shell.placeholder')}</Button>
-      {/* Plain trigger only — the polished pill/gradient Dashboard button (UX-DR8) is Story 2.5's
-          own deliverable; this just gives the Log Reading sheet (Story 2.2) somewhere to open
-          from and something to return focus to (AC #9). */}
-      <LogReadingSheet
-        trigger={<Button variant="outline">{t('meterReading.trigger')}</Button>}
-        open={logSheetOpen}
-        onOpenChange={handleLogSheetOpenChange}
-        onSaved={() => {
-          void refreshOpenRegressionPrompt()
-        }}
-      />
-      <InviteGeneratePanel />
-      <Button variant="outline" onClick={() => setView('settings')}>
-        {t('settings.heading')}
-      </Button>
-      <MeterRegressionPromptDialog
-        prompt={openRegressionPrompt}
-        onResolved={() => {
-          void refreshOpenRegressionPrompt()
-        }}
-      />
-    </main>
+    <DashboardPage
+      household={state.household}
+      status={status}
+      statusLoading={statusLoading}
+      playStatusEntranceAnimation={playStatusEntranceAnimation}
+      logSheetOpen={logSheetOpen}
+      onLogSheetOpenChange={handleLogSheetOpenChange}
+      onReadingSaved={() => {
+        void refreshOpenRegressionPrompt()
+        void refreshStatus()
+      }}
+      openRegressionPrompt={openRegressionPrompt}
+      onRegressionResolved={() => {
+        void refreshOpenRegressionPrompt()
+        void refreshStatus()
+      }}
+      onSettingsClick={() => setView('settings')}
+    />
   )
 }
 

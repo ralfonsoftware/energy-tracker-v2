@@ -2,9 +2,6 @@
   "app": {
     "title": "Energy Tracker"
   },
-  "shell": {
-    "placeholder": "Skeleton build"
-  },
   "session": {
     "loading": "Loading…",
     "error": "Something went wrong. Please try reloading the page."
@@ -104,5 +101,33 @@
     "confirm": "Confirm",
     "confirming": "Confirming…",
     "errorGeneric": "Something went wrong. Please try again."
+  },
+  "dashboard": {
+    "status": {
+      "headline": {
+        "withinRange": "Quiet week.",
+        "belowBaseline": "Well under baseline.",
+        "trending": "Worth a look."
+      },
+      "badge": {
+        "withinRange": "Within range",
+        "belowBaseline": "Below baseline",
+        "trending": "Trending"
+      },
+      "body": {
+        "onPace": "Right on pace.",
+        "underPace": "{{kwh}} kWh under pace.",
+        "overPace": "{{kwh}} kWh over pace."
+      },
+      "lowConfidenceNote": "It's been a while since your last reading — treat this as a rough estimate.",
+      "emptyTitle": "No Status yet",
+      "emptyBody": "Log your first reading to get started — Pattern Detective needs at least two to find your pace."
+    },
+    "nav": {
+      "dashboard": "Dashboard",
+      "trendHistory": "Trend History",
+      "tariffRadar": "Tariff Radar",
+      "settings": "Settings"
+    }
   }
 }

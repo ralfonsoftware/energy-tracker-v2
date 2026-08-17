@@ -42,6 +42,10 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-17
+# 2026-08-17: story 2-5-dashboard-status-display moved to done (code review complete: 3 decision-needed resolved (all became patches), 7 patch findings fixed (relocated InviteGeneratePanel to Settings, added NavChrome to Settings, empty-state-shaped skeleton, fixed entrance-animation replay + aria-live remount + rounding-boundary badge/sentence mismatch, dropped unused currency prop), 1 deferred, 9 dismissed — 98 frontend tests green, tsc/oxlint/vite build clean, zero backend files touched)
+# 2026-08-17: story 2-5-dashboard-status-display moved to review (dev-story implementation complete — 94 frontend tests green (15 files, 6 new), tsc/oxlint/vite build clean, zero backend files touched)
+# 2026-08-17: story 2-5-dashboard-status-display moved to in-progress (dev-story activation)
+# 2026-08-17: story 2-5-dashboard-status-display created (create-story) - status set to ready-for-dev
 # 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to done (code review complete: 4 decision-needed resolved (2 confirmed as-is, 2 became patches), 5 patch findings fixed (7 total incl. promoted decisions), 4 deferred, 3 dismissed — 219 backend tests green, dotnet build clean in Debug and Release)
 # 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to review (dev-story implementation complete — 210 backend tests green (119 Application + 86 Api.Tests via Testcontainers + 2 Infrastructure migration + 3 Architecture), dotnet build clean in Debug and Release, both Postgres and SqlServer migrations verified; no frontend changes)
 # 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to in-progress (dev-story activation)
@@ -91,7 +95,7 @@ development_status:
   2-2b-design-system-foundation: done
   2-3-meter-reading-regression-detection-classification: done
   2-4-gap-tolerant-rolling-baseline-status-computation: done
-  2-5-dashboard-status-display: backlog
+  2-5-dashboard-status-display: done
   2-6-room-power-point-device-re-parenting: backlog
   epic-2-retrospective: optional
 

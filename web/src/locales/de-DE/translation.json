@@ -2,9 +2,6 @@
   "app": {
     "title": "Energy Tracker"
   },
-  "shell": {
-    "placeholder": "Gerüstversion"
-  },
   "session": {
     "loading": "Wird geladen…",
     "error": "Etwas ist schiefgelaufen. Bitte lade die Seite neu."
@@ -104,5 +101,33 @@
     "confirm": "Bestätigen",
     "confirming": "Wird bestätigt…",
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+  },
+  "dashboard": {
+    "status": {
+      "headline": {
+        "withinRange": "Ruhige Woche.",
+        "belowBaseline": "Deutlich unter dem Basiswert.",
+        "trending": "Einen Blick wert."
+      },
+      "badge": {
+        "withinRange": "Im Rahmen",
+        "belowBaseline": "Unter Basiswert",
+        "trending": "Steigend"
+      },
+      "body": {
+        "onPace": "Genau im Zeitplan.",
+        "underPace": "{{kwh}} kWh unter dem erwarteten Verbrauch.",
+        "overPace": "{{kwh}} kWh über dem erwarteten Verbrauch."
+      },
+      "lowConfidenceNote": "Dein letzter Zählerstand liegt schon eine Weile zurück — betrachte dies als groben Richtwert.",
+      "emptyTitle": "Noch kein Status",
+      "emptyBody": "Erfasse deinen ersten Zählerstand, um loszulegen — Pattern Detective braucht mindestens zwei, um dein Tempo zu ermitteln."
+    },
+    "nav": {
+      "dashboard": "Dashboard",
+      "trendHistory": "Verlauf",
+      "tariffRadar": "Tarifradar",
+      "settings": "Einstellungen"
+    }
   }
 }
