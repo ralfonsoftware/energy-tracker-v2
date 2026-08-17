@@ -125,14 +125,19 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         var (client, householdId, version) = await CreateHouseholdAsync();
         await SetYearlyBaselineAsync(client, householdId, 3650m, version);
         var latest = DateTimeOffset.UtcNow;
-        var baseline = latest.AddDays(-182.5);
+        var baseline = latest.AddDays(-100);
 
         // First reading alone leaves Status undefined (AC #6) — no snapshot yet.
         await PostReadingAsync(client, 1000m, baseline);
         (await CountStatusSnapshotRowsAsync(householdId)).ShouldBe(0);
 
         // Second reading makes Status definite — AC #8: the recompute writes an immutable snapshot.
-        await PostReadingAsync(client, 2825m, latest);
+        // 100 days elapsed -> baseline-to-date = 3650 * 100/365 = 1000 kWh exactly; pace = 1050 kWh,
+        // 50 kWh over baseline and comfortably clear of both the WithinRange/BelowBaseline (0) and
+        // WithinRange/Trending (100) boundaries — this test only needs a clean WithinRange result to
+        // verify AC #8's persistence, not to pin the exact-tie boundary (that's PatternDetectiveCalculatorTests'
+        // job, in-memory and free of the JSON/Postgres timestamp round-trip's microsecond precision limits).
+        await PostReadingAsync(client, 2050m, latest);
 
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
@@ -140,7 +145,7 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
             .SingleAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
 
         snapshot.Status.ShouldBe(Status.WithinRange);
-        snapshot.PaceToDateKwh.ShouldBe(1825m);
-        snapshot.BaselineToDateKwh.ShouldBe(1825m);
+        snapshot.PaceToDateKwh.ShouldBe(1050m);
+        snapshot.BaselineToDateKwh.ShouldBe(1000m);
     }
 }
