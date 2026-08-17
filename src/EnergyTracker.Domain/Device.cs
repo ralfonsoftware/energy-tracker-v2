@@ -6,8 +6,8 @@ public class Device
 
     public required Guid HouseholdId { get; init; }
 
-    // Immutable — this story does not support re-parenting a Device to a different Power Point.
-    public required Guid PowerPointId { get; init; }
+    // Mutable via MoveDevice only — not a general-purpose setter.
+    public required Guid PowerPointId { get; set; }
 
     public required string Name { get; set; }
 

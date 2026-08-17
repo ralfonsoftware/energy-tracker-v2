@@ -168,4 +168,115 @@ public class TaggingScaffoldEndpointsTests(EnergyTrackerApiFactory factory) : IC
         (await client.DeleteAsync($"/api/devices/{someId}", TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task Story2_6_AC1_Moving_a_Power_Point_reassigns_its_Room_going_forward()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var oldRoomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Kitchen" }, TestContext.Current.CancellationToken);
+        var oldRoom = await oldRoomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var newRoomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var newRoom = await newRoomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync("/api/power-points", new { roomId = oldRoom!.Id, name = "Counter outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        var moveResponse = await client.PutAsJsonAsync($"/api/power-points/{powerPoint!.Id}/room", new { roomId = newRoom!.Id }, TestContext.Current.CancellationToken);
+        moveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var moved = await moveResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+        moved!.RoomId.ShouldBe(newRoom.Id);
+
+        var powerPoints = await client.GetFromJsonAsync<List<PowerPointResponse>>("/api/power-points", TestContext.Current.CancellationToken);
+        powerPoints!.Single(p => p.Id == powerPoint.Id).RoomId.ShouldBe(newRoom.Id);
+    }
+
+    [Fact]
+    public async Task Story2_6_AC2_Moving_a_Device_reassigns_its_Power_Point_going_forward()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Kitchen" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var oldPowerPointResponse = await client.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Counter outlet" }, TestContext.Current.CancellationToken);
+        var oldPowerPoint = await oldPowerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+        var newPowerPointResponse = await client.PostAsJsonAsync("/api/power-points", new { roomId = room.Id, name = "Wall outlet" }, TestContext.Current.CancellationToken);
+        var newPowerPoint = await newPowerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+        var deviceResponse = await client.PostAsJsonAsync("/api/devices", new { powerPointId = oldPowerPoint!.Id, name = "Kettle" }, TestContext.Current.CancellationToken);
+        var device = await deviceResponse.Content.ReadFromJsonAsync<DeviceResponse>(TestContext.Current.CancellationToken);
+
+        var moveResponse = await client.PutAsJsonAsync($"/api/devices/{device!.Id}/power-point", new { powerPointId = newPowerPoint!.Id }, TestContext.Current.CancellationToken);
+        moveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var moved = await moveResponse.Content.ReadFromJsonAsync<DeviceResponse>(TestContext.Current.CancellationToken);
+        moved!.PowerPointId.ShouldBe(newPowerPoint.Id);
+
+        var devices = await client.GetFromJsonAsync<List<DeviceResponse>>("/api/devices", TestContext.Current.CancellationToken);
+        devices!.Single(d => d.Id == device.Id).PowerPointId.ShouldBe(newPowerPoint.Id);
+    }
+
+    [Fact]
+    public async Task Story2_6_AC4_Moving_into_an_archived_Room_or_Power_Point_returns_409()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Kitchen" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var archivedRoomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Attic" }, TestContext.Current.CancellationToken);
+        var archivedRoom = await archivedRoomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        await client.DeleteAsync($"/api/rooms/{archivedRoom!.Id}", TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Counter outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        var movePowerPointResponse = await client.PutAsJsonAsync($"/api/power-points/{powerPoint!.Id}/room", new { roomId = archivedRoom.Id }, TestContext.Current.CancellationToken);
+        movePowerPointResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var archivedPowerPointResponse = await client.PostAsJsonAsync("/api/power-points", new { roomId = room.Id, name = "Wall outlet" }, TestContext.Current.CancellationToken);
+        var archivedPowerPoint = await archivedPowerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+        await client.DeleteAsync($"/api/power-points/{archivedPowerPoint!.Id}", TestContext.Current.CancellationToken);
+        var deviceResponse = await client.PostAsJsonAsync("/api/devices", new { powerPointId = powerPoint.Id, name = "Kettle" }, TestContext.Current.CancellationToken);
+        var device = await deviceResponse.Content.ReadFromJsonAsync<DeviceResponse>(TestContext.Current.CancellationToken);
+
+        var moveDeviceResponse = await client.PutAsJsonAsync($"/api/devices/{device!.Id}/power-point", new { powerPointId = archivedPowerPoint.Id }, TestContext.Current.CancellationToken);
+        moveDeviceResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Story2_6_AC5_Moving_into_another_Households_Room_or_Power_Point_returns_404()
+    {
+        var clientA = await CreateClientWithHouseholdAsync(factory);
+        var roomAResponse = await clientA.PostAsJsonAsync("/api/rooms", new { name = "Kitchen" }, TestContext.Current.CancellationToken);
+        var roomA = await roomAResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointAResponse = await clientA.PostAsJsonAsync("/api/power-points", new { roomId = roomA!.Id, name = "Counter outlet" }, TestContext.Current.CancellationToken);
+        var powerPointA = await powerPointAResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+        var deviceAResponse = await clientA.PostAsJsonAsync("/api/devices", new { powerPointId = powerPointA!.Id, name = "Kettle" }, TestContext.Current.CancellationToken);
+        var deviceA = await deviceAResponse.Content.ReadFromJsonAsync<DeviceResponse>(TestContext.Current.CancellationToken);
+
+        var clientB = await CreateClientWithHouseholdAsync(factory);
+        var roomBResponse = await clientB.PostAsJsonAsync("/api/rooms", new { name = "Office" }, TestContext.Current.CancellationToken);
+        var roomB = await roomBResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointBResponse = await clientB.PostAsJsonAsync("/api/power-points", new { roomId = roomB!.Id, name = "Wall outlet" }, TestContext.Current.CancellationToken);
+        var powerPointB = await powerPointBResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        (await clientA.PutAsJsonAsync($"/api/power-points/{powerPointA.Id}/room", new { roomId = roomB.Id }, TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await clientA.PutAsJsonAsync($"/api/devices/{deviceA!.Id}/power-point", new { powerPointId = powerPointB!.Id }, TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Story2_6_AC6_A_moved_item_appears_under_its_new_parent_and_not_the_old_one()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var oldRoomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Kitchen" }, TestContext.Current.CancellationToken);
+        var oldRoom = await oldRoomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var newRoomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var newRoom = await newRoomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync("/api/power-points", new { roomId = oldRoom!.Id, name = "Counter outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        await client.PutAsJsonAsync($"/api/power-points/{powerPoint!.Id}/room", new { roomId = newRoom!.Id }, TestContext.Current.CancellationToken);
+
+        var powerPoints = await client.GetFromJsonAsync<List<PowerPointResponse>>("/api/power-points", TestContext.Current.CancellationToken);
+        var byNewRoom = powerPoints!.Where(p => p.RoomId == newRoom.Id).ToList();
+        var byOldRoom = powerPoints!.Where(p => p.RoomId == oldRoom.Id).ToList();
+        byNewRoom.ShouldContain(p => p.Id == powerPoint.Id);
+        byOldRoom.ShouldNotContain(p => p.Id == powerPoint.Id);
+        powerPoints!.Count(p => p.Id == powerPoint.Id).ShouldBe(1);
+    }
 }

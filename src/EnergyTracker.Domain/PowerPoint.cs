@@ -6,8 +6,8 @@ public class PowerPoint
 
     public required Guid HouseholdId { get; init; }
 
-    // Immutable — this story does not support re-parenting a Power Point to a different Room.
-    public required Guid RoomId { get; init; }
+    // Mutable via MovePowerPoint only — not a general-purpose setter.
+    public required Guid RoomId { get; set; }
 
     public required string Name { get; set; }
 

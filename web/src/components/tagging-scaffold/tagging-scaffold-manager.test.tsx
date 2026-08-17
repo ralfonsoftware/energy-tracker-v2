@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TaggingScaffoldManager } from './tagging-scaffold-manager'
@@ -345,6 +345,163 @@ describe('TaggingScaffoldManager', () => {
     await user.click(screen.getByRole('button', { name: 'Add Power Point' }))
     await user.type(screen.getByLabelText('Name'), 'Counter outlet')
     await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByText('That parent was archived in the meantime. Please refresh and try again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('opening "Move to…" on a Power Point renders the Room destination list, current Room tagged/disabled, and moving it re-renders under the new Room', async () => {
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () =>
+          jsonResponse([
+            { id: 'r1', name: 'Kitchen', archivedAt: null },
+            { id: 'r2', name: 'Living room', archivedAt: null },
+          ]),
+      },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+      {
+        method: 'PUT',
+        url: '/api/power-points/p1/room',
+        respond: (body) => {
+          expect(body).toEqual({ roomId: 'r2' })
+          return jsonResponse({ id: 'p1', roomId: 'r2', name: 'Counter outlet', archivedAt: null })
+        },
+      },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    const kitchenSummary = await screen.findByText('Kitchen', { exact: false })
+    const kitchenDetails = kitchenSummary.closest('details')!
+    await user.click(kitchenSummary)
+
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+
+    expect(screen.getByRole('button', { name: /Kitchen/ })).toBeDisabled()
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    const destination = screen.getByRole('button', { name: 'Living room' })
+    expect(destination).toBeEnabled()
+
+    await user.click(destination)
+
+    const livingRoomSummary = await screen.findByText('Living room', { exact: false })
+    const livingRoomDetails = livingRoomSummary.closest('details')!
+    await user.click(livingRoomSummary)
+
+    expect(within(livingRoomDetails).getByText('Counter outlet', { exact: false })).toBeInTheDocument()
+    expect(within(kitchenDetails).queryByText('Counter outlet', { exact: false })).not.toBeInTheDocument()
+  })
+
+  it('opening "Move to…" on a Device renders the Power Point destination list and moving it issues the expected PUT and re-renders under the new Power Point', async () => {
+    mockFetchRoutes([
+      { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+      {
+        method: 'GET',
+        url: '/api/power-points',
+        respond: () =>
+          jsonResponse([
+            { id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null },
+            { id: 'p2', roomId: 'r1', name: 'Wall outlet', archivedAt: null },
+          ]),
+      },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([{ id: 'd1', powerPointId: 'p1', name: 'Kettle', archivedAt: null }]) },
+      {
+        method: 'PUT',
+        url: '/api/devices/d1/power-point',
+        respond: (body) => {
+          expect(body).toEqual({ powerPointId: 'p2' })
+          return jsonResponse({ id: 'd1', powerPointId: 'p2', name: 'Kettle', archivedAt: null })
+        },
+      },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+    await user.click(await screen.findByText('Counter outlet', { exact: false }))
+
+    const kettleText = await screen.findByText('Kettle', { exact: false })
+    const deviceRow = kettleText.closest<HTMLElement>('.flex.items-center.justify-between')!
+    await user.click(within(deviceRow).getByRole('button', { name: 'Move to…' }))
+
+    const destination = screen.getByRole('button', { name: 'Kitchen → Wall outlet' })
+    await user.click(destination)
+
+    await user.click(await screen.findByText('Wall outlet', { exact: false }))
+    expect(await screen.findByText('Kettle', { exact: false })).toBeInTheDocument()
+  })
+
+  it('shows noDestinations when the Household has no other non-archived Room to move a Power Point to', async () => {
+    mockFetchRoutes([
+      { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+
+    expect(await screen.findByText('No other option is available to move to.')).toBeInTheDocument()
+  })
+
+  it('still offers a valid destination when the Power Point\'s current Room has since been archived', async () => {
+    // ArchiveRoom doesn't cascade-archive its Power Points, so a Power Point can end up with an
+    // archived current parent. The current-room row then drops out of the non-archived filter
+    // entirely, and the destination list must not mistake "current row absent" for "no options".
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () =>
+          jsonResponse([
+            { id: 'r1', name: 'Kitchen', archivedAt: '2026-01-01T00:00:00Z' },
+            { id: 'r2', name: 'Living room', archivedAt: null },
+          ]),
+      },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+
+    expect(screen.queryByText('No other option is available to move to.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Living room' })).toBeEnabled()
+  })
+
+  it('a 409 moving a Power Point into a since-archived Room shows the parent-archived error', async () => {
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () =>
+          jsonResponse([
+            { id: 'r1', name: 'Kitchen', archivedAt: null },
+            { id: 'r2', name: 'Living room', archivedAt: null },
+          ]),
+      },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+      { method: 'PUT', url: '/api/power-points/p1/room', respond: () => jsonResponse(null, 409) },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+    await user.click(screen.getByRole('button', { name: 'Living room' }))
 
     expect(
       await screen.findByText('That parent was archived in the meantime. Please refresh and try again.'),

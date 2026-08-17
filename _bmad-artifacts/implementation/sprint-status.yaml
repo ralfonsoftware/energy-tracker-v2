@@ -42,6 +42,10 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-17
+# 2026-08-17: story 2-6-room-power-point-device-re-parenting moved to done (code review complete: 2 findings fixed — noDestinations check misfired when a Power Point/Device's current parent was archived (ArchiveRoom/ArchivePowerPoint don't cascade), and duplicated destination-list IIFEs consolidated into a shared MoveDestinationList component; 103 frontend tests green, tsc/oxlint/vite build clean, zero backend files touched by the fix)
+# 2026-08-17: story 2-6-room-power-point-device-re-parenting moved to review (dev-story implementation complete — 238 backend tests green (141 Application + 92 Api.Tests via Testcontainers + 5 Infrastructure/Architecture), 102 frontend tests green (17 in tagging-scaffold-manager.test.tsx), dotnet build clean in Debug and Release, tsc/oxlint/vite build clean, zero docs/*.md changes)
+# 2026-08-17: story 2-6-room-power-point-device-re-parenting moved to in-progress (dev-story activation)
+# 2026-08-17: story 2-6-room-power-point-device-re-parenting created (create-story) - status set to ready-for-dev
 # 2026-08-17: story 2-5-dashboard-status-display moved to done (code review complete: 3 decision-needed resolved (all became patches), 7 patch findings fixed (relocated InviteGeneratePanel to Settings, added NavChrome to Settings, empty-state-shaped skeleton, fixed entrance-animation replay + aria-live remount + rounding-boundary badge/sentence mismatch, dropped unused currency prop), 1 deferred, 9 dismissed — 98 frontend tests green, tsc/oxlint/vite build clean, zero backend files touched)
 # 2026-08-17: story 2-5-dashboard-status-display moved to review (dev-story implementation complete — 94 frontend tests green (15 files, 6 new), tsc/oxlint/vite build clean, zero backend files touched)
 # 2026-08-17: story 2-5-dashboard-status-display moved to in-progress (dev-story activation)
@@ -96,7 +100,7 @@ development_status:
   2-3-meter-reading-regression-detection-classification: done
   2-4-gap-tolerant-rolling-baseline-status-computation: done
   2-5-dashboard-status-display: done
-  2-6-room-power-point-device-re-parenting: backlog
+  2-6-room-power-point-device-re-parenting: done
   epic-2-retrospective: optional
 
   epic-3: backlog
