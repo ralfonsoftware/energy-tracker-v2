@@ -1,0 +1,146 @@
+using System.Net;
+using System.Net.Http.Json;
+using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Domain;
+using EnergyTracker.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+
+namespace EnergyTracker.Api.Tests;
+
+public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<EnergyTrackerApiFactory>
+{
+    private async Task<(HttpClient Client, Guid HouseholdId, int Version)> CreateHouseholdAsync()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        var response = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var created = await response.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        return (client, created!.Id, created.Version);
+    }
+
+    // AD-3's query filter needs an HttpContext-bound CurrentHouseholdAccessor, absent in this raw
+    // scope — IgnoreQueryFilters is required to count/read directly against the table.
+    private async Task<int> CountStatusSnapshotRowsAsync(Guid householdId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.StatusSnapshots.IgnoreQueryFilters()
+            .CountAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
+    }
+
+    private static Task<HttpResponseMessage> PostReadingAsync(HttpClient client, decimal kwhValue, DateTimeOffset readingTimestamp) =>
+        client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue, readingTimestamp, idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+
+    private static Task<HttpResponseMessage> SetYearlyBaselineAsync(HttpClient client, Guid householdId, decimal yearlyBaselineKwh, int version) =>
+        client.PutAsJsonAsync(
+            $"/api/households/{householdId}/yearly-baseline",
+            new { yearlyBaselineKwh, version },
+            TestContext.Current.CancellationToken);
+
+    [Fact]
+    public async Task GET_status_returns_a_null_body_when_no_Yearly_Baseline_is_set()
+    {
+        var (client, _, _) = await CreateHouseholdAsync();
+        await PostReadingAsync(client, 1000m, DateTimeOffset.UtcNow.AddDays(-1));
+        await PostReadingAsync(client, 1100m, DateTimeOffset.UtcNow);
+
+        var response = await client.GetAsync("/api/status", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GET_status_returns_a_null_body_when_fewer_than_two_readings_exist()
+    {
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        await PostReadingAsync(client, 1000m, DateTimeOffset.UtcNow);
+
+        var response = await client.GetAsync("/api/status", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GET_status_returns_a_computed_Status_once_a_baseline_and_two_readings_exist()
+    {
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-182.5);
+        await PostReadingAsync(client, 1000m, baseline);
+        await PostReadingAsync(client, 2825m, latest);
+
+        var response = await client.GetAsync("/api/status", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<StatusResponse>(TestContext.Current.CancellationToken);
+        body.ShouldNotBeNull();
+        body.Status.ShouldBe("withinRange");
+        body.PaceToDateKwh.ShouldBe(1825m);
+    }
+
+    [Fact]
+    public async Task A_households_Status_is_never_affected_by_another_households_readings_or_baseline()
+    {
+        var (ownerClient, ownerHouseholdId, ownerVersion) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(ownerClient, ownerHouseholdId, 3650m, ownerVersion);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-182.5);
+        await PostReadingAsync(ownerClient, 1000m, baseline);
+        await PostReadingAsync(ownerClient, 2825m, latest);
+
+        var (otherClient, otherHouseholdId, otherVersion) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(otherClient, otherHouseholdId, 100m, otherVersion);
+        await PostReadingAsync(otherClient, 0m, baseline);
+        await PostReadingAsync(otherClient, 5000m, latest);
+
+        var ownerResponse = await ownerClient.GetAsync("/api/status", TestContext.Current.CancellationToken);
+        var ownerBody = await ownerResponse.Content.ReadFromJsonAsync<StatusResponse>(TestContext.Current.CancellationToken);
+
+        ownerBody.ShouldNotBeNull();
+        ownerBody.PaceToDateKwh.ShouldBe(1825m);
+        ownerBody.Status.ShouldBe("withinRange");
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_reading_status()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.GetAsync("/api/status", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Saving_a_reading_that_makes_Status_definite_persists_a_StatusSnapshot_row()
+    {
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-182.5);
+
+        // First reading alone leaves Status undefined (AC #6) — no snapshot yet.
+        await PostReadingAsync(client, 1000m, baseline);
+        (await CountStatusSnapshotRowsAsync(householdId)).ShouldBe(0);
+
+        // Second reading makes Status definite — AC #8: the recompute writes an immutable snapshot.
+        await PostReadingAsync(client, 2825m, latest);
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var snapshot = await dbContext.StatusSnapshots.IgnoreQueryFilters()
+            .SingleAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
+
+        snapshot.Status.ShouldBe(Status.WithinRange);
+        snapshot.PaceToDateKwh.ShouldBe(1825m);
+        snapshot.BaselineToDateKwh.ShouldBe(1825m);
+    }
+}

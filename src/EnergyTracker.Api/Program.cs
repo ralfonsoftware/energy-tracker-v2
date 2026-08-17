@@ -286,9 +286,11 @@ builder.Services.AddScoped<ArchiveDevice>();
 
 builder.Services.AddScoped<IMeterReadingRepository, MeterReadingRepository>();
 builder.Services.AddScoped<IMeterRegressionPromptRepository, MeterRegressionPromptRepository>();
+builder.Services.AddScoped<IStatusRecomputeService, StatusRecomputeService>();
 builder.Services.AddScoped<CreateMeterReading>();
 builder.Services.AddScoped<ResolveMeterRegressionPrompt>();
 builder.Services.AddScoped<GetOpenMeterRegressionPrompt>();
+builder.Services.AddScoped<GetCurrentStatus>();
 
 var app = builder.Build();
 
@@ -338,6 +340,7 @@ api.MapHouseholdInviteEndpoints();
 api.MapTaggingScaffoldEndpoints();
 api.MapMeterReadingEndpoints();
 api.MapMeterRegressionPromptEndpoints();
+api.MapStatusEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();

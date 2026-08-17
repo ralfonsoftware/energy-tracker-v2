@@ -85,4 +85,14 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
 
     public Task<MeterReading?> FindByIdAsync(Guid readingId, CancellationToken cancellationToken) =>
         dbContext.MeterReadings.SingleOrDefaultAsync(r => r.Id == readingId, cancellationToken);
+
+    public Task<MainMeter?> FindMainMeterByHouseholdAsync(Guid householdId, CancellationToken cancellationToken) =>
+        dbContext.MainMeters.SingleOrDefaultAsync(m => m.HouseholdId == householdId, cancellationToken);
+
+    public async Task<IReadOnlyList<MeterReading>> GetAllByMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken) =>
+        await dbContext.MeterReadings
+            .Where(r => r.MainMeterId == mainMeterId)
+            .OrderBy(r => r.ReadingTimestamp)
+            .ThenBy(r => r.Id)
+            .ToListAsync(cancellationToken);
 }

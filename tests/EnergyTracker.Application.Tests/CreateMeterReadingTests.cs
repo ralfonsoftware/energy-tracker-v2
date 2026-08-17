@@ -9,6 +9,7 @@ public class CreateMeterReadingTests
 {
     private readonly IMeterReadingRepository _repository = Substitute.For<IMeterReadingRepository>();
     private readonly IMeterRegressionPromptRepository _regressionPromptRepository = Substitute.For<IMeterRegressionPromptRepository>();
+    private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
 
     private static MainMeter NewMainMeter(Guid householdId) => new()
     {
@@ -17,7 +18,7 @@ public class CreateMeterReadingTests
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    private CreateMeterReading Sut() => new(_repository, _regressionPromptRepository);
+    private CreateMeterReading Sut() => new(_repository, _regressionPromptRepository, _statusRecomputeService);
 
     public CreateMeterReadingTests()
     {
@@ -257,5 +258,108 @@ public class CreateMeterReadingTests
 
         await _repository.DidNotReceive().FindImmediatelyPrecedingAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
         await _regressionPromptRepository.DidNotReceive().AddAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_successful_save_recomputes_Status_immediately()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, 100m, DateTimeOffset.UtcNow, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        await _statusRecomputeService.Received(1).RecomputeAsync(householdId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_save_that_also_opens_a_regression_prompt_still_recomputes_Status()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var preceding = new MeterReading
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = mainMeter.Id,
+            KwhValue = 14302m,
+            ReadingTimestamp = DateTimeOffset.UtcNow.AddDays(-1),
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        _repository.FindImmediatelyPrecedingAsync(mainMeter.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(preceding);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, 412m, DateTimeOffset.UtcNow, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        await _statusRecomputeService.Received(1).RecomputeAsync(householdId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task An_idempotency_key_replay_does_not_re_run_Status_recompute()
+    {
+        var householdId = Guid.NewGuid();
+        var idempotencyKey = Guid.NewGuid();
+        var existing = new MeterReading
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = Guid.NewGuid(),
+            KwhValue = 4821.5m,
+            ReadingTimestamp = DateTimeOffset.UtcNow,
+            IdempotencyKey = idempotencyKey,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _repository.FindByIdempotencyKeyAsync(idempotencyKey, Arg.Any<CancellationToken>()).Returns(existing);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, 4821.5m, DateTimeOffset.UtcNow, idempotencyKey, TestContext.Current.CancellationToken);
+
+        await _statusRecomputeService.DidNotReceive().RecomputeAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Rejects_a_reading_timestamp_more_than_the_clock_skew_allowance_in_the_future()
+    {
+        var sut = Sut();
+
+        await Should.ThrowAsync<MeterReadingValidationException>(() =>
+            sut.ExecuteAsync(Guid.NewGuid(), 100m, DateTimeOffset.UtcNow.AddHours(1), Guid.NewGuid(), TestContext.Current.CancellationToken));
+
+        await _repository.DidNotReceive().AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Accepts_a_reading_timestamp_within_the_small_clock_skew_allowance()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(
+            householdId, 100m, DateTimeOffset.UtcNow.AddMinutes(2), Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Rejects_a_reading_timestamp_unreasonably_far_in_the_past()
+    {
+        var sut = Sut();
+
+        await Should.ThrowAsync<MeterReadingValidationException>(() =>
+            sut.ExecuteAsync(Guid.NewGuid(), 100m, new DateTimeOffset(1999, 12, 31, 23, 59, 59, TimeSpan.Zero), Guid.NewGuid(), TestContext.Current.CancellationToken));
+
+        await _repository.DidNotReceive().AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>());
     }
 }

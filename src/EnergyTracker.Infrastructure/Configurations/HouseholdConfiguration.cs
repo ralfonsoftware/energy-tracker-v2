@@ -29,6 +29,16 @@ public class HouseholdConfiguration : IEntityTypeConfiguration<Household>
         builder.Property(h => h.YearlyBaselineKwh)
             .HasPrecision(18, 2);
 
+        // Story 2.4 — unlike YearlyBaselineKwh, these two carry a real DB-level default so any
+        // pre-existing row (and any future direct-SQL insert) also gets a sane value, not just
+        // rows built through the Household object initializer's C# default.
+        builder.Property(h => h.TrendingThresholdKwh)
+            .HasPrecision(18, 2)
+            .HasDefaultValue(100m);
+
+        builder.Property(h => h.LowConfidenceGapDays)
+            .HasDefaultValue(45);
+
         builder.Property(h => h.Version)
             .IsConcurrencyToken();
 

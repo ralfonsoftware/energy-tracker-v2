@@ -12,6 +12,9 @@ public class HouseholdRepository(EnergyTrackerDbContext dbContext) : IHouseholdR
             m => m.ExternalIssuer == externalIssuer && m.ExternalSubjectId == externalSubjectId,
             cancellationToken);
 
+    public Task<Household?> FindByIdAsync(Guid householdId, CancellationToken cancellationToken) =>
+        dbContext.Households.SingleOrDefaultAsync(h => h.Id == householdId, cancellationToken);
+
     public async Task AddAsync(Household household, HouseholdMember creator, CancellationToken cancellationToken)
     {
         await dbContext.Households.AddAsync(household, cancellationToken);
