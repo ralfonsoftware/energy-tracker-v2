@@ -60,7 +60,12 @@
     "confirmDeletePowerPoint": "Delete this Power Point? It will be archived, not removed, so any historical data stays valid.",
     "confirmDeleteDevice": "Delete this Device? It will be archived, not removed, so any historical data stays valid.",
     "errorGeneric": "Something went wrong. Please try again.",
-    "errorParentArchived": "That parent was archived in the meantime. Please refresh and try again."
+    "errorParentArchived": "That parent was archived in the meantime. Please refresh and try again.",
+    "moveTo": "Move to…",
+    "moveDescriptionPowerPoint": "Choose a new Room. History already logged keeps its original Room, Power Point, and Device identity — this only changes where it lives going forward.",
+    "moveDescriptionDevice": "Choose a new Power Point. History already logged keeps its original Room, Power Point, and Device identity — this only changes where it lives going forward.",
+    "currentBadge": "Current",
+    "noDestinations": "No other option is available to move to."
   },
   "yearlyBaseline": {
     "heading": "Yearly Baseline",

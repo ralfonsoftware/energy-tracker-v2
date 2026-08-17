@@ -280,9 +280,11 @@ builder.Services.AddScoped<ArchiveRoom>();
 builder.Services.AddScoped<CreatePowerPoint>();
 builder.Services.AddScoped<RenamePowerPoint>();
 builder.Services.AddScoped<ArchivePowerPoint>();
+builder.Services.AddScoped<MovePowerPoint>();
 builder.Services.AddScoped<CreateDevice>();
 builder.Services.AddScoped<RenameDevice>();
 builder.Services.AddScoped<ArchiveDevice>();
+builder.Services.AddScoped<MoveDevice>();
 
 builder.Services.AddScoped<IMeterReadingRepository, MeterReadingRepository>();
 builder.Services.AddScoped<IMeterRegressionPromptRepository, MeterRegressionPromptRepository>();

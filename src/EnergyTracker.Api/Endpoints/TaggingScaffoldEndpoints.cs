@@ -215,6 +215,37 @@ public static class TaggingScaffoldEndpoints
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
             }
         });
+
+        api.MapPut("/power-points/{id}/room", async (
+            Guid id,
+            MovePowerPointRequest request,
+            ICurrentHouseholdAccessor householdAccessor,
+            MovePowerPoint movePowerPoint,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                var powerPoint = await movePowerPoint.ExecuteAsync(id, request.RoomId, cancellationToken);
+                return Results.Ok(ToResponse(powerPoint));
+            }
+            catch (TaggingScaffoldNotFoundException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (TaggingScaffoldValidationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (TaggingScaffoldParentArchivedException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
     }
 
     private static void MapDeviceEndpoints(RouteGroupBuilder api)
@@ -311,6 +342,37 @@ public static class TaggingScaffoldEndpoints
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
             }
         });
+
+        api.MapPut("/devices/{id}/power-point", async (
+            Guid id,
+            MoveDeviceRequest request,
+            ICurrentHouseholdAccessor householdAccessor,
+            MoveDevice moveDevice,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                var device = await moveDevice.ExecuteAsync(id, request.PowerPointId, cancellationToken);
+                return Results.Ok(ToResponse(device));
+            }
+            catch (TaggingScaffoldNotFoundException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (TaggingScaffoldValidationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (TaggingScaffoldParentArchivedException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
     }
 
     private static RoomResponse ToResponse(Room room) => new(room.Id, room.Name, room.ArchivedAt);
@@ -327,6 +389,10 @@ public record CreatePowerPointRequest(Guid RoomId, string Name);
 public record CreateDeviceRequest(Guid PowerPointId, string Name);
 
 public record RenameRequest(string Name);
+
+public record MovePowerPointRequest(Guid RoomId);
+
+public record MoveDeviceRequest(Guid PowerPointId);
 
 public record RoomResponse(Guid Id, string Name, DateTimeOffset? ArchivedAt);
 

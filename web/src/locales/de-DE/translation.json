@@ -60,7 +60,12 @@
     "confirmDeletePowerPoint": "Diese Steckdose löschen? Sie wird archiviert statt entfernt, damit historische Daten gültig bleiben.",
     "confirmDeleteDevice": "Dieses Gerät löschen? Es wird archiviert statt entfernt, damit historische Daten gültig bleiben.",
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
-    "errorParentArchived": "Das übergeordnete Element wurde inzwischen archiviert. Bitte aktualisiere die Seite und versuche es erneut."
+    "errorParentArchived": "Das übergeordnete Element wurde inzwischen archiviert. Bitte aktualisiere die Seite und versuche es erneut.",
+    "moveTo": "Verschieben nach…",
+    "moveDescriptionPowerPoint": "Wähle einen neuen Raum. Bereits erfasste Verlaufsdaten behalten ihre ursprüngliche Raum-, Steckdosen- und Geräte-Zuordnung — dies ändert nur, wo das Element künftig zugeordnet ist.",
+    "moveDescriptionDevice": "Wähle eine neue Steckdose. Bereits erfasste Verlaufsdaten behalten ihre ursprüngliche Raum-, Steckdosen- und Geräte-Zuordnung — dies ändert nur, wo das Element künftig zugeordnet ist.",
+    "currentBadge": "Aktuell",
+    "noDestinations": "Kein anderes Ziel verfügbar."
   },
   "yearlyBaseline": {
     "heading": "Jahresbasiswert",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, Pencil, Trash2 } from 'lucide-react'
+import { ChevronRight, Move, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Input } from '@/components/ui/input'
@@ -42,9 +42,11 @@ type DialogState =
   | { kind: 'create-power-point'; roomId: string }
   | { kind: 'rename-power-point'; powerPoint: PowerPointDto }
   | { kind: 'delete-power-point'; powerPoint: PowerPointDto }
+  | { kind: 'move-power-point'; powerPoint: PowerPointDto }
   | { kind: 'create-device'; powerPointId: string }
   | { kind: 'rename-device'; device: DeviceDto }
   | { kind: 'delete-device'; device: DeviceDto }
+  | { kind: 'move-device'; device: DeviceDto }
 
 class ApiError extends Error {
   status: number
@@ -71,6 +73,56 @@ function ArchivedBadge({ label }: { label: string }) {
     <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
       {label}
     </span>
+  )
+}
+
+// Shared by the Power Point (Room destinations) and Device (Power Point destinations) move
+// dialogs. `items` is the caller's own non-archived candidate list, which may or may not still
+// contain `currentId` — a Room/Power Point can be archived after something was created under it
+// (ArchiveRoom/ArchivePowerPoint don't cascade-archive their children), so the current parent is
+// not guaranteed to survive the archived-filter. The "any other option" check must therefore look
+// for a non-current entry rather than comparing the list length against a fixed threshold.
+function MoveDestinationList<T extends { id: string }>({
+  items,
+  currentId,
+  getLabel,
+  onSelect,
+  submitting,
+  currentLabel,
+  noDestinationsLabel,
+}: {
+  items: T[]
+  currentId: string
+  getLabel: (item: T) => string
+  onSelect: (id: string) => void
+  submitting: boolean
+  currentLabel: string
+  noDestinationsLabel: string
+}) {
+  const hasOtherDestination = items.some((item) => item.id !== currentId)
+  if (!hasOtherDestination) {
+    return <p className="text-muted-foreground text-sm">{noDestinationsLabel}</p>
+  }
+
+  return (
+    <>
+      {items.map((item) => {
+        const isCurrent = item.id === currentId
+        return (
+          <Button
+            key={item.id}
+            type="button"
+            variant={isCurrent ? 'outline' : 'ghost'}
+            disabled={isCurrent || submitting}
+            className="justify-between"
+            onClick={() => onSelect(item.id)}
+          >
+            <span>{getLabel(item)}</span>
+            {isCurrent && <ArchivedBadge label={currentLabel} />}
+          </Button>
+        )
+      })}
+    </>
   )
 }
 
@@ -137,6 +189,8 @@ export function TaggingScaffoldManager() {
     }
   }, [])
 
+  const roomsById = new Map(rooms.map((room) => [room.id, room]))
+
   const powerPointsByRoom = new Map<string, PowerPointDto[]>()
   for (const powerPoint of powerPoints) {
     const siblings = powerPointsByRoom.get(powerPoint.roomId) ?? []
@@ -182,7 +236,14 @@ export function TaggingScaffoldManager() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!dialog || dialog.kind === 'delete-room' || dialog.kind === 'delete-power-point' || dialog.kind === 'delete-device') {
+    if (
+      !dialog ||
+      dialog.kind === 'delete-room' ||
+      dialog.kind === 'delete-power-point' ||
+      dialog.kind === 'delete-device' ||
+      dialog.kind === 'move-power-point' ||
+      dialog.kind === 'move-device'
+    ) {
       return
     }
 
@@ -340,6 +401,56 @@ export function TaggingScaffoldManager() {
     }
   }
 
+  const handleMoveTo = async (destinationId: string) => {
+    if (!dialog || (dialog.kind !== 'move-power-point' && dialog.kind !== 'move-device')) {
+      return
+    }
+
+    const target = dialog
+    setSubmitting(true)
+    setDialogError(null)
+
+    try {
+      if (dialog.kind === 'move-power-point') {
+        const response = await fetch(`/api/power-points/${dialog.powerPoint.id}/room`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: destinationId }),
+        })
+        if (!response.ok) {
+          throw await toApiError(response)
+        }
+        const powerPoint = (await response.json()) as PowerPointDto
+        setPowerPoints((current) => current.map((p) => (p.id === powerPoint.id ? powerPoint : p)))
+      } else {
+        const response = await fetch(`/api/devices/${dialog.device.id}/power-point`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ powerPointId: destinationId }),
+        })
+        if (!response.ok) {
+          throw await toApiError(response)
+        }
+        const device = (await response.json()) as DeviceDto
+        setDevices((current) => current.map((d) => (d.id === device.id ? device : d)))
+      }
+
+      closeDialogIfUnchanged(target)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDialogError(t('taggingScaffold.errorParentArchived'))
+      } else if (err instanceof ApiError && err.detail) {
+        setDialogError(err.detail)
+      } else {
+        setDialogError(t('taggingScaffold.errorGeneric'))
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const archivedBadgeLabel = t('taggingScaffold.archivedBadge')
 
   return (
@@ -425,6 +536,14 @@ export function TaggingScaffoldManager() {
                       >
                         <Trash2 aria-hidden="true" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('taggingScaffold.moveTo')}
+                        onClick={() => openDialog({ kind: 'move-power-point', powerPoint })}
+                      >
+                        <Move aria-hidden="true" />
+                      </Button>
                       {!powerPoint.archivedAt && (
                         <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
                           {t('taggingScaffold.addDevice')}
@@ -455,6 +574,14 @@ export function TaggingScaffoldManager() {
                               onClick={() => openDialog({ kind: 'delete-device', device })}
                             >
                               <Trash2 aria-hidden="true" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t('taggingScaffold.moveTo')}
+                              onClick={() => openDialog({ kind: 'move-device', device })}
+                            >
+                              <Move aria-hidden="true" />
                             </Button>
                           </div>
                         </div>
@@ -524,10 +651,59 @@ export function TaggingScaffoldManager() {
             </>
           )}
 
+          {(dialog?.kind === 'move-power-point' || dialog?.kind === 'move-device') && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t('taggingScaffold.moveTo')}</DialogTitle>
+                <DialogDescription>
+                  {dialog.kind === 'move-power-point'
+                    ? t('taggingScaffold.moveDescriptionPowerPoint')
+                    : t('taggingScaffold.moveDescriptionDevice')}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex flex-col gap-1">
+                {dialog.kind === 'move-power-point' && (
+                  <MoveDestinationList
+                    items={rooms.filter((room) => !room.archivedAt)}
+                    currentId={dialog.powerPoint.roomId}
+                    getLabel={(room) => room.name}
+                    onSelect={handleMoveTo}
+                    submitting={submitting}
+                    currentLabel={t('taggingScaffold.currentBadge')}
+                    noDestinationsLabel={t('taggingScaffold.noDestinations')}
+                  />
+                )}
+
+                {dialog.kind === 'move-device' && (
+                  <MoveDestinationList
+                    items={powerPoints.filter((powerPoint) => !powerPoint.archivedAt)}
+                    currentId={dialog.device.powerPointId}
+                    getLabel={(powerPoint) => `${roomsById.get(powerPoint.roomId)?.name ?? ''} → ${powerPoint.name}`}
+                    onSelect={handleMoveTo}
+                    submitting={submitting}
+                    currentLabel={t('taggingScaffold.currentBadge')}
+                    noDestinationsLabel={t('taggingScaffold.noDestinations')}
+                  />
+                )}
+              </div>
+
+              {dialogError && <p className="text-destructive text-sm">{dialogError}</p>}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDialog} disabled={submitting}>
+                  {t('taggingScaffold.cancel')}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
           {dialog &&
             dialog.kind !== 'delete-room' &&
             dialog.kind !== 'delete-power-point' &&
-            dialog.kind !== 'delete-device' && (
+            dialog.kind !== 'delete-device' &&
+            dialog.kind !== 'move-power-point' &&
+            dialog.kind !== 'move-device' && (
               <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                 <DialogHeader>
                   <DialogTitle>
