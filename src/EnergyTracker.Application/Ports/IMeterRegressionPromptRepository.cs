@@ -12,6 +12,10 @@ public interface IMeterRegressionPromptRepository
 
     Task<MeterRegressionPrompt?> FindByIdAsync(Guid householdId, Guid promptId, CancellationToken cancellationToken);
 
+    // All resolved (Classification/DigitCapacityKwh/ResolvedAtUtc set) prompts for one Main
+    // Meter — Story 2.4's pace walk needs every past correction, not just the currently open one.
+    Task<IReadOnlyList<MeterRegressionPrompt>> GetResolvedForMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken);
+
     // Persists a prompt whose Classification/DigitCapacityKwh/ResolvedAtUtc the caller has already set,
     // via a conditional UPDATE ... WHERE Id = @id AND ResolvedAtUtc IS NULL. Returns false (without writing)
     // if the prompt was resolved by a concurrent request in between the caller's read and this write —

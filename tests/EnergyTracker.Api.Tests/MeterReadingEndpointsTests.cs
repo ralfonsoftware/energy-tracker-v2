@@ -68,7 +68,9 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
     public async Task Two_readings_with_different_idempotency_keys_on_the_same_calendar_day_both_land_as_distinct_rows()
     {
         var (client, householdId) = await CreateHouseholdAsync();
-        var readingTimestamp = DateTimeOffset.UtcNow;
+        // A day in the past — the +3 hour offset below must still land safely before "now" given
+        // Story 2.4's ReadingTimestamp bounds validation.
+        var readingTimestamp = DateTimeOffset.UtcNow.AddDays(-1);
 
         var first = await client.PostAsJsonAsync(
             "/api/meter-readings",

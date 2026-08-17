@@ -16,4 +16,15 @@ public interface IMeterReadingRepository
     Task<MeterReading?> FindImmediatelyPrecedingAsync(Guid mainMeterId, DateTimeOffset readingTimestamp, CancellationToken cancellationToken);
 
     Task<MeterReading?> FindByIdAsync(Guid readingId, CancellationToken cancellationToken);
+
+    // Read-only — deliberately does NOT create a MainMeter when none exists yet (unlike
+    // GetOrCreateMainMeterAsync above), so a pure Status read never has the side effect of
+    // inserting a row for a Household that has never logged a single reading.
+    Task<MainMeter?> FindMainMeterByHouseholdAsync(Guid householdId, CancellationToken cancellationToken);
+
+    // Full ordered sequence for one Main Meter, needed by Story 2.4's gap-tolerant pace walk.
+    // Ordered by ReadingTimestamp then Id — the same deterministic tiebreak on identical
+    // timestamps used by FindImmediatelyPrecedingAsync/GetOpenForHouseholdAsync, so the sequence
+    // walk never disagrees with regression detection's own ordering.
+    Task<IReadOnlyList<MeterReading>> GetAllByMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken);
 }

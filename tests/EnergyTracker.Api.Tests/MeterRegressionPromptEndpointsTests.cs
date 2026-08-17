@@ -40,7 +40,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task Posting_a_lower_reading_then_GET_open_returns_it()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
 
         var lowerResponse = await PostReadingAsync(client, 412m, baseline.AddHours(1));
@@ -74,7 +77,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task Resolving_as_reset_returns_200_and_a_subsequent_GET_open_returns_null()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
         await PostReadingAsync(client, 412m, baseline.AddHours(1));
         var open = await (await client.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken))
@@ -97,7 +103,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task Resolving_as_rollover_with_a_capacity_persists_it_and_a_later_rollover_can_omit_it()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 99900m, baseline);
         await PostReadingAsync(client, 100m, baseline.AddHours(1));
         var firstOpen = await (await client.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken))
@@ -129,7 +138,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task A_second_lower_reading_while_the_first_prompt_is_unresolved_queues_behind_it_by_timestamp_not_entry_order()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
         // The earlier-by-timestamp regression is posted SECOND (out of insertion order) — AC #4.
         await PostReadingAsync(client, 100m, baseline.AddHours(2));
@@ -148,7 +160,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task Resolving_the_queued_non_open_prompt_directly_returns_409()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
         var earlierRegressionResponse = await PostReadingAsync(client, 100m, baseline.AddHours(1));
         var laterRegressionResponse = await PostReadingAsync(client, 50m, baseline.AddHours(2));
@@ -173,7 +188,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task Resolving_an_already_resolved_prompt_returns_409_on_the_second_call()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
         await PostReadingAsync(client, 412m, baseline.AddHours(1));
         var open = await (await client.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken))
@@ -197,7 +215,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task A_household_cannot_resolve_another_households_prompt()
     {
         var (ownerClient, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(ownerClient, 14302m, baseline);
         await PostReadingAsync(ownerClient, 412m, baseline.AddHours(1));
         var open = await (await ownerClient.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken))
@@ -222,7 +243,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task GET_open_never_returns_another_households_prompt()
     {
         var (ownerClient, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(ownerClient, 14302m, baseline);
         await PostReadingAsync(ownerClient, 412m, baseline.AddHours(1));
 
@@ -240,7 +264,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task Rollover_with_no_available_digit_capacity_returns_400()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
         await PostReadingAsync(client, 412m, baseline.AddHours(1));
         var open = await (await client.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken))
@@ -258,7 +285,10 @@ public class MeterRegressionPromptEndpointsTests(EnergyTrackerApiFactory factory
     public async Task An_unrecognized_classification_value_returns_400()
     {
         var (client, _) = await CreateHouseholdAsync();
-        var baseline = DateTimeOffset.UtcNow;
+        // Anchored a day in the past — several of these tests offset by up to +3 hours from
+        // `baseline` to establish reading order, and Story 2.4's ReadingTimestamp bounds
+        // validation now rejects timestamps more than a few minutes in the future.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
         await PostReadingAsync(client, 14302m, baseline);
         await PostReadingAsync(client, 412m, baseline.AddHours(1));
         var open = await (await client.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken))

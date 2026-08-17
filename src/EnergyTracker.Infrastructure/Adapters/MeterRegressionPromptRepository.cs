@@ -47,6 +47,11 @@ public class MeterRegressionPromptRepository(EnergyTrackerDbContext dbContext) :
     public Task<MeterRegressionPrompt?> FindByIdAsync(Guid householdId, Guid promptId, CancellationToken cancellationToken) =>
         dbContext.MeterRegressionPrompts.SingleOrDefaultAsync(p => p.HouseholdId == householdId && p.Id == promptId, cancellationToken);
 
+    public async Task<IReadOnlyList<MeterRegressionPrompt>> GetResolvedForMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken) =>
+        await dbContext.MeterRegressionPrompts
+            .Where(p => p.MainMeterId == mainMeterId && p.ResolvedAtUtc != null)
+            .ToListAsync(cancellationToken);
+
     public async Task<bool> ResolveAsync(MeterRegressionPrompt prompt, CancellationToken cancellationToken)
     {
         // Conditional UPDATE guards against a concurrent resolve of the same prompt (e.g. a double-tap

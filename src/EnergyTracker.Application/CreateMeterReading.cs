@@ -3,14 +3,27 @@ using EnergyTracker.Domain;
 
 namespace EnergyTracker.Application;
 
-/// <summary>Creates a Meter Reading for the caller's own Household under AD-16 idempotency-key upsert, and raises a regression-classification prompt when it's lower than the immediately preceding reading (AC #1, #4, #6).</summary>
-public class CreateMeterReading(IMeterReadingRepository repository, IMeterRegressionPromptRepository regressionPromptRepository)
+/// <summary>Creates a Meter Reading for the caller's own Household under AD-16 idempotency-key upsert, raises a regression-classification prompt when it's lower than the immediately preceding reading, and recomputes Status (AC #1, #4, #6, #7).</summary>
+public class CreateMeterReading(
+    IMeterReadingRepository repository,
+    IMeterRegressionPromptRepository regressionPromptRepository,
+    IStatusRecomputeService statusRecomputeService)
 {
     // A meter reading is a cumulative lifetime total, not a small human-entered figure like
     // Yearly Baseline — no low arbitrary business cap. The bound here exists only to keep values
     // inside the decimal(18,2) column's range so an out-of-range submission fails validation
     // (400) instead of a provider-level overflow (500).
     private const decimal MaxKwhValue = 1_000_000_000_000_000m; // 10^15, one order below 10^16 overflow.
+
+    // Small clock-skew allowance, not a real "reading from the future" — a client's local clock
+    // can legitimately be a few minutes off from the server's.
+    private static readonly TimeSpan MaxFutureClockSkew = TimeSpan.FromMinutes(5);
+
+    // Deliberately not "no smart meters existed before X" — a generous floor that only exists to
+    // catch obviously-wrong input (e.g. a client-side date-parsing bug landing on year 1) before
+    // it corrupts Story 2.4's gap/pace/elapsed-time math, which relies on timestamp ordering
+    // (Task 8, `deferred-work.md` from Story 2.2's review).
+    private static readonly DateTimeOffset MinReadingTimestamp = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     public async Task<MeterReading> ExecuteAsync(
         Guid householdId,
@@ -19,20 +32,36 @@ public class CreateMeterReading(IMeterReadingRepository repository, IMeterRegres
         Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
+        // Fast-path no-op per AD-16 — checked before validation so a retry of an
+        // already-persisted reading always returns the existing record via the idempotency-key
+        // match, even if a validation rule added after that reading was created would otherwise
+        // reject it. The actual uniqueness guarantee is the IdempotencyKey unique index enforced
+        // in IMeterReadingRepository.AddAsync; this check just avoids a redundant MainMeter
+        // lookup/insert attempt on the common case (a retried request landing after its original
+        // attempt already committed).
+        var existing = await repository.FindByIdempotencyKeyAsync(idempotencyKey, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
         if (kwhValue <= 0 || kwhValue >= MaxKwhValue)
         {
             throw new MeterReadingValidationException(
                 $"kWh value must be a positive number less than {MaxKwhValue}, got '{kwhValue}'.");
         }
 
-        // Fast-path no-op per AD-16 — the actual guarantee is the IdempotencyKey unique index
-        // enforced in IMeterReadingRepository.AddAsync; this check just avoids a redundant
-        // MainMeter lookup/insert attempt on the common case (a retried request landing after its
-        // original attempt already committed).
-        var existing = await repository.FindByIdempotencyKeyAsync(idempotencyKey, cancellationToken);
-        if (existing is not null)
+        var latestAllowedTimestamp = DateTimeOffset.UtcNow.Add(MaxFutureClockSkew);
+        if (readingTimestamp > latestAllowedTimestamp)
         {
-            return existing;
+            throw new MeterReadingValidationException(
+                $"Reading timestamp '{readingTimestamp}' is too far in the future.");
+        }
+
+        if (readingTimestamp < MinReadingTimestamp)
+        {
+            throw new MeterReadingValidationException(
+                $"Reading timestamp '{readingTimestamp}' is unreasonably far in the past.");
         }
 
         var mainMeter = await repository.GetOrCreateMainMeterAsync(householdId, cancellationToken);
@@ -74,6 +103,11 @@ public class CreateMeterReading(IMeterReadingRepository repository, IMeterRegres
                 },
                 cancellationToken);
         }
+
+        // AC #7: every save recomputes Status immediately, unconditionally — regardless of
+        // whether a regression prompt was also opened above (AD-7 names this handler as one of
+        // exactly two call sites; the other, Smart-Plug-import-completion, is Epic 3's job).
+        await statusRecomputeService.RecomputeAsync(householdId, cancellationToken);
 
         return persistedReading;
     }

@@ -41,7 +41,11 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-16
+last_updated: 2026-08-17
+# 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to done (code review complete: 4 decision-needed resolved (2 confirmed as-is, 2 became patches), 5 patch findings fixed (7 total incl. promoted decisions), 4 deferred, 3 dismissed — 219 backend tests green, dotnet build clean in Debug and Release)
+# 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to review (dev-story implementation complete — 210 backend tests green (119 Application + 86 Api.Tests via Testcontainers + 2 Infrastructure migration + 3 Architecture), dotnet build clean in Debug and Release, both Postgres and SqlServer migrations verified; no frontend changes)
+# 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to in-progress (dev-story activation)
+# 2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation created (create-story) - status set to ready-for-dev
 # 2026-08-16: story 2-3-meter-reading-regression-detection-classification moved to done (code review complete: 0 decision-needed, 11 patch findings fixed, 0 deferred, 5 dismissed — 91 Application + 81 Api.Tests + 65 frontend tests green, dotnet build/tsc/oxlint/vite build clean)
 # 2026-08-16: story 2-3-meter-reading-regression-detection-classification moved to review (dev-story implementation complete — 172 backend tests + 63 frontend tests green, tsc/oxlint/build clean, real-Postgres API integration suite via Testcontainers)
 # 2026-08-16: story 2-3-meter-reading-regression-detection-classification moved to in-progress (dev-story activation; Task 6 amended per sprint-change-proposal-2026-08-16.md Section 4.2 to consume Story 2.2b's glass design system)
@@ -86,7 +90,7 @@ development_status:
   2-2-meter-reading-entry-with-offline-queueing: done
   2-2b-design-system-foundation: done
   2-3-meter-reading-regression-detection-classification: done
-  2-4-gap-tolerant-rolling-baseline-status-computation: backlog
+  2-4-gap-tolerant-rolling-baseline-status-computation: done
   2-5-dashboard-status-display: backlog
   2-6-room-power-point-device-re-parenting: backlog
   epic-2-retrospective: optional
