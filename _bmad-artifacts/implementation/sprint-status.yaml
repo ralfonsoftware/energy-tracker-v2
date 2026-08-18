@@ -189,7 +189,7 @@ action_items:
   - epic: 2
     action: "Root-cause the npx shadcn add CLI alias-misresolution bug (writes to web/@/components/ui/ instead of web/src/components/ui/, hit 3x this epic) — fix the underlying config or wrap it in a script that fails loudly on wrong output path"
     owner: "Amelia"
-    status: open
+    status: done
   - epic: 2
     action: "Before drafting Story 3.3's tasks, read deferred-work.md's Story 2.4 entries on the RecomputeAsync concurrency race and the full-history-walk performance risk — both become directly relevant once Smart Plug import is the second IStatusRecomputeService call site"
     owner: "Story 3.3 author"
