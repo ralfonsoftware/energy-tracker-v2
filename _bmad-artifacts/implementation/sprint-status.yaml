@@ -41,7 +41,8 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-17
+last_updated: 2026-08-18
+# 2026-08-18: story 3-1-smart-plug-file-upload-async-parsing created (create-story) - status set to ready-for-dev; epic-3 moved to in-progress (first story). Greenfield infra story: stands up AD-6's job queue (IBackgroundJobQueue, InProcessChannelJobQueue/AzureStorageQueueJobQueue) and AD-9's ISmartPlugParser port (EveHomeXlsxParser, MerossCsvParser) from scratch — none of it exists yet. Infra (storage queue, JobQueue__* env vars) was already provisioned ahead of time in infra/main.bicep; story only needs to read the config. Real Eve Home/Meross sample fixtures found at sample-data/ — their exact byte-level layout was verified directly and corrects a stale cell-reference detail in the PRD addendum.
 # 2026-08-17: story 2-6-room-power-point-device-re-parenting moved to done (code review complete: 2 findings fixed — noDestinations check misfired when a Power Point/Device's current parent was archived (ArchiveRoom/ArchivePowerPoint don't cascade), and duplicated destination-list IIFEs consolidated into a shared MoveDestinationList component; 103 frontend tests green, tsc/oxlint/vite build clean, zero backend files touched by the fix)
 # 2026-08-17: story 2-6-room-power-point-device-re-parenting moved to review (dev-story implementation complete — 238 backend tests green (141 Application + 92 Api.Tests via Testcontainers + 5 Infrastructure/Architecture), 102 frontend tests green (17 in tagging-scaffold-manager.test.tsx), dotnet build clean in Debug and Release, tsc/oxlint/vite build clean, zero docs/*.md changes)
 # 2026-08-17: story 2-6-room-power-point-device-re-parenting moved to in-progress (dev-story activation)
@@ -108,8 +109,8 @@ development_status:
   2-6-room-power-point-device-re-parenting: done
   epic-2-retrospective: done
 
-  epic-3: backlog
-  3-1-smart-plug-file-upload-async-parsing: backlog
+  epic-3: in-progress
+  3-1-smart-plug-file-upload-async-parsing: ready-for-dev
   3-2-import-to-power-point-mapping: backlog
   3-3-smart-plug-import-gap-handling-baseline-sharpening: backlog
   epic-3-retrospective: optional
