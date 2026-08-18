@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-08-12
+# last_updated: 2026-08-18
 # project: energy-tracker
 # project_key: NOKEY
 # tracking_system: file-system
@@ -75,6 +75,11 @@ last_updated: 2026-08-17
 # surface-glass, status-badge colors, and the rounded.* scale are scoped to
 # not-yet-built Epic 2+ components (Status card, Trend chart, etc.) and were
 # NOT wired; see spec-design-token-wiring.md's Design Notes for the reasoning.
+# 2026-08-18: epic-2-retrospective completed — 7/7 stories reviewed (2.1-2.6 + inserted 2.2b),
+#   0 production incidents, 43 patch findings fixed / 11 deferred, live-verified on Azure by Ralf.
+#   3 action items recorded (Auth0 test user for local live-verification, shadcn CLI alias-bug
+#   root-cause, deferred-work.md Story 2.4 items flagged for Story 3.3's author). See
+#   epic-2-retro-2026-08-18.md.
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -93,7 +98,7 @@ development_status:
   1-9-room-power-point-device-management: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-yearly-baseline-configuration: done
   2-2-meter-reading-entry-with-offline-queueing: done
   2-2b-design-system-foundation: done
@@ -101,7 +106,7 @@ development_status:
   2-4-gap-tolerant-rolling-baseline-status-computation: done
   2-5-dashboard-status-display: done
   2-6-room-power-point-device-re-parenting: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: backlog
   3-1-smart-plug-file-upload-async-parsing: backlog
@@ -177,3 +182,15 @@ action_items:
     action: "Document that the local Auth0 client registration referenced by .env is intentionally separate from the production registration (setup already correct, just undocumented)"
     owner: "Amelia (doc-only)"
     status: done
+  - epic: 2
+    action: "Create a dedicated Auth0 test user for the local dev app registration and document it in docs/local-development.md/.env.example, enabling real browser-driven live verification (Ralf will ensure Chrome availability going forward)"
+    owner: "Winston/Amelia"
+    status: done
+  - epic: 2
+    action: "Root-cause the npx shadcn add CLI alias-misresolution bug (writes to web/@/components/ui/ instead of web/src/components/ui/, hit 3x this epic) — fix the underlying config or wrap it in a script that fails loudly on wrong output path"
+    owner: "Amelia"
+    status: open
+  - epic: 2
+    action: "Before drafting Story 3.3's tasks, read deferred-work.md's Story 2.4 entries on the RecomputeAsync concurrency race and the full-history-walk performance risk — both become directly relevant once Smart Plug import is the second IStatusRecomputeService call site"
+    owner: "Story 3.3 author"
+    status: open
