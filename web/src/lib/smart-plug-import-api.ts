@@ -31,6 +31,27 @@ export interface JobStatusDto {
   errorMessage: string | null
   createdAtUtc: string
   completedAtUtc: string | null
+  // Set only for a Smart Plug import job — lets the client address the mapping endpoint from a
+  // polled job-status response once it resolves to 'awaitingpowerpointmapping'.
+  smartPlugImportId: string | null
+  // The parsed device tag — the mapping dialog's title and create-Power-Point name prefill.
+  smartPlugImportDeviceTag: string | null
+}
+
+// Same field shapes tagging-scaffold-manager.tsx already uses (camelCase, ASP.NET Core's
+// default JSON casing) — kept here rather than shared, since no shared tagging-scaffold API
+// client file exists in this codebase yet.
+export interface RoomDto {
+  id: string
+  name: string
+  archivedAt: string | null
+}
+
+export interface PowerPointDto {
+  id: string
+  roomId: string
+  name: string
+  archivedAt: string | null
 }
 
 // POST confirms immediately (202 Accepted) with a job id — parsing runs asynchronously via the
@@ -60,4 +81,52 @@ export async function fetchJobStatus(jobId: string): Promise<JobStatusDto> {
   }
 
   return (await response.json()) as JobStatusDto
+}
+
+// Resolves a Smart Plug import parked 'awaitingpowerpointmapping' by attaching it to an existing
+// (or just-created) Power Point (AC #1, #2).
+export async function mapSmartPlugImportToPowerPoint(smartPlugImportId: string, powerPointId: string): Promise<void> {
+  const response = await fetch(`/api/smart-plug-imports/${smartPlugImportId}/power-point-mapping`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ powerPointId }),
+  })
+
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+}
+
+export async function fetchRooms(): Promise<RoomDto[]> {
+  const response = await fetch('/api/rooms', { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as RoomDto[]
+}
+
+export async function fetchPowerPoints(): Promise<PowerPointDto[]> {
+  const response = await fetch('/api/power-points', { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as PowerPointDto[]
+}
+
+export async function createPowerPoint(roomId: string, name: string): Promise<PowerPointDto> {
+  const response = await fetch('/api/power-points', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId, name }),
+  })
+
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as PowerPointDto
 }

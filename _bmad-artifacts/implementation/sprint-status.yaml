@@ -1,5 +1,14 @@
 # generated: 2026-08-09
-# last_updated: 2026-08-18
+# last_updated: 2026-08-20
+# 2026-08-20: story 3-2-import-to-power-point-mapping created (create-story) - status set to ready-for-dev.
+#   Extends Story 3.1's already-parked AwaitingPowerPointMapping state (no new upload/parse/polling
+#   infra needed): new MapSmartPlugImportToPowerPoint use case + POST /api/smart-plug-imports/{id}/
+#   power-point-mapping endpoint, reusing the existing CreatePowerPoint endpoint unchanged for the
+#   create-new-Power-Point branch (two sequential frontend calls, not one atomic op - recoverable via
+#   retry if the mapping call fails after create succeeds). Frontend replaces the "coming soon"
+#   awaitingMappingNote placeholder with a real create/map dialog (mockup State 3). AD-7 boundary note
+#   left for Story 3.3: two completion paths now exist (ProcessSmartPlugImport's direct match, and this
+#   story's mapping-completion) and 3.3 must hook IStatusRecomputeService into both.
 # project: energy-tracker
 # project_key: NOKEY
 # tracking_system: file-system
@@ -42,6 +51,25 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-20
+# 2026-08-20: story 3-2-import-to-power-point-mapping moved to done (code review complete: 0
+#   decision-needed, 8 patch findings fixed, 3 deferred, 8 dismissed. Highlights: the dialog's Close
+#   (X) button was rendered but non-functional (no onOpenChange wired) and a load failure had no
+#   retry, permanently trapping the user; a Power Point created after a failed mapping call never
+#   appeared in the "map to existing" list, contradicting the story's own documented recovery
+#   guarantee; the new mapping endpoint omitted the TryGetHouseholdId/403 guard every sibling
+#   endpoint uses. Deferred (pre-existing, codebase-wide gaps not introduced by this diff): no
+#   optimistic-concurrency protection on the mapping use case, the mapping endpoint isn't
+#   idempotent on retry, and ListReadingsByImportIdAsync/UpdateMappingAsync are unpaged. 273
+#   backend tests green (unchanged), 135 frontend tests green (4 new for the review-fix behavior),
+#   dotnet build / tsc / oxlint / vite build all clean.
+# 2026-08-20: story 3-2-import-to-power-point-mapping moved to review (dev-story implementation
+#   complete - 273 backend tests green (148 Application + 3 Architecture + 16 Infrastructure + 106
+#   Api.Tests via Testcontainers), 131 frontend tests green (16 new: 7 dialog, 2 panel, 9 api),
+#   dotnet build clean in Debug and Release, tsc/oxlint/vite build clean. Live-verified end to end
+#   in a real Chrome browser against the real local stack (dotnet API + Vite + real Postgres): both
+#   the create-new-Power-Point and map-to-existing-Power-Point paths confirmed working, readings
+#   correctly attributed per AD-10 (verified directly in Postgres).)
+# 2026-08-20: story 3-2-import-to-power-point-mapping moved to in-progress (dev-story activation)
 # 2026-08-20: story 3-1-smart-plug-file-upload-async-parsing moved to done (code review complete: 1 decision-needed
 #   resolved (became a patch — AwaitingPowerPointMapping now surfaced via GET /api/jobs/{id} and given its own
 #   frontend badge, rather than deferred to 3.2), 14 patch findings fixed (incl. the promoted decision), 0 deferred,
@@ -130,7 +158,7 @@ development_status:
 
   epic-3: in-progress
   3-1-smart-plug-file-upload-async-parsing: done
-  3-2-import-to-power-point-mapping: backlog
+  3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: backlog
   epic-3-retrospective: optional
 

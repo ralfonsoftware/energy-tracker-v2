@@ -305,6 +305,7 @@ builder.Services.AddScoped<ISmartPlugParser, EveHomeXlsxParser>();
 builder.Services.AddScoped<ISmartPlugParser, MerossCsvParser>();
 builder.Services.AddScoped<ISmartPlugImportRepository, SmartPlugImportRepository>();
 builder.Services.AddScoped<ProcessSmartPlugImport>();
+builder.Services.AddScoped<MapSmartPlugImportToPowerPoint>();
 
 var jobQueueProvider = (builder.Configuration["JobQueue:Provider"] ?? string.Empty).Trim().ToLowerInvariant();
 switch (jobQueueProvider)

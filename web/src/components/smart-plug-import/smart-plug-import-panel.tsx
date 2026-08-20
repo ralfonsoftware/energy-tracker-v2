@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
+import { PowerPointMappingDialog } from '@/components/smart-plug-import/power-point-mapping-dialog'
 import { ApiError, fetchJobStatus, uploadSmartPlugFile } from '@/lib/smart-plug-import-api'
 
 type ImportState = 'idle' | 'uploading' | 'processing' | 'completed' | 'awaitingMapping' | 'failed'
@@ -25,6 +26,8 @@ export function SmartPlugImportPanel() {
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const jobIdRef = useRef<string | null>(null)
+  const smartPlugImportIdRef = useRef<string | null>(null)
+  const deviceTagRef = useRef<string>('')
 
   // First polling UI in this codebase (no existing precedent) — cleared on unmount and on
   // reaching a terminal job status (AC #2).
@@ -46,7 +49,13 @@ export function SmartPlugImportPanel() {
 
         consecutiveFailures = 0
         if (job.status === 'completed') {
-          setState(job.importStatus === 'awaitingpowerpointmapping' ? 'awaitingMapping' : 'completed')
+          if (job.importStatus === 'awaitingpowerpointmapping') {
+            smartPlugImportIdRef.current = job.smartPlugImportId
+            deviceTagRef.current = job.smartPlugImportDeviceTag ?? ''
+            setState('awaitingMapping')
+          } else {
+            setState('completed')
+          }
         } else if (job.status === 'failed') {
           setError(job.errorMessage ?? t('smartPlugImport.errorGeneric'))
           setState('failed')
@@ -110,6 +119,12 @@ export function SmartPlugImportPanel() {
     setFileName(null)
     setError(null)
     jobIdRef.current = null
+    smartPlugImportIdRef.current = null
+    deviceTagRef.current = ''
+  }
+
+  const handleMapped = () => {
+    setState('completed')
   }
 
   return (
@@ -150,7 +165,6 @@ export function SmartPlugImportPanel() {
           </div>
 
           {state === 'processing' && <p className="text-muted-foreground text-sm">{t('smartPlugImport.asyncNote')}</p>}
-          {state === 'awaitingMapping' && <p className="text-muted-foreground text-sm">{t('smartPlugImport.awaitingMappingNote')}</p>}
 
           {(state === 'completed' || state === 'awaitingMapping' || state === 'failed') && (
             <Button type="button" variant="outline" size="sm" onClick={handleReset}>
@@ -161,6 +175,15 @@ export function SmartPlugImportPanel() {
       )}
 
       {error && <p className="text-destructive text-sm">{error}</p>}
+
+      {state === 'awaitingMapping' && smartPlugImportIdRef.current && (
+        <PowerPointMappingDialog
+          smartPlugImportId={smartPlugImportIdRef.current}
+          deviceTag={deviceTagRef.current}
+          onMapped={handleMapped}
+          onCancel={handleReset}
+        />
+      )}
     </GlassCard>
   )
 }
