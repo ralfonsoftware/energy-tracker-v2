@@ -127,11 +127,18 @@ void ConfigureDbContext(DbContextOptionsBuilder options)
     {
         case "postgres":
             options.UseNpgsql(connectionString,
-                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres"));
+                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres").MaxBatchSize(1000));
             break;
         case "sqlserver":
+            // Default MaxBatchSize (42) meant a large Smart Plug import (Story 3.3 — a full-history
+            // Eve Home export can be hundreds of thousands of SmartPlugReading rows) round-tripped
+            // to the DB in tiny batches; on Basic-tier Azure SQL each round trip's latency dominated,
+            // stretching one import to 15+ minutes and starving every job queued behind it (AD-6 has
+            // exactly one worker). EF clamps this to whatever fits SQL Server's 2100-parameter
+            // batch limit for the widest entity being saved, so 1000 is a safe upper bound, not a
+            // literal row count.
             options.UseSqlServer(connectionString,
-                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer"));
+                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer").MaxBatchSize(1000));
             break;
         default:
             throw new InvalidOperationException(

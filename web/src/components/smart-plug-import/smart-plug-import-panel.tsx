@@ -32,6 +32,10 @@ export function SmartPlugImportPanel() {
   const smartPlugImportIdRef = useRef<string | null>(null)
   const deviceTagRef = useRef<string>('')
   const [gaps, setGaps] = useState<SmartPlugImportGapDto[]>([])
+  // A 404 while polling means the background worker hasn't dequeued this job yet (this system
+  // processes one job at a time — a large prior import can leave a fresh job queued for minutes),
+  // not that it failed. Tracked separately from `error` so it never renders as a failure state.
+  const [queued, setQueued] = useState(false)
 
   // First polling UI in this codebase (no existing precedent) — cleared on unmount and on
   // reaching a terminal job status (AC #2).
@@ -52,6 +56,7 @@ export function SmartPlugImportPanel() {
         }
 
         consecutiveFailures = 0
+        setQueued(false)
         if (job.status === 'completed') {
           setGaps(job.gaps ?? [])
           if (job.importStatus === 'awaitingpowerpointmapping') {
@@ -67,8 +72,14 @@ export function SmartPlugImportPanel() {
           setError(job.errorMessage ?? t('smartPlugImport.errorGeneric'))
           setState('failed')
         }
-      } catch {
+      } catch (err) {
         if (cancelled) {
+          return
+        }
+
+        if (err instanceof ApiError && err.status === 404) {
+          // Not yet queued for processing — keep polling indefinitely, this isn't a failure.
+          setQueued(true)
           return
         }
 
@@ -126,6 +137,7 @@ export function SmartPlugImportPanel() {
     setFileName(null)
     setError(null)
     setGaps([])
+    setQueued(false)
     jobIdRef.current = null
     smartPlugImportIdRef.current = null
     deviceTagRef.current = ''
@@ -191,7 +203,11 @@ export function SmartPlugImportPanel() {
             {state === 'failed' && <Badge variant="destructive">{t('smartPlugImport.failedTitle')}</Badge>}
           </div>
 
-          {state === 'processing' && <p className="text-muted-foreground text-sm">{t('smartPlugImport.asyncNote')}</p>}
+          {state === 'processing' && (
+            <p className="text-muted-foreground text-sm">
+              {queued ? t('smartPlugImport.queuedNote') : t('smartPlugImport.asyncNote')}
+            </p>
+          )}
 
           {state === 'flaggedForReview' && (
             <div className="flex items-center gap-2.5 rounded-[12px] border border-status-trending/25 bg-status-trending/10 p-3">

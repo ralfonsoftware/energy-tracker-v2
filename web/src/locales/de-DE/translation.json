@@ -143,6 +143,7 @@
     "uploading": "Wird hochgeladen…",
     "processingBadge": "Wird verarbeitet",
     "asyncNote": "Hochgeladen. Die Datei wird im Hintergrund verarbeitet — du erhältst eine Benachrichtigung, sobald es fertig ist. Du kannst diesen Bildschirm jederzeit verlassen.",
+    "queuedNote": "Noch in der Warteschlange — bei großen Dateien kann es eine Weile dauern, bis die Verarbeitung beginnt.",
     "completeTitle": "Import abgeschlossen",
     "awaitingMappingTitle": "Power-Point-Zuordnung erforderlich",
     "flaggedForReviewTitle": "Sollte vor Verwendung geprüft werden",

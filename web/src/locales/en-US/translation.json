@@ -143,6 +143,7 @@
     "uploading": "Uploading…",
     "processingBadge": "Processing",
     "asyncNote": "Uploaded. We're parsing this in the background — you'll get a notification when it's done. Feel free to leave this screen; nothing here needs to stay open.",
+    "queuedNote": "Still queued — large files can take a while to start processing.",
     "completeTitle": "Import complete",
     "awaitingMappingTitle": "Needs Power Point mapping",
     "flaggedForReviewTitle": "Needs a look before it's used",

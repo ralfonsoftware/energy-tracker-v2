@@ -202,6 +202,40 @@ describe('SmartPlugImportPanel', () => {
     await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
   })
 
+  it('tolerates repeated 404s while the job is queued behind another import, and does not mark it failed', async () => {
+    let statusCallCount = 0
+    const fetchMock = vi.fn((url: string) => {
+      if (url === '/api/smart-plug-imports') {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+
+      statusCallCount += 1
+      if (statusCallCount <= 5) {
+        // A 404 here means the background worker hasn't dequeued this job yet (e.g. it's stuck
+        // behind another slow import) — not that the job failed.
+        return Promise.resolve(jsonResponse({ detail: "No job 'job-1' found." }, 404))
+      }
+
+      return Promise.resolve(
+        jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SmartPlugImportPanel />)
+
+    await selectFile(makeFile('export.xlsx'))
+    await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
+
+    // 5 consecutive 404s — well past MAX_CONSECUTIVE_POLL_FAILURES (3) — must not trip 'failed'.
+    await vi.advanceTimersByTimeAsync(2000 * 5)
+    expect(screen.queryByText('Import failed')).not.toBeInTheDocument()
+    expect(screen.getByText('Processing')).toBeInTheDocument()
+    expect(screen.getByText('Still queued — large files can take a while to start processing.')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
+  })
+
   it('shows an error and returns to idle when the upload itself is rejected (unsupported type)', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ detail: 'bad type' }, 400))))
     render(<SmartPlugImportPanel />)
