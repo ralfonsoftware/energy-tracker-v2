@@ -290,6 +290,7 @@ builder.Services.AddScoped<MoveDevice>();
 builder.Services.AddScoped<IMeterReadingRepository, MeterReadingRepository>();
 builder.Services.AddScoped<IMeterRegressionPromptRepository, MeterRegressionPromptRepository>();
 builder.Services.AddScoped<IStatusRecomputeService, StatusRecomputeService>();
+builder.Services.AddScoped<ISmartPlugCoverageSignal, SmartPlugCoverageSignal>();
 builder.Services.AddScoped<CreateMeterReading>();
 builder.Services.AddScoped<ResolveMeterRegressionPrompt>();
 builder.Services.AddScoped<GetOpenMeterRegressionPrompt>();
@@ -304,6 +305,7 @@ builder.Services.AddScoped<GetBackgroundJobStatus>();
 builder.Services.AddScoped<ISmartPlugParser, EveHomeXlsxParser>();
 builder.Services.AddScoped<ISmartPlugParser, MerossCsvParser>();
 builder.Services.AddScoped<ISmartPlugImportRepository, SmartPlugImportRepository>();
+builder.Services.AddScoped<CompleteSmartPlugImportProcessing>();
 builder.Services.AddScoped<ProcessSmartPlugImport>();
 builder.Services.AddScoped<MapSmartPlugImportToPowerPoint>();
 

@@ -41,4 +41,29 @@ public class SmartPlugImportRepository(EnergyTrackerDbContext dbContext) : ISmar
         // is never observable by a later read.
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<SmartPlugReading>> ListPriorReadingsByPowerPointAsync(
+        Guid powerPointId, Guid excludeSmartPlugImportId, CancellationToken cancellationToken) =>
+        await dbContext.SmartPlugReadings
+            .Where(r => r.PowerPointId == powerPointId && r.SmartPlugImportId != excludeSmartPlugImportId)
+            .OrderBy(r => r.IntervalStart)
+            .ToListAsync(cancellationToken);
+
+    public async Task AddGapsAsync(IReadOnlyList<SmartPlugImportGap> gaps, CancellationToken cancellationToken)
+    {
+        await dbContext.SmartPlugImportGaps.AddRangeAsync(gaps, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SmartPlugImportGap>> ListGapsByImportIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken) =>
+        await dbContext.SmartPlugImportGaps
+            .Where(g => g.SmartPlugImportId == smartPlugImportId)
+            .ToListAsync(cancellationToken);
+
+    public async Task AddFlaggedForReviewAsync(SmartPlugImport import, SmartPlugImportGap gap, CancellationToken cancellationToken)
+    {
+        await dbContext.SmartPlugImports.AddAsync(import, cancellationToken);
+        await dbContext.SmartPlugImportGaps.AddAsync(gap, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

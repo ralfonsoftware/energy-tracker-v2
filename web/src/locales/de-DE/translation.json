@@ -145,10 +145,19 @@
     "asyncNote": "Hochgeladen. Die Datei wird im Hintergrund verarbeitet — du erhältst eine Benachrichtigung, sobald es fertig ist. Du kannst diesen Bildschirm jederzeit verlassen.",
     "completeTitle": "Import abgeschlossen",
     "awaitingMappingTitle": "Power-Point-Zuordnung erforderlich",
+    "flaggedForReviewTitle": "Sollte vor Verwendung geprüft werden",
     "failedTitle": "Import fehlgeschlagen",
     "uploadAnother": "Weitere Datei hochladen",
     "errorGeneric": "Beim Hochladen der Datei ist etwas schiefgelaufen. Bitte versuche es erneut.",
     "errorUnsupportedType": "Dieser Dateityp wird nicht unterstützt. Bitte wähle einen .xlsx- oder .csv-Export.",
+    "gaps": {
+      "estimatedBadge": "Geschätzt",
+      "missingBadge": "Fehlend, nicht geschätzt",
+      "flaggedForReviewBadge": "Zur Prüfung markiert",
+      "estimatedDetail": "Für {{days}} Tage wurden keine Daten empfangen. Aus dem Durchschnitt der Vorwoche ({{dailyAverage}} kWh/Tag) aufgefüllt und als geschätzt markiert — nie als gemessen gezählt.",
+      "missingDetail": "Für {{days}} Tage wurden keine Daten empfangen. Es gibt keine vorherige Historie zum Mitteln, daher bleibt dieser Zeitraum unausgefüllt und als fehlend markiert — nicht aus dem Nichts interpoliert.",
+      "flaggedForReviewDetail": "An jedem Tag im Datumsbereich dieser Datei kamen keine Intervalldaten an — zur Prüfung markiert statt vollständig interpoliert."
+    },
     "mappingModal": {
       "title": "Neuer Power Point: „{{deviceTag}}“",
       "body": "Diese Datei ist einem Power Point zugeordnet, den es in deinem Haushalt noch nicht gibt. Erstelle ihn, oder ordne diese Daten einem bestehenden Power Point zu — es wird nichts importiert, bis du dich entscheidest.",

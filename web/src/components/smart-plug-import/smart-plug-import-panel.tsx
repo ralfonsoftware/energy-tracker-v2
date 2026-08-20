@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
+import { GapCard } from '@/components/smart-plug-import/gap-card'
 import { PowerPointMappingDialog } from '@/components/smart-plug-import/power-point-mapping-dialog'
-import { ApiError, fetchJobStatus, uploadSmartPlugFile } from '@/lib/smart-plug-import-api'
+import { ApiError, fetchJobStatus, uploadSmartPlugFile, type SmartPlugImportGapDto } from '@/lib/smart-plug-import-api'
 
-type ImportState = 'idle' | 'uploading' | 'processing' | 'completed' | 'awaitingMapping' | 'failed'
+type ImportState = 'idle' | 'uploading' | 'processing' | 'completed' | 'awaitingMapping' | 'flaggedForReview' | 'failed'
 
 const POLL_INTERVAL_MS = 2000
 // Tolerate a few consecutive transient network blips while polling before giving up — a single
@@ -14,11 +15,12 @@ const POLL_INTERVAL_MS = 2000
 const MAX_CONSECUTIVE_POLL_FAILURES = 3
 
 // Mockup reference: key-smart-plug-import.html State 1 ("Uploading, non-blocking") — the
-// dropzone, file-choose control, processing pill, and async-note copy. States 2-5 (gap
-// summaries, create/map prompt) are Story 3.2/3.3's scope, not this component's. Colors are
-// deliberately plain shadcn Badge variants, not the mockup's own status-triad colors — the
-// UX rubric review flagged that reuse as a DESIGN.md violation (non-status badge borrowing
-// Status semantic colors).
+// dropzone, file-choose control, processing pill, and async-note copy. State 3 (create/map
+// prompt) is Story 3.2's PowerPointMappingDialog; States 2/4/5 (gap cards, flagged-for-review
+// banner) are Story 3.3's GapCard, rendered here whenever the polled job carries any gaps.
+// Colors are deliberately plain shadcn Badge variants, not the mockup's own status-triad colors —
+// the UX rubric review flagged that reuse as a DESIGN.md violation (non-status badge borrowing
+// Status semantic colors) — GapCard's own amber tint is the one deliberate exception (AC #8).
 export function SmartPlugImportPanel() {
   const { t } = useTranslation()
   const [state, setState] = useState<ImportState>('idle')
@@ -28,6 +30,7 @@ export function SmartPlugImportPanel() {
   const jobIdRef = useRef<string | null>(null)
   const smartPlugImportIdRef = useRef<string | null>(null)
   const deviceTagRef = useRef<string>('')
+  const [gaps, setGaps] = useState<SmartPlugImportGapDto[]>([])
 
   // First polling UI in this codebase (no existing precedent) — cleared on unmount and on
   // reaching a terminal job status (AC #2).
@@ -49,10 +52,13 @@ export function SmartPlugImportPanel() {
 
         consecutiveFailures = 0
         if (job.status === 'completed') {
+          setGaps(job.gaps ?? [])
           if (job.importStatus === 'awaitingpowerpointmapping') {
             smartPlugImportIdRef.current = job.smartPlugImportId
             deviceTagRef.current = job.smartPlugImportDeviceTag ?? ''
             setState('awaitingMapping')
+          } else if (job.importStatus === 'flaggedforreview') {
+            setState('flaggedForReview')
           } else {
             setState('completed')
           }
@@ -118,13 +124,24 @@ export function SmartPlugImportPanel() {
     setState('idle')
     setFileName(null)
     setError(null)
+    setGaps([])
     jobIdRef.current = null
     smartPlugImportIdRef.current = null
     deviceTagRef.current = ''
   }
 
-  const handleMapped = () => {
+  const handleMapped = async () => {
     setState('completed')
+    // The mapping call itself doesn't return a gap list (Task 5) — re-poll the same job status
+    // endpoint once to pick up gaps detected during mapping completion (AD-7's second path).
+    if (jobIdRef.current) {
+      try {
+        const job = await fetchJobStatus(jobIdRef.current)
+        setGaps(job.gaps ?? [])
+      } catch {
+        // Best-effort refresh only — the import itself already completed successfully.
+      }
+    }
   }
 
   return (
@@ -161,12 +178,21 @@ export function SmartPlugImportPanel() {
             {state === 'processing' && <Badge variant="outline">{t('smartPlugImport.processingBadge')}</Badge>}
             {state === 'completed' && <Badge variant="secondary">{t('smartPlugImport.completeTitle')}</Badge>}
             {state === 'awaitingMapping' && <Badge variant="outline">{t('smartPlugImport.awaitingMappingTitle')}</Badge>}
+            {state === 'flaggedForReview' && <Badge variant="outline">{t('smartPlugImport.flaggedForReviewTitle')}</Badge>}
             {state === 'failed' && <Badge variant="destructive">{t('smartPlugImport.failedTitle')}</Badge>}
           </div>
 
           {state === 'processing' && <p className="text-muted-foreground text-sm">{t('smartPlugImport.asyncNote')}</p>}
 
-          {(state === 'completed' || state === 'awaitingMapping' || state === 'failed') && (
+          {(state === 'completed' || state === 'flaggedForReview') && gaps.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {gaps.map((gap) => (
+                <GapCard key={`${gap.startDate}-${gap.endDate}`} gap={gap} />
+              ))}
+            </div>
+          )}
+
+          {(state === 'completed' || state === 'awaitingMapping' || state === 'flaggedForReview' || state === 'failed') && (
             <Button type="button" variant="outline" size="sm" onClick={handleReset}>
               {t('smartPlugImport.uploadAnother')}
             </Button>

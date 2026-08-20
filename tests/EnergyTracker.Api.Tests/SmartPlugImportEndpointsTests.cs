@@ -24,11 +24,26 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
     private static MultipartFormDataContent BuildUpload(string filePath, string contentType = "application/octet-stream")
     {
         var bytes = File.ReadAllBytes(filePath);
+        return BuildUploadFromBytes(bytes, Path.GetFileName(filePath));
+    }
+
+    private static MultipartFormDataContent BuildUploadFromBytes(byte[] bytes, string fileName, string contentType = "text/csv")
+    {
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(bytes);
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
-        content.Add(fileContent, "file", Path.GetFileName(filePath));
+        content.Add(fileContent, "file", fileName);
         return content;
+    }
+
+    // Meross's real byte layout (Story 3.1): UTF-8, "\t," field delimiter, trailing tab per line —
+    // built directly here rather than via a fixture file, so each test can control the exact
+    // date/value shape a Smart Plug import gap needs.
+    private static byte[] BuildMerossCsv(IEnumerable<(DateOnly Date, decimal Kwh)> rows)
+    {
+        var lines = new List<string> { "Date\t,Power Consumption-(kWh)\t" };
+        lines.AddRange(rows.Select(r => $"{r.Date:yyyy-MM-dd}\t,{r.Kwh.ToString(System.Globalization.CultureInfo.InvariantCulture)}\t"));
+        return System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines) + "\n");
     }
 
     private async Task<JobStatusResponse> PollJobToTerminalAsync(HttpClient client, Guid jobId)
@@ -61,6 +76,26 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         }
 
         throw new TimeoutException($"Job {jobId} did not reach a terminal status within the test deadline.");
+    }
+
+    private static Task<HttpResponseMessage> SetYearlyBaselineAsync(HttpClient client, Guid householdId, decimal yearlyBaselineKwh, int version) =>
+        client.PutAsJsonAsync(
+            $"/api/households/{householdId}/yearly-baseline", new { yearlyBaselineKwh, version }, TestContext.Current.CancellationToken);
+
+    private static Task<HttpResponseMessage> PostReadingAsync(HttpClient client, decimal kwhValue, DateTimeOffset readingTimestamp) =>
+        client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue, readingTimestamp, idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+
+    // AD-3's query filter needs an HttpContext-bound CurrentHouseholdAccessor, absent in this raw
+    // scope — IgnoreQueryFilters is required to count/read directly against the table.
+    private async Task<int> CountStatusSnapshotRowsAsync(Guid householdId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.StatusSnapshots.IgnoreQueryFilters()
+            .CountAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -310,5 +345,89 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
             TestContext.Current.CancellationToken);
 
         secondMapping.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task An_import_with_a_mid_file_gap_surfaces_it_in_the_jobs_Gaps_field()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Verbraucher 1" }, TestContext.Current.CancellationToken);
+
+        // 7 preceding days of real data (a genuine full week), then a 2-day gap, then 1 more day —
+        // matches SmartPlugGapDetectorTests' "sufficient preceding data" shape.
+        var start = new DateOnly(2026, 6, 1);
+        var rows = Enumerable.Range(0, 7).Select(i => (start.AddDays(i), 4m)).ToList();
+        rows.Add((start.AddDays(9), 4m));
+        using var upload = BuildUploadFromBytes(BuildMerossCsv(rows), "Power Monitor Day Data - Verbraucher 1 - 20260601.csv");
+
+        var response = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+
+        var terminalStatus = await PollJobToTerminalAsync(client, body!.JobId);
+
+        terminalStatus.ImportStatus.ShouldBe("completed");
+        terminalStatus.Gaps.Count.ShouldBe(1);
+        terminalStatus.Gaps[0].Treatment.ShouldBe("estimated");
+        terminalStatus.Gaps[0].StartDate.ShouldBe(start.AddDays(7));
+        terminalStatus.Gaps[0].EndDate.ShouldBe(start.AddDays(8));
+        terminalStatus.Gaps[0].EstimatedTotalKwh.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Mapping_an_unmatched_import_also_runs_gap_detection_and_a_Status_recompute()
+    {
+        // This is the concrete regression test for Task 3's "two completion paths" requirement —
+        // MapSmartPlugImportToPowerPoint must trigger the exact same AD-7 wiring
+        // ProcessSmartPlugImport's direct-match branch already does.
+        var (client, householdId) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version: 0);
+        await PostReadingAsync(client, 1000m, DateTimeOffset.UtcNow.AddDays(-10));
+        await PostReadingAsync(client, 1100m, DateTimeOffset.UtcNow);
+        var snapshotCountBeforeMapping = await CountStatusSnapshotRowsAsync(householdId);
+
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "A different outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        var rows = new List<(DateOnly, decimal)> { (new DateOnly(2026, 6, 1), 2m), (new DateOnly(2026, 6, 2), 2m) };
+        using var upload = BuildUploadFromBytes(BuildMerossCsv(rows), "Power Monitor Day Data - Unmatched Tag - 20260601.csv");
+        var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var awaitingStatus = await PollJobToTerminalAsync(client, uploadBody!.JobId);
+        awaitingStatus.ImportStatus.ShouldBe("awaitingpowerpointmapping");
+
+        var mappingResponse = await client.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{awaitingStatus.SmartPlugImportId}/power-point-mapping",
+            new { powerPointId = powerPoint!.Id },
+            TestContext.Current.CancellationToken);
+        mappingResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var finalStatus = await client.GetFromJsonAsync<JobStatusResponse>($"/api/jobs/{uploadBody.JobId}", TestContext.Current.CancellationToken);
+        finalStatus!.ImportStatus.ShouldBe("completed");
+
+        var snapshotCountAfterMapping = await CountStatusSnapshotRowsAsync(householdId);
+        snapshotCountAfterMapping.ShouldBeGreaterThan(snapshotCountBeforeMapping);
+    }
+
+    [Fact]
+    public async Task An_import_that_parses_to_zero_rows_is_flagged_for_review_with_no_Status_recompute()
+    {
+        var (client, householdId) = await CreateHouseholdAsync();
+        var headerOnlyCsv = BuildMerossCsv([]);
+        using var upload = BuildUploadFromBytes(headerOnlyCsv, "Power Monitor Day Data - Empty File - 20260601.csv");
+
+        var response = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+
+        var terminalStatus = await PollJobToTerminalAsync(client, body!.JobId);
+
+        terminalStatus.ImportStatus.ShouldBe("flaggedforreview");
+        terminalStatus.Gaps.Count.ShouldBe(1);
+        terminalStatus.Gaps[0].Treatment.ShouldBe("flaggedforreview");
+        (await CountStatusSnapshotRowsAsync(householdId)).ShouldBe(0);
     }
 }

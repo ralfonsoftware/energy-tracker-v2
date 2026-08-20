@@ -409,6 +409,48 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.ToTable("SmartPlugImports", (string)null);
                 });
 
+            modelBuilder.Entity("EnergyTracker.Domain.SmartPlugImportGap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("EstimatedTotalKwh")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PowerPointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SmartPlugImportId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Treatment")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("PowerPointId");
+
+                    b.HasIndex("SmartPlugImportId");
+
+                    b.ToTable("SmartPlugImportGaps", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.SmartPlugReading", b =>
                 {
                     b.Property<Guid>("Id")
@@ -639,6 +681,26 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasOne("EnergyTracker.Domain.Household", null)
                         .WithMany()
                         .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.SmartPlugImportGap", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.PowerPoint", null)
+                        .WithMany()
+                        .HasForeignKey("PowerPointId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EnergyTracker.Domain.SmartPlugImport", null)
+                        .WithMany()
+                        .HasForeignKey("SmartPlugImportId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

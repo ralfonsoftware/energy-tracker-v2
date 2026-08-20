@@ -10,8 +10,9 @@ public class GetCurrentStatusTests
     private readonly IHouseholdRepository _householdRepository = Substitute.For<IHouseholdRepository>();
     private readonly IMeterReadingRepository _readingRepository = Substitute.For<IMeterReadingRepository>();
     private readonly IMeterRegressionPromptRepository _regressionPromptRepository = Substitute.For<IMeterRegressionPromptRepository>();
+    private readonly ISmartPlugCoverageSignal _smartPlugCoverageSignal = Substitute.For<ISmartPlugCoverageSignal>();
 
-    private GetCurrentStatus Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository);
+    private GetCurrentStatus Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository, _smartPlugCoverageSignal);
 
     private static Household NewHousehold(Guid id, decimal? yearlyBaselineKwh, decimal trendingThresholdKwh = 100m, int lowConfidenceGapDays = 45) => new()
     {
@@ -330,5 +331,81 @@ public class GetCurrentStatusTests
         result.ShouldNotBeNull();
         result.Status.ShouldBe(Status.WithinRange);
         result.PaceToDateKwh.ShouldBe(1825m);
+    }
+
+    [Fact]
+    public async Task A_long_gap_corroborated_by_Smart_Plug_coverage_downgrades_IsLowConfidence_to_false()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, DateTimeOffset.UtcNow.AddDays(-100));
+        var last = NewReading(householdId, mainMeter.Id, 1100m, DateTimeOffset.UtcNow.AddDays(-50));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _smartPlugCoverageSignal.HasCoverageDuringAsync(householdId, last.ReadingTimestamp, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.IsLowConfidence.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_long_gap_with_zero_Smart_Plug_coverage_leaves_IsLowConfidence_unchanged_true()
+    {
+        // AC #1 regression guard: a Household with zero Smart Plug coverage must still get a
+        // fully functional Status computed from Meter Readings alone.
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, DateTimeOffset.UtcNow.AddDays(-100));
+        var last = NewReading(householdId, mainMeter.Id, 1100m, DateTimeOffset.UtcNow.AddDays(-50));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _smartPlugCoverageSignal.HasCoverageDuringAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.IsLowConfidence.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Smart_Plug_coverage_never_affects_PaceToDateKwh_BaselineToDateKwh_or_Status_AD_14()
+    {
+        // AC #2/AD-14 regression guard: Smart Plug data may only ever soften IsLowConfidence —
+        // it must never be summed against or reconcile the pace/baseline/Trending figures.
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-182.5);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns(
+        [
+            NewReading(householdId, mainMeter.Id, 1000m, baseline),
+            NewReading(householdId, mainMeter.Id, 2825m, latest),
+        ]);
+        _smartPlugCoverageSignal.HasCoverageDuringAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        // Recent reading — never low-confidence in the first place, so the coverage signal isn't
+        // even consulted; PaceToDateKwh/BaselineToDateKwh/Status are unaffected either way.
+        result.ShouldNotBeNull();
+        result.Status.ShouldBe(Status.WithinRange);
+        result.PaceToDateKwh.ShouldBe(1825m);
+        result.BaselineToDateKwh.ShouldBe(1825m);
+        await _smartPlugCoverageSignal.DidNotReceive().HasCoverageDuringAsync(
+            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 }

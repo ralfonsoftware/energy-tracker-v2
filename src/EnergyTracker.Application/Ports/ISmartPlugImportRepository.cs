@@ -24,4 +24,24 @@ public interface ISmartPlugImportRepository
     // Mirrors AddAsync's single-SaveChangesAsync pattern — one transaction, so a partially
     // updated import/readings set is never observable by a later read.
     Task UpdateMappingAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken);
+
+    // "Prior" readings for the same Power Point, across all of ITS OTHER imports (excludes
+    // `excludeSmartPlugImportId` — the import currently being completed, whose own readings are
+    // passed separately into SmartPlugGapDetector) — the cross-import trailing-average lookup
+    // Task 2's algorithm needs. Ordered by IntervalStart (Story 3.3).
+    Task<IReadOnlyList<SmartPlugReading>> ListPriorReadingsByPowerPointAsync(
+        Guid powerPointId, Guid excludeSmartPlugImportId, CancellationToken cancellationToken);
+
+    // Single SaveChangesAsync — one transaction, mirroring every other method here. Gaps are
+    // insert-only (immutable after creation, AD-7/NFR9's precedent) — never called to update an
+    // existing gap row.
+    Task AddGapsAsync(IReadOnlyList<SmartPlugImportGap> gaps, CancellationToken cancellationToken);
+
+    // Lets GET /api/jobs/{id} surface an import's detected gaps alongside its own status (Task 5).
+    Task<IReadOnlyList<SmartPlugImportGap>> ListGapsByImportIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken);
+
+    // AC #7: an import whose file parsed to zero rows at all — persists the SmartPlugImport
+    // (FlaggedForReview, no readings) and its single whole-file gap row together, one transaction,
+    // mirroring AddAsync's "no partially persisted import" discipline.
+    Task AddFlaggedForReviewAsync(SmartPlugImport import, SmartPlugImportGap gap, CancellationToken cancellationToken);
 }

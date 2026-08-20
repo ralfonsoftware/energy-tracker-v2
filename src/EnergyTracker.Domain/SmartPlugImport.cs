@@ -40,4 +40,10 @@ public enum SmartPlugImportStatus
     AwaitingPowerPointMapping,
     Completed,
     Failed,
+
+    // A terminal state distinct from Completed/Failed — the file parsed successfully (no
+    // exception), but every date in its own covered range came back with zero readings (AC #7,
+    // FR-24). Stored as a plain int (no HasConversion on this enum), so adding this member needs
+    // no migration by itself.
+    FlaggedForReview,
 }

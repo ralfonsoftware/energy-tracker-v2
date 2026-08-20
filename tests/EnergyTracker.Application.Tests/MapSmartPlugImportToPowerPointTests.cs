@@ -9,7 +9,17 @@ public class MapSmartPlugImportToPowerPointTests
 {
     private readonly ISmartPlugImportRepository _smartPlugImportRepository = Substitute.For<ISmartPlugImportRepository>();
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
+    private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
     private readonly Guid _householdId = Guid.NewGuid();
+
+    public MapSmartPlugImportToPowerPointTests()
+    {
+        _smartPlugImportRepository.ListPriorReadingsByPowerPointAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<SmartPlugReading>)[]);
+    }
+
+    private MapSmartPlugImportToPowerPoint Sut() => new(
+        _smartPlugImportRepository, _taggingScaffoldRepository, new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService));
 
     private SmartPlugImport MakeImport(SmartPlugImportStatus status = SmartPlugImportStatus.AwaitingPowerPointMapping) => new()
     {
@@ -68,7 +78,7 @@ public class MapSmartPlugImportToPowerPointTests
         _smartPlugImportRepository.ListReadingsByImportIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(readings);
         _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new MapSmartPlugImportToPowerPoint(_smartPlugImportRepository, _taggingScaffoldRepository);
+        var sut = Sut();
 
         await sut.ExecuteAsync(import.Id, powerPoint.Id, TestContext.Current.CancellationToken);
 
@@ -78,6 +88,8 @@ public class MapSmartPlugImportToPowerPointTests
             Arg.Is<SmartPlugImport>(i => i.Id == import.Id && i.Status == SmartPlugImportStatus.Completed),
             Arg.Is<IReadOnlyList<SmartPlugReading>>(rs => rs.Count == readings.Count),
             Arg.Any<CancellationToken>());
+        // AD-7's second completion path (Task 3) — Status recompute must fire here too.
+        await _statusRecomputeService.Received(1).RecomputeAsync(_householdId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -85,7 +97,7 @@ public class MapSmartPlugImportToPowerPointTests
     {
         var smartPlugImportId = Guid.NewGuid();
         _smartPlugImportRepository.FindByIdAsync(smartPlugImportId, Arg.Any<CancellationToken>()).Returns((SmartPlugImport?)null);
-        var sut = new MapSmartPlugImportToPowerPoint(_smartPlugImportRepository, _taggingScaffoldRepository);
+        var sut = Sut();
 
         await Should.ThrowAsync<SmartPlugImportNotFoundException>(
             () => sut.ExecuteAsync(smartPlugImportId, Guid.NewGuid(), TestContext.Current.CancellationToken));
@@ -96,7 +108,7 @@ public class MapSmartPlugImportToPowerPointTests
     {
         var import = MakeImport(status: SmartPlugImportStatus.Completed);
         _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
-        var sut = new MapSmartPlugImportToPowerPoint(_smartPlugImportRepository, _taggingScaffoldRepository);
+        var sut = Sut();
 
         await Should.ThrowAsync<SmartPlugImportValidationException>(
             () => sut.ExecuteAsync(import.Id, Guid.NewGuid(), TestContext.Current.CancellationToken));
@@ -109,7 +121,7 @@ public class MapSmartPlugImportToPowerPointTests
         var powerPointId = Guid.NewGuid();
         _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
         _taggingScaffoldRepository.FindPowerPointAsync(powerPointId, Arg.Any<CancellationToken>()).Returns((PowerPoint?)null);
-        var sut = new MapSmartPlugImportToPowerPoint(_smartPlugImportRepository, _taggingScaffoldRepository);
+        var sut = Sut();
 
         await Should.ThrowAsync<TaggingScaffoldNotFoundException>(
             () => sut.ExecuteAsync(import.Id, powerPointId, TestContext.Current.CancellationToken));
@@ -123,7 +135,7 @@ public class MapSmartPlugImportToPowerPointTests
         var powerPoint = MakePowerPoint(room.Id, archivedAt: DateTimeOffset.UtcNow);
         _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
         _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new MapSmartPlugImportToPowerPoint(_smartPlugImportRepository, _taggingScaffoldRepository);
+        var sut = Sut();
 
         await Should.ThrowAsync<TaggingScaffoldParentArchivedException>(
             () => sut.ExecuteAsync(import.Id, powerPoint.Id, TestContext.Current.CancellationToken));

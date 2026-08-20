@@ -145,10 +145,19 @@
     "asyncNote": "Uploaded. We're parsing this in the background — you'll get a notification when it's done. Feel free to leave this screen; nothing here needs to stay open.",
     "completeTitle": "Import complete",
     "awaitingMappingTitle": "Needs Power Point mapping",
+    "flaggedForReviewTitle": "Needs a look before it's used",
     "failedTitle": "Import failed",
     "uploadAnother": "Upload another file",
     "errorGeneric": "Something went wrong uploading this file. Please try again.",
     "errorUnsupportedType": "That file type isn't supported. Please choose an .xlsx or .csv export.",
+    "gaps": {
+      "estimatedBadge": "Estimated",
+      "missingBadge": "Missing, not estimated",
+      "flaggedForReviewBadge": "Flagged for review",
+      "estimatedDetail": "No data received for {{days}} days. Filled from the preceding week's average ({{dailyAverage}} kWh/day) and flagged as estimated — never counted as measured.",
+      "missingDetail": "No data received for {{days}} days. There's no prior history to average from, so this range is left unfilled and flagged as missing — not interpolated from nothing.",
+      "flaggedForReviewDetail": "Every day in this file's date range came back with no interval data — flagged for review rather than wholesale-interpolated."
+    },
     "mappingModal": {
       "title": "New Power Point: \"{{deviceTag}}\"",
       "body": "This file is tagged to a Power Point that doesn't exist in your household yet. Create it, or map this data to one you already have — nothing is imported until you choose.",
