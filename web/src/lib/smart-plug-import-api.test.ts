@@ -62,6 +62,9 @@ describe('fetchJobStatus', () => {
             errorMessage: null,
             createdAtUtc: '2026-08-18T10:00:00+00:00',
             completedAtUtc: '2026-08-18T10:00:05+00:00',
+            smartPlugImportId: null,
+            smartPlugImportDeviceTag: null,
+            gaps: [],
           }),
         ),
       ),
@@ -76,7 +79,35 @@ describe('fetchJobStatus', () => {
       errorMessage: null,
       createdAtUtc: '2026-08-18T10:00:00+00:00',
       completedAtUtc: '2026-08-18T10:00:05+00:00',
+      smartPlugImportId: null,
+      smartPlugImportDeviceTag: null,
+      gaps: [],
     })
+  })
+
+  it('parses a non-empty gaps field', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({
+            id: 'job-1',
+            status: 'completed',
+            importStatus: 'completed',
+            errorMessage: null,
+            createdAtUtc: '2026-08-18T10:00:00+00:00',
+            completedAtUtc: '2026-08-18T10:00:05+00:00',
+            smartPlugImportId: null,
+            smartPlugImportDeviceTag: null,
+            gaps: [{ startDate: '2026-04-12', endDate: '2026-04-17', treatment: 'estimated', estimatedTotalKwh: 24.6 }],
+          }),
+        ),
+      ),
+    )
+
+    const result = await fetchJobStatus('job-1')
+
+    expect(result.gaps).toEqual([{ startDate: '2026-04-12', endDate: '2026-04-17', treatment: 'estimated', estimatedTotalKwh: 24.6 }])
   })
 
   it('throws an ApiError on a non-2xx response', async () => {

@@ -23,6 +23,10 @@
     <!-- Logging -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <!-- Dependency-free logging abstraction — lets EnergyTracker.Application log a
+         swallow-and-continue failure (CompleteSmartPlugImportProcessing) without pulling in
+         ASP.NET Core or any concrete logging provider. -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
 
     <!-- OTel (AD-19 extension) -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />

@@ -41,4 +41,47 @@ public class SmartPlugImportRepository(EnergyTrackerDbContext dbContext) : ISmar
         // is never observable by a later read.
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<SmartPlugReading>> ListPriorReadingsByPowerPointAsync(
+        Guid powerPointId, Guid excludeSmartPlugImportId, DateOnly sinceDate, CancellationToken cancellationToken)
+    {
+        // AD-9: SmartPlugReading.IntervalStart is a local-time date encoded with a zero UTC offset
+        // — match that encoding here rather than comparing against a real-offset instant.
+        var sinceInstant = new DateTimeOffset(sinceDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        return await dbContext.SmartPlugReadings
+            .Where(r => r.PowerPointId == powerPointId
+                && r.SmartPlugImportId != excludeSmartPlugImportId
+                && r.IntervalStart >= sinceInstant)
+            .OrderBy(r => r.IntervalStart)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<DateOnly?> FindFirstReadingDateByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken)
+    {
+        var first = await dbContext.SmartPlugReadings
+            .Where(r => r.PowerPointId == powerPointId)
+            .OrderBy(r => r.IntervalStart)
+            .Select(r => (DateTimeOffset?)r.IntervalStart)
+            .FirstOrDefaultAsync(cancellationToken);
+        return first is { } value ? DateOnly.FromDateTime(value.DateTime) : null;
+    }
+
+    public async Task AddGapsAsync(IReadOnlyList<SmartPlugImportGap> gaps, CancellationToken cancellationToken)
+    {
+        await dbContext.SmartPlugImportGaps.AddRangeAsync(gaps, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SmartPlugImportGap>> ListGapsByImportIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken) =>
+        await dbContext.SmartPlugImportGaps
+            .Where(g => g.SmartPlugImportId == smartPlugImportId)
+            .OrderBy(g => g.StartDate)
+            .ToListAsync(cancellationToken);
+
+    public async Task AddFlaggedForReviewAsync(SmartPlugImport import, SmartPlugImportGap gap, CancellationToken cancellationToken)
+    {
+        await dbContext.SmartPlugImports.AddAsync(import, cancellationToken);
+        await dbContext.SmartPlugImportGaps.AddAsync(gap, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

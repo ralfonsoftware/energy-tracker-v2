@@ -10,7 +10,8 @@ public record CurrentStatusResult(Status Status, decimal PaceToDateKwh, decimal 
 public class GetCurrentStatus(
     IHouseholdRepository householdRepository,
     IMeterReadingRepository readingRepository,
-    IMeterRegressionPromptRepository regressionPromptRepository)
+    IMeterRegressionPromptRepository regressionPromptRepository,
+    ISmartPlugCoverageSignal smartPlugCoverageSignal)
 {
     // AD-7: this is the single place the live computation runs — both the GET /api/status read
     // path and IStatusRecomputeService's snapshot-writing path call this same method, so the two
@@ -53,6 +54,20 @@ public class GetCurrentStatus(
         // *included* reading to now, not a gap between two readings within the walked sequence.
         var lastReading = includedReadings[^1];
         var isLowConfidence = (DateTimeOffset.UtcNow - lastReading.ReadingTimestamp).TotalDays > household.LowConfidenceGapDays;
+
+        // Story 3.3 (AC #1, #2; AD-14): Smart Plug data can only ever soften this flag, never
+        // touch PaceToDateKwh/BaselineToDateKwh/the Trending resolution above — the entire
+        // "sharpening" mechanism for this story. A Household with zero Smart Plug coverage simply
+        // never has this signal flip true->false, so AC #1 needs no special-casing here.
+        if (isLowConfidence)
+        {
+            var hasCorroboratingCoverage = await smartPlugCoverageSignal.HasCoverageDuringAsync(
+                householdId, lastReading.ReadingTimestamp, DateTimeOffset.UtcNow, cancellationToken);
+            if (hasCorroboratingCoverage)
+            {
+                isLowConfidence = false;
+            }
+        }
 
         return new CurrentStatusResult(status, paceResult.Value.PaceToDateKwh, baselineToDateKwh, isLowConfidence);
     }

@@ -22,6 +22,16 @@ async function toApiError(response: Response): Promise<ApiError> {
 
 export type JobStatusValue = 'processing' | 'completed' | 'failed'
 
+// Matches the backend's lowercased-enum convention already used for `importStatus`.
+export type SmartPlugImportGapTreatment = 'estimated' | 'missing' | 'flaggedforreview'
+
+export interface SmartPlugImportGapDto {
+  startDate: string
+  endDate: string
+  treatment: SmartPlugImportGapTreatment
+  estimatedTotalKwh: number | null
+}
+
 export interface JobStatusDto {
   id: string
   status: JobStatusValue
@@ -36,6 +46,8 @@ export interface JobStatusDto {
   smartPlugImportId: string | null
   // The parsed device tag — the mapping dialog's title and create-Power-Point name prefill.
   smartPlugImportDeviceTag: string | null
+  // Empty, never absent, when there's nothing to show (Story 3.3) — simplifies rendering.
+  gaps: SmartPlugImportGapDto[]
 }
 
 // Same field shapes tagging-scaffold-manager.tsx already uses (camelCase, ASP.NET Core's

@@ -217,6 +217,66 @@ describe('SmartPlugImportPanel', () => {
     expect(screen.getByRole('button', { name: 'Choose file' })).toBeInTheDocument()
   })
 
+  it('shows the flagged-for-review state and its gap card when the import is entirely gaps', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === '/api/smart-plug-imports') {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+
+      return Promise.resolve(
+        jsonResponse({
+          id: 'job-1',
+          status: 'completed',
+          importStatus: 'flaggedforreview',
+          errorMessage: null,
+          createdAtUtc: '',
+          completedAtUtc: '',
+          gaps: [{ startDate: '2026-08-01', endDate: '2026-08-09', treatment: 'flaggedforreview', estimatedTotalKwh: null }],
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SmartPlugImportPanel />)
+
+    await selectFile(makeFile('empty.csv'))
+    await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
+
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await waitFor(() => expect(screen.getByText("Needs a look before it's used")).toBeInTheDocument())
+    expect(screen.getByText('Flagged for review')).toBeInTheDocument()
+  })
+
+  it('renders gap cards in the completed state when the job carries gaps', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url === '/api/smart-plug-imports') {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+
+      return Promise.resolve(
+        jsonResponse({
+          id: 'job-1',
+          status: 'completed',
+          importStatus: 'completed',
+          errorMessage: null,
+          createdAtUtc: '',
+          completedAtUtc: '',
+          gaps: [{ startDate: '2026-04-12', endDate: '2026-04-17', treatment: 'estimated', estimatedTotalKwh: 24.6 }],
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SmartPlugImportPanel />)
+
+    await selectFile(makeFile('export.xlsx'))
+    await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
+
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
+    expect(screen.getByText('Estimated')).toBeInTheDocument()
+  })
+
   it('clears the polling interval on unmount', async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/smart-plug-imports') {

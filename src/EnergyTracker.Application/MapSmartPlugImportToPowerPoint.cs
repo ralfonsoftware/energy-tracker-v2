@@ -6,7 +6,8 @@ namespace EnergyTracker.Application;
 /// <summary>Resolves a Smart Plug import parked AwaitingPowerPointMapping by attaching its readings to a Power Point (AC #1, #2, #3).</summary>
 public class MapSmartPlugImportToPowerPoint(
     ISmartPlugImportRepository smartPlugImportRepository,
-    ITaggingScaffoldRepository taggingScaffoldRepository)
+    ITaggingScaffoldRepository taggingScaffoldRepository,
+    CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing)
 {
     public async Task ExecuteAsync(Guid smartPlugImportId, Guid powerPointId, CancellationToken cancellationToken)
     {
@@ -48,6 +49,11 @@ public class MapSmartPlugImportToPowerPoint(
         import.CompletedAtUtc = DateTimeOffset.UtcNow;
 
         await smartPlugImportRepository.UpdateMappingAsync(import, readings, cancellationToken);
+
+        // AD-7's second completion path (Story 3.2's own Dev Notes flagged this for this story) —
+        // gap detection + Status recompute must fire here too, not just from
+        // ProcessSmartPlugImport's direct-match branch.
+        await completeSmartPlugImportProcessing.ExecuteAsync(import, readings, cancellationToken);
     }
 }
 
