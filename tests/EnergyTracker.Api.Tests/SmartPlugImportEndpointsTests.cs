@@ -393,7 +393,10 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
             "/api/power-points", new { roomId = room!.Id, name = "A different outlet" }, TestContext.Current.CancellationToken);
         var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
 
-        var rows = new List<(DateOnly, decimal)> { (new DateOnly(2026, 6, 1), 2m), (new DateOnly(2026, 6, 2), 2m) };
+        // A genuine mid-file gap (not just two contiguous days) — this is the concrete regression
+        // test for gap-detection wiring on the mapping path specifically, not only Status recompute.
+        var start = new DateOnly(2026, 6, 1);
+        var rows = new List<(DateOnly, decimal)> { (start, 2m), (start.AddDays(2), 2m) };
         using var upload = BuildUploadFromBytes(BuildMerossCsv(rows), "Power Monitor Day Data - Unmatched Tag - 20260601.csv");
         var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
         var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
@@ -408,6 +411,9 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
 
         var finalStatus = await client.GetFromJsonAsync<JobStatusResponse>($"/api/jobs/{uploadBody.JobId}", TestContext.Current.CancellationToken);
         finalStatus!.ImportStatus.ShouldBe("completed");
+        finalStatus.Gaps.Count.ShouldBe(1);
+        finalStatus.Gaps[0].StartDate.ShouldBe(start.AddDays(1));
+        finalStatus.Gaps[0].EndDate.ShouldBe(start.AddDays(1));
 
         var snapshotCountAfterMapping = await CountStatusSnapshotRowsAsync(householdId);
         snapshotCountAfterMapping.ShouldBeGreaterThan(snapshotCountBeforeMapping);

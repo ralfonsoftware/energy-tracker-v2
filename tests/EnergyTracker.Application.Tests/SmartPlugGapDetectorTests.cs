@@ -26,8 +26,16 @@ public class SmartPlugGapDetectorTests
     };
 
     private static IReadOnlyList<SmartPlugImportGap> Detect(
-        IReadOnlyList<SmartPlugReading> importReadings, IReadOnlyList<SmartPlugReading>? priorReadings = null) =>
-        SmartPlugGapDetector.DetectGaps(HouseholdId, SmartPlugImportId, PowerPointId, importReadings, priorReadings ?? [], NowUtc);
+        IReadOnlyList<SmartPlugReading> importReadings, IReadOnlyList<SmartPlugReading>? priorReadings = null)
+    {
+        var prior = priorReadings ?? [];
+        // Mirrors what SmartPlugImportRepository.FindFirstReadingDateByPowerPointAsync would
+        // return in production — the earliest date across all of this Power Point's readings
+        // (prior + this import's own), or null if there's no history anywhere at all.
+        var allDates = prior.Concat(importReadings).Select(r => DateOnly.FromDateTime(r.IntervalStart.DateTime)).ToList();
+        DateOnly? firstEverReadingDate = allDates.Count > 0 ? allDates.Min() : null;
+        return SmartPlugGapDetector.DetectGaps(HouseholdId, SmartPlugImportId, PowerPointId, importReadings, prior, firstEverReadingDate, NowUtc);
+    }
 
     [Fact]
     public void No_gap_when_every_date_in_the_range_has_a_reading()
@@ -112,6 +120,27 @@ public class SmartPlugGapDetectorTests
         gaps.Count.ShouldBe(1);
         gaps[0].Treatment.ShouldBe(SmartPlugImportGapTreatment.Missing);
         gaps[0].EstimatedTotalKwh.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_single_import_can_produce_multiple_disjoint_gaps_in_chronological_order()
+    {
+        var start = new DateOnly(2026, 8, 1);
+        // 10 dense preceding days so both gaps below clear the "full preceding week" gate.
+        var readings = Enumerable.Range(0, 10).Select(i => Reading(start.AddDays(i), 4m)).ToList();
+        // Aug 11-12 missing, Aug 13 has data, Aug 14-15 missing, Aug 16 has data (closes range).
+        readings.Add(Reading(start.AddDays(12), 4m));
+        readings.Add(Reading(start.AddDays(15), 4m));
+
+        var gaps = Detect(readings);
+
+        gaps.Count.ShouldBe(2);
+        gaps[0].StartDate.ShouldBe(start.AddDays(10));
+        gaps[0].EndDate.ShouldBe(start.AddDays(11));
+        gaps[0].Treatment.ShouldBe(SmartPlugImportGapTreatment.Estimated);
+        gaps[1].StartDate.ShouldBe(start.AddDays(13));
+        gaps[1].EndDate.ShouldBe(start.AddDays(14));
+        gaps[1].Treatment.ShouldBe(SmartPlugImportGapTreatment.Estimated);
     }
 
     [Fact]

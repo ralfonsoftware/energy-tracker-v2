@@ -155,7 +155,7 @@
       "missingBadge": "Missing, not estimated",
       "flaggedForReviewBadge": "Flagged for review",
       "estimatedDetail": "No data received for {{days}} days. Filled from the preceding week's average ({{dailyAverage}} kWh/day) and flagged as estimated — never counted as measured.",
-      "missingDetail": "No data received for {{days}} days. There's no prior history to average from, so this range is left unfilled and flagged as missing — not interpolated from nothing.",
+      "missingDetail": "No data received for {{days}} days. This Power Point doesn't yet have a full preceding week of history to average from, so this range is left unfilled and flagged as missing — not interpolated from nothing.",
       "flaggedForReviewDetail": "Every day in this file's date range came back with no interval data — flagged for review rather than wholesale-interpolated."
     },
     "mappingModal": {

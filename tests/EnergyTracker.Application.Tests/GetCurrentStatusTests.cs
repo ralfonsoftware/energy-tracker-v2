@@ -355,6 +355,42 @@ public class GetCurrentStatusTests
     }
 
     [Fact]
+    public async Task Smart_Plug_corroboration_of_a_low_confidence_gap_never_changes_Pace_Baseline_or_Status_AD_14()
+    {
+        // Combines both guards Task 7 asks for in one test: a low-confidence gap *with* active
+        // Smart-Plug corroboration must still leave PaceToDateKwh/BaselineToDateKwh/Status exactly
+        // as they'd be computed from Meter Readings alone — corroboration may only ever soften
+        // IsLowConfidence, never touch anything else (AC #2, AD-14). Asserted by comparing the
+        // corroborated and uncorroborated results directly rather than hardcoding expected
+        // pace/baseline figures, so this doesn't silently drift if PatternDetectiveCalculator's
+        // formula ever changes.
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, DateTimeOffset.UtcNow.AddDays(-100));
+        var last = NewReading(householdId, mainMeter.Id, 1100m, DateTimeOffset.UtcNow.AddDays(-50));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+
+        _smartPlugCoverageSignal.HasCoverageDuringAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+        var uncorroborated = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        _smartPlugCoverageSignal.HasCoverageDuringAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        var corroborated = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        uncorroborated.ShouldNotBeNull();
+        corroborated.ShouldNotBeNull();
+        uncorroborated!.IsLowConfidence.ShouldBeTrue();
+        corroborated!.IsLowConfidence.ShouldBeFalse();
+        corroborated.PaceToDateKwh.ShouldBe(uncorroborated.PaceToDateKwh);
+        corroborated.BaselineToDateKwh.ShouldBe(uncorroborated.BaselineToDateKwh);
+        corroborated.Status.ShouldBe(uncorroborated.Status);
+    }
+
+    [Fact]
     public async Task A_long_gap_with_zero_Smart_Plug_coverage_leaves_IsLowConfidence_unchanged_true()
     {
         // AC #1 regression guard: a Household with zero Smart Plug coverage must still get a

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TriangleAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -133,13 +134,22 @@ export function SmartPlugImportPanel() {
   const handleMapped = async () => {
     setState('completed')
     // The mapping call itself doesn't return a gap list (Task 5) — re-poll the same job status
-    // endpoint once to pick up gaps detected during mapping completion (AD-7's second path).
-    if (jobIdRef.current) {
+    // endpoint to pick up gaps detected during mapping completion (AD-7's second path). Retries a
+    // few times on a transient network blip rather than silently giving up after one attempt —
+    // the import itself already completed successfully either way, so this never blocks the UI.
+    if (!jobIdRef.current) {
+      return
+    }
+
+    for (let attempt = 1; attempt <= MAX_CONSECUTIVE_POLL_FAILURES; attempt += 1) {
       try {
         const job = await fetchJobStatus(jobIdRef.current)
         setGaps(job.gaps ?? [])
+        return
       } catch {
-        // Best-effort refresh only — the import itself already completed successfully.
+        if (attempt < MAX_CONSECUTIVE_POLL_FAILURES) {
+          await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS))
+        }
       }
     }
   }
@@ -178,11 +188,22 @@ export function SmartPlugImportPanel() {
             {state === 'processing' && <Badge variant="outline">{t('smartPlugImport.processingBadge')}</Badge>}
             {state === 'completed' && <Badge variant="secondary">{t('smartPlugImport.completeTitle')}</Badge>}
             {state === 'awaitingMapping' && <Badge variant="outline">{t('smartPlugImport.awaitingMappingTitle')}</Badge>}
-            {state === 'flaggedForReview' && <Badge variant="outline">{t('smartPlugImport.flaggedForReviewTitle')}</Badge>}
             {state === 'failed' && <Badge variant="destructive">{t('smartPlugImport.failedTitle')}</Badge>}
           </div>
 
           {state === 'processing' && <p className="text-muted-foreground text-sm">{t('smartPlugImport.asyncNote')}</p>}
+
+          {state === 'flaggedForReview' && (
+            <div className="flex items-center gap-2.5 rounded-[12px] border border-status-trending/25 bg-status-trending/10 p-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-status-trending/30 bg-status-trending/15 text-status-trending">
+                <TriangleAlert className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">{t('smartPlugImport.flaggedForReviewTitle')}</div>
+                {fileName && <div className="text-muted-foreground truncate text-xs">{fileName}</div>}
+              </div>
+            </div>
+          )}
 
           {(state === 'completed' || state === 'flaggedForReview') && gaps.length > 0 && (
             <div className="flex flex-col gap-2">

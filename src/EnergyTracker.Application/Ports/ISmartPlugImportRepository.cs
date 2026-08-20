@@ -25,12 +25,22 @@ public interface ISmartPlugImportRepository
     // updated import/readings set is never observable by a later read.
     Task UpdateMappingAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken);
 
-    // "Prior" readings for the same Power Point, across all of ITS OTHER imports (excludes
-    // `excludeSmartPlugImportId` — the import currently being completed, whose own readings are
-    // passed separately into SmartPlugGapDetector) — the cross-import trailing-average lookup
-    // Task 2's algorithm needs. Ordered by IntervalStart (Story 3.3).
+    // "Prior" readings for the same Power Point, across all of ITS OTHER imports, bounded to
+    // `sinceDate` and later (excludes `excludeSmartPlugImportId` — the import currently being
+    // completed, whose own readings are passed separately into SmartPlugGapDetector) — the
+    // cross-import trailing-average lookup Task 2's algorithm needs. Bounded rather than the
+    // Power Point's full history, since only the trailing window immediately before the current
+    // import's own covered range can ever be read by SmartPlugGapDetector.BuildGap. Ordered by
+    // IntervalStart (Story 3.3).
     Task<IReadOnlyList<SmartPlugReading>> ListPriorReadingsByPowerPointAsync(
-        Guid powerPointId, Guid excludeSmartPlugImportId, CancellationToken cancellationToken);
+        Guid powerPointId, Guid excludeSmartPlugImportId, DateOnly sinceDate, CancellationToken cancellationToken);
+
+    // The Power Point's single earliest-ever SmartPlugReading date (a cheap indexed MIN lookup,
+    // not a full history scan) — feeds SmartPlugGapDetector's "has a genuine full preceding week
+    // elapsed since first-ever reading" rule (AC #6) without needing ListPriorReadingsByPowerPointAsync
+    // to load unbounded history just to compute the same thing. `null` only when the Power Point has
+    // no persisted reading at all yet.
+    Task<DateOnly?> FindFirstReadingDateByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
 
     // Single SaveChangesAsync — one transaction, mirroring every other method here. Gaps are
     // insert-only (immutable after creation, AD-7/NFR9's precedent) — never called to update an

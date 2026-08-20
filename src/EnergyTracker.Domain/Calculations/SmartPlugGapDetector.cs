@@ -11,7 +11,9 @@ namespace EnergyTracker.Domain.Calculations;
 // vendor-specific logic belongs here.
 public static class SmartPlugGapDetector
 {
-    private const int TrailingAverageWindowDays = 7;
+    // Public so callers (CompleteSmartPlugImportProcessing) can bound their own prior-readings
+    // query to this same window instead of loading a Power Point's full reading history.
+    public const int TrailingAverageWindowDays = 7;
 
     // Confirmed with Ralf during dev-story activation: the "no preceding history" check (AC #6) is
     // scoped per Power Point, not per household — `priorReadings` already carries only this Power
@@ -35,6 +37,7 @@ public static class SmartPlugGapDetector
         Guid powerPointId,
         IReadOnlyList<SmartPlugReading> importReadings,
         IReadOnlyList<SmartPlugReading> priorReadings,
+        DateOnly? firstEverReadingDate,
         DateTimeOffset nowUtc)
     {
         if (importReadings.Count == 0)
@@ -47,7 +50,10 @@ public static class SmartPlugGapDetector
         var importDatesWithData = importReadings.Select(DateOf).ToHashSet();
 
         // Merged daily totals (import + prior, same Power Point) used only for the trailing-average
-        // fill computation below — irrelevant to whether a date counts as a gap.
+        // fill computation below — irrelevant to whether a date counts as a gap. `priorReadings` is
+        // expected to already be bounded to the trailing window a caller can actually need (see
+        // CompleteSmartPlugImportProcessing) — the true "has any history ever existed" question is
+        // answered by `firstEverReadingDate` below, not by scanning `priorReadings` itself.
         var dailyTotals = new Dictionary<DateOnly, decimal>();
         foreach (var reading in priorReadings.Concat(importReadings))
         {
@@ -58,9 +64,11 @@ public static class SmartPlugGapDetector
         var rangeStart = importDatesWithData.Min();
         var rangeEnd = importDatesWithData.Max();
 
-        var firstEverDate = priorReadings.Count > 0
-            ? priorReadings.Select(DateOf).Min()
-            : rangeStart;
+        // `firstEverReadingDate` is the Power Point's true earliest-ever reading date across ALL of
+        // its history (a cheap indexed MIN lookup at the caller, not derived from `priorReadings`,
+        // which may be windowed) — `null` only for a genuinely first-ever import with no prior
+        // reading anywhere yet, in which case this import's own first date is the earliest.
+        var firstEverDate = firstEverReadingDate ?? rangeStart;
         if (firstEverDate > rangeStart)
         {
             firstEverDate = rangeStart;
@@ -83,10 +91,9 @@ public static class SmartPlugGapDetector
             }
         }
 
-        if (contiguousGapStart is { } trailingGapStart)
-        {
-            gaps.Add(BuildGap(trailingGapStart, rangeEnd));
-        }
+        // No trailing-gap-close branch after the loop: `rangeEnd` is defined above as the max date
+        // *with* data, so the loop's final iteration (date == rangeEnd) is always a non-gap date —
+        // any open gap is always already closed by the `else if` branch inside the loop.
 
         return gaps;
 

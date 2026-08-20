@@ -155,7 +155,7 @@
       "missingBadge": "Fehlend, nicht geschätzt",
       "flaggedForReviewBadge": "Zur Prüfung markiert",
       "estimatedDetail": "Für {{days}} Tage wurden keine Daten empfangen. Aus dem Durchschnitt der Vorwoche ({{dailyAverage}} kWh/Tag) aufgefüllt und als geschätzt markiert — nie als gemessen gezählt.",
-      "missingDetail": "Für {{days}} Tage wurden keine Daten empfangen. Es gibt keine vorherige Historie zum Mitteln, daher bleibt dieser Zeitraum unausgefüllt und als fehlend markiert — nicht aus dem Nichts interpoliert.",
+      "missingDetail": "Für {{days}} Tage wurden keine Daten empfangen. Für diesen Power Point liegt noch keine vollständige vorherige Woche an Verlaufsdaten zum Mitteln vor, daher bleibt dieser Zeitraum unausgefüllt und als fehlend markiert — nicht aus dem Nichts interpoliert.",
       "flaggedForReviewDetail": "An jedem Tag im Datumsbereich dieser Datei kamen keine Intervalldaten an — zur Prüfung markiert statt vollständig interpoliert."
     },
     "mappingModal": {
