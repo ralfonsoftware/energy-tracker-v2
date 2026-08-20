@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Azure.Storage.Queues;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
@@ -294,6 +295,39 @@ builder.Services.AddScoped<ResolveMeterRegressionPrompt>();
 builder.Services.AddScoped<GetOpenMeterRegressionPrompt>();
 builder.Services.AddScoped<GetCurrentStatus>();
 
+// AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
+// switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
+builder.Services.AddScoped<JobHouseholdContext>();
+builder.Services.AddSingleton<BackgroundJobProcessor>();
+builder.Services.AddScoped<IBackgroundJobRepository, BackgroundJobRepository>();
+builder.Services.AddScoped<GetBackgroundJobStatus>();
+builder.Services.AddScoped<ISmartPlugParser, EveHomeXlsxParser>();
+builder.Services.AddScoped<ISmartPlugParser, MerossCsvParser>();
+builder.Services.AddScoped<ISmartPlugImportRepository, SmartPlugImportRepository>();
+builder.Services.AddScoped<ProcessSmartPlugImport>();
+
+var jobQueueProvider = (builder.Configuration["JobQueue:Provider"] ?? string.Empty).Trim().ToLowerInvariant();
+switch (jobQueueProvider)
+{
+    case "azurestoragequeue":
+        var jobQueueConnectionString = builder.Configuration["JobQueue:ConnectionString"] ?? string.Empty;
+        // Base64 message encoding so a JSON payload survives the queue message's XML envelope
+        // untouched (the SDK's raw/"None" default is not XML-safe for arbitrary JSON text).
+        builder.Services.AddSingleton(_ => new QueueClient(
+            jobQueueConnectionString, "jobs", new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 }));
+        builder.Services.AddSingleton<IBackgroundJobQueue, AzureStorageQueueJobQueue>();
+        builder.Services.AddHostedService<AzureStorageQueueJobProcessingService>();
+        break;
+    default:
+        // Unset/unrecognized: same "unset stays off"-shaped default as Otel:Exporter, not
+        // Database:Provider's hard-required default — the in-process adapter needs no external
+        // config to function.
+        builder.Services.AddSingleton<InProcessChannelJobQueue>();
+        builder.Services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<InProcessChannelJobQueue>());
+        builder.Services.AddHostedService<InProcessChannelJobProcessingService>();
+        break;
+}
+
 var app = builder.Build();
 
 // Must run before anything reads Request.Scheme/Host — Azure Container Apps (this story's own
@@ -343,6 +377,8 @@ api.MapTaggingScaffoldEndpoints();
 api.MapMeterReadingEndpoints();
 api.MapMeterRegressionPromptEndpoints();
 api.MapStatusEndpoints();
+api.MapSmartPlugImportEndpoints();
+api.MapJobEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();

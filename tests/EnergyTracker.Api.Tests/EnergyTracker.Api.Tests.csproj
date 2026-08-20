@@ -10,6 +10,11 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Fixtures (Story 3.1) — upload-endpoint tests exercise the actual upload → async
+         parse → job-completion flow against a real vendor export (trimmed/anonymized before being
+         committed, see .gitignore and sample-data/), not a hand-rolled minimal file. -->
+    <Content Include="..\..\sample-data\eve\*.xlsx" LinkBase="sample-data\eve" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\sample-data\meross\*.csv" LinkBase="sample-data\meross" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

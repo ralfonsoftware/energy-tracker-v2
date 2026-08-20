@@ -167,6 +167,37 @@ Open `https://localhost:5173` (not `:5133`, and note `https`) in Safari.
 `certs/` is git-ignored — these certs are local-machine-only, like the Data
 Protection cert (`DATA_PROTECTION_CERTIFICATE_BASE64`).
 
+## Live browser verification with the test user
+
+For stories where component/integration tests aren't enough — anything touching
+auth, ingress, or a real rendered flow you want to see with your own eyes —
+`OIDC_TEST_USER_EMAIL`/`OIDC_TEST_USER_NAME`/`OIDC_TEST_USER_PASSWORD` in `.env`
+hold a dedicated Auth0 test-user account, separate from any real personal
+account, for driving a real OIDC login through Claude-in-Chrome (or manually).
+
+**Log in with the username, not the email.** This tenant's connection
+identifies users by username (`OIDC_TEST_USER_NAME`) — the Auth0 hosted
+login page's first field is labeled "Benutzername"/"Username" and only
+accepts that value; entering `OIDC_TEST_USER_EMAIL` there fails. The email
+is stored for reference/account-recovery only.
+
+**A fresh test-user login always hits the household-onboarding screen
+first** ("Set up your Household" — Locale/Currency), same as any brand-new
+account — there's no pre-seeded household. Complete it before expecting to
+see the real Dashboard.
+
+**Skip the passkey-enrollment upsell** ("Passkey für ... auf diesem Gerät
+erstellen") if Auth0 shows it after a successful password login — click
+"Weiter ohne Passkeys" ("Continue without Passkeys"), don't click "Passkey
+erstellen". That screen can trigger the browser's native WebAuthn prompt,
+which browser-automation tools can't dismiss or interact with and will
+leave the session stuck. Once dismissed with "not asking again" for a given
+account, Auth0 stops offering it on subsequent logins.
+
+To reset the test user's household state (e.g. to re-verify onboarding from
+scratch), delete its `Household`/related rows from the local Postgres
+database directly — there's no in-app account-deletion flow.
+
 ## Running it all from VS Code (F5)
 
 The repo ships `.vscode/launch.json` and `.vscode/tasks.json` with three

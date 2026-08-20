@@ -3,5 +3,14 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" }
-  ]
+  ],
+  // Duplicated from tsconfig.app.json (the actual compile-time source of truth for this path).
+  // The shadcn CLI reads paths only from this root tsconfig.json, not from a referenced project
+  // config — without this, "npx shadcn add" silently resolves "@/components/ui" as a literal
+  // relative path and writes files to a stray "web/@/components/ui/" directory instead.
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
 }

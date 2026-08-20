@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { TaggingScaffoldManager } from '@/components/tagging-scaffold/tagging-scaffold-manager'
 import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline-form'
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
+import { SmartPlugImportPanel } from '@/components/smart-plug-import/smart-plug-import-panel'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 
 interface SettingsPageProps {
@@ -30,6 +31,7 @@ export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
       <div className="flex flex-col gap-[var(--spacing-card-gap)]">
         <YearlyBaselineForm householdId={householdId} />
         <TaggingScaffoldManager />
+        <SmartPlugImportPanel />
         <InviteGeneratePanel />
       </div>
 

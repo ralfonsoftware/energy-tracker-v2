@@ -22,6 +22,38 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("EnergyTracker.Domain.BackgroundJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("JobType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.ToTable("BackgroundJobs", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.Device", b =>
                 {
                     b.Property<Guid>("Id")
@@ -336,6 +368,95 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.ToTable("Rooms", (string)null);
                 });
 
+            modelBuilder.Entity("EnergyTracker.Domain.SmartPlugImport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BackgroundJobId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DeviceTag")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VendorFormat")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BackgroundJobId");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.ToTable("SmartPlugImports", (string)null);
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.SmartPlugReading", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeviceName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("IntervalEnd")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("IntervalStart")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal>("KwhValue")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<Guid?>("PowerPointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PowerPointName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoomName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("SmartPlugImportId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("PowerPointId");
+
+                    b.HasIndex("SmartPlugImportId");
+
+                    b.ToTable("SmartPlugReadings", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.StatusSnapshot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -386,6 +507,15 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("DataProtectionKeys");
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.BackgroundJob", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.Device", b =>
@@ -494,6 +624,41 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasOne("EnergyTracker.Domain.Household", null)
                         .WithMany()
                         .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.SmartPlugImport", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.BackgroundJob", null)
+                        .WithMany()
+                        .HasForeignKey("BackgroundJobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.SmartPlugReading", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.PowerPoint", null)
+                        .WithMany()
+                        .HasForeignKey("PowerPointId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EnergyTracker.Domain.SmartPlugImport", null)
+                        .WithMany()
+                        .HasForeignKey("SmartPlugImportId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
