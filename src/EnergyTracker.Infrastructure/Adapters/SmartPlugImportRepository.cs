@@ -27,18 +27,26 @@ public class SmartPlugImportRepository(EnergyTrackerDbContext dbContext) : ISmar
 
     public async Task<IReadOnlyList<SmartPlugReading>> ListReadingsByImportIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken) =>
         await dbContext.SmartPlugReadings
+            .AsNoTracking()
             .Where(r => r.SmartPlugImportId == smartPlugImportId)
             .ToListAsync(cancellationToken);
 
-    public async Task UpdateMappingAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
+    public async Task UpdateMappingAsync(
+        SmartPlugImport import, Guid powerPointId, string powerPointName, string? roomName, CancellationToken cancellationToken)
     {
-        // import/readings are already tracked by this same scoped DbContext — they came from
-        // FindByIdAsync/ListReadingsByImportIdAsync earlier in the same request. Calling
-        // Update()/UpdateRange() here would mark every property Modified (forcing a full-column
-        // UPDATE) instead of letting the change tracker diff only what ExecuteAsync actually
-        // touched — SaveChangesAsync alone is enough.
-        // Single SaveChangesAsync — one transaction, so a partially updated import/readings set
-        // is never observable by a later read.
+        // One set-based UPDATE server-side — no loading/tracking/diffing hundreds of thousands of
+        // rows for a large import (see this method's doc comment on the port interface).
+        await dbContext.SmartPlugReadings
+            .Where(r => r.SmartPlugImportId == import.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.PowerPointId, powerPointId)
+                .SetProperty(r => r.PowerPointName, powerPointName)
+                .SetProperty(r => r.RoomName, r => roomName ?? r.RoomName),
+                cancellationToken);
+
+        // import is already tracked by this same scoped DbContext (loaded via FindByIdAsync
+        // earlier in the same request) — only its Status/CompletedAtUtc changed, so
+        // SaveChangesAsync alone is enough.
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

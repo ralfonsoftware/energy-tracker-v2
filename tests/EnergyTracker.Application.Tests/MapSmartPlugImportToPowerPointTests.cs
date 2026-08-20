@@ -86,12 +86,16 @@ public class MapSmartPlugImportToPowerPointTests
     };
 
     [Fact]
-    public async Task Sets_power_point_and_room_on_every_reading_and_completes_the_import()
+    public async Task Attaches_every_reading_to_the_power_point_via_a_set_based_update_and_completes_the_import()
     {
         var import = MakeImport();
-        var readings = new List<SmartPlugReading> { MakeReading(import.Id), MakeReading(import.Id) };
         var room = MakeRoom();
         var powerPoint = MakePowerPoint(room.Id);
+        // Attachment now happens via UpdateMappingAsync's set-based UPDATE, not a C# mutation
+        // loop — ListReadingsByImportIdAsync is called AFTER that UPDATE (see production code),
+        // so the mock simulates the already-updated DB state a real read-back would return.
+        var readings = new List<SmartPlugReading> { MakeReading(import.Id), MakeReading(import.Id) };
+        readings.ForEach(r => r.PowerPointId = powerPoint.Id);
         _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
         _smartPlugImportRepository.ListReadingsByImportIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(readings);
         _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
@@ -101,10 +105,12 @@ public class MapSmartPlugImportToPowerPointTests
         await sut.ExecuteAsync(import.Id, powerPoint.Id, TestContext.Current.CancellationToken);
 
         import.Status.ShouldBe(SmartPlugImportStatus.Completed);
-        readings.ShouldAllBe(r => r.PowerPointId == powerPoint.Id && r.PowerPointName == powerPoint.Name && r.RoomName == room.Name);
+        // A large import's readings are attached via a single set-based UPDATE (not loaded and
+        // mutated row-by-row in memory — see UpdateMappingAsync's doc comment), so the assertion
+        // is on the call's arguments, not on mutated reading objects.
         await _smartPlugImportRepository.Received(1).UpdateMappingAsync(
             Arg.Is<SmartPlugImport>(i => i.Id == import.Id && i.Status == SmartPlugImportStatus.Completed),
-            Arg.Is<IReadOnlyList<SmartPlugReading>>(rs => rs.Count == readings.Count),
+            powerPoint.Id, powerPoint.Name, room.Name,
             Arg.Any<CancellationToken>());
         // AD-7's second completion path (Task 3) — Status recompute must fire here too.
         await _statusRecomputeService.Received(1).RecomputeAsync(_householdId, Arg.Any<CancellationToken>());
@@ -118,6 +124,8 @@ public class MapSmartPlugImportToPowerPointTests
         // had no equivalent unit-level assertion.
         var import = MakeImport();
         var start = new DateOnly(2026, 8, 1);
+        var room = MakeRoom();
+        var powerPoint = MakePowerPoint(room.Id);
         var readings = new List<SmartPlugReading>
         {
             MakeReadingOnDate(import.Id, start),
@@ -125,8 +133,9 @@ public class MapSmartPlugImportToPowerPointTests
             // week of history, so this is Missing, not Estimated; either way AddGapsAsync must fire.
             MakeReadingOnDate(import.Id, start.AddDays(2)),
         };
-        var room = MakeRoom();
-        var powerPoint = MakePowerPoint(room.Id);
+        // Simulates the already-updated DB state UpdateMappingAsync's set-based UPDATE would have
+        // produced before this read-back (see the other test's comment for why).
+        readings.ForEach(r => r.PowerPointId = powerPoint.Id);
         _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
         _smartPlugImportRepository.ListReadingsByImportIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(readings);
         _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);

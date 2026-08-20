@@ -34,21 +34,18 @@ public class MapSmartPlugImportToPowerPoint(
 
         var room = await taggingScaffoldRepository.FindRoomAsync(powerPoint.RoomId, cancellationToken);
 
-        var readings = await smartPlugImportRepository.ListReadingsByImportIdAsync(smartPlugImportId, cancellationToken);
-
-        // AD-10: this mapping call is "write time" for these previously-unattributed readings —
-        // snapshot the Power Point/Room identity by value now, never a live join later.
-        foreach (var reading in readings)
-        {
-            reading.PowerPointId = powerPoint.Id;
-            reading.PowerPointName = powerPoint.Name;
-            reading.RoomName = room?.Name ?? reading.RoomName;
-        }
-
         import.Status = SmartPlugImportStatus.Completed;
         import.CompletedAtUtc = DateTimeOffset.UtcNow;
 
-        await smartPlugImportRepository.UpdateMappingAsync(import, readings, cancellationToken);
+        // AD-10: this mapping call is "write time" for these previously-unattributed readings —
+        // snapshot the Power Point/Room identity by value now, never a live join later. A
+        // set-based UPDATE (not load-every-row-then-mutate) — see UpdateMappingAsync's doc comment.
+        await smartPlugImportRepository.UpdateMappingAsync(import, powerPoint.Id, powerPoint.Name, room?.Name, cancellationToken);
+
+        // Read back only now, after the UPDATE above already persisted the Power Point/Room
+        // attribution — gap detection needs these readings' own values (kWh, timestamps), not
+        // further mutation, so this is a plain read.
+        var readings = await smartPlugImportRepository.ListReadingsByImportIdAsync(smartPlugImportId, cancellationToken);
 
         // AD-7's second completion path (Story 3.2's own Dev Notes flagged this for this story) —
         // gap detection + Status recompute must fire here too, not just from

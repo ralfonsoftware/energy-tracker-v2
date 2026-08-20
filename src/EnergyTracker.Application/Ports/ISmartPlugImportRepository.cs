@@ -19,11 +19,23 @@ public interface ISmartPlugImportRepository
     // FindByBackgroundJobIdAsync, which is job-context (Story 3.1's ProcessSmartPlugImport).
     Task<SmartPlugImport?> FindByIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken);
 
+    // Read-only from here on (AsNoTracking) — the only caller (MapSmartPlugImportToPowerPoint)
+    // used to mutate and re-persist this same list, but UpdateMappingAsync now writes
+    // PowerPointId/PowerPointName/RoomName via a set-based UPDATE instead, so nothing downstream
+    // needs these entities tracked.
     Task<IReadOnlyList<SmartPlugReading>> ListReadingsByImportIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken);
 
-    // Mirrors AddAsync's single-SaveChangesAsync pattern — one transaction, so a partially
-    // updated import/readings set is never observable by a later read.
-    Task UpdateMappingAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken);
+    // A single set-based UPDATE (EF Core's ExecuteUpdateAsync) against every SmartPlugReading row
+    // for this import, plus the import row's own Status/CompletedAtUtc. Deliberately NOT the
+    // load-every-row-then-track-then-diff pattern AddAsync/other methods here use — a large Eve
+    // Home import can carry hundreds of thousands of readings, and loading + change-tracking that
+    // many rows blew the default 30s SQL command timeout on Basic-tier Azure SQL on every mapping
+    // attempt. The readings UPDATE and the import row's SaveChangesAsync are two separate
+    // round trips (not one transaction like AddAsync) — a crash between them leaves readings
+    // already correctly attributed but the import row still AwaitingPowerPointMapping, which a
+    // retry safely repeats (the UPDATE is idempotent).
+    Task UpdateMappingAsync(
+        SmartPlugImport import, Guid powerPointId, string powerPointName, string? roomName, CancellationToken cancellationToken);
 
     // "Prior" readings for the same Power Point, across all of ITS OTHER imports, bounded to
     // `sinceDate` and later (excludes `excludeSmartPlugImportId` — the import currently being
