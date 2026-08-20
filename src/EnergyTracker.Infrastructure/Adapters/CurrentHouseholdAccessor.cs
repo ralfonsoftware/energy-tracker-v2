@@ -15,7 +15,10 @@ namespace EnergyTracker.Infrastructure.Adapters;
 /// EnergyTrackerDbContext directly, so EnergyTrackerDbContext can take this accessor as a normal
 /// constructor dependency with no circular-DI workaround needed.
 /// </summary>
-public class CurrentHouseholdAccessor(IHttpContextAccessor httpContextAccessor, IDbContextFactory<HouseholdMembershipDbContext> dbContextFactory)
+public class CurrentHouseholdAccessor(
+    IHttpContextAccessor httpContextAccessor,
+    IDbContextFactory<HouseholdMembershipDbContext> dbContextFactory,
+    JobHouseholdContext jobHouseholdContext)
     : ICurrentHouseholdAccessor
 {
     private bool _resolved;
@@ -37,6 +40,13 @@ public class CurrentHouseholdAccessor(IHttpContextAccessor httpContextAccessor, 
 
     private Guid? Resolve()
     {
+        // AD-3's job-processing resolution path: no HTTP request exists while a dequeued job
+        // envelope is being processed, so there's nothing to read a principal from.
+        if (httpContextAccessor.HttpContext is null)
+        {
+            return jobHouseholdContext.HouseholdId;
+        }
+
         var user = httpContextAccessor.HttpContext?.User;
         var subjectClaim = user?.FindFirst(ClaimTypes.NameIdentifier);
         var issuerClaim = user?.FindFirst(HouseholdClaimTypes.ValidatedIssuer);

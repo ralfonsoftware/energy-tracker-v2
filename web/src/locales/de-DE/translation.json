@@ -134,5 +134,21 @@
       "tariffRadar": "Tarifradar",
       "settings": "Einstellungen"
     }
+  },
+  "smartPlugImport": {
+    "heading": "Smart-Plug-Import",
+    "dropHint": "Datei hierher ziehen oder eine Datei auswählen.",
+    "formats": "Unterstützt Eve-Home-Exporte (.xlsx) und Meross-Exporte (.csv).",
+    "chooseFile": "Datei auswählen",
+    "uploading": "Wird hochgeladen…",
+    "processingBadge": "Wird verarbeitet",
+    "asyncNote": "Hochgeladen. Die Datei wird im Hintergrund verarbeitet — du erhältst eine Benachrichtigung, sobald es fertig ist. Du kannst diesen Bildschirm jederzeit verlassen.",
+    "completeTitle": "Import abgeschlossen",
+    "awaitingMappingTitle": "Power-Point-Zuordnung erforderlich",
+    "awaitingMappingNote": "Diese Datei konnte keinem Power Point automatisch zugeordnet werden. Die Zuordnung folgt in Kürze.",
+    "failedTitle": "Import fehlgeschlagen",
+    "uploadAnother": "Weitere Datei hochladen",
+    "errorGeneric": "Beim Hochladen der Datei ist etwas schiefgelaufen. Bitte versuche es erneut.",
+    "errorUnsupportedType": "Dieser Dateityp wird nicht unterstützt. Bitte wähle einen .xlsx- oder .csv-Export."
   }
 }

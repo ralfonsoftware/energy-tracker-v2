@@ -35,6 +35,12 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
 
     public DbSet<StatusSnapshot> StatusSnapshots => Set<StatusSnapshot>();
 
+    public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
+
+    public DbSet<SmartPlugImport> SmartPlugImports => Set<SmartPlugImport>();
+
+    public DbSet<SmartPlugReading> SmartPlugReadings => Set<SmartPlugReading>();
+
     // Backs PersistKeysToDbContext (AC #4) — Data Protection keys survive a scale-to-zero cold
     // start instead of being regenerated in memory (AD-17).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -55,5 +61,8 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
         modelBuilder.Entity<MeterReading>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
         modelBuilder.Entity<MeterRegressionPrompt>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
         modelBuilder.Entity<StatusSnapshot>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
+        modelBuilder.Entity<BackgroundJob>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
+        modelBuilder.Entity<SmartPlugImport>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
+        modelBuilder.Entity<SmartPlugReading>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
     }
 }

@@ -36,6 +36,16 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
 
+    <!-- AD-6 async job queue cloud adapter (AzureStorageQueueJobQueue) -->
+    <PackageVersion Include="Azure.Storage.Queues" Version="12.22.0" />
+
+    <!-- AD-9 Eve Home .xlsx parser (EveHomeXlsxParser). The real sample files store their date
+         column as OOXML's ISO-8601 "t=d" cell type (dimension A1:B57184) rather than the usual
+         numeric date serial — ClosedXML 0.105.1 throws FormatException loading that cell type
+         (verified directly against sample-data/eve/*.xlsx), so this reads the OOXML package
+         directly via the lower-level SDK ClosedXML itself wraps instead. -->
+    <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
+
     <!-- Testing -->
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
