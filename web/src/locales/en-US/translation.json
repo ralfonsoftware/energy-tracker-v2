@@ -145,10 +145,20 @@
     "asyncNote": "Uploaded. We're parsing this in the background — you'll get a notification when it's done. Feel free to leave this screen; nothing here needs to stay open.",
     "completeTitle": "Import complete",
     "awaitingMappingTitle": "Needs Power Point mapping",
-    "awaitingMappingNote": "We couldn't automatically match this file to a Power Point. Mapping support is coming soon.",
     "failedTitle": "Import failed",
     "uploadAnother": "Upload another file",
     "errorGeneric": "Something went wrong uploading this file. Please try again.",
-    "errorUnsupportedType": "That file type isn't supported. Please choose an .xlsx or .csv export."
+    "errorUnsupportedType": "That file type isn't supported. Please choose an .xlsx or .csv export.",
+    "mappingModal": {
+      "title": "New Power Point: \"{{deviceTag}}\"",
+      "body": "This file is tagged to a Power Point that doesn't exist in your household yet. Create it, or map this data to one you already have — nothing is imported until you choose.",
+      "createButton": "Create Power Point \"{{deviceTag}}\"",
+      "roomLabel": "Room",
+      "noRooms": "You don't have any Rooms yet. Add one in Settings before creating a Power Point here.",
+      "orDivider": "or map to an existing one",
+      "noExisting": "No existing Power Points yet.",
+      "mapError": "Something went wrong mapping this import. Please try again.",
+      "retry": "Retry"
+    }
   }
 }

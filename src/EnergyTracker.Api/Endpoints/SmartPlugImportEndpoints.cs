@@ -1,5 +1,6 @@
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
+using EnergyTracker.Domain;
 
 namespace EnergyTracker.Api.Endpoints;
 
@@ -99,8 +100,51 @@ public static class SmartPlugImportEndpoints
         // every other write endpoint.
         .DisableAntiforgery();
 
+        api.MapPost("/smart-plug-imports/{id:guid}/power-point-mapping", async (
+            Guid id,
+            MapSmartPlugImportRequest request,
+            ICurrentHouseholdAccessor householdAccessor,
+            MapSmartPlugImportToPowerPoint mapSmartPlugImportToPowerPoint,
+            CancellationToken cancellationToken) =>
+        {
+            // AD-3's query filter alone would already stop a cross-Household id from resolving,
+            // but every sibling endpoint (RenamePowerPoint/MovePowerPoint included, the exact
+            // precedent this handler follows) still calls TryGetHouseholdId first so a principal
+            // with no Household gets a 403 rather than a misleading 404.
+            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                await mapSmartPlugImportToPowerPoint.ExecuteAsync(id, request.PowerPointId, cancellationToken);
+                return Results.Ok(new SmartPlugImportMappingResponse(id, SmartPlugImportStatus.Completed.ToString().ToLowerInvariant()));
+            }
+            catch (SmartPlugImportNotFoundException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (TaggingScaffoldNotFoundException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (SmartPlugImportValidationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+            catch (TaggingScaffoldParentArchivedException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
+
         return api;
     }
 }
 
 public record SmartPlugImportUploadResponse(Guid JobId);
+
+public record MapSmartPlugImportRequest(Guid PowerPointId);
+
+public record SmartPlugImportMappingResponse(Guid Id, string Status);

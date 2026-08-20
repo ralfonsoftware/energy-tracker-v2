@@ -88,22 +88,33 @@ describe('SmartPlugImportPanel', () => {
     expect(screen.getByText('boom')).toBeInTheDocument()
   })
 
-  it('shows a needs-mapping badge when the import completes without a Power Point match', async () => {
+  it('shows a needs-mapping badge and the create/map dialog when the import completes without a Power Point match', async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'job-1',
+            status: 'completed',
+            importStatus: 'awaitingpowerpointmapping',
+            errorMessage: null,
+            createdAtUtc: '',
+            completedAtUtc: '',
+            smartPlugImportId: 'import-1',
+            smartPlugImportDeviceTag: 'Office Desk',
+          }),
+        )
+      }
+      if (url === '/api/rooms') {
+        return Promise.resolve(jsonResponse([{ id: 'room-1', name: 'Living room', archivedAt: null }]))
+      }
+      if (url === '/api/power-points') {
+        return Promise.resolve(jsonResponse([]))
+      }
 
-      return Promise.resolve(
-        jsonResponse({
-          id: 'job-1',
-          status: 'completed',
-          importStatus: 'awaitingpowerpointmapping',
-          errorMessage: null,
-          createdAtUtc: '',
-          completedAtUtc: '',
-        }),
-      )
+      throw new Error(`Unexpected fetch: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPanel />)
@@ -114,6 +125,51 @@ describe('SmartPlugImportPanel', () => {
     await vi.advanceTimersByTimeAsync(2000)
 
     await waitFor(() => expect(screen.getByText('Needs Power Point mapping')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('New Power Point: "Office Desk"')).toBeInTheDocument())
+  })
+
+  it('flips to the completed state once the mapping dialog reports success', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/smart-plug-imports') {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 'job-1',
+            status: 'completed',
+            importStatus: 'awaitingpowerpointmapping',
+            errorMessage: null,
+            createdAtUtc: '',
+            completedAtUtc: '',
+            smartPlugImportId: 'import-1',
+            smartPlugImportDeviceTag: 'Office Desk',
+          }),
+        )
+      }
+      if (url === '/api/rooms') {
+        return Promise.resolve(jsonResponse([{ id: 'room-1', name: 'Living room', archivedAt: null }]))
+      }
+      if (url === '/api/power-points') {
+        return Promise.resolve(jsonResponse([{ id: 'pp-1', roomId: 'room-1', name: 'Desk lamp', archivedAt: null }]))
+      }
+      if (url === '/api/smart-plug-imports/import-1/power-point-mapping') {
+        return Promise.resolve(jsonResponse({ id: 'import-1', status: 'completed' }))
+      }
+
+      throw new Error(`Unexpected fetch: ${url} ${init?.method ?? ''}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SmartPlugImportPanel />)
+
+    await selectFile(makeFile('export.xlsx'))
+    await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
+    await vi.advanceTimersByTimeAsync(2000)
+    await waitFor(() => expect(screen.getByText('Living room → Desk lamp')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('Living room → Desk lamp'))
+
+    await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
   })
 
   it('tolerates a transient polling failure and keeps polling instead of failing immediately', async () => {

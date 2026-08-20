@@ -195,4 +195,120 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task Mapping_an_unmatched_import_to_an_existing_Power_Point_attaches_readings_and_completes_it()
+    {
+        var (client, householdId) = await CreateHouseholdAsync();
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "A different outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+
+        var awaitingStatus = await PollJobToTerminalAsync(client, uploadBody!.JobId);
+        awaitingStatus.ImportStatus.ShouldBe("awaitingpowerpointmapping");
+        awaitingStatus.SmartPlugImportId.ShouldNotBeNull();
+
+        var mappingResponse = await client.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{awaitingStatus.SmartPlugImportId}/power-point-mapping",
+            new { powerPointId = powerPoint!.Id },
+            TestContext.Current.CancellationToken);
+
+        mappingResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var mappingBody = await mappingResponse.Content.ReadFromJsonAsync<SmartPlugImportMappingResponse>(TestContext.Current.CancellationToken);
+        mappingBody!.Status.ShouldBe("completed");
+
+        var finalStatus = await client.GetFromJsonAsync<JobStatusResponse>($"/api/jobs/{uploadBody.JobId}", TestContext.Current.CancellationToken);
+        finalStatus!.ImportStatus.ShouldBe("completed");
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var readings = await dbContext.SmartPlugReadings.IgnoreQueryFilters()
+            .Where(r => r.HouseholdId == householdId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        readings.ShouldNotBeEmpty();
+        readings.ShouldAllBe(r => r.PowerPointId == powerPoint.Id && r.PowerPointName == powerPoint.Name && r.RoomName == room.Name);
+    }
+
+    [Fact]
+    public async Task Mapping_a_cross_Household_SmartPlugImportId_returns_404()
+    {
+        var (clientA, _) = await CreateHouseholdAsync();
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await clientA.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var awaitingStatus = await PollJobToTerminalAsync(clientA, uploadBody!.JobId);
+
+        var (clientB, _) = await CreateHouseholdAsync();
+        var roomResponse = await clientB.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await clientB.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "Outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        var mappingResponse = await clientB.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{awaitingStatus.SmartPlugImportId}/power-point-mapping",
+            new { powerPointId = powerPoint!.Id },
+            TestContext.Current.CancellationToken);
+
+        mappingResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Mapping_to_an_archived_Power_Point_returns_409()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "Outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+        await client.DeleteAsync($"/api/power-points/{powerPoint!.Id}", TestContext.Current.CancellationToken);
+
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var awaitingStatus = await PollJobToTerminalAsync(client, uploadBody!.JobId);
+
+        var mappingResponse = await client.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{awaitingStatus.SmartPlugImportId}/power-point-mapping",
+            new { powerPointId = powerPoint.Id },
+            TestContext.Current.CancellationToken);
+
+        mappingResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Mapping_an_already_completed_import_a_second_time_returns_409()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "Outlet" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var awaitingStatus = await PollJobToTerminalAsync(client, uploadBody!.JobId);
+
+        var firstMapping = await client.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{awaitingStatus.SmartPlugImportId}/power-point-mapping",
+            new { powerPointId = powerPoint!.Id },
+            TestContext.Current.CancellationToken);
+        firstMapping.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var secondMapping = await client.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{awaitingStatus.SmartPlugImportId}/power-point-mapping",
+            new { powerPointId = powerPoint.Id },
+            TestContext.Current.CancellationToken);
+
+        secondMapping.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
 }

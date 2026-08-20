@@ -145,10 +145,20 @@
     "asyncNote": "Hochgeladen. Die Datei wird im Hintergrund verarbeitet — du erhältst eine Benachrichtigung, sobald es fertig ist. Du kannst diesen Bildschirm jederzeit verlassen.",
     "completeTitle": "Import abgeschlossen",
     "awaitingMappingTitle": "Power-Point-Zuordnung erforderlich",
-    "awaitingMappingNote": "Diese Datei konnte keinem Power Point automatisch zugeordnet werden. Die Zuordnung folgt in Kürze.",
     "failedTitle": "Import fehlgeschlagen",
     "uploadAnother": "Weitere Datei hochladen",
     "errorGeneric": "Beim Hochladen der Datei ist etwas schiefgelaufen. Bitte versuche es erneut.",
-    "errorUnsupportedType": "Dieser Dateityp wird nicht unterstützt. Bitte wähle einen .xlsx- oder .csv-Export."
+    "errorUnsupportedType": "Dieser Dateityp wird nicht unterstützt. Bitte wähle einen .xlsx- oder .csv-Export.",
+    "mappingModal": {
+      "title": "Neuer Power Point: „{{deviceTag}}“",
+      "body": "Diese Datei ist einem Power Point zugeordnet, den es in deinem Haushalt noch nicht gibt. Erstelle ihn, oder ordne diese Daten einem bestehenden Power Point zu — es wird nichts importiert, bis du dich entscheidest.",
+      "createButton": "Power Point „{{deviceTag}}“ erstellen",
+      "roomLabel": "Raum",
+      "noRooms": "Du hast noch keine Räume. Lege in den Einstellungen zuerst einen Raum an, bevor du hier einen Power Point erstellst.",
+      "orDivider": "oder einem bestehenden zuordnen",
+      "noExisting": "Noch keine vorhandenen Power Points.",
+      "mapError": "Beim Zuordnen dieses Imports ist etwas schiefgelaufen. Bitte versuche es erneut.",
+      "retry": "Erneut versuchen"
+    }
   }
 }

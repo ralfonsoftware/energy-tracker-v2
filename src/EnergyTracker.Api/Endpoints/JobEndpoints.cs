@@ -56,8 +56,11 @@ public static class JobEndpoints
         result.SmartPlugImportStatus?.ToString().ToLowerInvariant(),
         result.Job.ErrorMessage,
         result.Job.CreatedAtUtc,
-        result.Job.CompletedAtUtc);
+        result.Job.CompletedAtUtc,
+        result.SmartPlugImportId,
+        result.SmartPlugImportDeviceTag);
 }
 
 public record JobStatusResponse(
-    Guid Id, string Status, string? ImportStatus, string? ErrorMessage, DateTimeOffset CreatedAtUtc, DateTimeOffset? CompletedAtUtc);
+    Guid Id, string Status, string? ImportStatus, string? ErrorMessage, DateTimeOffset CreatedAtUtc, DateTimeOffset? CompletedAtUtc,
+    Guid? SmartPlugImportId, string? SmartPlugImportDeviceTag);
