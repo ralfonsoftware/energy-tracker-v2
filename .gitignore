@@ -429,7 +429,15 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-sample-data/
+# Real vendor exports (Story 3.1 dev fixtures) live here untracked — everything is ignored except
+# the specific anonymized, row-capped files committed as test fixtures for the parser/upload tests.
+sample-data/*
+!sample-data/eve/
+sample-data/eve/*
+!sample-data/eve/2026-06-20_Steckdose-1_Gesamtverbrauch.xlsx
+!sample-data/meross/
+sample-data/meross/*
+!sample-data/meross/Power Monitor Day Data - Verbraucher 1 - 20260620.csv
 .DS_Store
 
 # web/ frontend

@@ -3,13 +3,16 @@ using Shouldly;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
-// Real fixture at sample-data/eve/*.xlsx (copied into the test output directory) — its exact
-// byte-level layout is documented in Story 3.1's Dev Notes and verified directly during story
-// creation (the PRD addendum's cell references were off by one row).
+// Fixture at sample-data/eve/*.xlsx (copied into the test output directory) — a real Eve Home
+// export, trimmed to 50 data rows and with the device/room name anonymized before being committed
+// (the original spans months of real household data; see .gitignore). Its exact byte-level layout
+// (header rows, cell types, column order) is otherwise untouched and documented in Story 3.1's Dev
+// Notes, verified directly during story creation (the PRD addendum's cell references were off by
+// one row).
 public class EveHomeXlsxParserTests
 {
     private static readonly string SampleFilePath =
-        Path.Combine(AppContext.BaseDirectory, "sample-data", "eve", "2026-06-20_Steckdose_Tur_Gesamtverbrauch.xlsx");
+        Path.Combine(AppContext.BaseDirectory, "sample-data", "eve", "2026-06-20_Steckdose-1_Gesamtverbrauch.xlsx");
 
     [Theory]
     [InlineData("export.xlsx", true)]
@@ -31,9 +34,9 @@ public class EveHomeXlsxParserTests
         var readings = parser.Parse(stream, Path.GetFileName(SampleFilePath), TestContext.Current.CancellationToken);
 
         readings.ShouldNotBeEmpty();
-        readings[0].DeviceName.ShouldBe("Steckdose Tür");
-        readings[0].PowerPointName.ShouldBe("Steckdose Tür");
-        readings[0].RoomName.ShouldBe("Wohnzimmer");
+        readings[0].DeviceName.ShouldBe("Steckdose 1");
+        readings[0].PowerPointName.ShouldBe("Steckdose 1");
+        readings[0].RoomName.ShouldBe("Zimmer 1");
         readings[0].PowerPointId.ShouldBeNull();
     }
 
@@ -45,8 +48,8 @@ public class EveHomeXlsxParserTests
 
         var readings = parser.Parse(stream, Path.GetFileName(SampleFilePath), TestContext.Current.CancellationToken);
 
-        // Data spans rows 5..57184 in the source workbook (row 5 newest).
-        readings.Count.ShouldBe(57180);
+        // Data spans rows 5..54 in the trimmed fixture (row 5 newest, capped to 50 rows).
+        readings.Count.ShouldBe(50);
         readings[0].IntervalStart.ShouldBeGreaterThan(readings[1].IntervalStart);
         readings[^1].IntervalStart.ShouldBeLessThan(readings[^2].IntervalStart);
     }

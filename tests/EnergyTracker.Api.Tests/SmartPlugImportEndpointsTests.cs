@@ -11,7 +11,7 @@ namespace EnergyTracker.Api.Tests;
 public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<EnergyTrackerApiFactory>
 {
     private static readonly string EveSampleFilePath = Path.Combine(
-        AppContext.BaseDirectory, "sample-data", "eve", "2026-06-20_Steckdose_Tur_Gesamtverbrauch.xlsx");
+        AppContext.BaseDirectory, "sample-data", "eve", "2026-06-20_Steckdose-1_Gesamtverbrauch.xlsx");
 
     private async Task<(HttpClient Client, Guid HouseholdId)> CreateHouseholdAsync()
     {
@@ -40,11 +40,21 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         while (DateTime.UtcNow < deadline)
         {
             var response = await client.GetAsync($"/api/jobs/{jobId}", TestContext.Current.CancellationToken);
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-            var status = await response.Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
-            if (status!.Status is "completed" or "failed")
+            // A 404 here (as opposed to a mid-Household-mismatch test's deliberate 404) just means
+            // the BackgroundJob row hasn't been inserted yet — this test's own upload races the
+            // background processor's async dequeue-and-insert. Keep polling instead of failing on
+            // the first miss; only a 404 that persists past the deadline below is a real problem.
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                return status;
+                var status = await response.Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
+                if (status!.Status is "completed" or "failed")
+                {
+                    return status;
+                }
+            }
+            else
+            {
+                response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
             }
 
             await Task.Delay(100, TestContext.Current.CancellationToken);
@@ -59,7 +69,7 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var (client, householdId) = await CreateHouseholdAsync();
         var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
         var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
-        await client.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Steckdose Tür" }, TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
 
         using var upload = BuildUpload(EveSampleFilePath);
         var response = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
@@ -106,7 +116,7 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
     [Fact]
     public async Task An_import_with_no_matching_Power_Point_completes_as_AwaitingPowerPointMapping()
     {
-        // No Power Point named "Steckdose Tür" exists in this Household at all.
+        // No Power Point named "Steckdose 1" exists in this Household at all.
         var (client, _) = await CreateHouseholdAsync();
 
         using var upload = BuildUpload(EveSampleFilePath);
@@ -123,14 +133,14 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
     public async Task A_device_tag_matching_Power_Points_in_two_different_Rooms_is_treated_as_unmatched()
     {
         // Power Point Name is only unique within its Room — two Rooms can each have a "Steckdose
-        // Tür". An ambiguous match must never be resolved by picking one arbitrarily.
+        // 1". An ambiguous match must never be resolved by picking one arbitrarily.
         var (client, _) = await CreateHouseholdAsync();
         var roomAResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
         var roomA = await roomAResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
         var roomBResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Bedroom" }, TestContext.Current.CancellationToken);
         var roomB = await roomBResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
-        await client.PostAsJsonAsync("/api/power-points", new { roomId = roomA!.Id, name = "Steckdose Tür" }, TestContext.Current.CancellationToken);
-        await client.PostAsJsonAsync("/api/power-points", new { roomId = roomB!.Id, name = "Steckdose Tür" }, TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync("/api/power-points", new { roomId = roomA!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync("/api/power-points", new { roomId = roomB!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
 
         using var upload = BuildUpload(EveSampleFilePath);
         var response = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
@@ -148,7 +158,7 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
         var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
         var powerPointResponse = await client.PostAsJsonAsync(
-            "/api/power-points", new { roomId = room!.Id, name = "Steckdose Tür" }, TestContext.Current.CancellationToken);
+            "/api/power-points", new { roomId = room!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
         var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
         await client.DeleteAsync($"/api/power-points/{powerPoint!.Id}", TestContext.Current.CancellationToken);
 

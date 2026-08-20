@@ -8,7 +8,7 @@ namespace EnergyTracker.Api.Tests;
 public class JobEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<EnergyTrackerApiFactory>
 {
     private static readonly string EveSampleFilePath = Path.Combine(
-        AppContext.BaseDirectory, "sample-data", "eve", "2026-06-20_Steckdose_Tur_Gesamtverbrauch.xlsx");
+        AppContext.BaseDirectory, "sample-data", "eve", "2026-06-20_Steckdose-1_Gesamtverbrauch.xlsx");
 
     private async Task<(HttpClient Client, Guid HouseholdId)> CreateHouseholdAsync()
     {

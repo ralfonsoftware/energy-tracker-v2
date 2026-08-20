@@ -3,19 +3,21 @@ using Shouldly;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
-// Real fixture at sample-data/meross/*.csv (copied into the test output directory) — its exact
-// byte layout (UTF-8 BOM, "\t," field delimiter, trailing tab) is documented in Story 3.1's Dev
-// Notes and verified directly during story creation.
+// Fixture at sample-data/meross/*.csv (copied into the test output directory) — a real Meross
+// export, trimmed to 50 data rows and with the device name (carried in the filename, AC #4)
+// anonymized before being committed (the original spans ~6 months of real household data; see
+// .gitignore). Its exact byte layout (UTF-8 BOM, "\t," field delimiter, trailing tab) is otherwise
+// untouched and documented in Story 3.1's Dev Notes, verified directly during story creation.
 public class MerossCsvParserTests
 {
     private static readonly string SampleFilePath = Path.Combine(
-        AppContext.BaseDirectory, "sample-data", "meross", "Power Monitor Day Data - Schreibtisch - 20260620.csv");
+        AppContext.BaseDirectory, "sample-data", "meross", "Power Monitor Day Data - Verbraucher 1 - 20260620.csv");
 
     [Theory]
-    [InlineData("Power Monitor Day Data - Schreibtisch - 20260620.csv", true)]
-    [InlineData("Power Monitor Day Data - Couch Verteiler - 20260620.csv", true)]
+    [InlineData("Power Monitor Day Data - Verbraucher 1 - 20260620.csv", true)]
+    [InlineData("Power Monitor Day Data - Verbraucher 2 - 20260620.csv", true)]
     [InlineData("random-export.csv", false)]
-    [InlineData("Power Monitor Day Data - Schreibtisch - 20260620.xlsx", false)]
+    [InlineData("Power Monitor Day Data - Verbraucher 1 - 20260620.xlsx", false)]
     public void CanParse_recognizes_only_the_documented_filename_pattern(string fileName, bool expected)
     {
         var parser = new MerossCsvParser();
@@ -32,8 +34,8 @@ public class MerossCsvParserTests
         var readings = parser.Parse(stream, Path.GetFileName(SampleFilePath), TestContext.Current.CancellationToken);
 
         readings.ShouldNotBeEmpty();
-        readings[0].DeviceName.ShouldBe("Schreibtisch");
-        readings[0].PowerPointName.ShouldBe("Schreibtisch");
+        readings[0].DeviceName.ShouldBe("Verbraucher 1");
+        readings[0].PowerPointName.ShouldBe("Verbraucher 1");
         readings[0].RoomName.ShouldBe(string.Empty);
         readings[0].PowerPointId.ShouldBeNull();
     }
@@ -46,11 +48,11 @@ public class MerossCsvParserTests
 
         var readings = parser.Parse(stream, Path.GetFileName(SampleFilePath), TestContext.Current.CancellationToken);
 
-        // 2026-01-01 .. 2026-06-20 inclusive, ascending in the source file.
-        readings.Count.ShouldBe(171);
+        // 2026-01-01 .. 2026-02-19 inclusive, ascending, capped to 50 rows in the trimmed fixture.
+        readings.Count.ShouldBe(50);
         readings[0].IntervalStart.ShouldBeLessThan(readings[1].IntervalStart);
         readings[0].KwhValue.ShouldBe(1.492m);
-        readings[^1].KwhValue.ShouldBe(0.240m);
+        readings[^1].KwhValue.ShouldBe(0.748m);
     }
 
     [Fact]
