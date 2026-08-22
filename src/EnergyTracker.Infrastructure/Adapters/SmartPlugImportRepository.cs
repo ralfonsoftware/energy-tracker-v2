@@ -34,6 +34,14 @@ public class SmartPlugImportRepository(EnergyTrackerDbContext dbContext) : ISmar
     public async Task UpdateMappingAsync(
         SmartPlugImport import, Guid powerPointId, string powerPointName, string? roomName, CancellationToken cancellationToken)
     {
+        // The default 30s ADO.NET command timeout is tuned for point queries, not a set-based
+        // UPDATE across a full import's rows on Basic-tier Azure SQL (5 DTU) — a large Eve Home
+        // export (tens of thousands of rows) reliably exceeded it in production ("Execution Timeout
+        // Expired" surfaced to the caller as a 500). Raised for the rest of this scoped DbContext's
+        // request too, since the readback in MapSmartPlugImportToPowerPoint.ExecuteAsync right
+        // after this call reads the same row count under the same DTU ceiling.
+        dbContext.Database.SetCommandTimeout(TimeSpan.FromSeconds(180));
+
         // One set-based UPDATE server-side — no loading/tracking/diffing hundreds of thousands of
         // rows for a large import (see this method's doc comment on the port interface).
         await dbContext.SmartPlugReadings
