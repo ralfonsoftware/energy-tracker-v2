@@ -49,6 +49,7 @@ updated: 2026-08-08](#title-energy-tracker-v2-prd-status-final-created-2026-08-0
       - [FR-26: Household Provisioning](./4-features.md#fr-26-household-provisioning)
       - [FR-27: Household Member Invitation](./4-features.md#fr-27-household-member-invitation)
       - [FR-28: Room / Power Point / Device Management](./4-features.md#fr-28-room-power-point-device-management)
+      - [FR-29: Structure Editor Archived-Item Visibility Toggle](./4-features.md#fr-29-structure-editor-archived-item-visibility-toggle)
   - [Cross-Cutting NFRs](./cross-cutting-nfrs.md)
   - [Constraints and Guardrails](./constraints-and-guardrails.md)
   - [5. Non-Goals (Explicit)](./5-non-goals-explicit.md)

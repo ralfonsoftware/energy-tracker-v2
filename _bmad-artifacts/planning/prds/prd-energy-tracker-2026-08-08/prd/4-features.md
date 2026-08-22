@@ -290,3 +290,11 @@ A Household member can create, edit, and delete Rooms, Power Points, and Devices
 
 **Consequences (testable):**
 - Deleting a Power Point or Device that already has tagged historical data (imports, Events) orphans/leaves that data reassignable rather than cascade-deleting it.
+
+### FR-29: Structure Editor Archived-Item Visibility Toggle
+
+*(Backfilled 2026-08-22 — added directly to the epics/implementation layer as a small follow-up before this PRD entry existed; see `9-assumptions-index.md`.)* A Household member can show or hide archived Rooms, Power Points, and Devices in the structure editor (FR-28). Today a "deleted" (archived) item stays visible inline in the tree with an "Archived" badge; this adds a toggle to control that.
+
+**Consequences (testable):**
+- The toggle controls whether archived Rooms/Power Points/Devices render in the tree at all, versus the current always-visible-with-badge behavior.
+- Toggling hide-archived is a view filter only — it never changes the underlying soft-delete/reassignment behavior FR-28 already defines.

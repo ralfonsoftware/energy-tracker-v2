@@ -2,7 +2,7 @@
 
 ## Epic 1: Foundation, Deployment & Household Access
 Establishes the buildable/deployable skeleton (the architecture's Structural Seed — layered .NET solution, React/Vite/shadcn frontend, dual-provider DB, Docker Compose) and lets the first Household come into existence: a fresh deployment routes an authenticated visitor into Household creation, existing members can invite others, and the Room → Power Point → Device tagging scaffold used by later epics is manageable. Every subsequent epic depends on this one; it depends on nothing.
-**FRs covered:** FR-26, FR-27, FR-28
+**FRs covered:** FR-26, FR-27, FR-28, FR-29
 
 ## Epic 2: Meter Reading & Pattern Detective Status Core
 The product's non-negotiable core loop: a Household member logs a Meter Reading in under a minute (with offline queuing), sets a Yearly Baseline, and sees a single trustworthy Status (within range / below baseline / trending) on the dashboard — computed from a gap-tolerant rolling baseline, with meter-rollover/reset regressions caught and classified rather than silently corrupting the pace. Fully functional with zero Smart Plug coverage. Realizes UJ-1 and UJ-2's Status half.

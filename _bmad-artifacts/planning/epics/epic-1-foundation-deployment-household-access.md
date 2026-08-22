@@ -2,7 +2,7 @@
 
 Establishes the buildable/deployable skeleton (the architecture's Structural Seed) and lets the first Household come into existence: a fresh deployment routes an authenticated visitor into Household creation, existing members can invite others, and the Room → Power Point → Device tagging scaffold used by later epics is manageable. Every subsequent epic depends on this one; it depends on nothing.
 
-**FRs covered:** FR-26, FR-27, FR-28
+**FRs covered:** FR-26, FR-27, FR-28, FR-29
 **NFRs:** NFR2 (hosting cost-efficiency), NFR3 (auth), NFR4 (tenant isolation), NFR5 (i18n), NFR11 (docs as onboarding path), NFR12 (privacy), NFR14 (cost)
 **Architecture:** Structural Seed, AD-1, AD-2, AD-3, AD-10, AD-13, AD-15, AD-17, AD-18, AD-19, Consistency Conventions, Stack
 **UX-DRs:** UX-DR1 (token foundation), UX-DR12 (Onboarding/Settings surfaces), UX-DR16 (accessibility baseline)
@@ -255,3 +255,35 @@ So that I have the tagging scaffold ready before Smart Plug data or Events need 
 **Given** the management list view
 **When** displayed
 **Then** archived items are excluded from active-selection pickers, while historical references to them still resolve correctly
+
+## Story 1.10: Structure Editor Archived-Item Visibility Toggle
+
+As a Household member,
+I want to show or hide archived Rooms, Power Points, and Devices in the structure editor,
+So that a tree that's accumulated a lot of soft-deleted history doesn't stay cluttered with items I no longer manage day-to-day.
+
+**Acceptance Criteria:**
+
+**Given** the Room/Power Point/Device management surface (Story 1.9)
+**When** it renders today
+**Then** archived items (`ArchivedAt` set, FR-28/AD-10) stay visible inline in the tree with an "Archived" badge — this story adds a toggle to control that, it does not change the underlying default described here
+
+**Given** the management surface
+**When** I switch the toggle to hide archived items
+**Then** Rooms, Power Points, and Devices with `ArchivedAt` set no longer render in the tree at all — not just visually de-emphasized, actually absent
+
+**Given** the toggle set to hide archived items
+**When** I switch it back to show them
+**Then** archived items reappear inline with their "Archived" badge, exactly as they render today with no toggle
+
+**Given** the hide-archived toggle state
+**When** it changes
+**Then** it is a view filter only — it never touches the underlying soft-delete state (`ArchivedAt`), never affects Story 2.6's reassignment/"Move to…" behavior, and never affects which items are offered as active-selection destinations (already excluded regardless of this toggle, per Story 1.9)
+
+**Given** an archived parent (e.g. a Room) with non-archived children still nested under it
+**When** the toggle hides archived items
+**Then** the non-archived children remain visible — hiding a parent does not cascade-hide children whose own `ArchivedAt` is unset (they're still reachable, matching this epic's "historical references still resolve correctly" guarantee, Story 1.9)
+
+**Given** the toggle
+**When** I leave and return to the management surface
+**Then** *(open question, not yet decided — flag for whoever picks this up)* whether the toggle state persists (e.g. a per-member or per-Household preference) or resets to the default (always-visible) on every visit is undecided; FR-29's PRD text doesn't specify persistence, so confirm with Ralf before implementation rather than assuming either behavior
