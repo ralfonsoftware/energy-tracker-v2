@@ -5,7 +5,7 @@ The product's non-negotiable core loop: a Household member logs a Meter Reading 
 **FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1)
 **NFRs:** NFR1 (perf tier 1), NFR7 (offline capture), NFR9 (recomputation policy), NFR10 (concurrency), NFR15 (says-less discipline)
 **Architecture:** AD-4, AD-7, AD-12, AD-14, AD-16
-**UX-DRs:** UX-DR1 (status/brand tokens), UX-DR2 (Status card), UX-DR3 (Log Reading sheet), UX-DR4 (Meter Regression prompt), UX-DR8 (primary action button), UX-DR9 (nav chrome), UX-DR13 (one-level-deep modal stacking), UX-DR14 (empty/edge states), UX-DR15 (motion contract), UX-DR16 (accessibility floor), UX-DR17 (voice/tone), UX-DR18 (regression micro-flow)
+**UX-DRs:** UX-DR1 (status/brand tokens), UX-DR2 (Status card), UX-DR3 (Log Reading sheet), UX-DR4 (Meter Regression prompt), UX-DR8 (primary action button), UX-DR9 (nav chrome), UX-DR11 (liquid glass elevation), UX-DR13 (one-level-deep modal stacking), UX-DR14 (empty/edge states), UX-DR15 (motion contract), UX-DR16 (accessibility floor), UX-DR17 (voice/tone), UX-DR18 (regression micro-flow)
 
 ## Story 2.1: Yearly Baseline Configuration
 

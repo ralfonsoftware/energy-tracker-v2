@@ -115,6 +115,15 @@
 - Mapping endpoint isn't idempotent — retrying after a lost response on a successful mapping returns 409 instead of the original success [src/EnergyTracker.Application/MapSmartPlugImportToPowerPoint.cs:16-20] — no idempotency-key pattern exists anywhere in this codebase.
 - `ListReadingsByImportIdAsync`/`UpdateMappingAsync` load and update an import's full reading set unpaged [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:415-431] — mirrors `ProcessSmartPlugImport`'s existing bulk-write pattern from Story 3.1, not introduced by this diff.
 
+## Deferred from: code review of spec-epic-2-header-ux-dr11 (2026-08-22)
+
+- source_spec: `_bmad-artifacts/implementation/spec-epic-2-header-ux-dr11.md`
+  summary: Epic 2's `**Architecture:**` rollup header (line 7: `AD-4, AD-7, AD-12, AD-14, AD-16`) is missing AD-15 (cited in the body at lines 20, 28), AD-10 (line 244), and AD-3 (line 252) — the same header/body drift class this diff fixed for `UX-DRs:`, left unfixed on the neighboring line.
+  evidence: Same defect, same file, same review pass; not fixed here to keep this change a single-line, single-concern edit matching its spec trace. Worth a follow-up pass across all epic files' rollup headers rather than a second one-line patch.
+- source_spec: `_bmad-artifacts/implementation/spec-epic-2-header-ux-dr11.md`
+  summary: Story 2.3's regression-prompt AC (epic-2 file, line 116) describes "the neutral/informational glass treatment" but cites only `(UX-DR4, UX-DR18)`, not UX-DR11 — unclear whether this is a second missing citation for the same glass-elevation system or a deliberate exclusion.
+  evidence: Flagged by adversarial review of this diff; requires a judgment call on whether Story 2.3's glass treatment is actually governed by UX-DR11 (out of scope to decide as part of a trivial header-consistency fix) — a UX-designer or spec-owner call, not a mechanical correction.
+
 ## Deferred from: code review of story-3.3 (2026-08-20)
 
 - `SmartPlugCoverageSignal.HasCoverageDuringAsync` derives calendar-date boundaries from UTC `DateTimeOffset`s via `.DateTime`, while `SmartPlugImportGap.StartDate`/`EndDate` are local-time dates per AD-9 [src/EnergyTracker.Infrastructure/Adapters/SmartPlugCoverageSignal.cs:25-26] — can misalign by a day near local midnight for non-UTC households, nudging the low-confidence corroboration boundary. No household-timezone concept exists anywhere else in the codebase to fix this properly against; a point fix here would be inconsistent with the rest of the app.
