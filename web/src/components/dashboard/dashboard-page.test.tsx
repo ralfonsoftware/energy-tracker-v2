@@ -41,6 +41,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -61,6 +62,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -80,6 +82,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -100,6 +103,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -121,12 +125,56 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={onSettingsClick}
+        onHistoryClick={noop}
       />,
     )
 
     expect(screen.getByText('Trend History')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Settings' }))
     expect(onSettingsClick).toHaveBeenCalledOnce()
+  })
+
+  it('renders the history trigger only when populated, and calls onHistoryClick when clicked', async () => {
+    const user = userEvent.setup()
+    const onHistoryClick = vi.fn()
+    const status: StatusDto = { status: 'withinRange', paceToDateKwh: 1000, baselineToDateKwh: 1000, isLowConfidence: false }
+    const { rerender } = render(
+      <DashboardPage
+        household={household}
+        status={null}
+        statusLoading={false}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onHistoryClick={onHistoryClick}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'View reading history' })).not.toBeInTheDocument()
+
+    rerender(
+      <DashboardPage
+        household={household}
+        status={status}
+        statusLoading={false}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onHistoryClick={onHistoryClick}
+      />,
+    )
+
+    const trigger = await screen.findByRole('button', { name: 'View reading history' })
+    await user.click(trigger)
+    expect(onHistoryClick).toHaveBeenCalledOnce()
   })
 
   it('does not render the invite-generation panel — relocated to Settings so it never competes with the Status card for visual weight (AC #10)', () => {
@@ -143,6 +191,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -183,6 +232,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -201,6 +251,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={regressionPrompt()}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -241,6 +292,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -260,6 +312,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 
@@ -278,6 +331,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
+        onHistoryClick={noop}
       />,
     )
 

@@ -229,6 +229,27 @@ describe('App', () => {
     })
   })
 
+  describe('Meter Reading History navigation (Story 2.8)', () => {
+    it('switches to the Meter Reading History surface and back via local view state, not a URL route', async () => {
+      const user = userEvent.setup()
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'GET', url: '/api/status', respond: () => jsonResponse({ status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }) },
+        { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
+        { method: 'GET', url: '/api/meter-readings?page=1&pageSize=20', respond: () => jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }) },
+      ])
+
+      render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'View reading history' }))
+      expect(await screen.findByRole('heading', { name: 'Meter Reading History' })).toBeInTheDocument()
+      expect(window.location.pathname).toBe('/')
+
+      await user.click(screen.getByRole('button', { name: 'Go to Energy Tracker' }))
+      expect(await screen.findByRole('heading', { name: 'Energy Tracker' })).toBeInTheDocument()
+    })
+  })
+
   describe('invite-generation panel', () => {
     // Relocated to Settings by a code review of Story 2.5 (was previously on the Dashboard
     // placeholder shell, before a real Settings surface existed) — reach it via Settings nav.

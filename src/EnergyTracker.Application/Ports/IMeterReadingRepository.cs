@@ -27,4 +27,16 @@ public interface IMeterReadingRepository
     // timestamps used by FindImmediatelyPrecedingAsync/GetOpenForHouseholdAsync, so the sequence
     // walk never disagrees with regression detection's own ordering.
     Task<IReadOnlyList<MeterReading>> GetAllByMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken);
+
+    // One page of a Main Meter's Meter Readings, most-recent-first (ReadingTimestamp descending,
+    // then Id descending as the deterministic tiebreak — mirrors FindImmediatelyPrecedingAsync's
+    // tiebreak pattern). Descending is this story's own explicit choice for a browsable history
+    // list (Story 2.8) — nothing in FR-31 mandates a direction, only that the sort key is
+    // timestamp, not entry order.
+    Task<(IReadOnlyList<MeterReading> Items, int TotalCount)> GetPageForMainMeterAsync(Guid mainMeterId, int page, int pageSize, CancellationToken cancellationToken);
+
+    // Optimistic-concurrency-guarded value edit (AD-4, Story 2.8). Throws
+    // MeterReadingConcurrencyConflictException on a Version mismatch — mirrors
+    // HouseholdRepository.UpdateYearlyBaselineAsync's exact mechanics.
+    Task<MeterReading> UpdateKwhValueAsync(Guid readingId, decimal kwhValue, int expectedVersion, CancellationToken cancellationToken);
 }

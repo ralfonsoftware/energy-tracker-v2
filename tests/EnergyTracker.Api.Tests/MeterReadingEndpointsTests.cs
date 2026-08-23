@@ -134,4 +134,150 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task GET_meter_readings_returns_a_paginated_page_ordered_by_timestamp_descending()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
+        var first = await PostReadingAsync(client, 100m, baseline);
+        var firstBody = await first.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+        var second = await PostReadingAsync(client, 200m, baseline.AddHours(1));
+        var secondBody = await second.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await response.Content.ReadFromJsonAsync<MeterReadingHistoryPageResponse>(TestContext.Current.CancellationToken);
+        page!.TotalCount.ShouldBe(2);
+        page.Items.Select(i => i.Id).ShouldBe([secondBody!.Id, firstBody!.Id]);
+    }
+
+    [Fact]
+    public async Task GET_meter_readings_reflects_the_pending_flag_for_a_reading_under_an_open_regression_prompt()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
+        await PostReadingAsync(client, 14302m, baseline);
+        var lowerResponse = await PostReadingAsync(client, 412m, baseline.AddHours(1));
+        var lowerReading = await lowerResponse.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken);
+
+        var page = await response.Content.ReadFromJsonAsync<MeterReadingHistoryPageResponse>(TestContext.Current.CancellationToken);
+        page!.Items.Count(i => i.IsPendingRegression).ShouldBe(1);
+        page.Items.Single(i => i.IsPendingRegression).Id.ShouldBe(lowerReading!.Id);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_edits_the_value_and_records_a_correction_note_visible_on_the_next_GET()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var created = await PostReadingAsync(client, 100m, DateTimeOffset.UtcNow);
+        var createdBody = await created.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        var putResponse = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{createdBody!.Id}",
+            new { kwhValue = 150m, version = createdBody.Version },
+            TestContext.Current.CancellationToken);
+
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated = await putResponse.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+        updated!.KwhValue.ShouldBe(150m);
+
+        var getResponse = await client.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken);
+        var page = await getResponse.Content.ReadFromJsonAsync<MeterReadingHistoryPageResponse>(TestContext.Current.CancellationToken);
+        var item = page!.Items.Single(i => i.Id == createdBody.Id);
+        item.CorrectedFromKwhValue.ShouldBe(100m);
+        item.CorrectedAtUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_with_a_stale_Version_returns_409()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var created = await PostReadingAsync(client, 100m, DateTimeOffset.UtcNow);
+        var createdBody = await created.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{createdBody!.Id}",
+            new { kwhValue = 150m, version = createdBody.Version + 1 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_for_a_reading_that_does_not_exist_returns_404()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{Guid.NewGuid()}",
+            new { kwhValue = 150m, version = 0 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_with_an_out_of_range_kwhValue_returns_400()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var created = await PostReadingAsync(client, 100m, DateTimeOffset.UtcNow);
+        var createdBody = await created.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{createdBody!.Id}",
+            new { kwhValue = 0m, version = createdBody.Version },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task A_households_meter_reading_history_is_never_affected_by_another_households_readings()
+    {
+        var (clientA, _) = await CreateHouseholdAsync();
+        var (clientB, _) = await CreateHouseholdAsync();
+        await PostReadingAsync(clientA, 100m, DateTimeOffset.UtcNow);
+        await PostReadingAsync(clientB, 200m, DateTimeOffset.UtcNow);
+
+        var pageA = await (await clientA.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken))
+            .Content.ReadFromJsonAsync<MeterReadingHistoryPageResponse>(TestContext.Current.CancellationToken);
+        var pageB = await (await clientB.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken))
+            .Content.ReadFromJsonAsync<MeterReadingHistoryPageResponse>(TestContext.Current.CancellationToken);
+
+        pageA!.Items.ShouldAllBe(i => i.KwhValue == 100m);
+        pageB!.Items.ShouldAllBe(i => i.KwhValue == 200m);
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_reading_the_history()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_editing_a_reading()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{Guid.NewGuid()}",
+            new { kwhValue = 100m, version = 0 },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    private static Task<HttpResponseMessage> PostReadingAsync(HttpClient client, decimal kwhValue, DateTimeOffset readingTimestamp) =>
+        client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue, readingTimestamp, idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
 }
