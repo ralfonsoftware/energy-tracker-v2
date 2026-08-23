@@ -159,6 +159,20 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-23
+# 2026-08-23: epic-3-retrospective completed — 4/4 stories reviewed (3.1-3.4), plus orphaned
+#   stories 1.10/2.7/2.8 (added after their own epics' retros already closed). 0 production
+#   incidents, deployed and verified live on Azure by Ralf. Significant discovery: Epic 4's
+#   Story 4.3 is stale against Story 2.8's shipped History page — Ralf's decision: consolidate,
+#   don't duplicate. Story 4.1 (Trend History) absorbs 2.8's Meter Reading History functionality
+#   as its single surface; 4.3 keeps its ACs exactly as specified (edit via that merged surface,
+#   AD-4 409 + AD-11 audit-trail already built and reusable from 2.8, net-new: forward-recompute-
+#   through-present); Dashboard's standalone "History" text-link gets removed once merged. Flagged
+#   as a required Epic 4 definition update, blocking Story 4.1 drafting. Also decided: fix the
+#   concurrent-RecomputeAsync race (deferred since 2.4, re-confirmed in 3.3/3.4) before Epic 4
+#   starts — Trend History will read StatusSnapshot directly, turning a silent audit-trail gap
+#   into a visibly wrong trend line. Epic 1 action item #1 (deploy-environment verification AC)
+#   closed as superseded by Epic 2's Auth0-test-user/live-Chrome capability. 6 action items
+#   recorded, 2 closed same-session. See epic-3-retro-2026-08-23.md.
 # 2026-08-23: story 2-7-status-calculation-detail moved to review (dev-story implementation
 #   complete — new CurrentStatusResult fields (ElapsedDays, TrendingThresholdKwh,
 #   DaysSinceLastReading, LowConfidenceGapDaysThreshold) extend GetCurrentStatus.ExecuteAsync's
@@ -440,12 +454,12 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
+  epic-3: done
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
   3-4-incremental-smart-plug-import: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   epic-4: backlog
   4-1-trend-history-view: backlog
@@ -474,7 +488,8 @@ action_items:
   - epic: 1
     action: "Add a required, blocking 'verified against the real deployed environment' AC for any story touching auth, ingress, proxy config, or the deploy pipeline"
     owner: "story authors/reviewers"
-    status: open
+    status: done
+    note: "Closed 2026-08-23 (epic-3 retro) as superseded — the Auth0 test-user + live-Chrome verification capability from Epic 2's retro closes the underlying gap this AC-gate targeted."
   - epic: 1
     action: "Document known local-vs-Azure behavior deltas (forwarded headers/HTTPS, Postgres region restrictions, ACR credential timing, empty-secret ACA validation) in one place for story-definition-time reference"
     owner: "Winston (architecture)"
@@ -526,4 +541,21 @@ action_items:
   - epic: 2
     action: "Before drafting Story 3.3's tasks, read deferred-work.md's Story 2.4 entries on the RecomputeAsync concurrency race and the full-history-walk performance risk — both become directly relevant once Smart Plug import is the second IStatusRecomputeService call site"
     owner: "Story 3.3 author"
+    status: done
+    note: "Confirmed 2026-08-23 (epic-3 retro) — 3.3's own deferred-work entry explicitly references and considers both items, deliberately keeping the race deferred as a documented tradeoff. Superseded by epic-3 retro action item below (fix now, ahead of Epic 4)."
+  - epic: 3
+    action: "Add per-household serialization to IStatusRecomputeService, fixing the concurrent-recompute race deferred since Story 2.4 and re-confirmed in 3.3/3.4 — fix before Epic 4 starts, since Trend History will read StatusSnapshot rows directly"
+    owner: "Winston/Amelia"
+    status: open
+  - epic: 3
+    action: "Address the full-history-walk-on-every-recompute latent NFR1 performance risk (same subsystem as the serialization fix, same trigger-frequency growth from periodic Smart Plug re-imports)"
+    owner: "Winston/Amelia"
+    status: open
+  - epic: 3
+    action: "Standardize running 'git add -N' before generating any adversarial-review diff, to stop git diff's untracked-files omission from recurring (hit in both Story 2.7 and 2.8 reviews)"
+    owner: "Amelia"
+    status: open
+  - epic: 3
+    action: "Update Epic 4's definition (Stories 4.1 and 4.3) before drafting Story 4.1: Story 4.1 (Trend History) absorbs Story 2.8's Meter Reading History List/edit functionality as its single surface; Story 4.3 keeps its ACs as specified (edit via the merged surface, AD-4 409 + AD-11 audit-trail already built and reusable from 2.8, net-new forward-recompute-through-present via IStatusRecomputeService); remove the Dashboard Status card's standalone History text-link once merged"
+    owner: "John (epic definition)/Sally (UX placement)"
     status: open
