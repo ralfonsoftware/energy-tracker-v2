@@ -178,7 +178,13 @@ jobs:
           fi
 
           ESCAPED_PASSWORD="${DATABASE_ADMIN_PASSWORD//\"/\"\"}"
-          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;User ID=etadmin;Password=\"${ESCAPED_PASSWORD}\";Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          # Command Timeout (query execution) is a separate ADO.NET setting from Connection Timeout
+          # (time to connect) above — without it, SqlCommand defaults to 30s. A migration's raw-SQL
+          # step (e.g. AddSmartPlugReadingUniqueIndex's dedup DELETE, a ROW_NUMBER()-partitioned
+          # full-table scan joined to SmartPlugImports) can run well past that against Basic-tier
+          # Azure SQL (5 DTU, infra/modules/database-sqlserver.bicep) — same reasoning already
+          # applied to SmartPlugImportRepository.UpdateMappingAsync's own 180s override.
+          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;User ID=etadmin;Password=\"${ESCAPED_PASSWORD}\";Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=300;"
 
           for attempt in 1 2 3 4 5; do
             if dotnet ef database update \
