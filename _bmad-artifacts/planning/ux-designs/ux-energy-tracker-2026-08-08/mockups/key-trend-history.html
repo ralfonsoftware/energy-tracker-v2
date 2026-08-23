@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Screen — Trend History, merged Meter Readings (Green Eco, Dark + Light)</title>
+<style>
+/*
+  KEY SCREEN — TREND HISTORY, WITH MERGED METER READINGS (Story 4.1, Story 4.3)
+  ===============================================================================
+  Placement pass for the Epic 3 Retro's Significant Discovery (2026-08-23):
+  Story 2.8 (Epic 2) shipped a standalone "Meter Reading History" page —
+  paginated list, Pending-regression flag, correction note, edit dialog with
+  AD-4 optimistic concurrency + AD-11 AuditCorrection — reachable only via a
+  Dashboard text-link. Ralf's call at the retro: consolidate rather than
+  duplicate. Story 4.1 (Trend History) absorbs that list as a third card on
+  this surface; Story 4.3 reuses 2.8's edit-in-place mechanics unmodified,
+  adding only the net-new IStatusRecomputeService recompute-forward AC. The
+  Dashboard's standalone "History" text-link is removed once this ships.
+  See _bmad-artifacts/planning/epics/epic-4-trend-history-per-plug-insight.md
+  and _bmad-artifacts/implementation/epic-3-retro-2026-08-23.md.
+
+  This file answers exactly one question density-trend-history.html (the
+  Minimal/Moderate/Dense exploration that settled Moderate as the sole
+  shipped default) didn't need to: where does the raw, editable list of
+  individual Meter Readings sit relative to the trend chart and the
+  Room -> Power Point -> Device tree, on the one Moderate-density page.
+
+  Placement decision: a THIRD card, "Meter Readings", between the trend
+  chart and the Room -> Power Point -> Device tree — not folded inside the
+  chart card, and not appended after the tree. Rationale:
+  - Chart + Meter Readings are the two representations of the SAME data
+    (FR-8, the Main Meter's own reading history) and read as a pair —
+    aggregate first, raw entries directly below, before the page moves on
+    to an entirely different data source.
+  - The Room -> Power Point -> Device tree is Smart Plug "measured context"
+    (FR-9, AD-14) — a structurally different signal that must never visually
+    blend with the Main Meter's own authoritative readings. Keeping it a
+    separate, clearly-labeled card after Meter Readings (not before, not
+    merged) keeps that boundary legible, the same discipline AD-14 already
+    enforces in the data layer.
+  - Collapsed by default (`details`/`summary`, identical idiom to the tree
+    below it) — "says less, on purpose" (NFR15): most visits are chart-only;
+    the raw list exists for the minority of visits that need to find and fix
+    a specific past entry, exactly Story 2.8's own problem statement.
+
+  Row/edit affordances, pagination, Pending badge (plain outline, NOT a
+  status-triad color — this flags an open regression classification, a
+  different concept from Status/pace), and the correction note ("Originally
+  X kWh") are carried over from Story 2.8's shipped page as-is — reused, not
+  redesigned. The Edit dialog frame below reuses key-log-reading-flow.html's
+  modal-card chrome and key-settings.html's unit-inside-field composed input
+  verbatim; nothing about the dialog itself is new.
+
+  Frame is browser/tablet-width, matching density-trend-history.html and
+  UX-DR19 (widens to that frame but stays single-column-of-cards, never a
+  dense multi-column grid). Tokens reused verbatim from direction-green-eco.html.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  padding: 48px 24px 88px;
+}
+.wrap { max-width: 1500px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+.intro { max-width: 900px; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px; }
+.intro code { font-weight: 600; }
+.decision-note {
+  max-width: 900px; font-size: 13px; line-height: 1.6; margin-bottom: 40px;
+  padding: 14px 18px; border-radius: 14px;
+}
+
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; margin-bottom: 48px; }
+.theme { flex: 1 1 560px; border-radius: 28px; padding: 32px 26px 40px; min-width: 480px; max-width: 660px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 20px; }
+
+/* ---------- browser/tablet app frame (not phone — UJ-3 is calm-evening browsing) ---------- */
+.appframe { border-radius: 20px; padding: 10px; }
+.chrome-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 10px; }
+.chrome-dot { width: 8px; height: 8px; border-radius: 50%; }
+.screen { border-radius: 14px; padding: 24px 24px 28px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.crumb { font-size: 12px; text-decoration: none; }
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 18px; }
+
+/* ---------- shared glass card ---------- */
+.card { border-radius: 18px; padding: 18px 18px 16px; margin-bottom: 14px; }
+.card h3 { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.card h3 .count { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+
+.plain-line { font-size: 13px; line-height: 1.55; margin-top: 8px; }
+
+/* ---------- trend chart (carried from density-trend-history.html, Moderate column) ---------- */
+svg text { font-family: inherit; }
+.axis-label { font-size: 8.5px; }
+.grid-line { stroke-width: 1; }
+.baseline-line { stroke-width: 1; stroke-dasharray: 3 3; }
+.trend-path { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.gap-band-label { font-size: 8px; font-weight: 600; }
+.pt { r: 3; }
+
+/* ---------- Meter Readings card (NEW — absorbed from Story 2.8) ---------- */
+details.readings-list { border-radius: 14px; }
+details.readings-list > summary {
+  cursor: pointer; list-style: none; font-size: 12.5px; font-weight: 600;
+  padding: 11px 13px; display: flex; justify-content: space-between; align-items: center;
+}
+details.readings-list > summary::-webkit-details-marker { display: none; }
+details.readings-list > summary::after { content: "Browse & correct  ▾"; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; }
+details.readings-list[open] > summary::after { content: "Hide  ▴"; }
+.readings-body { padding: 6px 4px 4px; }
+
+table.readings-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+table.readings-table th { text-align: left; font-weight: 600; text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.5px; padding: 8px 8px; }
+table.readings-table td { padding: 10px 8px; font-variant-numeric: tabular-nums; vertical-align: top; }
+.kwh-cell { font-weight: 700; }
+.corrected-note { display: block; font-size: 10.5px; font-weight: 400; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pending-badge { display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-left: 8px; }
+.edit-btn { font-family: inherit; font-size: 11.5px; font-weight: 700; padding: 7px 13px; border-radius: 999px; }
+
+.pager-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; }
+.pager-btn { font-family: inherit; font-size: 11.5px; font-weight: 700; padding: 7px 13px; border-radius: 999px; }
+.pager-label { font-size: 11px; }
+
+/* ---------- Room -> Power Point -> Device tree (unchanged from density-trend-history.html) ---------- */
+.room-item summary { cursor: pointer; list-style: none; font-size: 13px; font-weight: 700; padding: 9px 6px; display: flex; justify-content: space-between; }
+.room-item summary::-webkit-details-marker { display: none; }
+.room-item summary::after { content: "▾"; font-weight: 400; }
+.room-item[open] summary::after { content: "▴"; }
+.pp-item summary { cursor: pointer; list-style: none; font-size: 12.5px; font-weight: 600; padding: 7px 6px 7px 16px; display: flex; justify-content: space-between; }
+.pp-item summary::-webkit-details-marker { display: none; }
+.pp-item summary::after { content: "▾"; font-weight: 400; }
+.pp-item[open] summary::after { content: "▴"; }
+.device-row { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 6px 6px 30px; font-variant-numeric: tabular-nums; }
+.kwh { font-variant-numeric: tabular-nums; }
+.caveat { font-size: 11.5px; line-height: 1.55; margin-top: 10px; padding-top: 10px; }
+
+/* ---------- Edit dialog (reused verbatim from key-log-reading-flow.html's modal-card + key-settings.html's unit-inside-field) ---------- */
+.dialog-frame { position: relative; }
+.dialog-scrim { position: absolute; inset: 0; border-radius: 14px; }
+.modal-card {
+  position: absolute; left: 50%; top: 130px; transform: translateX(-50%);
+  width: 320px; border-radius: 24px; padding: 22px 20px 20px;
+}
+.modal-title { font-size: 15.5px; font-weight: 700; margin-bottom: 4px; }
+.modal-sub { font-size: 11.5px; margin-bottom: 16px; }
+.field-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 6px; }
+.kwh-input-wrap { display: flex; align-items: baseline; gap: 8px; border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; }
+.kwh-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; background: transparent; border: none; width: 100%; }
+.kwh-unit { font-size: 12px; font-weight: 600; }
+.dialog-actions { display: flex; gap: 10px; }
+.dialog-btn { flex: 1 1 0; text-align: center; font-family: inherit; font-size: 13px; font-weight: 700; border: none; border-radius: 999px; padding: 11px 14px; }
+.dialog-btn.secondary { background: transparent; }
+
+/* ============ DARK THEME ============ */
+body.page-dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; }
+.theme.dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
+.theme.dark .theme-label { color: rgba(234,245,238,0.4); }
+.theme.dark .intro, .theme.dark .decision-note { color: rgba(234,245,238,0.62); }
+.decision-note.dark { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.12); }
+.theme.dark .appframe { background: linear-gradient(160deg, #1C2C24, #0F1A15); border: 1px solid rgba(210,235,220,0.08); box-shadow: 0 30px 70px rgba(0,0,0,0.5); }
+.theme.dark .chrome-dot { background: rgba(234,245,238,0.14); }
+.theme.dark .screen { background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); }
+.theme.dark .crumb { color: #6FD1B1; }
+.theme.dark .page-title { color: #F3FBF5; }
+.theme.dark .card { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.13); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); }
+.theme.dark .card h3 { color: rgba(234,245,238,0.45); }
+.theme.dark .card h3 .count { color: rgba(234,245,238,0.4); }
+.theme.dark .plain-line { color: rgba(234,245,238,0.55); }
+.theme.dark .axis-label { fill: rgba(234,245,238,0.38); }
+.theme.dark .grid-line { stroke: rgba(234,245,238,0.08); }
+.theme.dark .baseline-line { stroke: rgba(234,245,238,0.28); }
+.theme.dark .trend-path { stroke: #9FBB8A; }
+.theme.dark .gap-band { fill: rgba(226,165,66,0.07); }
+.theme.dark .gap-band-label { fill: rgba(226,165,66,0.75); }
+.theme.dark .pt { fill: #9FBB8A; }
+.theme.dark details.readings-list { background: rgba(220,245,230,0.04); border: 1px solid rgba(210,235,220,0.1); }
+.theme.dark details.readings-list > summary { color: rgba(234,245,238,0.8); }
+.theme.dark details.readings-list > summary::after { color: #6FD1B1; }
+.theme.dark table.readings-table th { color: rgba(234,245,238,0.4); border-bottom: 1px solid rgba(210,235,220,0.12); }
+.theme.dark table.readings-table td { color: rgba(234,245,238,0.75); border-bottom: 1px solid rgba(210,235,220,0.07); }
+.theme.dark .kwh-cell { color: #EAF5EE; }
+.theme.dark .corrected-note { color: rgba(234,245,238,0.42); }
+.theme.dark .pending-badge { color: rgba(234,245,238,0.7); background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.24); }
+.theme.dark .edit-btn { color: rgba(234,245,238,0.85); background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.2); }
+.theme.dark .pager-row { border-top: 1px solid rgba(210,235,220,0.08); }
+.theme.dark .pager-btn { color: rgba(234,245,238,0.75); background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.18); }
+.theme.dark .pager-btn[disabled] { color: rgba(234,245,238,0.25); border-color: rgba(210,235,220,0.08); }
+.theme.dark .pager-label { color: rgba(234,245,238,0.5); }
+.theme.dark .room-item { border-bottom: 1px solid rgba(210,235,220,0.08); }
+.theme.dark .room-item summary { color: #EAF5EE; }
+.theme.dark .room-item summary::after { color: rgba(234,245,238,0.35); }
+.theme.dark .pp-item summary { color: rgba(234,245,238,0.75); }
+.theme.dark .pp-item summary::after { color: rgba(234,245,238,0.3); }
+.theme.dark .device-row { color: rgba(234,245,238,0.6); }
+.theme.dark .device-row b { color: rgba(234,245,238,0.85); }
+.theme.dark .caveat { color: rgba(234,245,238,0.4); border-top: 1px solid rgba(210,235,220,0.08); }
+
+.dialog-scrim.dark { background: rgba(6,12,9,0.5); backdrop-filter: blur(2px); }
+.modal-card.dark { background: rgba(24,38,31,0.96); border: 1px solid rgba(210,235,220,0.18); backdrop-filter: blur(24px) saturate(150%); box-shadow: 0 30px 60px rgba(0,0,0,0.55); }
+.modal-card.dark .modal-title { color: #F3FBF5; }
+.modal-card.dark .modal-sub { color: rgba(234,245,238,0.5); }
+.modal-card.dark .field-label { color: rgba(234,245,238,0.55); }
+.modal-card.dark .kwh-input-wrap { background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.2); }
+.modal-card.dark .kwh-input { color: #EAF5EE; }
+.modal-card.dark .kwh-unit { color: rgba(234,245,238,0.5); }
+.modal-card.dark .dialog-btn.primary { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; }
+.modal-card.dark .dialog-btn.secondary { color: rgba(234,245,238,0.7); border: 1px solid rgba(210,235,220,0.2); }
+
+/* ============ LIGHT THEME ============ */
+body.page-light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; }
+.theme.light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; box-shadow: 0 24px 60px rgba(40,70,30,0.14); border: 1px solid rgba(255,255,255,0.6); }
+.theme.light .theme-label { color: rgba(30,42,28,0.46); }
+.theme.light .intro, .theme.light .decision-note { color: rgba(30,42,28,0.68); }
+.decision-note.light { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.12); }
+.theme.light .appframe { background: linear-gradient(160deg, #FFFFFA, #E3EDD8); border: 1px solid rgba(40,70,50,0.14); box-shadow: 0 30px 60px rgba(40,70,30,0.22); }
+.theme.light .chrome-dot { background: rgba(30,42,28,0.16); }
+.theme.light .screen { background: radial-gradient(130% 60% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
+.theme.light .crumb { color: #1E7A61; }
+.theme.light .page-title { color: #16210F; }
+.theme.light .card { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); }
+.theme.light .card h3 { color: rgba(30,42,28,0.55); }
+.theme.light .card h3 .count { color: rgba(30,42,28,0.5); }
+.theme.light .plain-line { color: rgba(30,42,28,0.65); }
+.theme.light .axis-label { fill: rgba(30,42,28,0.45); }
+.theme.light .grid-line { stroke: rgba(30,42,28,0.1); }
+.theme.light .baseline-line { stroke: rgba(30,42,28,0.3); }
+.theme.light .trend-path { stroke: #5C8A48; }
+.theme.light .gap-band { fill: rgba(178,120,20,0.09); }
+.theme.light .gap-band-label { fill: rgba(150,100,10,0.85); }
+.theme.light .pt { fill: #5C8A48; }
+.theme.light details.readings-list { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.14); }
+.theme.light details.readings-list > summary { color: rgba(30,42,28,0.85); }
+.theme.light details.readings-list > summary::after { color: #1E7A61; }
+.theme.light table.readings-table th { color: rgba(30,42,28,0.5); border-bottom: 1px solid rgba(40,70,50,0.14); }
+.theme.light table.readings-table td { color: rgba(30,42,28,0.78); border-bottom: 1px solid rgba(40,70,50,0.08); }
+.theme.light .kwh-cell { color: #16210F; }
+.theme.light .corrected-note { color: rgba(30,42,28,0.5); }
+.theme.light .pending-badge { color: rgba(30,42,28,0.75); background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.28); }
+.theme.light .edit-btn { color: rgba(30,42,28,0.85); background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.2); }
+.theme.light .pager-row { border-top: 1px solid rgba(40,70,50,0.1); }
+.theme.light .pager-btn { color: rgba(30,42,28,0.78); background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.18); }
+.theme.light .pager-btn[disabled] { color: rgba(30,42,28,0.3); border-color: rgba(40,70,50,0.08); }
+.theme.light .pager-label { color: rgba(30,42,28,0.55); }
+.theme.light .room-item { border-bottom: 1px solid rgba(40,70,50,0.09); }
+.theme.light .room-item summary { color: #16210F; }
+.theme.light .room-item summary::after { color: rgba(30,42,28,0.4); }
+.theme.light .pp-item summary { color: rgba(30,42,28,0.8); }
+.theme.light .pp-item summary::after { color: rgba(30,42,28,0.35); }
+.theme.light .device-row { color: rgba(30,42,28,0.68); }
+.theme.light .device-row b { color: rgba(30,42,28,0.9); }
+.theme.light .caveat { color: rgba(30,42,28,0.5); border-top: 1px solid rgba(40,70,50,0.09); }
+
+.dialog-scrim.light { background: rgba(40,55,35,0.32); backdrop-filter: blur(2px); }
+.modal-card.light { background: rgba(255,255,255,0.96); border: 1px solid rgba(40,70,50,0.16); backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 30px 60px rgba(40,70,30,0.28); }
+.modal-card.light .modal-title { color: #16210F; }
+.modal-card.light .modal-sub { color: rgba(30,42,28,0.55); }
+.modal-card.light .field-label { color: rgba(30,42,28,0.6); }
+.modal-card.light .kwh-input-wrap { background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.18); }
+.modal-card.light .kwh-input { color: #1E2A1C; }
+.modal-card.light .kwh-unit { color: rgba(30,42,28,0.55); }
+.modal-card.light .dialog-btn.primary { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; }
+.modal-card.light .dialog-btn.secondary { color: rgba(30,42,28,0.7); border: 1px solid rgba(40,70,50,0.2); }
+</style>
+</head>
+<body class="page-dark">
+<div class="wrap">
+  <h1>Trend History — merged Meter Readings placement</h1>
+  <p class="intro">
+    <code>Story 4.1</code> / <code>Story 4.3</code> — the one open UX question from the Epic 3
+    Retro's Significant Discovery: where Story 2.8's Meter Reading list/edit surface lands once
+    it's folded into Trend History instead of staying a standalone page.
+  </p>
+  <div class="decision-note dark">
+    <strong>Placement:</strong> a third card, "Meter Readings," sits between the trend chart and
+    the Room → Power Point → Device tree — collapsed by default (same disclosure idiom as the
+    tree below it). Chart and Meter Readings are two views of the same Main Meter data (FR-8) and
+    read as a pair; the tree is a structurally different signal (FR-9, Smart Plug, AD-14) and stays
+    visually separate, last on the page. Row content, pagination, the Pending flag, and the
+    correction note are carried over unmodified from Story 2.8's shipped page.
+  </div>
+
+  <div class="theme-row">
+
+    <!-- ================= DARK ================= -->
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+          <div class="page-title">Trend History</div>
+
+          <div class="card">
+            <h3>Pace vs. yearly baseline</h3>
+            <svg viewBox="0 0 320 130" width="100%" height="150" preserveAspectRatio="xMidYMid meet">
+              <line x1="28" y1="10" x2="28" y2="106" class="grid-line"/>
+              <line x1="28" y1="106" x2="310" y2="106" class="grid-line"/>
+              <line x1="28" y1="60" x2="310" y2="60" class="baseline-line"/>
+              <text x="0" y="63" class="axis-label">0</text>
+              <text x="0" y="14" class="axis-label">+40</text>
+              <text x="0" y="109" class="axis-label">−40</text>
+              <text x="30" y="120" class="axis-label">Jan</text>
+              <text x="150" y="120" class="axis-label">Apr</text>
+              <text x="290" y="120" class="axis-label">Aug</text>
+              <rect x="150" y="10" width="30" height="96" class="gap-band"/>
+              <text x="152" y="22" class="gap-band-label">No reading</text>
+              <text x="152" y="31" class="gap-band-label">Apr 3–17</text>
+              <path d="M34,60 L96,48 L148,38" class="trend-path"/>
+              <path d="M182,44 L228,80 L270,52 L304,40" class="trend-path"/>
+              <circle cx="304" cy="40" class="pt"/>
+            </svg>
+            <p class="plain-line">Currently 240&nbsp;kWh under baseline. Gaps render as a visible break in the line — never interpolated.</p>
+          </div>
+
+          <div class="card" style="padding-bottom: 4px;">
+            <details class="readings-list" open>
+              <summary><span>Meter Readings <span style="font-weight:400; text-transform:none;">— 214 logged</span></span></summary>
+              <div class="readings-body">
+                <table class="readings-table">
+                  <thead><tr><th>Timestamp</th><th>kWh</th><th></th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td>Aug 16, 19:42</td>
+                      <td class="kwh-cell">14,302</td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                    <tr>
+                      <td>Aug 9, 08:15</td>
+                      <td class="kwh-cell">14,238 <span class="pending-badge">Pending</span></td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                    <tr>
+                      <td>Aug 2, 20:03</td>
+                      <td class="kwh-cell">14,190<span class="corrected-note">Originally logged as 14,910 kWh</span></td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                    <tr>
+                      <td>Jul 26, 18:47</td>
+                      <td class="kwh-cell">14,140</td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pager-row">
+                  <button class="pager-btn" disabled>Previous</button>
+                  <span class="pager-label">Page 1 of 11</span>
+                  <button class="pager-btn">Next</button>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="card">
+            <h3>Room → Power Point → Device</h3>
+            <details class="room-item">
+              <summary><span>Living Room</span><span class="kwh">60 kWh</span></summary>
+            </details>
+            <details class="room-item">
+              <summary><span>Kitchen</span><span class="kwh">173 kWh</span></summary>
+            </details>
+            <details class="room-item">
+              <summary><span>Office</span><span class="kwh">100 kWh</span></summary>
+            </details>
+            <p class="caveat">Measured context, not a reconciled attribution of your Main Meter total — these figures won't sum to it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= LIGHT ================= -->
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+          <div class="page-title">Trend History</div>
+
+          <div class="card">
+            <h3>Pace vs. yearly baseline</h3>
+            <svg viewBox="0 0 320 130" width="100%" height="150" preserveAspectRatio="xMidYMid meet">
+              <line x1="28" y1="10" x2="28" y2="106" class="grid-line"/>
+              <line x1="28" y1="106" x2="310" y2="106" class="grid-line"/>
+              <line x1="28" y1="60" x2="310" y2="60" class="baseline-line"/>
+              <text x="0" y="63" class="axis-label">0</text>
+              <text x="0" y="14" class="axis-label">+40</text>
+              <text x="0" y="109" class="axis-label">−40</text>
+              <text x="30" y="120" class="axis-label">Jan</text>
+              <text x="150" y="120" class="axis-label">Apr</text>
+              <text x="290" y="120" class="axis-label">Aug</text>
+              <rect x="150" y="10" width="30" height="96" class="gap-band"/>
+              <text x="152" y="22" class="gap-band-label">No reading</text>
+              <text x="152" y="31" class="gap-band-label">Apr 3–17</text>
+              <path d="M34,60 L96,48 L148,38" class="trend-path"/>
+              <path d="M182,44 L228,80 L270,52 L304,40" class="trend-path"/>
+              <circle cx="304" cy="40" class="pt"/>
+            </svg>
+            <p class="plain-line">Currently 240&nbsp;kWh under baseline. Gaps render as a visible break in the line — never interpolated.</p>
+          </div>
+
+          <div class="card" style="padding-bottom: 4px;">
+            <details class="readings-list" open>
+              <summary><span>Meter Readings <span style="font-weight:400; text-transform:none;">— 214 logged</span></span></summary>
+              <div class="readings-body">
+                <table class="readings-table">
+                  <thead><tr><th>Timestamp</th><th>kWh</th><th></th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td>Aug 16, 19:42</td>
+                      <td class="kwh-cell">14,302</td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                    <tr>
+                      <td>Aug 9, 08:15</td>
+                      <td class="kwh-cell">14,238 <span class="pending-badge">Pending</span></td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                    <tr>
+                      <td>Aug 2, 20:03</td>
+                      <td class="kwh-cell">14,190<span class="corrected-note">Originally logged as 14,910 kWh</span></td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                    <tr>
+                      <td>Jul 26, 18:47</td>
+                      <td class="kwh-cell">14,140</td>
+                      <td><button class="edit-btn">Edit</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pager-row">
+                  <button class="pager-btn" disabled>Previous</button>
+                  <span class="pager-label">Page 1 of 11</span>
+                  <button class="pager-btn">Next</button>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="card">
+            <h3>Room → Power Point → Device</h3>
+            <details class="room-item">
+              <summary><span>Living Room</span><span class="kwh">60 kWh</span></summary>
+            </details>
+            <details class="room-item">
+              <summary><span>Kitchen</span><span class="kwh">173 kWh</span></summary>
+            </details>
+            <details class="room-item">
+              <summary><span>Office</span><span class="kwh">100 kWh</span></summary>
+            </details>
+            <p class="caveat">Measured context, not a reconciled attribution of your Main Meter total — these figures won't sum to it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <h1 style="margin-top:8px;">Edit dialog — reused verbatim from Story 2.8</h1>
+  <p class="intro" style="margin-bottom:24px;">
+    No new dialog design: same <code>Dialog</code> + <code>GLASS_MODAL_CLASSNAME</code> shell as
+    the Meter Regression prompt (key-log-reading-flow.html) and the same unit-inside-field kWh
+    input as the Yearly Baseline field (key-settings.html). Shown here only to confirm it drops
+    into the merged surface unchanged — clicking "Edit" on a Meter Readings row opens this over
+    the Trend History page, not a new route.
+  </p>
+  <section class="theme dark" style="max-width: 620px;">
+    <div class="theme-label">Dark</div>
+    <div class="appframe dialog-frame">
+      <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+      <div class="screen" style="min-height: 340px; position: relative;">
+        <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+        <div class="page-title">Trend History</div>
+        <div class="dialog-scrim dark"></div>
+        <div class="modal-card dark">
+          <div class="modal-title">Edit Meter Reading</div>
+          <div class="modal-sub">Aug 16, 19:42</div>
+          <span class="field-label">Meter reading</span>
+          <div class="kwh-input-wrap">
+            <input class="kwh-input" value="14 302">
+            <span class="kwh-unit">kWh</span>
+          </div>
+          <div class="dialog-actions">
+            <button class="dialog-btn secondary">Cancel</button>
+            <button class="dialog-btn primary">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

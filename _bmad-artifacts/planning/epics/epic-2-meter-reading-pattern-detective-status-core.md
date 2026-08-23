@@ -2,7 +2,7 @@
 
 The product's non-negotiable core loop: a Household member logs a Meter Reading in under a minute (with offline queuing), sets a Yearly Baseline, and sees a single trustworthy Status (within range / below baseline / trending) on the dashboard — computed from a gap-tolerant rolling baseline, with meter-rollover/reset regressions caught and classified rather than silently corrupting the pace. Fully functional with zero Smart Plug coverage. Realizes UJ-1 and UJ-2's Status half.
 
-**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1), FR-30 (added post-Epic-2-retro 2026-08-18, extending Story 2.5's Status card), FR-31 (added 2026-08-23, dedicated Meter Reading history/browse surface)
+**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1), FR-30 (added post-Epic-2-retro 2026-08-18, extending Story 2.5's Status card), FR-31 (added 2026-08-23, dedicated Meter Reading history/browse surface — Story 2.8 shipped it as a standalone page; per the Epic 3 retro 2026-08-23, that surface is absorbed into Epic 4's Story 4.1 going forward — see `epic-4-trend-history-per-plug-insight.md`)
 **NFRs:** NFR1 (perf tier 1), NFR7 (offline capture), NFR8 (audit trail on corrections — first wired in Story 2.8), NFR9 (recomputation policy), NFR10 (concurrency), NFR15 (says-less discipline)
 **Architecture:** AD-4, AD-7, AD-12, AD-14, AD-16
 **UX-DRs:** UX-DR1 (status/brand tokens), UX-DR2 (Status card), UX-DR3 (Log Reading sheet), UX-DR4 (Meter Regression prompt), UX-DR8 (primary action button), UX-DR9 (nav chrome), UX-DR11 (liquid glass elevation), UX-DR13 (one-level-deep modal stacking), UX-DR14 (empty/edge states), UX-DR15 (motion contract), UX-DR16 (accessibility floor), UX-DR17 (voice/tone), UX-DR18 (regression micro-flow)
@@ -318,3 +318,5 @@ So that I can find and correct a specific past entry, distinct from just seeing 
 **Given** the existing `/api/meter-readings` POST endpoint
 **When** the history list is served
 **Then** it's exposed via a new paginated GET on the same route, following the codebase's existing kebab-case-plural route convention (FR-31, AD-consistency-conventions)
+
+> **Superseded (2026-08-23):** the ACs above describe what Story 2.8 actually shipped as a standalone page and remain accurate history — but per the Epic 3 Retro's Significant Discovery, this surface (including the "Trend History stays aggregate-only" claim above) is consolidated into Epic 4's Story 4.1 going forward, and the Dashboard's "History" text-link is removed once that lands. See `epic-4-trend-history-per-plug-insight.md` for the current, forward-looking definition.
