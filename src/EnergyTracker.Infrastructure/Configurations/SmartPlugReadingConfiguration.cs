@@ -57,6 +57,31 @@ public class SmartPlugReadingConfiguration : IEntityTypeConfiguration<SmartPlugR
         // Story 3.2/3.3 will read "all readings for one import" repeatedly.
         builder.HasIndex(r => r.SmartPlugImportId);
 
+        // AD-20/Story 3.4 AC #6: the DB-level guarantee against a duplicate SmartPlugReading row
+        // — protects paths the application-layer watermark filter can't reach (e.g. a first-ever
+        // parse racing a concurrent completion for the same Power Point). Also doubles as
+        // FindLatestReadingIntervalStartByPowerPointAsync's and
+        // FindFirstReadingDateByPowerPointAsync's query-optimization index (PowerPointId leading).
+        // A NULL PowerPointId (AwaitingPowerPointMapping) is never caught by this index on either
+        // provider — Postgres never treats NULL as equal to NULL in a composite unique index, and
+        // EF Core's SqlServer provider auto-filters a unique index over a nullable column to
+        // `WHERE [PowerPointId] IS NOT NULL` for the identical reason (verified empirically via
+        // this project's own `dotnet ef migrations add` output, correcting Dev Notes Open
+        // Question #3's original assumption that SQL Server protected this "for free"). Closed
+        // instead by a second, hand-added `(HouseholdId, IntervalStart) WHERE PowerPointId IS
+        // NULL` partial unique index in both providers' migrations.
+        builder.HasIndex(r => new { r.PowerPointId, r.IntervalStart }).IsUnique();
+
+        // Story 3.4: the `(HouseholdId, IntervalStart) WHERE PowerPointId IS NULL` unique index
+        // that closes the gap above (see the block comment) is declared ONLY as raw SQL in each
+        // provider's migration (Postgres 20260822165109/SqlServer 20260822165112's Up()) — NOT
+        // here. A `HasFilter(...)` predicate is raw dialect SQL text (Postgres double-quoted
+        // identifiers vs. SQL Server brackets), and this class is shared across both provider
+        // migration projects (AD-2) with no provider check available at this configuration
+        // scope — a single filter string here would be syntactically wrong for one provider.
+        // EF's model is therefore intentionally unaware of this constraint; do not "fix" that by
+        // adding a filtered index here without first solving the dual-provider syntax problem.
+
         // AD-3's standard query filter is wired in EnergyTrackerDbContext.OnModelCreating.
     }
 }

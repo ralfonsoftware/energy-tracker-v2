@@ -54,6 +54,13 @@ public interface ISmartPlugImportRepository
     // no persisted reading at all yet.
     Task<DateOnly?> FindFirstReadingDateByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
 
+    // Story 3.4: the Power Point's latest stored SmartPlugReading.IntervalStart — the watermark
+    // ProcessSmartPlugImport passes into ISmartPlugParser.Parse so a repeat import only reads/
+    // persists genuinely new rows (AC #1, #3). Mirrors FindFirstReadingDateByPowerPointAsync's
+    // exact shape, just OrderByDescending. `null` only when the Power Point has no persisted
+    // reading at all yet (AC #4 — parse the full file).
+    Task<DateTimeOffset?> FindLatestReadingIntervalStartByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
+
     // Single SaveChangesAsync — one transaction, mirroring every other method here. Gaps are
     // insert-only (immutable after creation, AD-7/NFR9's precedent) — never called to update an
     // existing gap row.

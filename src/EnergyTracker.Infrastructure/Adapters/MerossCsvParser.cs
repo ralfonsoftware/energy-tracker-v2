@@ -16,20 +16,21 @@ public partial class MerossCsvParser : ISmartPlugParser
 
     public bool CanParse(string fileName) => FileNamePattern().IsMatch(fileName);
 
-    public IReadOnlyList<SmartPlugReading> Parse(Stream fileContent, string fileName, CancellationToken cancellationToken = default)
-    {
-        var match = FileNamePattern().Match(fileName);
-        if (!match.Success)
-        {
-            throw new InvalidOperationException($"File name '{fileName}' does not match the Meross export pattern.");
-        }
+    // Trivial — the device tag comes from the filename (AC #4), never the file body, so this
+    // doesn't need to touch fileContent at all.
+    public string ReadDeviceTag(Stream fileContent, string fileName, CancellationToken cancellationToken = default) =>
+        ParseDeviceTag(fileName);
 
-        var deviceTag = match.Groups["device"].Value;
+    public SmartPlugParseResult Parse(
+        Stream fileContent, string fileName, DateTimeOffset? watermark, CancellationToken cancellationToken = default)
+    {
+        var deviceTag = ParseDeviceTag(fileName);
 
         using var reader = new StreamReader(fileContent, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         reader.ReadLine(); // Header: "Date\t,Power Consumption-(kWh)\t"
 
         var readings = new List<SmartPlugReading>();
+        var rawDataRowsRead = 0;
         string? line;
         while ((line = reader.ReadLine()) is not null)
         {
@@ -39,6 +40,8 @@ public partial class MerossCsvParser : ISmartPlugParser
             {
                 continue;
             }
+
+            rawDataRowsRead++;
 
             var fields = line.Split("\t,");
             if (fields.Length < 2)
@@ -57,6 +60,13 @@ public partial class MerossCsvParser : ISmartPlugParser
             var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
             var dayEnd = dayStart.AddDays(1).AddTicks(-1);
 
+            // AC #3: filtered, not early-stopped — Meross's CSV row order carries no documented
+            // ordering guarantee (unlike Eve Home's), so every row must still be read.
+            if (watermark is not null && dayStart <= watermark)
+            {
+                continue;
+            }
+
             readings.Add(new SmartPlugReading
             {
                 Id = Guid.NewGuid(),
@@ -72,7 +82,18 @@ public partial class MerossCsvParser : ISmartPlugParser
             });
         }
 
-        return readings;
+        return new SmartPlugParseResult(readings, rawDataRowsRead);
+    }
+
+    private static string ParseDeviceTag(string fileName)
+    {
+        var match = FileNamePattern().Match(fileName);
+        if (!match.Success)
+        {
+            throw new InvalidOperationException($"File name '{fileName}' does not match the Meross export pattern.");
+        }
+
+        return match.Groups["device"].Value;
     }
 
     [GeneratedRegex(@"^Power Monitor Day Data - (?<device>.+) - \d{8}\.csv$", RegexOptions.IgnoreCase)]
