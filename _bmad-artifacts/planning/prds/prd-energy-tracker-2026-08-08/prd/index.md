@@ -6,7 +6,7 @@
   - [title: Energy Tracker v2 PRD
 status: final
 created: 2026-08-08
-updated: 2026-08-08](#title-energy-tracker-v2-prd-status-final-created-2026-08-08-updated-2026-08-08)
+updated: 2026-08-23](#title-energy-tracker-v2-prd-status-final-created-2026-08-08-updated-2026-08-23)
   - [0. Document Purpose](./0-document-purpose.md)
   - [1. Vision](./1-vision.md)
   - [2. Target User](./2-target-user.md)
@@ -23,7 +23,9 @@ updated: 2026-08-08](#title-energy-tracker-v2-prd-status-final-created-2026-08-0
       - [FR-5: Baseline Sharpening from Smart Plug Signal](./4-features.md#fr-5-baseline-sharpening-from-smart-plug-signal)
       - [FR-6: Status Computation](./4-features.md#fr-6-status-computation)
       - [FR-7: Dashboard Status Display](./4-features.md#fr-7-dashboard-status-display)
+      - [FR-30: Status Calculation Detail](./4-features.md#fr-30-status-calculation-detail)
       - [FR-8: Trend History View](./4-features.md#fr-8-trend-history-view)
+      - [FR-31: Meter Reading History View](./4-features.md#fr-31-meter-reading-history-view)
       - [FR-9: Per-Plug Measured Data View](./4-features.md#fr-9-per-plug-measured-data-view)
       - [FR-24: Smart-Plug Import Gap Handling](./4-features.md#fr-24-smart-plug-import-gap-handling)
       - [FR-25: Meter Reading Regression Detection](./4-features.md#fr-25-meter-reading-regression-detection)

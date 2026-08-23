@@ -2,8 +2,8 @@
 
 The product's non-negotiable core loop: a Household member logs a Meter Reading in under a minute (with offline queuing), sets a Yearly Baseline, and sees a single trustworthy Status (within range / below baseline / trending) on the dashboard — computed from a gap-tolerant rolling baseline, with meter-rollover/reset regressions caught and classified rather than silently corrupting the pace. Fully functional with zero Smart Plug coverage. Realizes UJ-1 and UJ-2's Status half.
 
-**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1)
-**NFRs:** NFR1 (perf tier 1), NFR7 (offline capture), NFR9 (recomputation policy), NFR10 (concurrency), NFR15 (says-less discipline)
+**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1), FR-30 (added post-Epic-2-retro 2026-08-18, extending Story 2.5's Status card), FR-31 (added 2026-08-23, dedicated Meter Reading history/browse surface)
+**NFRs:** NFR1 (perf tier 1), NFR7 (offline capture), NFR8 (audit trail on corrections — first wired in Story 2.8), NFR9 (recomputation policy), NFR10 (concurrency), NFR15 (says-less discipline)
 **Architecture:** AD-4, AD-7, AD-12, AD-14, AD-16
 **UX-DRs:** UX-DR1 (status/brand tokens), UX-DR2 (Status card), UX-DR3 (Log Reading sheet), UX-DR4 (Meter Regression prompt), UX-DR8 (primary action button), UX-DR9 (nav chrome), UX-DR11 (liquid glass elevation), UX-DR13 (one-level-deep modal stacking), UX-DR14 (empty/edge states), UX-DR15 (motion contract), UX-DR16 (accessibility floor), UX-DR17 (voice/tone), UX-DR18 (regression micro-flow)
 
@@ -258,3 +258,63 @@ So that I can reorganize my Household's tagging structure once real day-to-day u
 **Given** the Room/Power Point/Device management surface in Settings (Story 1.9)
 **When** a move is available
 **Then** it's exposed as an additive "Move to…" action on the existing management UI rather than a new standalone surface — reusing the same list/detail pattern already established
+
+## Story 2.7: Status Calculation Detail
+
+As a Household member,
+I want to open a details view from the dashboard Status card,
+So that I understand how the "X kWh over/under expected" figure was actually calculated, not just told the number.
+
+**Acceptance Criteria:**
+
+**Given** the dashboard Status card
+**When** I open its details view
+**Then** it shows pace-to-date, baseline-to-date, the elapsed period baseline-to-date covers, the difference between them (the figure already shown on the card), and the household's configured trending threshold (FR-30)
+
+**Given** the details view
+**When** rendered
+**Then** it shows only the aggregate figures already computed for Status — never a list of individual contributing Meter Readings (FR-30, confirmed with Ralf: a full reading list would be long with little added value)
+
+**Given** the Status card's low-confidence flag (Story 2.4) is active
+**When** I open the details view
+**Then** it explains why — stale last reading, not corroborated by Smart Plug coverage — rather than surfacing the flag with no explanation (FR-30, FR-6)
+
+**Given** the details view
+**When** rendered
+**Then** no chart is required — it's legible as labeled figures, same as the Status card itself (FR-30, FR-7)
+
+**Given** Status is undefined (fewer than two Readings, or no Yearly Baseline set — Story 2.4/2.5's onboarding empty state)
+**When** the dashboard is in that state
+**Then** no details view is offered — there is no calculation yet to explain (FR-30, FR-6)
+
+**Given** the existing `/api/status` endpoint
+**When** the details data is served
+**Then** it's exposed via a separate endpoint, never merged into the Status response — consistent with the codebase's existing drill-down convention (e.g. Trend History, FR-8)
+
+## Story 2.8: Meter Reading History View
+
+As a Household member,
+I want a dedicated, browsable list of every Meter Reading I've logged,
+So that I can find and correct a specific past entry, distinct from just seeing the aggregate trend.
+
+**Acceptance Criteria:**
+
+**Given** the Meter Reading History view
+**When** I open it
+**Then** it lists individual Meter Readings (value + timestamp) for the Main Meter, ordered by timestamp — not entry order, consistent with FR-1/FR-25's sequencing (FR-31)
+
+**Given** Trend History (FR-8) and Status Calculation Detail (FR-30)
+**When** comparing surfaces
+**Then** this view is the only place raw, per-Reading data is browsable — both of those stay aggregate-only, unchanged by this story (FR-31, FR-8, FR-30)
+
+**Given** a Reading in the list
+**When** I open it to correct a mis-logged value
+**Then** editing preserves the original value as a visible correction note rather than a silent overwrite — this story is the first to wire the shared audit-trail mechanism (NFR8) into a Meter Reading edit path (FR-31, NFR8)
+
+**Given** a Reading currently under an open, unconfirmed regression classification (Story 2.3 / FR-25)
+**When** it appears in the list
+**Then** it's visibly flagged as pending rather than shown as a normal confirmed entry (FR-31, FR-25)
+
+**Given** the existing `/api/meter-readings` POST endpoint
+**When** the history list is served
+**Then** it's exposed via a new paginated GET on the same route, following the codebase's existing kebab-case-plural route convention (FR-31, AD-consistency-conventions)

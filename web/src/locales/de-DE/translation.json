@@ -130,6 +130,18 @@
       "emptyTitle": "Noch kein Status",
       "emptyBody": "Erfasse deinen ersten Zählerstand, um loszulegen — Pattern Detective braucht mindestens zwei, um dein Tempo zu ermitteln."
     },
+    "statusDetail": {
+      "trigger": "Wie wurde das berechnet?",
+      "title": "Statusberechnung",
+      "paceLabel": "Tempo bis heute",
+      "baselineLabel": "Basiswert bis heute",
+      "elapsedDays": "über {{days}} Tage",
+      "differenceLabel": "Differenz",
+      "thresholdLabel": "Schwellenwert für Anstieg",
+      "lowConfidenceExplanation": "Dein letzter Zählerstand liegt {{days}} Tage zurück — mehr als der Schwellenwert des Haushalts von {{threshold}} Tagen, und keine Smart-Plug-Daten decken die Lücke ab.",
+      "loadError": "Die Berechnungsdetails konnten nicht geladen werden — bitte versuche es erneut.",
+      "close": "Schließen"
+    },
     "nav": {
       "dashboard": "Dashboard",
       "trendHistory": "Verlauf",

@@ -120,6 +120,99 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task GET_status_detail_returns_a_null_body_when_no_Yearly_Baseline_is_set()
+    {
+        var (client, _, _) = await CreateHouseholdAsync();
+        await PostReadingAsync(client, 1000m, DateTimeOffset.UtcNow.AddDays(-1));
+        await PostReadingAsync(client, 1100m, DateTimeOffset.UtcNow);
+
+        var response = await client.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GET_status_detail_returns_a_null_body_when_fewer_than_two_readings_exist()
+    {
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        await PostReadingAsync(client, 1000m, DateTimeOffset.UtcNow);
+
+        var response = await client.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GET_status_detail_returns_the_detail_figures_once_a_baseline_and_two_readings_exist()
+    {
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-182.5);
+        await PostReadingAsync(client, 1000m, baseline);
+        await PostReadingAsync(client, 2825m, latest);
+
+        var response = await client.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<StatusDetailResponse>(TestContext.Current.CancellationToken);
+        body.ShouldNotBeNull();
+        body.Status.ShouldBe("withinRange");
+        body.PaceToDateKwh.ShouldBe(1825m);
+        body.BaselineToDateKwh.ShouldBe(1825m);
+        body.ElapsedDays.ShouldBe(182.5, tolerance: 0.1);
+        body.TrendingThresholdKwh.ShouldBe(100m);
+        body.IsLowConfidence.ShouldBeFalse();
+        body.DaysSinceLastReading.ShouldBeLessThan(1);
+        body.LowConfidenceGapDaysThreshold.ShouldBe(45);
+    }
+
+    [Fact]
+    public async Task A_households_Status_detail_is_never_affected_by_another_households_readings_or_baseline()
+    {
+        var (ownerClient, ownerHouseholdId, ownerVersion) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(ownerClient, ownerHouseholdId, 3650m, ownerVersion);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-182.5);
+        await PostReadingAsync(ownerClient, 1000m, baseline);
+        await PostReadingAsync(ownerClient, 2825m, latest);
+
+        var (otherClient, otherHouseholdId, otherVersion) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(otherClient, otherHouseholdId, 100m, otherVersion);
+        await PostReadingAsync(otherClient, 1m, baseline);
+        await PostReadingAsync(otherClient, 5000m, latest);
+
+        var ownerResponse = await ownerClient.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+        var ownerBody = await ownerResponse.Content.ReadFromJsonAsync<StatusDetailResponse>(TestContext.Current.CancellationToken);
+
+        ownerBody.ShouldNotBeNull();
+        ownerBody.PaceToDateKwh.ShouldBe(1825m);
+        ownerBody.Status.ShouldBe("withinRange");
+
+        // Symmetric proof: the other Household's own detail view must reflect its own data, not
+        // bleed the owner's figures either.
+        var otherResponse = await otherClient.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+        var otherBody = await otherResponse.Content.ReadFromJsonAsync<StatusDetailResponse>(TestContext.Current.CancellationToken);
+
+        otherBody.ShouldNotBeNull();
+        otherBody.PaceToDateKwh.ShouldBe(4999m);
+        otherBody.Status.ShouldBe("trending");
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_reading_status_detail()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Saving_a_reading_that_makes_Status_definite_persists_a_StatusSnapshot_row()
     {
         var (client, householdId, version) = await CreateHouseholdAsync();

@@ -130,6 +130,18 @@
       "emptyTitle": "No Status yet",
       "emptyBody": "Log your first reading to get started — Pattern Detective needs at least two to find your pace."
     },
+    "statusDetail": {
+      "trigger": "How was this calculated?",
+      "title": "Status calculation",
+      "paceLabel": "Pace to date",
+      "baselineLabel": "Baseline to date",
+      "elapsedDays": "over {{days}} days",
+      "differenceLabel": "Difference",
+      "thresholdLabel": "Trending threshold",
+      "lowConfidenceExplanation": "It's been {{days}} days since your last reading — more than the household's {{threshold}}-day threshold, and no Smart Plug data covers the gap.",
+      "loadError": "Couldn't load the calculation detail — try again.",
+      "close": "Close"
+    },
     "nav": {
       "dashboard": "Dashboard",
       "trendHistory": "Trend History",

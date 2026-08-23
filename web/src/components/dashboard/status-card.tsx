@@ -4,6 +4,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { computeStatusDifference } from '@/lib/status-difference'
 import type { StatusDto, StatusValue } from '@/lib/status-api'
 
 interface StatusCardProps {
@@ -22,6 +23,10 @@ interface StatusCardProps {
   // empty frame) — the populated state's own primary button lives outside the card
   // (DashboardPage, Task 6/8), matching the mockup's real-screen layout.
   emptyStateAction?: ReactNode
+  // The Story 2.7 "How was this calculated?" details-view trigger — rendered only in the
+  // populated branch below (never loading/empty), a compositional slot exactly like
+  // emptyStateAction so StatusCard stays a pure function of its props.
+  detailTrigger?: ReactNode
 }
 
 // {typography.status-headline} — verbatim per-state copy from mockups/key-dashboard.html /
@@ -54,7 +59,7 @@ const BADGE_CLASS: Record<StatusValue, string> = {
   trending: 'bg-status-trending-badge-bg text-status-trending-badge-text',
 }
 
-export function StatusCard({ status, loading, locale, playEntranceAnimation, emptyStateAction }: StatusCardProps) {
+export function StatusCard({ status, loading, locale, playEntranceAnimation, emptyStateAction, detailTrigger }: StatusCardProps) {
   const { t } = useTranslation()
 
   if (loading) {
@@ -87,19 +92,12 @@ export function StatusCard({ status, loading, locale, playEntranceAnimation, emp
   }
 
   const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
-  // Branch on the *unrounded* sign, matching the backend's own ResolveStatus boundary
-  // (PatternDetectiveCalculator.cs: "difference < 0m" is BelowBaseline, otherwise WithinRange
-  // unless it clears the Trending threshold). Rounding the difference before branching could
-  // flip the displayed direction for any unrounded value in (-0.5, 0) — e.g. -0.3 rounds to 0
-  // and would render "Right on pace." while the badge/dot still say "Below baseline", a visible
-  // contradiction between the two. Only the displayed *magnitude* is rounded.
-  const rawDifference = status.paceToDateKwh - status.baselineToDateKwh
-  const roundedMagnitude = Math.round(Math.abs(rawDifference))
+  const { sign, roundedMagnitude } = computeStatusDifference(status.paceToDateKwh, status.baselineToDateKwh)
 
   let supportingSentence: string
-  if (rawDifference === 0) {
+  if (sign === 'on') {
     supportingSentence = t('dashboard.status.body.onPace')
-  } else if (rawDifference < 0) {
+  } else if (sign === 'under') {
     supportingSentence = t('dashboard.status.body.underPace', { kwh: numberFormat.format(roundedMagnitude) })
   } else {
     supportingSentence = t('dashboard.status.body.overPace', { kwh: numberFormat.format(roundedMagnitude) })
@@ -140,6 +138,7 @@ export function StatusCard({ status, loading, locale, playEntranceAnimation, emp
           {status.isLowConfidence && (
             <p className="mt-2 text-xs text-muted-foreground/80">{t('dashboard.status.lowConfidenceNote')}</p>
           )}
+          {detailTrigger}
         </div>
       </GlassCard>
     </div>

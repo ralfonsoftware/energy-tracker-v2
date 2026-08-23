@@ -6,7 +6,7 @@ Establishes the buildable/deployable skeleton (the architecture's Structural See
 
 ## Epic 2: Meter Reading & Pattern Detective Status Core
 The product's non-negotiable core loop: a Household member logs a Meter Reading in under a minute (with offline queuing), sets a Yearly Baseline, and sees a single trustworthy Status (within range / below baseline / trending) on the dashboard — computed from a gap-tolerant rolling baseline, with meter-rollover/reset regressions caught and classified rather than silently corrupting the pace. Fully functional with zero Smart Plug coverage. Realizes UJ-1 and UJ-2's Status half.
-**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1)
+**FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1), FR-30 (added post-Epic-2-retro 2026-08-18, extending Story 2.5's Status card), FR-31 (added 2026-08-23, dedicated Meter Reading history/browse surface — Story 2.8)
 
 ## Epic 3: Smart Plug Import & Baseline Sharpening
 Adds Smart Plug data (Eve Home `.xlsx`, Meross `.csv`) as an optional, additive signal that sharpens the Status Epic 2 already delivers — async import with completion notification, gap-tolerant parsing that never fabricates measured data. Builds on Epic 2's Status but never blocks it.

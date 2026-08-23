@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -6,6 +7,7 @@ import { MeterRegressionPromptDialog } from '@/components/meter-reading/meter-re
 import type { MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import type { StatusDto } from '@/lib/status-api'
 import { StatusCard } from './status-card'
+import { StatusDetailDialog } from './status-detail-dialog'
 import { NavChrome } from './nav-chrome'
 
 interface DashboardHousehold {
@@ -46,6 +48,16 @@ export function DashboardPage({
   onSettingsClick,
 }: DashboardPageProps) {
   const { t } = useTranslation()
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+
+  // UX-DR13 (one-level-deep modal stacking): a newly-raised regression prompt supersedes this
+  // read-only drill-down rather than stacking on top of it, the same discipline already applied
+  // to the Log Reading sheet (App.tsx).
+  useEffect(() => {
+    if (openRegressionPrompt) {
+      setDetailDialogOpen(false)
+    }
+  }, [openRegressionPrompt])
 
   // One LogReadingSheet instance — its trigger renders wherever this element is placed below,
   // and exactly one of the two placements ever mounts at a time (empty-state slot vs. below the
@@ -67,6 +79,31 @@ export function DashboardPage({
   const showEmptyState = !statusLoading && !status
   const showPopulated = !statusLoading && !!status
 
+  // A transient status refresh failure (or the onboarding-empty state) unmounts the dialog by
+  // dropping detailTrigger below — but detailDialogOpen lives here in the parent, so without this
+  // it would silently reopen with a fresh fetch the next time status repopulates.
+  useEffect(() => {
+    if (!showPopulated) {
+      setDetailDialogOpen(false)
+    }
+  }, [showPopulated])
+
+  const detailTrigger = showPopulated ? (
+    <StatusDetailDialog
+      open={detailDialogOpen}
+      onOpenChange={setDetailDialogOpen}
+      locale={household.locale}
+      trigger={
+        <button
+          type="button"
+          className="mt-3 text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          {t('dashboard.statusDetail.trigger')}
+        </button>
+      }
+    />
+  ) : undefined
+
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
       <h1 className="text-lg font-bold">{t('app.title')}</h1>
@@ -77,6 +114,7 @@ export function DashboardPage({
         locale={household.locale}
         playEntranceAnimation={playStatusEntranceAnimation}
         emptyStateAction={showEmptyState ? logReadingSheet : undefined}
+        detailTrigger={detailTrigger}
       />
 
       {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}

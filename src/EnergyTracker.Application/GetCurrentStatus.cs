@@ -4,7 +4,15 @@ using EnergyTracker.Domain.Calculations;
 
 namespace EnergyTracker.Application;
 
-public record CurrentStatusResult(Status Status, decimal PaceToDateKwh, decimal BaselineToDateKwh, bool IsLowConfidence);
+public record CurrentStatusResult(
+    Status Status,
+    decimal PaceToDateKwh,
+    decimal BaselineToDateKwh,
+    bool IsLowConfidence,
+    double ElapsedDays,
+    decimal TrendingThresholdKwh,
+    double DaysSinceLastReading,
+    int LowConfidenceGapDaysThreshold);
 
 /// <summary>Computes the caller's Household's current Status live, synchronously, at request time — undefined (null) with fewer than two Readings or no Yearly Baseline set (AC #1, #2, #3, #6, #9, #10; AD-7, AD-12, AD-14).</summary>
 public class GetCurrentStatus(
@@ -52,8 +60,10 @@ public class GetCurrentStatus(
 
         // AC #3: "unusually long gap since the last reading" — measured from the most recent
         // *included* reading to now, not a gap between two readings within the walked sequence.
+        var now = DateTimeOffset.UtcNow;
         var lastReading = includedReadings[^1];
-        var isLowConfidence = (DateTimeOffset.UtcNow - lastReading.ReadingTimestamp).TotalDays > household.LowConfidenceGapDays;
+        var daysSinceLastReading = (now - lastReading.ReadingTimestamp).TotalDays;
+        var isLowConfidence = daysSinceLastReading > household.LowConfidenceGapDays;
 
         // Story 3.3 (AC #1, #2; AD-14): Smart Plug data can only ever soften this flag, never
         // touch PaceToDateKwh/BaselineToDateKwh/the Trending resolution above — the entire
@@ -62,13 +72,21 @@ public class GetCurrentStatus(
         if (isLowConfidence)
         {
             var hasCorroboratingCoverage = await smartPlugCoverageSignal.HasCoverageDuringAsync(
-                householdId, lastReading.ReadingTimestamp, DateTimeOffset.UtcNow, cancellationToken);
+                householdId, lastReading.ReadingTimestamp, now, cancellationToken);
             if (hasCorroboratingCoverage)
             {
                 isLowConfidence = false;
             }
         }
 
-        return new CurrentStatusResult(status, paceResult.Value.PaceToDateKwh, baselineToDateKwh, isLowConfidence);
+        return new CurrentStatusResult(
+            Status: status,
+            PaceToDateKwh: paceResult.Value.PaceToDateKwh,
+            BaselineToDateKwh: baselineToDateKwh,
+            IsLowConfidence: isLowConfidence,
+            ElapsedDays: paceResult.Value.Elapsed.TotalDays,
+            TrendingThresholdKwh: household.TrendingThresholdKwh,
+            DaysSinceLastReading: daysSinceLastReading,
+            LowConfidenceGapDaysThreshold: household.LowConfidenceGapDays);
     }
 }

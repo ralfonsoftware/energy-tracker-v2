@@ -115,6 +115,8 @@ public class GetCurrentStatusTests
         result.ShouldNotBeNull();
         result.Status.ShouldBe(Status.WithinRange);
         result.PaceToDateKwh.ShouldBe(1825m);
+        result.ElapsedDays.ShouldBe(182.5, tolerance: 0.01);
+        result.TrendingThresholdKwh.ShouldBe(100m);
     }
 
     [Fact]
@@ -219,6 +221,8 @@ public class GetCurrentStatusTests
 
         result.ShouldNotBeNull();
         result.IsLowConfidence.ShouldBeTrue();
+        result.DaysSinceLastReading.ShouldBe(50, tolerance: 0.1);
+        result.LowConfidenceGapDaysThreshold.ShouldBe(45);
     }
 
     [Fact]

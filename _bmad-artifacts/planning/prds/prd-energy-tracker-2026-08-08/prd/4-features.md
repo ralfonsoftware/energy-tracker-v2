@@ -73,6 +73,16 @@ The main dashboard shows the current Status as the primary, glanceable element. 
 
 **Out of Scope:** Ambient/push notification delivery of the Status — deferred to a later version; dashboard display is the v2 mechanism (see Open Question 2).
 
+### FR-30: Status Calculation Detail
+
+A Household member can open a details view from the dashboard Status card showing how the displayed pace-vs-baseline figure was calculated. Realizes UJ-2 (dashboard status check, transparency extension).
+
+**Consequences (testable):**
+- Shows pace-to-date, baseline-to-date (and the elapsed period it covers), the difference driving the headline figure, and the household's configured trending threshold — the aggregate figures already computed for Status, not a list of individual contributing Meter Readings.
+- When the low-confidence flag (FR-6) is active, the detail view explains why (stale last reading, not corroborated by Smart Plug coverage) rather than surfacing the flag with no explanation.
+- No chart is required — same legible-as-text principle as FR-7; this is a secondary drill-down, not a replacement for the primary Status element.
+- Only available when Status itself is computable (per FR-6) — the undefined/onboarding case (FR-7) has no detail view, since there is no calculation yet to explain.
+
 ### FR-8: Trend History View
 
 A Household member can view historical Status/pace trend over time. Realizes UJ-3.
@@ -80,6 +90,16 @@ A Household member can view historical Status/pace trend over time. Realizes UJ-
 **Consequences (testable):**
 - The view shows trend, not just the current point-in-time Status.
 - Gaps in the underlying Meter Reading history are rendered as a visible break in the trend, not an interpolated line — interpolation-and-flag treatment (FR-24) is specific to Smart Plug import data, not the core Reading-based trend.
+
+### FR-31: Meter Reading History View
+
+A Household member can view a dedicated, browsable list of individual Meter Readings (value + timestamp) for the Main Meter, separate from the aggregate Status/pace views. Fills the entry point Cross-Cutting NFR "Audit trail on corrections" needs — the correction workflow presupposes a way to find the Reading being corrected, which no other FR provides.
+
+**Consequences (testable):**
+- Distinct surface from FR-8 (Trend History) and FR-30 (Status Calculation Detail) — both of those stay aggregate-only by design; this view is the one place raw, per-Reading data is browsable.
+- Ordered by timestamp, not entry order, consistent with FR-1/FR-25's timestamp-based sequencing.
+- Each Reading entry point supports the edit path the audit-trail NFR requires: editing surfaces the original value as a visible correction note, never a silent overwrite.
+- A Reading under an open, unconfirmed regression classification (FR-25) is visibly flagged as pending in the list, not shown as a normal confirmed entry.
 
 ### FR-9: Per-Plug Measured Data View
 
