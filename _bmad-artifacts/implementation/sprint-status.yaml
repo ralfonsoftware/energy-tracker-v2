@@ -1,5 +1,38 @@
 # generated: 2026-08-09
 # last_updated: 2026-08-23
+# 2026-08-23: story 2-8-meter-reading-history-view moved to done (adversarial code review, 3
+#   layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Acceptance Auditor: 0 findings —
+#   every AC and binding Dev Notes/AD constraint checked out. Review artifact note: same untracked-
+#   files omission as story 2.7's review — `git diff` silently excludes untracked files; regenerated
+#   with `git add -N` before launching reviewers this time, so all findings reflect the complete
+#   diff from the first pass. 1 decision-needed, 8 patch findings fixed, 0 deferred pre-existing,
+#   9 dismissed as noise. Highlights: EditMeterReading's value update and its AuditCorrection write
+#   were two independent SaveChangesAsync calls with no shared transaction — a failure recording the
+#   correction after the value update committed would leave a silent, uncorrected value change,
+#   exactly the class of bug AC #3/NFR8 exist to prevent — fixed via a new IUnitOfWork port/adapter
+#   (first of its kind in this codebase) wrapping both writes in one DB transaction; a no-op edit
+#   (saving the same kWh value) was unconditionally bumping Version and writing to the DB, handing
+#   out spurious 409s to anyone else viewing the same reading — fixed with an early return; an
+#   unbounded `page` query param could integer-overflow GetPageForMainMeterAsync's Skip() into a
+#   500; every row's "Edit" button shared one accessible name with nothing distinguishing rows for
+#   screen-reader/voice-control users; the history page's `loading` state was tracked but never
+#   rendered, leaving the page blank with no feedback during every fetch. Decision-needed (deferred,
+#   needs product judgment): Epic 4's own Story 4.3 "Correcting a Meter Reading" is now materially
+#   superseded/contradicted by this story — it still describes editing via Trend History (this story
+#   built a separate History page instead) and requires a Status recompute-forward-through-present
+#   on every edit that this story deliberately does not implement; logged in deferred-work.md
+#   alongside the existing no-recompute-on-edit entry so the gap isn't lost. Full backend suite
+#   green: 346/346 (Application, Architecture, Api.Tests via Testcontainers Postgres+SqlServer,
+#   Infrastructure.Tests), dotnet build clean. 185 frontend tests green (1 new), tsc/oxlint clean.
+#   Confirmed with Ralf during story creation, since FR-31 postdates the UX freeze the same way
+#   FR-30 did for Story 2.7: no mockup, no nav-chrome slot (all 4 tabs already claimed, Trend
+#   History/Tariff Radar still inert placeholders for Epic 4/5) — surface is a new full page (not
+#   a dialog, given pagination + inline edit), reached via a Dashboard text-link trigger mirroring
+#   Story 2.7's Status Detail link, using the existing local `view` state (no react-router). This
+#   is also the first story to activate two previously-deferred architecture invariants: AD-4's
+#   MeterReading.Version column (explicitly deferred by MeterReading.cs's own comment until an
+#   edit path existed) and AD-11's shared AuditCorrection table/IAuditCorrectionRecorder (built
+#   generic so a future Tariff-editing story can reuse it unmodified).
 # 2026-08-23: story 2-7-status-calculation-detail moved to done (adversarial code review, 3
 #   layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Review artifact note: the diff
 #   first handed to reviewers omitted the story's 4 new untracked files (status-detail-dialog.tsx/
@@ -404,7 +437,7 @@ development_status:
   2-5-dashboard-status-display: done
   2-6-room-power-point-device-re-parenting: done
   2-7-status-calculation-detail: done
-  2-8-meter-reading-history-view: backlog
+  2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
   epic-3: in-progress

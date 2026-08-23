@@ -9,12 +9,6 @@ public class CreateMeterReading(
     IMeterRegressionPromptRepository regressionPromptRepository,
     IStatusRecomputeService statusRecomputeService)
 {
-    // A meter reading is a cumulative lifetime total, not a small human-entered figure like
-    // Yearly Baseline — no low arbitrary business cap. The bound here exists only to keep values
-    // inside the decimal(18,2) column's range so an out-of-range submission fails validation
-    // (400) instead of a provider-level overflow (500).
-    private const decimal MaxKwhValue = 1_000_000_000_000_000m; // 10^15, one order below 10^16 overflow.
-
     // Small clock-skew allowance, not a real "reading from the future" — a client's local clock
     // can legitimately be a few minutes off from the server's.
     private static readonly TimeSpan MaxFutureClockSkew = TimeSpan.FromMinutes(5);
@@ -45,11 +39,7 @@ public class CreateMeterReading(
             return existing;
         }
 
-        if (kwhValue <= 0 || kwhValue >= MaxKwhValue)
-        {
-            throw new MeterReadingValidationException(
-                $"kWh value must be a positive number less than {MaxKwhValue}, got '{kwhValue}'.");
-        }
+        MeterReadingValidation.ValidateKwhValue(kwhValue);
 
         var latestAllowedTimestamp = DateTimeOffset.UtcNow.Add(MaxFutureClockSkew);
         if (readingTimestamp > latestAllowedTimestamp)

@@ -109,7 +109,30 @@
     "confirming": "Wird bestätigt…",
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   },
+  "meterReadingHistory": {
+    "heading": "Zählerstandsverlauf",
+    "backToApp": "Zu Energy Tracker",
+    "loading": "Wird geladen…",
+    "emptyState": "Noch keine Zählerstände erfasst.",
+    "valueColumn": "Wert",
+    "timestampColumn": "Datum & Uhrzeit",
+    "pendingBadge": "Ausstehend",
+    "correctedFrom": "Ursprünglich als {{kwh}} kWh erfasst",
+    "editTrigger": "Bearbeiten",
+    "editTriggerFor": "Zählerstand vom {{timestamp}} bearbeiten",
+    "editDialogTitle": "Zählerstand bearbeiten",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "cancel": "Abbrechen",
+    "conflictError": "Dieser Zählerstand wurde inzwischen an anderer Stelle geändert — bitte aktualisieren und erneut versuchen.",
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "loadError": "Der Zählerstandsverlauf konnte nicht geladen werden — bitte versuche es erneut.",
+    "previousPage": "Zurück",
+    "nextPage": "Weiter",
+    "pageIndicator": "Seite {{page}} von {{totalPages}}"
+  },
   "dashboard": {
+    "historyTrigger": "Zählerstandsverlauf ansehen",
     "status": {
       "headline": {
         "withinRange": "Ruhige Woche.",

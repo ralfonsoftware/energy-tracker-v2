@@ -109,7 +109,30 @@
     "confirming": "Confirming…",
     "errorGeneric": "Something went wrong. Please try again."
   },
+  "meterReadingHistory": {
+    "heading": "Meter Reading History",
+    "backToApp": "Go to Energy Tracker",
+    "loading": "Loading…",
+    "emptyState": "No Meter Readings logged yet.",
+    "valueColumn": "Value",
+    "timestampColumn": "Date & time",
+    "pendingBadge": "Pending",
+    "correctedFrom": "Originally logged as {{kwh}} kWh",
+    "editTrigger": "Edit",
+    "editTriggerFor": "Edit reading from {{timestamp}}",
+    "editDialogTitle": "Edit Meter Reading",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "conflictError": "This reading was changed elsewhere — refresh and try again.",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "loadError": "Couldn't load the reading history — try again.",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "pageIndicator": "Page {{page}} of {{totalPages}}"
+  },
   "dashboard": {
+    "historyTrigger": "View reading history",
     "status": {
       "headline": {
         "withinRange": "Quiet week.",

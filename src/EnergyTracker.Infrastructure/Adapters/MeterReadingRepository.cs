@@ -1,3 +1,4 @@
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -95,4 +96,44 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
             .OrderBy(r => r.ReadingTimestamp)
             .ThenBy(r => r.Id)
             .ToListAsync(cancellationToken);
+
+    public async Task<(IReadOnlyList<MeterReading> Items, int TotalCount)> GetPageForMainMeterAsync(Guid mainMeterId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var query = dbContext.MeterReadings.Where(r => r.MainMeterId == mainMeterId);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(r => r.ReadingTimestamp)
+            .ThenByDescending(r => r.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    public async Task<MeterReading> UpdateKwhValueAsync(Guid readingId, decimal kwhValue, int expectedVersion, CancellationToken cancellationToken)
+    {
+        var reading = await dbContext.MeterReadings.SingleAsync(r => r.Id == readingId, cancellationToken);
+
+        // Makes EF's SaveChangesAsync compare expectedVersion (the caller's known value) against
+        // the DB, not whatever the freshly-loaded entity already has.
+        dbContext.Entry(reading).Property(r => r.Version).OriginalValue = expectedVersion;
+
+        reading.KwhValue = kwhValue;
+        // AD-4 requires the concurrency token to change on every update — same reasoning as
+        // HouseholdRepository.UpdateYearlyBaselineAsync's household.Version++.
+        reading.Version++;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new MeterReadingConcurrencyConflictException(readingId);
+        }
+
+        return reading;
+    }
 }

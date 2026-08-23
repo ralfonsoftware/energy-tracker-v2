@@ -22,6 +22,50 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("EnergyTracker.Domain.AuditCorrection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CorrectedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("FieldName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("NewValue")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("OldValue")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("AuditCorrections", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.BackgroundJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -247,6 +291,10 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.Property<DateTimeOffset>("ReadingTimestamp")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 

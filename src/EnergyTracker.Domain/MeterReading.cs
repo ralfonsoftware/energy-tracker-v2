@@ -1,8 +1,5 @@
 namespace EnergyTracker.Domain;
 
-// Deliberately no Version/concurrency-token column here (AD-4) — that binds Meter Reading for
-// future *edit* conflicts (Story 4.3's correction flow), not creation. Add it only when a story
-// actually implements edits, mirroring how Household.Version was added by Story 2.1.
 public class MeterReading
 {
     public required Guid Id { get; init; }
@@ -12,7 +9,7 @@ public class MeterReading
 
     public required Guid MainMeterId { get; init; }
 
-    public required decimal KwhValue { get; init; }
+    public required decimal KwhValue { get; set; }
 
     // The meter's own read time — user-editable/backfillable, distinct from CreatedAtUtc below.
     public required DateTimeOffset ReadingTimestamp { get; init; }
@@ -24,4 +21,8 @@ public class MeterReading
     // Server insert time — doubles as the "entry order" signal Story 2.3's regression detection
     // needs to distinguish from ReadingTimestamp order.
     public required DateTimeOffset CreatedAtUtc { get; init; }
+
+    // Portable EF Core concurrency token (AD-4) — guards a Meter Reading edit (Story 2.8) against
+    // a second concurrent edit of the same reading. Mirrors Household.Version's exact shape.
+    public int Version { get; set; }
 }

@@ -3,6 +3,7 @@ using System;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(EnergyTrackerDbContext))]
-    partial class EnergyTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260823164619_AddMeterReadingVersionAndAuditCorrection")]
+    partial class AddMeterReadingVersionAndAuditCorrection
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

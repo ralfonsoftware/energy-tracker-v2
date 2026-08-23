@@ -26,6 +26,9 @@ public class MeterReadingConfiguration : IEntityTypeConfiguration<MeterReading>
         builder.Property(r => r.CreatedAtUtc)
             .IsRequired();
 
+        builder.Property(r => r.Version)
+            .IsConcurrencyToken();
+
         // Restrict, not Cascade — same AD-10 reasoning as Room/PowerPoint/Device's FK to Household.
         builder.HasOne<Household>()
             .WithMany()
