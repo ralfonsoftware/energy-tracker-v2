@@ -107,8 +107,8 @@ last_updated: 2026-08-23
 #   (the epic's own open question, plus one more that surfaced from it): (1) no persistence -
 #   confirmed, component-local state only, resets every visit; (2) the toggle's default flips from
 #   "show archived" to "hide archived" - this reverses the epic's originally-drafted AC #1 text
-#   ("does not change the underlying default"). The epic file itself was intentionally left
-#   unedited (out of create-story's scope) - the story file is authoritative on both points, and
+#   ("does not change the underlying default"). The epic file's AC text was updated in place to
+#   match (same commit) - both documents now agree on both points, and
 #   flags three existing tests in tagging-scaffold-manager.test.tsx (archive-then-assert-badge,
 #   lines 93/204/288) that will start failing under the new default and need a toggle-on step
 #   added, not just new tests alongside them.
@@ -121,6 +121,18 @@ last_updated: 2026-08-23
 #   "still offers a valid destination when the Power Point's current Room has since been archived"
 #   - whose archived Room now has its own row suppressed by the new default, so it needed to click
 #   the still-reachable Power Point directly instead of the no-longer-rendered Room summary.
+# 2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle moved to done (adversarial
+#   code review of commit d2c79f0, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor).
+#   All three independently found the same real AC #5 violation: roomHasVisibleChildren checked
+#   only each direct Power Point's own archivedAt, never recursing into powerPointHasVisibleChildren
+#   - so an archived Room whose only Power Point was also archived but had a live Device underneath
+#   was dropped from the tree entirely with the toggle at its default, silently hiding that Device.
+#   Fixed by recursing the same way the sibling render-time filter already did, with a regression
+#   test. 3 more patch findings fixed: story/sprint-status docs' false claim that the epic file was
+#   left unedited (it was, same commit); a duplicated Tailwind class string extracted to a shared
+#   constant; missing Power-Point/Device-level round-trip toggle tests Task 4 asked for. 1 item
+#   deferred (pre-existing, not introduced by this diff): no test exercises the German toggle
+#   strings specifically. 150/150 frontend tests pass after fixes.
 # 2026-08-23: story 3-4-incremental-smart-plug-import moved to done (adversarial code review
 #   complete, 3 review layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 13 findings
 #   after triage (10 patch, 3 decision-needed resolved with Ralf), 1 dismissed as noise. Ralf's
@@ -336,7 +348,7 @@ development_status:
   1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress: done
   1-8-household-member-invitation: done
   1-9-room-power-point-device-management: done
-  1-10-structure-editor-archived-item-visibility-toggle: review
+  1-10-structure-editor-archived-item-visibility-toggle: done
   epic-1-retrospective: done
 
   epic-2: done

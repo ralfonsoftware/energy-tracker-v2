@@ -632,4 +632,87 @@ describe('TaggingScaffoldManager', () => {
     expect(screen.getByText('Toaster', { exact: false })).toBeInTheDocument()
     expect(screen.queryByText('Old outlet', { exact: false })).not.toBeInTheDocument()
   })
+
+  it('keeps a live Device reachable when its Power Point is archived and it is the archived Room\'s only Power Point (AC #5)', async () => {
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () => jsonResponse([{ id: 'r1', name: 'Old Pantry', archivedAt: '2026-01-01T00:00:00Z' }]),
+      },
+      {
+        method: 'GET',
+        url: '/api/power-points',
+        respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Old outlet', archivedAt: '2026-01-01T00:00:00Z' }]),
+      },
+      {
+        method: 'GET',
+        url: '/api/devices',
+        respond: () => jsonResponse([{ id: 'd1', powerPointId: 'p1', name: 'Toaster', archivedAt: null }]),
+      },
+    ])
+
+    render(<TaggingScaffoldManager />)
+
+    // Room r1 is archived and its only Power Point (p1) is also archived, but p1 still has a
+    // live Device — the Room must not be dropped from the tree entirely just because none of
+    // its direct Power Point children are themselves non-archived.
+    expect(await screen.findByText('Toaster', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText('Old Pantry', { exact: false })).not.toBeInTheDocument()
+    expect(screen.queryByText('Old outlet', { exact: false })).not.toBeInTheDocument()
+  })
+
+  it('toggling reveals then re-hides an archived Power Point that has no live children (AC #2, #3)', async () => {
+    mockFetchRoutes([
+      { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+      {
+        method: 'GET',
+        url: '/api/power-points',
+        respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Old outlet', archivedAt: '2026-01-01T00:00:00Z' }]),
+      },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+    const toggle = screen.getByRole('button', { name: 'Show archived items' })
+    expect(screen.queryByText('Old outlet', { exact: false })).not.toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(await screen.findByText('Old outlet', { exact: false })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide archived items' }))
+    expect(screen.queryByText('Old outlet', { exact: false })).not.toBeInTheDocument()
+  })
+
+  it('toggling reveals then re-hides an archived Device (AC #2, #3)', async () => {
+    mockFetchRoutes([
+      { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+      {
+        method: 'GET',
+        url: '/api/power-points',
+        respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]),
+      },
+      {
+        method: 'GET',
+        url: '/api/devices',
+        respond: () => jsonResponse([{ id: 'd1', powerPointId: 'p1', name: 'Old toaster', archivedAt: '2026-01-01T00:00:00Z' }]),
+      },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+    const toggle = screen.getByRole('button', { name: 'Show archived items' })
+    expect(screen.queryByText('Old toaster', { exact: false })).not.toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(await screen.findByText('Old toaster', { exact: false })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide archived items' }))
+    expect(screen.queryByText('Old toaster', { exact: false })).not.toBeInTheDocument()
+  })
 })

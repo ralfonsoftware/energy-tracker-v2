@@ -68,6 +68,10 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
+// Shared between a Room's suppressed-row `<div>` wrapper and its normal `<details>` wrapper so the
+// two branches can't visually drift apart independently.
+const ROOM_ROW_BORDER_CLASS = 'border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]'
+
 function ArchivedBadge({ label }: { label: string }) {
   return (
     <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -210,10 +214,15 @@ export function TaggingScaffoldManager() {
   // AC #5: an archived parent with non-archived children must not cascade-hide those children —
   // a Room/Power Point is only fully absent when it's archived, hiding is on, AND it has no
   // visible children; otherwise it still renders, with just its own row suppressed. See Dev Notes.
-  const roomHasVisibleChildren = (room: RoomDto) =>
-    (powerPointsByRoom.get(room.id) ?? []).some((pp) => showArchived || !pp.archivedAt)
+  // roomHasVisibleChildren must recurse through powerPointHasVisibleChildren (not just check each
+  // Power Point's own archivedAt) — otherwise a Room whose only Power Point is itself archived but
+  // has a live Device underneath it is wrongly treated as having no visible children at all.
   const powerPointHasVisibleChildren = (powerPoint: PowerPointDto) =>
     (devicesByPowerPoint.get(powerPoint.id) ?? []).some((device) => showArchived || !device.archivedAt)
+  const roomHasVisibleChildren = (room: RoomDto) =>
+    (powerPointsByRoom.get(room.id) ?? []).some(
+      (pp) => showArchived || !pp.archivedAt || powerPointHasVisibleChildren(pp),
+    )
 
   const openDialog = (next: DialogState) => {
     setDialogError(null)
@@ -615,7 +624,7 @@ export function TaggingScaffoldManager() {
                 return (
                   <div
                     key={room.id}
-                    className="border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]"
+                    className={ROOM_ROW_BORDER_CLASS}
                   >
                     {powerPointsList}
                   </div>
@@ -625,7 +634,7 @@ export function TaggingScaffoldManager() {
               return (
                 <details
                   key={room.id}
-                  className="group/room border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]"
+                  className={`group/room ${ROOM_ROW_BORDER_CLASS}`}
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                     <span className="flex items-center gap-2">
