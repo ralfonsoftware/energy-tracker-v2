@@ -13,20 +13,19 @@ function jsonResponse(body: object | null, status = 200) {
 function mockFetchRoutes(
   routes: Array<{ method: string; url: string; respond: (body: unknown) => Response }>,
 ) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input)
-      const method = (init?.method ?? 'GET').toUpperCase()
-      const route = routes.find((r) => r.method === method && r.url === url)
-      if (!route) {
-        throw new Error(`Unmocked fetch: ${method} ${url}`)
-      }
+  const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    const method = (init?.method ?? 'GET').toUpperCase()
+    const route = routes.find((r) => r.method === method && r.url === url)
+    if (!route) {
+      throw new Error(`Unmocked fetch: ${method} ${url}`)
+    }
 
-      const body = init?.body ? JSON.parse(init.body as string) : undefined
-      return Promise.resolve(route.respond(body))
-    }),
-  )
+    const body = init?.body ? JSON.parse(init.body as string) : undefined
+    return Promise.resolve(route.respond(body))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
 }
 
 const emptyScaffoldRoutes = [
@@ -111,6 +110,9 @@ describe('TaggingScaffoldManager', () => {
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[0])
     await user.click(screen.getByRole('button', { name: 'Archive' }))
+
+    // Hidden by default after archiving (AC #1/#2) — reveal it to assert the badge/actions.
+    await user.click(screen.getByRole('button', { name: 'Show archived items' }))
 
     expect(await screen.findByText('Archived')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add Power Point' })).not.toBeInTheDocument()
@@ -224,6 +226,9 @@ describe('TaggingScaffoldManager', () => {
     await user.click(deleteButtons[1])
     await user.click(screen.getByRole('button', { name: 'Archive' }))
 
+    // Hidden by default after archiving (AC #1/#2) — reveal it to assert the badge/actions.
+    await user.click(screen.getByRole('button', { name: 'Show archived items' }))
+
     expect(await screen.findByText('Archived')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add Device' })).not.toBeInTheDocument()
   })
@@ -305,6 +310,9 @@ describe('TaggingScaffoldManager', () => {
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[2])
     await user.click(screen.getByRole('button', { name: 'Archive' }))
+
+    // Hidden by default after archiving (AC #1/#2) — reveal it to assert the badge.
+    await user.click(screen.getByRole('button', { name: 'Show archived items' }))
 
     expect(await screen.findByText('Archived')).toBeInTheDocument()
   })
@@ -472,7 +480,9 @@ describe('TaggingScaffoldManager', () => {
     const user = userEvent.setup()
 
     render(<TaggingScaffoldManager />)
-    await user.click(await screen.findByText('Kitchen', { exact: false }))
+    // The archived Kitchen's own row is hidden by default (AC #2) — its live Power Point
+    // child is still directly reachable, without expanding a Room row that no longer renders.
+    await user.click(await screen.findByText('Counter outlet', { exact: false }))
 
     await user.click(screen.getByRole('button', { name: 'Move to…' }))
 
@@ -506,5 +516,120 @@ describe('TaggingScaffoldManager', () => {
     expect(
       await screen.findByText('That parent was archived in the meantime. Please refresh and try again.'),
     ).toBeInTheDocument()
+  })
+
+  it('hides archived Rooms from the tree by default with no interaction (AC #1, #6)', async () => {
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () =>
+          jsonResponse([
+            { id: 'r1', name: 'Kitchen', archivedAt: null },
+            { id: 'r2', name: 'Old Pantry', archivedAt: '2026-01-01T00:00:00Z' },
+          ]),
+      },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+    ])
+
+    render(<TaggingScaffoldManager />)
+
+    expect(await screen.findByText('Kitchen', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText('Old Pantry', { exact: false })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show archived items' })).toBeInTheDocument()
+  })
+
+  it('toggling reveals then re-hides an archived Room that has no live children (AC #2, #3)', async () => {
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () => jsonResponse([{ id: 'r1', name: 'Old Pantry', archivedAt: '2026-01-01T00:00:00Z' }]),
+      },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+
+    const toggle = await screen.findByRole('button', { name: 'Show archived items' })
+    expect(screen.queryByText('Old Pantry', { exact: false })).not.toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(await screen.findByText('Old Pantry', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('Archived')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide archived items' }))
+    expect(screen.queryByText('Old Pantry', { exact: false })).not.toBeInTheDocument()
+  })
+
+  it('toggling archived visibility issues no extra fetch and leaves Move destinations unchanged (AC #4)', async () => {
+    const fetchMock = mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () =>
+          jsonResponse([
+            { id: 'r1', name: 'Kitchen', archivedAt: null },
+            { id: 'r2', name: 'Old Pantry', archivedAt: '2026-01-01T00:00:00Z' },
+          ]),
+      },
+      { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]) },
+      { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+    ])
+    const user = userEvent.setup()
+
+    render(<TaggingScaffoldManager />)
+    await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+    const callCountAfterLoad = fetchMock.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+    expect(screen.queryByRole('button', { name: 'Old Pantry' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'Show archived items' }))
+    expect(fetchMock.mock.calls.length).toBe(callCountAfterLoad)
+
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+    expect(screen.queryByRole('button', { name: 'Old Pantry' })).not.toBeInTheDocument()
+  })
+
+  it('keeps non-archived children visible when their archived parent is hidden by default (AC #5)', async () => {
+    mockFetchRoutes([
+      {
+        method: 'GET',
+        url: '/api/rooms',
+        respond: () => jsonResponse([{ id: 'r1', name: 'Old Pantry', archivedAt: '2026-01-01T00:00:00Z' }]),
+      },
+      {
+        method: 'GET',
+        url: '/api/power-points',
+        respond: () =>
+          jsonResponse([
+            { id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null },
+            { id: 'p2', roomId: 'r1', name: 'Old outlet', archivedAt: '2026-01-01T00:00:00Z' },
+          ]),
+      },
+      {
+        method: 'GET',
+        url: '/api/devices',
+        respond: () => jsonResponse([{ id: 'd1', powerPointId: 'p2', name: 'Toaster', archivedAt: null }]),
+      },
+    ])
+
+    render(<TaggingScaffoldManager />)
+
+    // Live Power Point under the archived Room stays reachable; the archived Room's own
+    // name/badge is genuinely absent (not just style-hidden).
+    expect(await screen.findByText('Counter outlet', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText('Old Pantry', { exact: false })).not.toBeInTheDocument()
+
+    // Live Device under the archived Power Point stays reachable; the archived Power Point's
+    // own name/badge is genuinely absent.
+    expect(screen.getByText('Toaster', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText('Old outlet', { exact: false })).not.toBeInTheDocument()
   })
 })

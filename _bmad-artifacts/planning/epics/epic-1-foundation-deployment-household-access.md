@@ -265,25 +265,25 @@ So that a tree that's accumulated a lot of soft-deleted history doesn't stay clu
 **Acceptance Criteria:**
 
 **Given** the Room/Power Point/Device management surface (Story 1.9)
-**When** it renders today
-**Then** archived items (`ArchivedAt` set, FR-28/AD-10) stay visible inline in the tree with an "Archived" badge — this story adds a toggle to control that, it does not change the underlying default described here
+**When** it renders with no interaction
+**Then** archived items (`ArchivedAt` set, FR-28/AD-10) are hidden from the tree by default — this is an intentional change from the pre-Story-1.10 behavior, where archived items always rendered inline with an "Archived" badge unconditionally (decided and confirmed with Ralf 2026-08-23, during Story 1.10's creation, superseding this AC's original "does not change the underlying default" text)
 
 **Given** the management surface
-**When** I switch the toggle to hide archived items
-**Then** Rooms, Power Points, and Devices with `ArchivedAt` set no longer render in the tree at all — not just visually de-emphasized, actually absent
+**When** I switch the toggle to show archived items
+**Then** Rooms, Power Points, and Devices with `ArchivedAt` set appear inline with their "Archived" badge, exactly as they rendered unconditionally before this story existed
 
-**Given** the toggle set to hide archived items
-**When** I switch it back to show them
-**Then** archived items reappear inline with their "Archived" badge, exactly as they render today with no toggle
+**Given** the toggle set to show archived items
+**When** I switch it back to hide them (its default state)
+**Then** Rooms, Power Points, and Devices with `ArchivedAt` set no longer render in the tree at all — not just visually de-emphasized, actually absent
 
 **Given** the hide-archived toggle state
 **When** it changes
 **Then** it is a view filter only — it never touches the underlying soft-delete state (`ArchivedAt`), never affects Story 2.6's reassignment/"Move to…" behavior, and never affects which items are offered as active-selection destinations (already excluded regardless of this toggle, per Story 1.9)
 
 **Given** an archived parent (e.g. a Room) with non-archived children still nested under it
-**When** the toggle hides archived items
+**When** the toggle hides archived items (its default state)
 **Then** the non-archived children remain visible — hiding a parent does not cascade-hide children whose own `ArchivedAt` is unset (they're still reachable, matching this epic's "historical references still resolve correctly" guarantee, Story 1.9)
 
 **Given** the toggle
 **When** I leave and return to the management surface
-**Then** *(open question, not yet decided — flag for whoever picks this up)* whether the toggle state persists (e.g. a per-member or per-Household preference) or resets to the default (always-visible) on every visit is undecided; FR-29's PRD text doesn't specify persistence, so confirm with Ralf before implementation rather than assuming either behavior
+**Then** the toggle resets to its default (hide archived) — it does not persist across visits (e.g. no per-member or per-Household preference); resolved with Ralf 2026-08-23, during Story 1.10's creation, since no existing mechanism in this codebase persists an arbitrary UI-only preference and building one for a single boolean would be disproportionate

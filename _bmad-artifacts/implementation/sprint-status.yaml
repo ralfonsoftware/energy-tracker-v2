@@ -95,6 +95,32 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-23
+# 2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle created (create-story) -
+#   status set to ready-for-dev. Pure frontend change, zero backend surface (GET /api/rooms|
+#   power-points|devices already return archived rows unfiltered per Story 1.9). The one
+#   non-obvious design problem: an archived Room/Power Point can still have non-archived children
+#   nested under it (Story 1.9's archive never cascades), so hiding an archived item can't just
+#   filter the top-level array - the story spells out a three-way per-node render rule (fully
+#   absent / present-with-own-row-suppressed-but-children-visible / present-normally) to satisfy
+#   the epic's "hiding a parent does not cascade-hide its non-archived children" AC without
+#   silently dropping live data from view. Two follow-up questions asked of Ralf during creation
+#   (the epic's own open question, plus one more that surfaced from it): (1) no persistence -
+#   confirmed, component-local state only, resets every visit; (2) the toggle's default flips from
+#   "show archived" to "hide archived" - this reverses the epic's originally-drafted AC #1 text
+#   ("does not change the underlying default"). The epic file itself was intentionally left
+#   unedited (out of create-story's scope) - the story file is authoritative on both points, and
+#   flags three existing tests in tagging-scaffold-manager.test.tsx (archive-then-assert-badge,
+#   lines 93/204/288) that will start failing under the new default and need a toggle-on step
+#   added, not just new tests alongside them.
+# 2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle implemented (dev-story) -
+#   status set to review. Hide-by-default toggle with three-way cascade-safe rendering (fully
+#   absent / own-row-suppressed-but-children-visible / present-normally) at both Room-PowerPoint
+#   and PowerPoint-Device level; new i18n keys; Move destination pickers left untouched by design.
+#   147/147 frontend tests pass (22/22 in the modified file); dotnet build clean (no backend files
+#   touched). Also fixed one pre-existing test not flagged in the story's own Task 4 callout -
+#   "still offers a valid destination when the Power Point's current Room has since been archived"
+#   - whose archived Room now has its own row suppressed by the new default, so it needed to click
+#   the still-reachable Power Point directly instead of the no-longer-rendered Room summary.
 # 2026-08-23: story 3-4-incremental-smart-plug-import moved to done (adversarial code review
 #   complete, 3 review layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 13 findings
 #   after triage (10 patch, 3 decision-needed resolved with Ralf), 1 dismissed as noise. Ralf's
@@ -310,7 +336,7 @@ development_status:
   1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress: done
   1-8-household-member-invitation: done
   1-9-room-power-point-device-management: done
-  1-10-structure-editor-archived-item-visibility-toggle: backlog
+  1-10-structure-editor-archived-item-visibility-toggle: review
   epic-1-retrospective: done
 
   epic-2: done
