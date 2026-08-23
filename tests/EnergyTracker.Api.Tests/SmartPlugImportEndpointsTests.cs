@@ -1,5 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -44,6 +47,59 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var lines = new List<string> { "Date\t,Power Consumption-(kWh)\t" };
         lines.AddRange(rows.Select(r => $"{r.Date:yyyy-MM-dd}\t,{r.Kwh.ToString(System.Globalization.CultureInfo.InvariantCulture)}\t"));
         return System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines) + "\n");
+    }
+
+    // Builds a minimal but structurally valid Eve Home-layout workbook in memory, newest-first,
+    // one row per entry in `timestamps` — lets a test control the exact date shape a Story 3.4
+    // incremental-reimport scenario needs, the same way BuildMerossCsv already does for Meross,
+    // since the committed EveSampleFilePath fixture's content is fixed.
+    private static byte[] BuildEveHomeWorkbook(string deviceName, string roomName, IReadOnlyList<DateTime> timestamps)
+    {
+        using var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook, autoSave: false))
+        {
+            var workbookPart = document.AddWorkbookPart();
+            workbookPart.Workbook = new Workbook();
+
+            var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            var sheetData = new SheetData();
+            worksheetPart.Worksheet = new Worksheet(sheetData);
+
+            var sheets = workbookPart.Workbook.AppendChild(new Sheets());
+            sheets.Append(new Sheet
+            {
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Gesamtverbrauch",
+            });
+
+            uint rowIndex = 1;
+            sheetData.Append(BuildRow(rowIndex++, $"Gerät: {deviceName}"));
+            sheetData.Append(BuildRow(rowIndex++, $"Raum: {roomName}"));
+            sheetData.Append(BuildRow(rowIndex++, "Zuhause: Test-Zuhause"));
+            sheetData.Append(BuildRow(rowIndex++, "Zeitstempel", "Wh"));
+
+            foreach (var timestamp in timestamps)
+            {
+                sheetData.Append(BuildRow(rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss"), "820"));
+            }
+
+            worksheetPart.Worksheet.Save();
+            workbookPart.Workbook.Save();
+        }
+
+        return stream.ToArray();
+
+        static Row BuildRow(uint index, params string[] cellTexts)
+        {
+            var row = new Row { RowIndex = index };
+            foreach (var text in cellTexts)
+            {
+                row.Append(new Cell { DataType = CellValues.String, CellValue = new CellValue(text) });
+            }
+
+            return row;
+        }
     }
 
     private async Task<JobStatusResponse> PollJobToTerminalAsync(HttpClient client, Guid jobId)
@@ -435,5 +491,90 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         terminalStatus.Gaps.Count.ShouldBe(1);
         terminalStatus.Gaps[0].Treatment.ShouldBe("flaggedforreview");
         (await CountStatusSnapshotRowsAsync(householdId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Reimporting_an_overlapping_superset_file_only_persists_the_genuinely_new_rows()
+    {
+        // Story 3.4 end-to-end regression: upload a file, then re-upload an overlapping/superset
+        // file for the same (already-matched) Power Point — only the rows newer than the
+        // Power Point's stored watermark must be persisted by the second import, not a duplicate
+        // of everything the first import already wrote.
+        var (client, householdId) = await CreateHouseholdAsync();
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "Verbraucher 1" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        var start = new DateOnly(2026, 6, 1);
+        var firstRows = Enumerable.Range(0, 5).Select(i => (start.AddDays(i), 4m)).ToList();
+        using var firstUpload = BuildUploadFromBytes(BuildMerossCsv(firstRows), "Power Monitor Day Data - Verbraucher 1 - 20260601.csv");
+        var firstResponse = await client.PostAsync("/api/smart-plug-imports", firstUpload, TestContext.Current.CancellationToken);
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var firstStatus = await PollJobToTerminalAsync(client, firstBody!.JobId);
+        firstStatus.ImportStatus.ShouldBe("completed");
+
+        // Superset: the same 5 already-imported days plus 2 genuinely new ones.
+        var secondRows = Enumerable.Range(0, 7).Select(i => (start.AddDays(i), 4m)).ToList();
+        using var secondUpload = BuildUploadFromBytes(BuildMerossCsv(secondRows), "Power Monitor Day Data - Verbraucher 1 - 20260608.csv");
+        var secondResponse = await client.PostAsync("/api/smart-plug-imports", secondUpload, TestContext.Current.CancellationToken);
+        var secondBody = await secondResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var secondStatus = await PollJobToTerminalAsync(client, secondBody!.JobId);
+        secondStatus.ImportStatus.ShouldBe("completed");
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var readings = await dbContext.SmartPlugReadings.IgnoreQueryFilters()
+            .Where(r => r.HouseholdId == householdId && r.PowerPointId == powerPoint!.Id)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        // 7 distinct days total, never 12 (5 from the first import + all 7 re-persisted by the
+        // second) — the watermark filtered out the 5 already-stored days on the second upload.
+        readings.Count.ShouldBe(7);
+        readings.Select(r => r.IntervalStart).Distinct().Count().ShouldBe(7);
+    }
+
+    [Fact]
+    public async Task Reimporting_an_overlapping_superset_Eve_Home_file_only_persists_the_genuinely_new_rows()
+    {
+        // Story 3.4 end-to-end regression, Eve Home variant of the Meross test above — Eve Home's
+        // streaming/early-stop parse (AC #2) is the highest-risk part of this change and had no
+        // dedicated end-to-end coverage. Newest-first, matching the vendor's real row order.
+        var (client, householdId) = await CreateHouseholdAsync();
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        var powerPointResponse = await client.PostAsJsonAsync(
+            "/api/power-points", new { roomId = room!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
+        var powerPoint = await powerPointResponse.Content.ReadFromJsonAsync<PowerPointResponse>(TestContext.Current.CancellationToken);
+
+        var start = new DateTime(2026, 6, 1, 12, 0, 0);
+        var firstTimestamps = Enumerable.Range(0, 5).Select(i => start.AddDays(4 - i)).ToList();
+        using var firstUpload = BuildUploadFromBytes(
+            BuildEveHomeWorkbook("Steckdose 1", "Living room", firstTimestamps), "first.xlsx", "application/octet-stream");
+        var firstResponse = await client.PostAsync("/api/smart-plug-imports", firstUpload, TestContext.Current.CancellationToken);
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var firstStatus = await PollJobToTerminalAsync(client, firstBody!.JobId);
+        firstStatus.ImportStatus.ShouldBe("completed");
+
+        // Superset, newest-first: the same 5 already-imported days plus 2 genuinely new ones.
+        var secondTimestamps = Enumerable.Range(0, 7).Select(i => start.AddDays(6 - i)).ToList();
+        using var secondUpload = BuildUploadFromBytes(
+            BuildEveHomeWorkbook("Steckdose 1", "Living room", secondTimestamps), "second.xlsx", "application/octet-stream");
+        var secondResponse = await client.PostAsync("/api/smart-plug-imports", secondUpload, TestContext.Current.CancellationToken);
+        var secondBody = await secondResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var secondStatus = await PollJobToTerminalAsync(client, secondBody!.JobId);
+        secondStatus.ImportStatus.ShouldBe("completed");
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var readings = await dbContext.SmartPlugReadings.IgnoreQueryFilters()
+            .Where(r => r.HouseholdId == householdId && r.PowerPointId == powerPoint!.Id)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        // 7 distinct rows total, never 12 (5 from the first import + all 7 re-persisted by the
+        // second) — the watermark filtered out the 5 already-stored rows on the second upload.
+        readings.Count.ShouldBe(7);
+        readings.Select(r => r.IntervalStart).Distinct().Count().ShouldBe(7);
     }
 }

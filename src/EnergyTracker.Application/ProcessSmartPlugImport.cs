@@ -24,26 +24,13 @@ public class ProcessSmartPlugImport(
             parser = parsers.FirstOrDefault(p => p.CanParse(payload.OriginalFileName))
                 ?? throw new SmartPlugImportValidationException($"No parser recognizes file '{payload.OriginalFileName}'.");
 
-            IReadOnlyList<SmartPlugReading> readings;
-            await using (var fileStream = File.OpenRead(payload.TempFilePath))
+            // Story 3.4 AC #1: the Power Point match (and its watermark) is resolved from the
+            // file's header before the data body is read at all — never a full parse first.
+            string deviceTag;
+            await using (var headerStream = File.OpenRead(payload.TempFilePath))
             {
-                readings = parser.Parse(fileStream, payload.OriginalFileName, cancellationToken);
+                deviceTag = parser.ReadDeviceTag(headerStream, payload.OriginalFileName, cancellationToken);
             }
-
-            if (readings.Count == 0)
-            {
-                // AC #7 (FR-24): a file that parses to zero rows is entirely gaps — flagged for
-                // review, never a hard failure (Story 3.1 built this as a thrown exception before
-                // FR-24's softer framing existed). No Power Point was ever resolved and nothing
-                // here was used to sharpen anything, so this returns without calling
-                // CompleteSmartPlugImportProcessing/IStatusRecomputeService.
-                await PersistFlaggedForReviewImportAsync(householdId, backgroundJobId, payload, parser.Vendor, cancellationToken);
-                return;
-            }
-
-            // Every reading in one file shares the same device tag (Eve Home's "Gerät:" header /
-            // Meross's filename segment) — any reading's DeviceName carries it.
-            var deviceTag = readings[0].DeviceName;
 
             var powerPoints = await taggingScaffoldRepository.ListPowerPointsAsync(cancellationToken);
             // Exact-name match only (Task 3) — no fuzzy/case-insensitive matching. A Power Point
@@ -55,11 +42,50 @@ public class ProcessSmartPlugImport(
             var nameMatches = powerPoints.Where(p => p.ArchivedAt is null && p.Name == deviceTag).ToList();
             var matchedPowerPoint = nameMatches.Count == 1 ? nameMatches[0] : null;
 
+            // AC #4: null whenever there's no Power Point match at all (AwaitingPowerPointMapping)
+            // or the matched Power Point has no prior stored reading yet (first-ever import) —
+            // either way the parser parses the file in full, exactly as before this story.
             string? matchedRoomName = null;
+            DateTimeOffset? watermark = null;
             if (matchedPowerPoint is not null)
             {
                 var room = await taggingScaffoldRepository.FindRoomAsync(matchedPowerPoint.RoomId, cancellationToken);
                 matchedRoomName = room?.Name;
+                watermark = await smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(matchedPowerPoint.Id, cancellationToken);
+            }
+
+            SmartPlugParseResult parseResult;
+            await using (var dataStream = File.OpenRead(payload.TempFilePath))
+            {
+                parseResult = parser.Parse(dataStream, payload.OriginalFileName, watermark, cancellationToken);
+            }
+
+            var readings = parseResult.Readings;
+
+            if (readings.Count == 0)
+            {
+                if (watermark is null || parseResult.RawDataRowsRead == 0)
+                {
+                    // AC #7 (FR-24): the file body itself had zero data rows to read at all —
+                    // either genuinely empty/all-header (watermark is null: no Power Point was
+                    // ever resolved) or, review-round-2 patch, a matched Power Point's re-upload
+                    // whose body still turned out to have nothing in it (a corrupt/truncated file,
+                    // not a legitimate "nothing new"). Flagged for review either way, never a hard
+                    // failure (Story 3.1 built this as a thrown exception before FR-24's softer
+                    // framing existed) and never silently marked Completed.
+                    await PersistFlaggedForReviewImportAsync(householdId, backgroundJobId, payload, parser.Vendor, deviceTag, cancellationToken);
+                    return;
+                }
+
+                // Story 3.4: a normal, successful "nothing new" incremental re-import — rows were
+                // read (RawDataRowsRead > 0) but every one was at-or-before the watermark.
+                // Distinct from AC #7 above: this must NOT be flagged for review. Persist a
+                // Completed import with zero readings (AddAsync already handles readings.Count
+                // == 0 correctly) and skip CompleteSmartPlugImportProcessing — it requires a
+                // non-empty readings list (Story 3.3), and there is nothing new here to run gap
+                // detection/Status recompute against.
+                await PersistCompletedEmptyImportAsync(householdId, backgroundJobId, payload, parser.Vendor, deviceTag, cancellationToken);
+                return;
             }
 
             foreach (var reading in readings)
@@ -153,9 +179,30 @@ public class ProcessSmartPlugImport(
         await smartPlugImportRepository.AddAsync(failedImport, [], cancellationToken);
     }
 
+    private async Task PersistCompletedEmptyImportAsync(
+        Guid householdId, Guid backgroundJobId, ProcessSmartPlugImportPayload payload,
+        SmartPlugVendorFormat vendor, string deviceTag, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var import = new SmartPlugImport
+        {
+            Id = payload.SmartPlugImportId,
+            HouseholdId = householdId,
+            BackgroundJobId = backgroundJobId,
+            VendorFormat = vendor,
+            OriginalFileName = payload.OriginalFileName,
+            Status = SmartPlugImportStatus.Completed,
+            DeviceTag = deviceTag,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
+        };
+
+        await smartPlugImportRepository.AddAsync(import, [], cancellationToken);
+    }
+
     private async Task PersistFlaggedForReviewImportAsync(
         Guid householdId, Guid backgroundJobId, ProcessSmartPlugImportPayload payload,
-        SmartPlugVendorFormat vendor, CancellationToken cancellationToken)
+        SmartPlugVendorFormat vendor, string deviceTag, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
         var import = new SmartPlugImport
@@ -166,9 +213,10 @@ public class ProcessSmartPlugImport(
             VendorFormat = vendor,
             OriginalFileName = payload.OriginalFileName,
             Status = SmartPlugImportStatus.FlaggedForReview,
-            // No rows parsed at all — there's no reading to read a device tag from (unlike the
-            // matched/awaiting-mapping branches above).
-            DeviceTag = string.Empty,
+            // No rows parsed at all, but the header (Task 1's ReadDeviceTag) was already read
+            // before the body — this is known even though nothing here was used to sharpen a
+            // Power Point match.
+            DeviceTag = deviceTag,
             CreatedAtUtc = now,
             CompletedAtUtc = now,
         };

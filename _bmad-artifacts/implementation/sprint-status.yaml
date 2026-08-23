@@ -94,7 +94,100 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-20
+last_updated: 2026-08-23
+# 2026-08-23: story 3-4-incremental-smart-plug-import moved to done (adversarial code review
+#   complete, 3 review layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 13 findings
+#   after triage (10 patch, 3 decision-needed resolved with Ralf), 1 dismissed as noise. Ralf's
+#   calls: DST fall-back collision (SmartPlugReading unique index rejects a second reading sharing
+#   a local wall-clock IntervalStart) = detect-and-log with deterministic keep-first, not a schema
+#   change; unbounded per-row fallback on a large first-time import = pre-filter known conflicts
+#   before the bulk write, so a fresh Power Point/Household never even runs the per-key check.
+#   Verifying the third call (cancellation mid per-row fallback = rely on watermark-based re-run)
+#   surfaced a real bug beyond the original finding: the queue-redelivered SmartPlugImportId is
+#   fixed across retries, so a cancelled fallback's already-committed SmartPlugImport row collided
+#   on retry and cascaded into an unhandled exception instead of resuming - fixed by deleting the
+#   partial row on cancellation, restoring the "no row survives cancellation" invariant
+#   ProcessSmartPlugImport already assumed. Also added: a 20k-row synthetic-workbook test for AC
+#   #5/#7 (Task 6's own required test was checked off but never written), an Eve Home end-to-end
+#   incremental-reimport regression test (only Meross had one), a monotonic-RowIndex sanity check
+#   in the streaming parser, a migration dedup tiebreaker, and narrowed/logged conflict-tolerant
+#   exception handling. One finding (EF model drift on the PowerPointId-IS-NULL partial index) was
+#   resolved as an explicit comment instead of a `HasFilter` call - that filter predicate is raw
+#   dialect SQL and SmartPlugReadingConfiguration is shared across both provider migration
+#   projects, so a single filter string would be syntactically wrong for one of them. Full backend
+#   suite green: 308 tests (165 Application, 3 Architecture, 29 Infrastructure via Testcontainers
+#   Postgres+SqlServer, 111 Api.Tests via Testcontainers), dotnet build clean in Debug and Release.
+# 2026-08-23: story 3-4-incremental-smart-plug-import re-reviewed (round 2, adversarial code
+#   review before commit - same 3 layers). 16 findings after triage (7 patch, 2 decision-needed
+#   resolved with Ralf, 3 defer, 5 dismissed as noise/false positives - e.g. the migration dedup's
+#   orphan-row concern can't happen given SmartPlugImportId's required+Restrict FK). Ralf's calls:
+#   cross-vendor watermark mixing (Eve Home vs Meross granularity on one Power Point) = defer as a
+#   known limitation, no vendor-swap use case exists today; corrupt-vs-empty incremental re-import
+#   ambiguity = fix now, add a RawDataRowsRead signal to ISmartPlugParser.Parse's return so a
+#   truly-empty file body still gets FlaggedForReview instead of being indistinguishable from a
+#   legitimate nothing-new re-import. Patches applied: the per-row conflict-tolerant fallback now
+#   cleans up on any exception (not just cancellation), closing a path where a genuine
+#   DbUpdateException left a partial import that then collided with the Failed-import retry write;
+#   DeletePartiallyPersistedImportAsync now swallows/logs its own cleanup failures instead of
+#   masking the original exception; EveHomeXlsxParser.ReadDeviceTag now validates row order (had
+#   none) and reads through row 2 per Task 2's original text; the RowIndex monotonic guard now
+#   fails closed instead of silently skipping when RowIndex is absent; added a 2,000-row scale test
+#   for the conflict pre-check query. Full backend suite green: 314 tests (166 Application, 3
+#   Architecture, 34 Infrastructure via Testcontainers Postgres+SqlServer, 111 Api.Tests via
+#   Testcontainers), dotnet build clean.
+# 2026-08-22: story 3-4-incremental-smart-plug-import moved to review (dev-story implementation
+#   complete). Open Design Questions confirmed with Ralf during activation: (1) ISmartPlugParser
+#   shape = recommended default (ReadDeviceTag header-only method + watermark parameter on Parse);
+#   (2) AddAsync insert-conflict handling = Option A (per-row fallback: SmartPlugImport saved alone
+#   first, then a per-reading try/save/catch-and-skip loop); (3) Postgres NULL-uniqueness gap =
+#   Ralf chose "fix it now" (not the recommended "document as known limitation" default); (4)
+#   UpdateMappingAsync's own unique-constraint exposure = Ralf also chose "fix it now" (not the
+#   recommended "flag as known non-goal" default). Two real bugs found and fixed while
+#   implementing the two "fix it now" choices: (a) scaffolding the migration via
+#   `dotnet ef migrations add` empirically corrected Open Question #3's own premise - EF Core's
+#   SqlServer provider auto-filters a unique index over a nullable column to
+#   `WHERE [PowerPointId] IS NOT NULL`, so the NULL-uniqueness gap is symmetric across both
+#   providers, not Postgres-only, closed via a second `(HouseholdId, IntervalStart) WHERE
+#   PowerPointId IS NULL` partial unique index on both; (b) that fix's first version, keyed on
+#   IntervalStart alone (no HouseholdId), collided different Households' unmapped readings sharing
+#   a timestamp and hung the shared background job loop in SmartPlugImportEndpointsTests (caught
+#   via the full Api.Tests suite, not the new unit test alone - 7 failures traced to every
+#   "no Power Point match" Eve Home upload after the first). UpdateMappingAsync's fallback needed
+#   its own fix too: ExecuteUpdateAsync bypasses SaveChangesAsync's DbUpdateException wrapping
+#   entirely, so the portable System.Data.Common.DbException base type had to be caught alongside
+#   it (confirmed empirically, not assumed). Full backend suite green: 306 tests (165 Application,
+#   3 Architecture, 28 Infrastructure via Testcontainers Postgres+SqlServer, 110 Api.Tests via
+#   Testcontainers), dotnet build clean in Debug and Release. No frontend changes.
+# 2026-08-22: story 3-4-incremental-smart-plug-import created (create-story) - status set to
+#   ready-for-dev. Drafted directly against the epic's own already-fully-specified ACs (written
+#   during the 2026-08-22 correct-course/architecture-planning session with Ralf/Winston — see
+#   sprint-change-proposal-2026-08-22.md). This story's ACs describe behavior (watermark filtering,
+#   early-stop vs. filter per vendor, DB uniqueness) but not the exact interface/algorithm shape, so
+#   the story proposes concrete recommended defaults (flagged as Open Design Questions for Ralf,
+#   same "propose -> confirm" pattern as 2.4/3.2/3.3): (1) ISmartPlugParser gains a header-only
+#   ReadDeviceTag method plus a watermark parameter on Parse; (2) insert-time unique-constraint
+#   conflicts are handled via a fast-path-then-per-row-fallback pattern, not a new upsert dependency
+#   or provider-specific SQL; (3) a genuine cross-provider gap is flagged and NOT silently patched -
+#   Postgres never treats NULL as equal to NULL in a composite unique index, so AwaitingPowerPointMapping
+#   rows (PowerPointId IS NULL) aren't protected by the new (PowerPointId, IntervalStart) constraint
+#   on Postgres the way they are on SQL Server; (4) UpdateMappingAsync's (Story 3.2) own new exposure
+#   to this same constraint is flagged as an explicit known non-goal, not fixed speculatively.
+#   Also flagged: a real interaction with Story 3.3's AC #7 - "zero rows parsed" now has two causes
+#   (a genuinely empty file vs. a successful incremental re-import with nothing new), which must not
+#   both be treated as FlaggedForReview. Large-file memory/perf claims (AC #5/#7) can't be verified
+#   in CI against the real dated Eve Home HiFi samples (gitignored personal data) - story recommends
+#   a synthetic in-test fixture instead.
+# 2026-08-22: story 3-4-incremental-smart-plug-import validated by an independent fresh-context
+#   reviewer against the epic/source code before dev-story activation - 3 fixes applied: (1) Dev
+#   Notes Option A's insert-conflict fallback made explicit about ordering - the SmartPlugImport row
+#   must be SaveChangesAsync'd alone before the per-reading retry loop starts, or the first colliding
+#   reading's failed save would roll back the still-pending import insert too, silently losing the
+#   whole import on one collision (worse than the bug this story fixes); (2) Task 6 gained a missing
+#   test for that exact fallback path (previously unverified by any listed test); (3) Task 2's
+#   ReadDeviceTag guidance made explicit that it must reuse the same streaming OpenXmlReader, never
+#   worksheetPart.Worksheet, which would silently force a full-DOM load regardless of rows read. Two
+#   other reviewer findings (AC #6 wording, the dropped-OrderBy trade-off note) were already present
+#   in the file and required no change.
 # 2026-08-20: story 3-3-smart-plug-import-gap-handling-baseline-sharpening moved to done
 #   (bmad-code-review, second pass) - all decision-needed and patch findings resolved; 2 items
 #   deferred (concurrent-import race, negative-average guard), both pre-existing-root-cause
@@ -234,7 +327,7 @@ development_status:
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
-  3-4-incremental-smart-plug-import: backlog
+  3-4-incremental-smart-plug-import: done
   epic-3-retrospective: optional
 
   epic-4: backlog

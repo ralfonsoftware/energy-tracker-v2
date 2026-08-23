@@ -492,9 +492,11 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.HasIndex("HouseholdId");
 
-                    b.HasIndex("PowerPointId");
-
                     b.HasIndex("SmartPlugImportId");
+
+                    b.HasIndex("PowerPointId", "IntervalStart")
+                        .IsUnique()
+                        .HasFilter("[PowerPointId] IS NOT NULL");
 
                     b.ToTable("SmartPlugReadings", (string)null);
                 });
