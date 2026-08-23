@@ -65,7 +65,9 @@
     "moveDescriptionPowerPoint": "Wähle einen neuen Raum. Bereits erfasste Verlaufsdaten behalten ihre ursprüngliche Raum-, Steckdosen- und Geräte-Zuordnung — dies ändert nur, wo das Element künftig zugeordnet ist.",
     "moveDescriptionDevice": "Wähle eine neue Steckdose. Bereits erfasste Verlaufsdaten behalten ihre ursprüngliche Raum-, Steckdosen- und Geräte-Zuordnung — dies ändert nur, wo das Element künftig zugeordnet ist.",
     "currentBadge": "Aktuell",
-    "noDestinations": "Kein anderes Ziel verfügbar."
+    "noDestinations": "Kein anderes Ziel verfügbar.",
+    "hideArchivedToggle": "Archivierte Elemente ausblenden",
+    "showArchivedToggle": "Archivierte Elemente einblenden"
   },
   "yearlyBaseline": {
     "heading": "Jahresbasiswert",

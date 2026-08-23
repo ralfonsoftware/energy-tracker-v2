@@ -65,7 +65,9 @@
     "moveDescriptionPowerPoint": "Choose a new Room. History already logged keeps its original Room, Power Point, and Device identity — this only changes where it lives going forward.",
     "moveDescriptionDevice": "Choose a new Power Point. History already logged keeps its original Room, Power Point, and Device identity — this only changes where it lives going forward.",
     "currentBadge": "Current",
-    "noDestinations": "No other option is available to move to."
+    "noDestinations": "No other option is available to move to.",
+    "hideArchivedToggle": "Hide archived items",
+    "showArchivedToggle": "Show archived items"
   },
   "yearlyBaseline": {
     "heading": "Yearly Baseline",

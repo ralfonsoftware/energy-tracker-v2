@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, Move, Pencil, Trash2 } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, Move, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Input } from '@/components/ui/input'
@@ -67,6 +67,10 @@ async function toApiError(response: Response): Promise<ApiError> {
     return new ApiError(response.status, null)
   }
 }
+
+// Shared between a Room's suppressed-row `<div>` wrapper and its normal `<details>` wrapper so the
+// two branches can't visually drift apart independently.
+const ROOM_ROW_BORDER_CLASS = 'border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]'
 
 function ArchivedBadge({ label }: { label: string }) {
   return (
@@ -141,6 +145,8 @@ export function TaggingScaffoldManager() {
   const [nameInput, setNameInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [dialogError, setDialogError] = useState<string | null>(null)
+  // No persistence by design (AC #6) — resets to hidden on every mount.
+  const [showArchived, setShowArchived] = useState(false)
 
   // Tracks the live `dialog` value outside of React's closure/batching timing so a request that
   // resolves after the user has already closed and reopened a different dialog can tell it's
@@ -204,6 +210,19 @@ export function TaggingScaffoldManager() {
     siblings.push(device)
     devicesByPowerPoint.set(device.powerPointId, siblings)
   }
+
+  // AC #5: an archived parent with non-archived children must not cascade-hide those children —
+  // a Room/Power Point is only fully absent when it's archived, hiding is on, AND it has no
+  // visible children; otherwise it still renders, with just its own row suppressed. See Dev Notes.
+  // roomHasVisibleChildren must recurse through powerPointHasVisibleChildren (not just check each
+  // Power Point's own archivedAt) — otherwise a Room whose only Power Point is itself archived but
+  // has a live Device underneath it is wrongly treated as having no visible children at all.
+  const powerPointHasVisibleChildren = (powerPoint: PowerPointDto) =>
+    (devicesByPowerPoint.get(powerPoint.id) ?? []).some((device) => showArchived || !device.archivedAt)
+  const roomHasVisibleChildren = (room: RoomDto) =>
+    (powerPointsByRoom.get(room.id) ?? []).some(
+      (pp) => showArchived || !pp.archivedAt || powerPointHasVisibleChildren(pp),
+    )
 
   const openDialog = (next: DialogState) => {
     setDialogError(null)
@@ -457,7 +476,20 @@ export function TaggingScaffoldManager() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t('taggingScaffold.heading')}</h2>
-        <Button onClick={() => openDialog({ kind: 'create-room' })}>{t('taggingScaffold.addRoom')}</Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-pressed={showArchived}
+            aria-label={
+              showArchived ? t('taggingScaffold.hideArchivedToggle') : t('taggingScaffold.showArchivedToggle')
+            }
+            onClick={() => setShowArchived((current) => !current)}
+          >
+            {showArchived ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+          </Button>
+          <Button onClick={() => openDialog({ kind: 'create-room' })}>{t('taggingScaffold.addRoom')}</Button>
+        </div>
       </div>
 
       {loading && <p className="text-muted-foreground text-sm">{t('taggingScaffold.loading')}</p>}
@@ -468,130 +500,178 @@ export function TaggingScaffoldManager() {
 
       {rooms.length > 0 && (
         <GlassCard className="gap-0 p-0">
-          {rooms.map((room) => (
-            <details
-              key={room.id}
-              className="group/room border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]"
-            >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2">
-                  <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/room:rotate-90 motion-reduce:transition-none" />
-                  <span>{room.name}</span>
-                </span>
-                {room.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
-              </summary>
+          {rooms
+            .filter((room) => showArchived || !room.archivedAt || roomHasVisibleChildren(room))
+            .map((room) => {
+              const suppressRoomRow = !!room.archivedAt && !showArchived
 
-              <div className="flex flex-wrap items-center gap-1 px-3.5 pt-1 pb-3 pl-8">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t('taggingScaffold.rename')}
-                  onClick={() => openDialog({ kind: 'rename-room', room })}
-                >
-                  <Pencil aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t('taggingScaffold.delete')}
-                  onClick={() => openDialog({ kind: 'delete-room', room })}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-                {!room.archivedAt && (
-                  <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
-                    {t('taggingScaffold.addPowerPoint')}
-                  </Button>
-                )}
-              </div>
+              const visiblePowerPoints = (powerPointsByRoom.get(room.id) ?? []).filter(
+                (powerPoint) => showArchived || !powerPoint.archivedAt || powerPointHasVisibleChildren(powerPoint),
+              )
 
-              <div className="flex flex-col pl-4">
-                {(powerPointsByRoom.get(room.id) ?? []).map((powerPoint) => (
-                  <details
-                    key={powerPoint.id}
-                    className="group/pp border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
-                  >
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                      <span className="flex items-center gap-2">
-                        <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/pp:rotate-90 motion-reduce:transition-none" />
-                        <span>{powerPoint.name}</span>
-                      </span>
-                      {powerPoint.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
-                    </summary>
+              const powerPointsList = (
+                <div className="flex flex-col pl-4">
+                  {visiblePowerPoints.map((powerPoint) => {
+                    const suppressPowerPointRow = !!powerPoint.archivedAt && !showArchived
 
-                    <div className="flex flex-wrap items-center gap-1 px-3.5 pt-1 pb-2.5 pl-8">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('taggingScaffold.rename')}
-                        onClick={() => openDialog({ kind: 'rename-power-point', powerPoint })}
-                      >
-                        <Pencil aria-hidden="true" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('taggingScaffold.delete')}
-                        onClick={() => openDialog({ kind: 'delete-power-point', powerPoint })}
-                      >
-                        <Trash2 aria-hidden="true" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('taggingScaffold.moveTo')}
-                        onClick={() => openDialog({ kind: 'move-power-point', powerPoint })}
-                      >
-                        <Move aria-hidden="true" />
-                      </Button>
-                      {!powerPoint.archivedAt && (
-                        <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
-                          {t('taggingScaffold.addDevice')}
-                        </Button>
-                      )}
-                    </div>
+                    const visibleDevices = (devicesByPowerPoint.get(powerPoint.id) ?? []).filter(
+                      (device) => showArchived || !device.archivedAt,
+                    )
 
-                    <div className="flex flex-col gap-0.5 pb-2 pl-8">
-                      {(devicesByPowerPoint.get(powerPoint.id) ?? []).map((device) => (
-                        <div key={device.id} className="flex items-center justify-between gap-2 px-3.5 py-1 text-sm">
-                          <span className="flex items-center gap-2">
-                            <span aria-hidden="true" className="size-1 shrink-0 rounded-full bg-[rgba(30,42,28,0.3)] dark:bg-[rgba(234,245,238,0.3)]" />
-                            {device.name} {device.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t('taggingScaffold.rename')}
-                              onClick={() => openDialog({ kind: 'rename-device', device })}
-                            >
-                              <Pencil aria-hidden="true" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t('taggingScaffold.delete')}
-                              onClick={() => openDialog({ kind: 'delete-device', device })}
-                            >
-                              <Trash2 aria-hidden="true" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t('taggingScaffold.moveTo')}
-                              onClick={() => openDialog({ kind: 'move-device', device })}
-                            >
-                              <Move aria-hidden="true" />
-                            </Button>
+                    const deviceList = (
+                      <div className="flex flex-col gap-0.5 pb-2 pl-8">
+                        {visibleDevices.map((device) => (
+                          <div key={device.id} className="flex items-center justify-between gap-2 px-3.5 py-1 text-sm">
+                            <span className="flex items-center gap-2">
+                              <span aria-hidden="true" className="size-1 shrink-0 rounded-full bg-[rgba(30,42,28,0.3)] dark:bg-[rgba(234,245,238,0.3)]" />
+                              {device.name} {device.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={t('taggingScaffold.rename')}
+                                onClick={() => openDialog({ kind: 'rename-device', device })}
+                              >
+                                <Pencil aria-hidden="true" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={t('taggingScaffold.delete')}
+                                onClick={() => openDialog({ kind: 'delete-device', device })}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={t('taggingScaffold.moveTo')}
+                                onClick={() => openDialog({ kind: 'move-device', device })}
+                              >
+                                <Move aria-hidden="true" />
+                              </Button>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                    )
+
+                    if (suppressPowerPointRow) {
+                      return (
+                        <div
+                          key={powerPoint.id}
+                          className="border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
+                        >
+                          {deviceList}
                         </div>
-                      ))}
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </details>
-          ))}
+                      )
+                    }
+
+                    return (
+                      <details
+                        key={powerPoint.id}
+                        className="group/pp border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
+                      >
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                          <span className="flex items-center gap-2">
+                            <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/pp:rotate-90 motion-reduce:transition-none" />
+                            <span>{powerPoint.name}</span>
+                          </span>
+                          {powerPoint.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
+                        </summary>
+
+                        <div className="flex flex-wrap items-center gap-1 px-3.5 pt-1 pb-2.5 pl-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t('taggingScaffold.rename')}
+                            onClick={() => openDialog({ kind: 'rename-power-point', powerPoint })}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t('taggingScaffold.delete')}
+                            onClick={() => openDialog({ kind: 'delete-power-point', powerPoint })}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t('taggingScaffold.moveTo')}
+                            onClick={() => openDialog({ kind: 'move-power-point', powerPoint })}
+                          >
+                            <Move aria-hidden="true" />
+                          </Button>
+                          {!powerPoint.archivedAt && (
+                            <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
+                              {t('taggingScaffold.addDevice')}
+                            </Button>
+                          )}
+                        </div>
+
+                        {deviceList}
+                      </details>
+                    )
+                  })}
+                </div>
+              )
+
+              if (suppressRoomRow) {
+                return (
+                  <div
+                    key={room.id}
+                    className={ROOM_ROW_BORDER_CLASS}
+                  >
+                    {powerPointsList}
+                  </div>
+                )
+              }
+
+              return (
+                <details
+                  key={room.id}
+                  className={`group/room ${ROOM_ROW_BORDER_CLASS}`}
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-2">
+                      <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/room:rotate-90 motion-reduce:transition-none" />
+                      <span>{room.name}</span>
+                    </span>
+                    {room.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
+                  </summary>
+
+                  <div className="flex flex-wrap items-center gap-1 px-3.5 pt-1 pb-3 pl-8">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('taggingScaffold.rename')}
+                      onClick={() => openDialog({ kind: 'rename-room', room })}
+                    >
+                      <Pencil aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('taggingScaffold.delete')}
+                      onClick={() => openDialog({ kind: 'delete-room', room })}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                    {!room.archivedAt && (
+                      <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
+                        {t('taggingScaffold.addPowerPoint')}
+                      </Button>
+                    )}
+                  </div>
+
+                  {powerPointsList}
+                </details>
+              )
+            })}
         </GlassCard>
       )}
 
