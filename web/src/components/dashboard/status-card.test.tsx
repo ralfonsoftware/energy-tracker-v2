@@ -129,4 +129,39 @@ describe('StatusCard', () => {
 
     expect(screen.getByRole('button', { name: 'Log reading' })).toBeInTheDocument()
   })
+
+  it('renders detailTrigger only in the populated state, not while loading or empty', () => {
+    const { rerender } = render(
+      <StatusCard
+        status={dto()}
+        loading={false}
+        locale="en-US"
+        playEntranceAnimation={true}
+        detailTrigger={<button>How was this calculated?</button>}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'How was this calculated?' })).toBeInTheDocument()
+
+    rerender(
+      <StatusCard
+        status={null}
+        loading={true}
+        locale="en-US"
+        playEntranceAnimation={true}
+        detailTrigger={<button>How was this calculated?</button>}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'How was this calculated?' })).not.toBeInTheDocument()
+
+    rerender(
+      <StatusCard
+        status={null}
+        loading={false}
+        locale="en-US"
+        playEntranceAnimation={true}
+        detailTrigger={<button>How was this calculated?</button>}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'How was this calculated?' })).not.toBeInTheDocument()
+  })
 })

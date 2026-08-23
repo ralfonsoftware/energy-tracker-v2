@@ -48,6 +48,24 @@ public static class StatusEndpoints
             return Results.Ok(result is null ? null : ToResponse(result));
         });
 
+        // Sub-resource drill-down of the singleton /api/status (AC #6, Story 2.7): the aggregate
+        // figures behind the headline, never a Meter Reading list (AC #2). Reuses the exact same
+        // GetCurrentStatus.ExecuteAsync call as /status above — AD-7's single live-computation
+        // seam, not a second calculation path.
+        api.MapGet("/status/detail", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            GetCurrentStatus getCurrentStatus,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            var result = await getCurrentStatus.ExecuteAsync(householdId, cancellationToken);
+            return Results.Ok(result is null ? null : ToDetailResponse(result));
+        });
+
         return api;
     }
 
@@ -56,6 +74,16 @@ public static class StatusEndpoints
         result.PaceToDateKwh,
         result.BaselineToDateKwh,
         result.IsLowConfidence);
+
+    private static StatusDetailResponse ToDetailResponse(CurrentStatusResult result) => new(
+        Status: ToStatusString(result.Status),
+        PaceToDateKwh: result.PaceToDateKwh,
+        BaselineToDateKwh: result.BaselineToDateKwh,
+        ElapsedDays: result.ElapsedDays,
+        TrendingThresholdKwh: result.TrendingThresholdKwh,
+        IsLowConfidence: result.IsLowConfidence,
+        DaysSinceLastReading: result.DaysSinceLastReading,
+        LowConfidenceGapDaysThreshold: result.LowConfidenceGapDaysThreshold);
 
     private static string ToStatusString(Status status) => status switch
     {
@@ -67,3 +95,13 @@ public static class StatusEndpoints
 }
 
 public record StatusResponse(string Status, decimal PaceToDateKwh, decimal BaselineToDateKwh, bool IsLowConfidence);
+
+public record StatusDetailResponse(
+    string Status,
+    decimal PaceToDateKwh,
+    decimal BaselineToDateKwh,
+    double ElapsedDays,
+    decimal TrendingThresholdKwh,
+    bool IsLowConfidence,
+    double DaysSinceLastReading,
+    int LowConfidenceGapDaysThreshold);

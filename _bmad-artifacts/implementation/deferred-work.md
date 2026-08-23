@@ -140,3 +140,7 @@
 ## Deferred from: code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
 
 - No test exercises the German (`de-DE`) toggle strings specifically — every assertion in `tagging-scaffold-manager.test.tsx` hardcodes the English string, and this diff's new `hideArchivedToggle`/`showArchivedToggle` keys inherit that gap [web/src/components/tagging-scaffold/tagging-scaffold-manager.test.tsx] — pre-existing whole-file test convention (no test in this file has ever asserted against `de-DE` strings), not something introduced by this diff specifically; a mismatched or garbled German translation would ship undetected regardless of which story adds it.
+
+## Deferred from: code review of story-2.7 (2026-08-23)
+
+- Duplicate "Close" accessible name inside `StatusDetailDialog` [web/src/components/dashboard/status-detail-dialog.tsx:141-145] — the footer `Close` button and shadcn `DialogContent`'s built-in "X" close button share the accessible name "Close"; `status-detail-dialog.test.tsx` already works around it by DOM order. Same pattern exists in every `DialogFooter` usage in `tagging-scaffold-manager.tsx` — pre-existing codebase-wide shadcn Dialog pattern, not introduced by this diff.

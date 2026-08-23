@@ -29,6 +29,17 @@ export interface StatusDto {
   isLowConfidence: boolean
 }
 
+export interface StatusDetailDto {
+  status: StatusValue
+  paceToDateKwh: number
+  baselineToDateKwh: number
+  elapsedDays: number
+  trendingThresholdKwh: number
+  isLowConfidence: boolean
+  daysSinceLastReading: number
+  lowConfidenceGapDaysThreshold: number
+}
+
 export async function fetchCurrentStatus(): Promise<StatusDto | null> {
   const response = await fetch('/api/status', { credentials: 'include' })
   if (!response.ok) {
@@ -40,4 +51,14 @@ export async function fetchCurrentStatus(): Promise<StatusDto | null> {
   // SyntaxError on an empty body (same precedent as fetchOpenMeterRegressionPrompt).
   const text = await response.text()
   return text ? (JSON.parse(text) as StatusDto) : null
+}
+
+export async function fetchStatusDetail(): Promise<StatusDetailDto | null> {
+  const response = await fetch('/api/status/detail', { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  const text = await response.text()
+  return text ? (JSON.parse(text) as StatusDetailDto) : null
 }

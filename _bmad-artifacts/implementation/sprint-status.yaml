@@ -1,5 +1,26 @@
 # generated: 2026-08-09
 # last_updated: 2026-08-23
+# 2026-08-23: story 2-7-status-calculation-detail moved to done (adversarial code review, 3
+#   layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Review artifact note: the diff
+#   first handed to reviewers omitted the story's 4 new untracked files (status-detail-dialog.tsx/
+#   test, status-difference.ts/test) — git diff silently excludes untracked files; regenerated with
+#   `git add -N` mid-review before triage, all findings reflect the complete diff. 0 decision-
+#   needed, 8 patch findings fixed, 1 deferred, 4 dismissed as noise. Highlights: the low-confidence
+#   explanation could read self-contradictory at the rounding boundary ("It's been 45 days... more
+#   than the household's 45-day threshold") since isLowConfidence is decided on the raw day count
+#   but the dialog displayed Math.round — switched to Math.ceil; the dialog's async loading/error
+#   transition had no aria-live region unlike status-card.tsx's established pattern; the dialog
+#   could be force-unmounted by a transient status-refresh failure and then silently reopen once
+#   status repopulated (detailDialogOpen lives in the parent, wasn't reset) — fixed with a
+#   supersession effect mirroring the existing openRegressionPrompt pattern; day figures bypassed
+#   Intl.NumberFormat (AD-18). Fixing the cross-household isolation test's missing symmetric
+#   assertion surfaced a genuine pre-existing bug in the test's own fixture (a kwhValue: 0m reading
+#   silently rejected by CreateMeterReading's positive-value validation, never checked). Deferred:
+#   duplicate "Close" accessible name inside the dialog (pre-existing shadcn Dialog pattern,
+#   codebase-wide, not introduced by this diff). Full backend suite green: 319 tests (166
+#   Application + 34 Infrastructure + 3 Architecture + 116 Api.Tests via Testcontainers
+#   Postgres+SqlServer), dotnet build clean in Debug and Release. 168 frontend tests green (2 new),
+#   tsc/oxlint/vite build clean.
 # 2026-08-23: story 2-8-meter-reading-history-view added to backlog under Epic 2 (Ralf's request,
 #   following a small PRD update). Implements FR-31 (Meter Reading History View) — a dedicated,
 #   browsable list of individual Meter Readings, distinct from FR-8/FR-30's aggregate-only views;
@@ -105,6 +126,19 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-23
+# 2026-08-23: story 2-7-status-calculation-detail moved to review (dev-story implementation
+#   complete — new CurrentStatusResult fields (ElapsedDays, TrendingThresholdKwh,
+#   DaysSinceLastReading, LowConfidenceGapDaysThreshold) extend GetCurrentStatus.ExecuteAsync's
+#   existing single live-computation seam (AD-7), no new calculation path; new GET
+#   /api/status/detail endpoint, purely additive alongside the untouched /api/status route
+#   (AC #6); new StatusDetailDialog reuses the existing Dialog/GLASS_MODAL_CLASSNAME shell (no
+#   mockup exists for this story, added post-UX-freeze); computeStatusDifference extracted from
+#   status-card.tsx into a shared web/src/lib/status-difference.ts so the Story 2.5 pace/baseline
+#   sign-boundary fix can't silently regress via a second copy. Full backend suite green: 319
+#   tests (166 Application + 34 Infrastructure + 3 Architecture + 116 Api.Tests via Testcontainers
+#   Postgres+SqlServer), dotnet build clean in Debug and Release. 166 frontend tests green (16
+#   new), tsc/oxlint/vite build clean. No docs/*.md changes.
+# 2026-08-23: story 2-7-status-calculation-detail moved to in-progress (dev-story activation)
 # 2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle created (create-story) -
 #   status set to ready-for-dev. Pure frontend change, zero backend surface (GET /api/rooms|
 #   power-points|devices already return archived rows unfiltered per Story 1.9). The one
@@ -369,7 +403,7 @@ development_status:
   2-4-gap-tolerant-rolling-baseline-status-computation: done
   2-5-dashboard-status-display: done
   2-6-room-power-point-device-re-parenting: done
-  2-7-status-calculation-detail: backlog
+  2-7-status-calculation-detail: done
   2-8-meter-reading-history-view: backlog
   epic-2-retrospective: done
 
