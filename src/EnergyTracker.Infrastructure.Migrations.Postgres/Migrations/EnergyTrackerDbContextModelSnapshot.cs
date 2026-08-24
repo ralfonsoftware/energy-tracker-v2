@@ -303,7 +303,7 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasIndex("IdempotencyKey")
                         .IsUnique();
 
-                    b.HasIndex("MainMeterId");
+                    b.HasIndex("MainMeterId", "ReadingTimestamp");
 
                     b.ToTable("MeterReadings", (string)null);
                 });

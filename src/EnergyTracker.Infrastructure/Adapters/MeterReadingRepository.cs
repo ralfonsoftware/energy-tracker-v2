@@ -90,12 +90,50 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
     public Task<MainMeter?> FindMainMeterByHouseholdAsync(Guid householdId, CancellationToken cancellationToken) =>
         dbContext.MainMeters.SingleOrDefaultAsync(m => m.HouseholdId == householdId, cancellationToken);
 
-    public async Task<IReadOnlyList<MeterReading>> GetAllByMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken) =>
-        await dbContext.MeterReadings
+    public async Task<IReadOnlyList<MeterReading>> GetRecentByMainMeterAsync(
+        Guid mainMeterId, int windowDays, Guid? mustIncludeReadingId, CancellationToken cancellationToken)
+    {
+        var latest = await dbContext.MeterReadings
             .Where(r => r.MainMeterId == mainMeterId)
+            .OrderByDescending(r => r.ReadingTimestamp)
+            .Select(r => new { r.ReadingTimestamp })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (latest is null)
+        {
+            // No readings at all for this Main Meter.
+            return [];
+        }
+
+        var latestTimestamp = latest.ReadingTimestamp;
+
+        // The must-include lookup is filtered on MainMeterId too, not just Id — defensive, matches
+        // ExcludeFromOpenPrompt's own defensiveness a few lines away in PatternDetectiveCalculator.
+        // Id alone is already PK-filtered (at most one row); this never returns more than one.
+        DateTimeOffset? mustIncludeTimestamp = null;
+        if (mustIncludeReadingId is { } mustIncludeId)
+        {
+            var mustInclude = await dbContext.MeterReadings
+                .Where(r => r.Id == mustIncludeId && r.MainMeterId == mainMeterId)
+                .Select(r => new { r.ReadingTimestamp })
+                .FirstOrDefaultAsync(cancellationToken);
+            mustIncludeTimestamp = mustInclude?.ReadingTimestamp;
+        }
+
+        // windowDays is subtracted AFTER taking the min of the two anchors — applying it to only
+        // one side (or dropping it for the must-include branch) would fetch just the anchor
+        // reading itself instead of a trailing window behind it.
+        var anchor = mustIncludeTimestamp is { } mustInclude2 && mustInclude2 < latestTimestamp
+            ? mustInclude2
+            : latestTimestamp;
+        var cutoff = anchor - TimeSpan.FromDays(windowDays);
+
+        return await dbContext.MeterReadings
+            .Where(r => r.MainMeterId == mainMeterId && r.ReadingTimestamp >= cutoff)
             .OrderBy(r => r.ReadingTimestamp)
             .ThenBy(r => r.Id)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<(IReadOnlyList<MeterReading> Items, int TotalCount)> GetPageForMainMeterAsync(Guid mainMeterId, int page, int pageSize, CancellationToken cancellationToken)
     {

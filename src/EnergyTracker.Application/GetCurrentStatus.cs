@@ -21,6 +21,12 @@ public class GetCurrentStatus(
     IMeterRegressionPromptRepository regressionPromptRepository,
     ISmartPlugCoverageSignal smartPlugCoverageSignal)
 {
+    // PatternDetectiveCalculator.ComputePaceToDate only ever windows the trailing 365 days from
+    // the last included reading (see its own doc comment) — 400 gives that a 35-day margin so an
+    // exact-boundary reading is never clipped. Shared here instead of a literal duplicated across
+    // this call site and its tests.
+    private const int RecentReadingWindowDays = 400;
+
     // AD-7: this is the single place the live computation runs — both the GET /api/status read
     // path and IStatusRecomputeService's snapshot-writing path call this same method, so the two
     // can never disagree on exclusion/threshold logic (Task 6's own requirement).
@@ -40,11 +46,24 @@ public class GetCurrentStatus(
             return null;
         }
 
+        // Fetched before the reading fetch so its PreviousMeterReadingId (if any) can be passed as
+        // the bounded fetch's must-include anchor below — an open prompt can stay unresolved
+        // indefinitely while readings keep arriving (AD-12), so the fetch must be able to widen to
+        // cover it regardless of how stale it's gotten.
+        var openPrompt = await regressionPromptRepository.GetOpenForHouseholdAsync(householdId, cancellationToken);
+
         // AD-14: only ever MeterReading data is read/summed here — no other reading/log type is
         // referenced anywhere in this method (see the guard test in EnergyTracker.Architecture.Tests).
-        var allReadings = await readingRepository.GetAllByMainMeterAsync(mainMeter.Id, cancellationToken);
-        var openPrompt = await regressionPromptRepository.GetOpenForHouseholdAsync(householdId, cancellationToken);
-        var includedReadings = PatternDetectiveCalculator.ExcludeFromOpenPrompt(allReadings, openPrompt?.MeterReadingId);
+        //
+        // Anchored on PreviousMeterReadingId, not MeterReadingId (the prompt's own trigger) —
+        // ExcludeFromOpenPrompt below returns everything strictly before the trigger, so the last
+        // reading ComputePaceToDate actually windows from is the one immediately preceding it.
+        // PreviousMeterReadingId's timestamp is always <= the trigger's own timestamp, so
+        // anchoring there also keeps the trigger itself in the fetched set (ExcludeFromOpenPrompt
+        // would otherwise throw for a trigger that got excluded from the fetch entirely).
+        var recentReadings = await readingRepository.GetRecentByMainMeterAsync(
+            mainMeter.Id, RecentReadingWindowDays, openPrompt?.PreviousMeterReadingId, cancellationToken);
+        var includedReadings = PatternDetectiveCalculator.ExcludeFromOpenPrompt(recentReadings, openPrompt?.MeterReadingId);
 
         var resolvedPrompts = await regressionPromptRepository.GetResolvedForMainMeterAsync(mainMeter.Id, cancellationToken);
         var resolvedPromptsByTriggeringReadingId = resolvedPrompts.ToDictionary(p => p.MeterReadingId);
