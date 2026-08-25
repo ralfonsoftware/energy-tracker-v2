@@ -138,11 +138,22 @@ public abstract class MeterReadingRepositoryTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var latest = DateTimeOffset.UtcNow;
-        var atBoundary = NewReading(householdId, mainMeterId, 100m, latest.AddDays(-30));
-        var oneTickBeforeBoundary = NewReading(householdId, mainMeterId, 0m, latest.AddDays(-30).AddTicks(-1));
-        var latestReading = NewReading(householdId, mainMeterId, 200m, latest);
-        dbContext.MeterReadings.AddRange(atBoundary, oneTickBeforeBoundary, latestReading);
+        var latestReading = NewReading(householdId, mainMeterId, 200m, DateTimeOffset.UtcNow);
+        dbContext.MeterReadings.Add(latestReading);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Derive the boundary readings from the PERSISTED timestamp, not the in-memory
+        // DateTimeOffset.UtcNow value — Postgres rounds timestamptz to microseconds and SqlServer
+        // to 100ns on write, so a value computed from the pre-write tick count can land a hair on
+        // either side of the cutoff the repository computes from its own DB read. Reading the
+        // already-quantized value back first makes the arithmetic below exact on every provider.
+        var persistedLatestTimestamp = await dbContext.MeterReadings
+            .Where(r => r.Id == latestReading.Id)
+            .Select(r => r.ReadingTimestamp)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var atBoundary = NewReading(householdId, mainMeterId, 100m, persistedLatestTimestamp.AddDays(-30));
+        var oneTickBeforeBoundary = NewReading(householdId, mainMeterId, 0m, persistedLatestTimestamp.AddDays(-30).AddTicks(-1));
+        dbContext.MeterReadings.AddRange(atBoundary, oneTickBeforeBoundary);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new MeterReadingRepository(dbContext);
 
