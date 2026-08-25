@@ -50,6 +50,11 @@ public class MeterReadingConfiguration : IEntityTypeConfiguration<MeterReading>
         builder.HasIndex(r => r.IdempotencyKey)
             .IsUnique();
 
+        // Backs GetRecentByMainMeterAsync's bounded-window fetch (the ReadingTimestamp >= cutoff
+        // filter for one MainMeterId) — without this, every Status recompute/live read would fall
+        // back to a full table scan of MeterReadings as history grows.
+        builder.HasIndex(r => new { r.MainMeterId, r.ReadingTimestamp });
+
         // AD-3's standard query filter is wired in EnergyTrackerDbContext.OnModelCreating.
     }
 }

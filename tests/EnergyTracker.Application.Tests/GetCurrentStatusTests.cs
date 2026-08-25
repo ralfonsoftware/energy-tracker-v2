@@ -84,7 +84,7 @@ public class GetCurrentStatusTests
         var mainMeter = NewMainMeter(householdId);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>())
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns([NewReading(householdId, mainMeter.Id, 1000m, DateTimeOffset.UtcNow)]);
         var sut = Sut();
 
@@ -103,7 +103,7 @@ public class GetCurrentStatusTests
         // Half a year elapsed; annual baseline 3650 kWh -> baseline-to-date 1825 kWh. Pace = 1825 (exact match).
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns(
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
         [
             NewReading(householdId, mainMeter.Id, 1000m, baseline),
             NewReading(householdId, mainMeter.Id, 2825m, latest),
@@ -129,7 +129,7 @@ public class GetCurrentStatusTests
         // baseline-to-date = 1825 kWh; threshold = 100 kWh; pace = 2000 kWh -> 175 over -> Trending.
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns(
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
         [
             NewReading(householdId, mainMeter.Id, 1000m, baseline),
             NewReading(householdId, mainMeter.Id, 3000m, latest),
@@ -155,7 +155,7 @@ public class GetCurrentStatusTests
         var afterTriggering = NewReading(householdId, mainMeter.Id, 60m, baseline.AddDays(21));
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>())
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns([first, second, triggering, afterTriggering]);
         _regressionPromptRepository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(
             new MeterRegressionPrompt
@@ -178,6 +178,61 @@ public class GetCurrentStatusTests
     }
 
     [Fact]
+    public async Task An_open_regression_prompt_makes_the_bounded_fetch_widen_on_the_previous_reading_not_the_trigger()
+    {
+        // Round-4 discipline: this asserts ONLY which arguments GetCurrentStatus passes to
+        // GetRecentByMainMeterAsync for the widen scenario — it must never assert on the
+        // *contents* of a mocked return value here, since that's exactly what let round 3's false
+        // positive through (it mocked a result the real, buggy repository could never have
+        // produced). Proving the real widen fetch's contents are correct is
+        // MeterReadingRepositoryTests's job, against a real Testcontainers database.
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var baseline = DateTimeOffset.UtcNow.AddDays(-30);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, baseline);
+        var second = NewReading(householdId, mainMeter.Id, 1100m, baseline.AddDays(10));
+        var triggering = NewReading(householdId, mainMeter.Id, 50m, baseline.AddDays(20));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns([first, second, triggering]);
+        _regressionPromptRepository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(
+            new MeterRegressionPrompt
+            {
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                MainMeterId = mainMeter.Id,
+                MeterReadingId = triggering.Id,
+                PreviousMeterReadingId = second.Id,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        // Anchored on PreviousMeterReadingId (`second.Id`) — never MeterReadingId (`triggering.Id`,
+        // round 2's bug) — and windowDays is the shared 400-day constant, not a magic number
+        // re-literaled at the call site.
+        await _readingRepository.Received(1).GetRecentByMainMeterAsync(mainMeter.Id, 400, second.Id, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task With_no_open_prompt_the_bounded_fetch_is_called_with_a_null_must_include_id()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns([NewReading(householdId, mainMeter.Id, 1000m, DateTimeOffset.UtcNow.AddDays(-10)), NewReading(householdId, mainMeter.Id, 1100m, DateTimeOffset.UtcNow)]);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        await _readingRepository.Received(1).GetRecentByMainMeterAsync(mainMeter.Id, 400, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task An_open_regression_prompt_that_leaves_fewer_than_two_readings_makes_Status_undefined()
     {
         var householdId = Guid.NewGuid();
@@ -186,7 +241,7 @@ public class GetCurrentStatusTests
         var triggering = NewReading(householdId, mainMeter.Id, 50m, DateTimeOffset.UtcNow);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, triggering]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, triggering]);
         _regressionPromptRepository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(
             new MeterRegressionPrompt
             {
@@ -214,7 +269,7 @@ public class GetCurrentStatusTests
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
             .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, last]);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
@@ -235,7 +290,7 @@ public class GetCurrentStatusTests
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
             .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, last]);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
@@ -254,7 +309,7 @@ public class GetCurrentStatusTests
         var afterRollover = NewReading(householdId, mainMeter.Id, 10m, DateTimeOffset.UtcNow);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, afterRollover]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, afterRollover]);
         _regressionPromptRepository.GetResolvedForMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns(
         [
             new MeterRegressionPrompt
@@ -290,7 +345,7 @@ public class GetCurrentStatusTests
         var latest = NewReading(householdId, mainMeter.Id, 30m, DateTimeOffset.UtcNow);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, afterReset, latest]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, afterReset, latest]);
         _regressionPromptRepository.GetResolvedForMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns(
         [
             new MeterRegressionPrompt
@@ -326,7 +381,7 @@ public class GetCurrentStatusTests
         var recent = NewReading(householdId, mainMeter.Id, 2825m, latest);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([ancient, windowStart, recent]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([ancient, windowStart, recent]);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
@@ -335,6 +390,64 @@ public class GetCurrentStatusTests
         result.ShouldNotBeNull();
         result.Status.ShouldBe(Status.WithinRange);
         result.PaceToDateKwh.ShouldBe(1825m);
+    }
+
+    [Fact]
+    public async Task An_idle_household_whose_last_reading_is_500_days_old_still_computes_the_same_result_as_an_unbounded_fetch()
+    {
+        // I/O matrix: "Idle household, bounded fetch" — the bounded window is relative to the
+        // MainMeter's own most recent reading, never DateTimeOffset.UtcNow, so a household that
+        // hasn't logged anything in 500 days must still resolve a defined Status identical to what
+        // an unbounded fetch would have produced (Design Notes: "why bound from the last reading,
+        // not from now").
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var latest = DateTimeOffset.UtcNow.AddDays(-500);
+        var baseline = latest.AddDays(-182.5);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
+        [
+            NewReading(householdId, mainMeter.Id, 1000m, baseline),
+            NewReading(householdId, mainMeter.Id, 2825m, latest),
+        ]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        // Same 1825 kWh / half-year figures as the unwindowed WithinRange test — only the
+        // readings' own timestamps (not how long ago "now" is) drive the computation.
+        result.ShouldNotBeNull();
+        result.Status.ShouldBe(Status.WithinRange);
+        result.PaceToDateKwh.ShouldBe(1825m);
+    }
+
+    [Fact]
+    public async Task A_household_with_5_plus_years_of_history_matches_what_an_unbounded_fetch_would_produce()
+    {
+        // I/O matrix: "Long-lived household, bounded fetch" — only the trailing window
+        // contributes; a Main Meter with several years of readings behind it must resolve
+        // identically to a hypothetical unbounded fetch of its full history.
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var latest = DateTimeOffset.UtcNow;
+        // Over 5 years before `latest` — nowhere near the 400-day window, must not contribute.
+        var fiveYearsAgo = NewReading(householdId, mainMeter.Id, -50000m, latest.AddYears(-5));
+        var twoYearsAgo = NewReading(householdId, mainMeter.Id, 0m, latest.AddYears(-2));
+        var windowStart = NewReading(householdId, mainMeter.Id, 1000m, latest.AddDays(-182.5));
+        var recent = NewReading(householdId, mainMeter.Id, 2825m, latest);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns([fiveYearsAgo, twoYearsAgo, windowStart, recent]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.Status.ShouldBe(Status.WithinRange);
+        result.PaceToDateKwh.ShouldBe(1825m);
+        result.BaselineToDateKwh.ShouldBe(1825m);
     }
 
     [Fact]
@@ -347,7 +460,7 @@ public class GetCurrentStatusTests
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
             .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, last]);
         _smartPlugCoverageSignal.HasCoverageDuringAsync(householdId, last.ReadingTimestamp, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(true);
         var sut = Sut();
@@ -375,7 +488,7 @@ public class GetCurrentStatusTests
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
             .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, last]);
 
         _smartPlugCoverageSignal.HasCoverageDuringAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(false);
@@ -406,7 +519,7 @@ public class GetCurrentStatusTests
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
             .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns([first, last]);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns([first, last]);
         _smartPlugCoverageSignal.HasCoverageDuringAsync(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(false);
         var sut = Sut();
@@ -428,7 +541,7 @@ public class GetCurrentStatusTests
         var baseline = latest.AddDays(-182.5);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
         _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
-        _readingRepository.GetAllByMainMeterAsync(mainMeter.Id, Arg.Any<CancellationToken>()).Returns(
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
         [
             NewReading(householdId, mainMeter.Id, 1000m, baseline),
             NewReading(householdId, mainMeter.Id, 2825m, latest),

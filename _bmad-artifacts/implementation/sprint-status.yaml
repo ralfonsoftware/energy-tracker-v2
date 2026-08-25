@@ -558,4 +558,5 @@ action_items:
   - epic: 3
     action: "Update Epic 4's definition (Stories 4.1 and 4.3) before drafting Story 4.1: Story 4.1 (Trend History) absorbs Story 2.8's Meter Reading History List/edit functionality as its single surface; Story 4.3 keeps its ACs as specified (edit via the merged surface, AD-4 409 + AD-11 audit-trail already built and reusable from 2.8, net-new forward-recompute-through-present via IStatusRecomputeService); remove the Dashboard Status card's standalone History text-link once merged"
     owner: "John (epic definition)/Sally (UX placement)"
-    status: open
+    status: done
+    note: "John's half done 2026-08-23 — epic-4-trend-history-per-plug-insight.md updated (Stories 4.1/4.3 + header), cross-referenced from epic-2's Story 2.8 section, epic-list.md, and 2-8's own review-findings entry. Sally's half done 2026-08-23 — new mockups/key-trend-history.html (Dark+Light) places the absorbed Meter Readings list as a third card between the Trend chart and the Room->Power Point->Device tree, collapsed by default, reusing 2.8's row content/edit dialog unmodified; EXPERIENCE.md (IA row, new Component Patterns row, State Patterns row) and DESIGN/components.md (new component section) updated and cross-linked; .memlog.md entry added. Unblocks Story 4.1 drafting on the UX side — action item #1/#2 (recompute-race fix) is the remaining gate."

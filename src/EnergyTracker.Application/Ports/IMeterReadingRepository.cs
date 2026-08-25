@@ -22,11 +22,23 @@ public interface IMeterReadingRepository
     // inserting a row for a Household that has never logged a single reading.
     Task<MainMeter?> FindMainMeterByHouseholdAsync(Guid householdId, CancellationToken cancellationToken);
 
-    // Full ordered sequence for one Main Meter, needed by Story 2.4's gap-tolerant pace walk.
-    // Ordered by ReadingTimestamp then Id — the same deterministic tiebreak on identical
-    // timestamps used by FindImmediatelyPrecedingAsync/GetOpenForHouseholdAsync, so the sequence
-    // walk never disagrees with regression detection's own ordering.
-    Task<IReadOnlyList<MeterReading>> GetAllByMainMeterAsync(Guid mainMeterId, CancellationToken cancellationToken);
+    // Ordered sequence for one Main Meter, bounded to a trailing window so GetCurrentStatus never
+    // re-walks a household's entire lifetime history when PatternDetectiveCalculator.ComputePaceToDate
+    // only ever needs the trailing 365 days (windowDays gives that a margin). Ordered by
+    // ReadingTimestamp then Id — the same deterministic tiebreak on identical timestamps used by
+    // FindImmediatelyPrecedingAsync/GetOpenForHouseholdAsync, so the sequence walk never disagrees
+    // with regression detection's own ordering.
+    //
+    // mustIncludeReadingId (optional) dynamically widens the fetch to guarantee that reading is
+    // covered even when it's older than the base window — GetCurrentStatus passes an open
+    // MeterRegressionPrompt's PreviousMeterReadingId here, since a prompt can stay open
+    // indefinitely while readings keep arriving (AD-12). The cutoff is computed as
+    // `Min(latestTimestamp, mustIncludeTimestamp ?? latestTimestamp) - windowDays` — i.e. the
+    // margin is subtracted AFTER taking the min of the two anchors, so the widened branch still
+    // fetches a full trailing window of real history behind the must-include reading, not just
+    // that single reading in isolation.
+    Task<IReadOnlyList<MeterReading>> GetRecentByMainMeterAsync(
+        Guid mainMeterId, int windowDays, Guid? mustIncludeReadingId, CancellationToken cancellationToken);
 
     // One page of a Main Meter's Meter Readings, most-recent-first (ReadingTimestamp descending,
     // then Id descending as the deterministic tiebreak — mirrors FindImmediatelyPrecedingAsync's

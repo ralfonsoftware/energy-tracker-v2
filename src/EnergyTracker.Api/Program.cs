@@ -296,6 +296,9 @@ builder.Services.AddScoped<MoveDevice>();
 
 builder.Services.AddScoped<IMeterReadingRepository, MeterReadingRepository>();
 builder.Services.AddScoped<IMeterRegressionPromptRepository, MeterRegressionPromptRepository>();
+// Singleton: the per-Household lock dictionary must survive across scoped requests to actually
+// serialize concurrent recomputes for the same Household (AD-7).
+builder.Services.AddSingleton<IHouseholdRecomputeLock, HouseholdRecomputeLock>();
 builder.Services.AddScoped<IStatusRecomputeService, StatusRecomputeService>();
 builder.Services.AddScoped<ISmartPlugCoverageSignal, SmartPlugCoverageSignal>();
 builder.Services.AddScoped<IAuditCorrectionRecorder, AuditCorrectionRecorder>();
