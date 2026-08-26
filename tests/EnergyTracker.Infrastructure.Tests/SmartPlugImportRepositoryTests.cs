@@ -80,7 +80,9 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         CompletedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    private static SmartPlugReading MakeReading(Guid householdId, Guid smartPlugImportId, Guid? powerPointId, DateTimeOffset intervalStart) => new()
+    private static SmartPlugReading MakeReading(
+        Guid householdId, Guid smartPlugImportId, Guid? powerPointId, DateTimeOffset intervalStart,
+        decimal kwhValue = 0.5m, DateTimeOffset? intervalEnd = null, string deviceName = "Fridge") => new()
     {
         Id = Guid.NewGuid(),
         HouseholdId = householdId,
@@ -88,10 +90,10 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         PowerPointId = powerPointId,
         RoomName = "Kitchen",
         PowerPointName = "Fridge",
-        DeviceName = "Fridge",
+        DeviceName = deviceName,
         IntervalStart = intervalStart,
-        IntervalEnd = intervalStart,
-        KwhValue = 0.5m,
+        IntervalEnd = intervalEnd ?? intervalStart,
+        KwhValue = kwhValue,
     };
 
     [Fact]
@@ -210,16 +212,17 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpdateMappingAsync_persists_the_import_status_and_skips_only_the_colliding_reading_on_a_unique_constraint_conflict()
+    public async Task UpdateMappingAsync_persists_the_import_status_and_deletes_the_colliding_reading_on_an_exact_duplicate_conflict()
     {
-        // Dev Notes Open Question #4 ("fix it now", confirmed with Ralf during dev-story
-        // activation): an AwaitingPowerPointMapping import sits with a reading at the same
-        // IntervalStart a different, already-mapped import for the same target Power Point
-        // already holds. The set-based UPDATE this method normally uses would reject that as one
-        // all-or-nothing statement (a unique-constraint DbUpdateException) — this asserts the
-        // per-row conflict-tolerant fallback instead: the colliding reading is skipped (stays
-        // unmapped), the non-colliding reading is attached, and the import's own Status/
-        // CompletedAtUtc change is still persisted.
+        // Story 3.7 AC #1 (closes Story 3.4 Dev Notes Open Question #4's AD-20 gap): an
+        // AwaitingPowerPointMapping import sits with a reading at the same IntervalStart a
+        // different, already-mapped import for the same target Power Point already holds, and
+        // the colliding reading's KwhValue/IntervalEnd exactly match the already-mapped one. The
+        // set-based UPDATE this method normally uses would reject that as one all-or-nothing
+        // statement (a unique-constraint DbUpdateException) — this asserts the per-row
+        // conflict-tolerant fallback instead: the exact-duplicate colliding reading is DELETED
+        // (not left behind unmapped), the non-colliding reading is attached, and the import's own
+        // Status/CompletedAtUtc change is still persisted.
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
@@ -253,8 +256,130 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var persistedReadings = await verifyDbContext.SmartPlugReadings
             .Where(r => r.SmartPlugImportId == awaitingImport.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
-        persistedReadings.Single(r => r.IntervalStart == collidingIntervalStart).PowerPointId.ShouldBeNull();
-        persistedReadings.Single(r => r.IntervalStart == collidingIntervalStart.AddDays(1)).PowerPointId.ShouldBe(powerPointId);
+        persistedReadings.ShouldHaveSingleItem();
+        persistedReadings.Single().IntervalStart.ShouldBe(collidingIntervalStart.AddDays(1));
+        persistedReadings.Single().PowerPointId.ShouldBe(powerPointId);
+    }
+
+    [Fact]
+    public async Task UpdateMappingAsync_leaves_the_colliding_reading_unmapped_when_its_KwhValue_diverges_from_the_existing_mapped_reading()
+    {
+        // Story 3.7 AC #2: a collision at the same (PowerPointId, IntervalStart) whose KwhValue
+        // genuinely diverges from the already-mapped reading (e.g. a DST fall-back duplicate
+        // local timestamp with different data) must NOT be silently deleted — today's tolerant
+        // behavior (skip, stay unmapped, log) is preserved for this case.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingImport = MakeImport(householdId, existingBackgroundJobId);
+        var collidingIntervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        dbContext.SmartPlugImports.Add(existingImport);
+        dbContext.SmartPlugReadings.Add(
+            MakeReading(householdId, existingImport.Id, powerPointId, collidingIntervalStart, kwhValue: 0.5m));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var awaitingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var awaitingImport = MakeImport(householdId, awaitingBackgroundJobId);
+        awaitingImport.Status = SmartPlugImportStatus.AwaitingPowerPointMapping;
+        dbContext.SmartPlugImports.Add(awaitingImport);
+        dbContext.SmartPlugReadings.Add(
+            MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, kwhValue: 0.9m));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        awaitingImport.Status = SmartPlugImportStatus.Completed;
+        awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+        await repository.UpdateMappingAsync(awaitingImport, powerPointId, "Fridge", "Kitchen", TestContext.Current.CancellationToken);
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var persistedImport = await verifyDbContext.SmartPlugImports.SingleAsync(
+            i => i.Id == awaitingImport.Id, TestContext.Current.CancellationToken);
+        persistedImport.Status.ShouldBe(SmartPlugImportStatus.Completed);
+
+        var persistedReading = await verifyDbContext.SmartPlugReadings.SingleAsync(
+            r => r.SmartPlugImportId == awaitingImport.Id, TestContext.Current.CancellationToken);
+        persistedReading.PowerPointId.ShouldBeNull();
+        persistedReading.KwhValue.ShouldBe(0.9m);
+    }
+
+    [Fact]
+    public async Task UpdateMappingAsync_leaves_the_colliding_reading_unmapped_when_its_IntervalEnd_diverges_from_the_existing_mapped_reading()
+    {
+        // Story 3.7 AC #2, IntervalEnd branch (review finding): same collision shape as the
+        // KwhValue-divergence test above, but this time KwhValue matches and only IntervalEnd
+        // diverges — must NOT be silently deleted either.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingImport = MakeImport(householdId, existingBackgroundJobId);
+        var collidingIntervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        dbContext.SmartPlugImports.Add(existingImport);
+        dbContext.SmartPlugReadings.Add(
+            MakeReading(householdId, existingImport.Id, powerPointId, collidingIntervalStart, intervalEnd: collidingIntervalStart));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var awaitingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var awaitingImport = MakeImport(householdId, awaitingBackgroundJobId);
+        awaitingImport.Status = SmartPlugImportStatus.AwaitingPowerPointMapping;
+        dbContext.SmartPlugImports.Add(awaitingImport);
+        dbContext.SmartPlugReadings.Add(
+            MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, intervalEnd: collidingIntervalStart.AddHours(1)));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        awaitingImport.Status = SmartPlugImportStatus.Completed;
+        awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+        await repository.UpdateMappingAsync(awaitingImport, powerPointId, "Fridge", "Kitchen", TestContext.Current.CancellationToken);
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var persistedReading = await verifyDbContext.SmartPlugReadings.SingleAsync(
+            r => r.SmartPlugImportId == awaitingImport.Id, TestContext.Current.CancellationToken);
+        persistedReading.PowerPointId.ShouldBeNull();
+        persistedReading.IntervalEnd.ShouldBe(collidingIntervalStart.AddHours(1));
+    }
+
+    [Fact]
+    public async Task UpdateMappingAsync_leaves_the_colliding_reading_unmapped_when_its_DeviceName_diverges_from_the_existing_mapped_reading()
+    {
+        // Review finding (Edge Case Hunter): the exact-duplicate check must compare DeviceName
+        // too, not just KwhValue/IntervalEnd — two different devices' readings could otherwise
+        // coincide on IntervalStart/KwhValue/IntervalEnd (a Power Point can receive manually
+        // mapped readings from more than one distinct SmartPlugImport/device over time) and be
+        // wrongly treated as the same duplicate.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingImport = MakeImport(householdId, existingBackgroundJobId);
+        var collidingIntervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        dbContext.SmartPlugImports.Add(existingImport);
+        dbContext.SmartPlugReadings.Add(
+            MakeReading(householdId, existingImport.Id, powerPointId, collidingIntervalStart, deviceName: "Old Smart Plug"));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var awaitingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var awaitingImport = MakeImport(householdId, awaitingBackgroundJobId);
+        awaitingImport.Status = SmartPlugImportStatus.AwaitingPowerPointMapping;
+        dbContext.SmartPlugImports.Add(awaitingImport);
+        dbContext.SmartPlugReadings.Add(
+            MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, deviceName: "New Smart Plug"));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        awaitingImport.Status = SmartPlugImportStatus.Completed;
+        awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+        await repository.UpdateMappingAsync(awaitingImport, powerPointId, "Fridge", "Kitchen", TestContext.Current.CancellationToken);
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var persistedReading = await verifyDbContext.SmartPlugReadings.SingleAsync(
+            r => r.SmartPlugImportId == awaitingImport.Id, TestContext.Current.CancellationToken);
+        persistedReading.PowerPointId.ShouldBeNull();
+        persistedReading.DeviceName.ShouldBe("New Smart Plug");
     }
 
     [Fact]

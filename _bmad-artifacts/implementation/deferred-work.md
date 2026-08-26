@@ -164,3 +164,7 @@
 - source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
   summary: `HouseholdRecomputeLock`'s internal `Releaser.DisposeAsync` double-dispose guard (`Interlocked.Exchange`) has no test calling `DisposeAsync` twice to prove it actually prevents a double-release.
   evidence: Low-risk — the guard is a standard, well-understood idiom, and `await using` in every real call site only ever disposes once. Worth a quick test if this type is ever reused outside its current single call site. Raised by adversarial review, round 4.
+
+## Deferred from: code review of story-3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping (2026-08-26)
+
+- TOCTOU window between `UpdateMappingPerRowWithConflictToleranceAsync`'s conflict-confirmation read and the delete/skip decision it drives [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:303-330] — nothing pins the colliding "already-mapped" row in place between the read and the write, so a genuinely concurrent mutation/removal of that row in the gap could make the delete-vs-skip decision against stale data. Deferred, pre-existing: this check-then-act pattern already existed in this method (and in `AnyMappingConflictAsync`'s pre-check ahead of the `ExecuteUpdateAsync` fast path) before this story — Story 3.7 only changed what happens *after* the conflict is confirmed (delete vs. skip), not the underlying race. Raised by adversarial review (Blind Hunter).

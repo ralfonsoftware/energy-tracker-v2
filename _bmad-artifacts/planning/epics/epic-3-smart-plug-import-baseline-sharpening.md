@@ -227,3 +227,35 @@ So that I can find and resolve one that needs my attention without having to rem
 **Given** a Household with no Smart Plug import activity in the last 30 days
 **When** the screen is opened
 **Then** it shows an empty state, not an error or blank space (FR-32, UX-DR21)
+
+## Story 3.7: Smart-Plug Reading Duplicate Cleanup on Late Power-Point Mapping
+
+As a Household member whose Smart Plug import once sat AwaitingPowerPointMapping before being resolved,
+I want the readings from that resolution to never leave a duplicate, permanently-unmapped copy behind,
+So that my Smart Plug data stays accurate and doesn't waste storage on dead rows nobody will ever read.
+
+**Context (why this is needed):** Confirmed live in production on 2026-08-26 (household audit): `MapSmartPlugImportToPowerPoint`'s per-row conflict-tolerant fallback (`SmartPlugImportRepository.UpdateMappingPerRowWithConflictToleranceAsync`, added by Story 3.4's Dev Notes Open Question #4, "fix it now") intentionally *skips* a reading — leaving its `PowerPointId` `NULL` forever — when mapping it would collide with the `(PowerPointId, IntervalStart)` unique index (AD-20) against an already-mapped reading. `MapSmartPlugImportToPowerPoint.ExecuteAsync` still unconditionally marks the import `Completed` regardless of how many readings the fallback skipped, so nothing (status, UI, data) signals that orphaned rows were left behind — only a `LogWarning` line does, and nothing reads it. AD-20's own Dev Notes already named this exact gap ("doesn't protect ... the AwaitingPowerPointMapping → later-mapped path ... from ever producing an exact-timestamp duplicate") but left it unaddressed pending real evidence. That evidence now exists: 179,324 orphaned unmapped rows across two Power Points in one household (122,154 for "Netzwerk", 57,170 for "Steckdose Tür" — each an exact duplicate, matching on `HouseholdId`/`DeviceName`/`IntervalStart`/`IntervalEnd`/`KwhValue`, of an already-mapped reading), out of 467,787 total `SmartPlugReading` rows. This is NFR10's "no-silent-duplication" guarantee failing at exactly the boundary AD-20 flagged as unprotected.
+
+**Acceptance Criteria:**
+
+**Given** `UpdateMappingPerRowWithConflictToleranceAsync` skips a reading because it collides with an already-mapped reading at the same `(PowerPointId, IntervalStart)`
+**When** the skipped reading's `KwhValue` and `IntervalEnd` exactly match the already-mapped reading's
+**Then** the skipped reading is deleted instead of left behind with `PowerPointId` still `NULL` — no orphaned duplicate survives a mapping operation (closes AD-20's named gap)
+
+**Given** the same collision
+**When** the skipped reading's `KwhValue` or `IntervalEnd` does NOT match the already-mapped reading's (an unexpected divergence, e.g. a DST fall-back duplicate local timestamp with genuinely different data)
+**Then** today's tolerant behavior is unchanged — the reading is left unmapped, the existing `LogWarning` fires — since this case must never silently discard data that might actually differ
+
+**Given** the live production data this story was written from
+**When** the one-time cleanup migration runs
+**Then** every unmapped `SmartPlugReading` row that has an exact mapped twin (same `HouseholdId`, `DeviceName`, `IntervalStart`, `IntervalEnd`, `KwhValue`, differing only in `PowerPointId`/`RoomName`/`PowerPointName`/`SmartPlugImportId`) is deleted, and rows with no such twin (e.g. a device tag still genuinely `AwaitingPowerPointMapping`) are left untouched
+
+**Given** the cleanup migration
+**When** authored
+**Then** it is added via `scripts/add-migration.sh` to both `Infrastructure.Migrations.Postgres` and `Infrastructure.Migrations.SqlServer` projects (AD-2) and verified against both engines via Testcontainers (matching Story 3.4's own migration-testing discipline), same delete-before-any-schema-change shape as `20260822165109_AddSmartPlugReadingUniqueIndex`'s precedent — except this migration adds no new index, it is cleanup only
+
+**Dev Notes / Open Questions:**
+- This is a data-integrity fix, not a user-facing correction — like Story 3.4's cleanup, it deliberately does not route through `AuditCorrection`/`IAuditCorrectionRecorder` (AD-11).
+- Per AD-7, this does not retroactively recompute any `SmartPlugImportGap`/`StatusSnapshot` rows already computed before this story ships — same "immutable history, correct from this point forward" discipline as Story 3.4's cleanup.
+- Out of scope: a second, unconfirmed finding from the same audit — two Power Points both named "Tür" in different Rooms in the audited household. Not folded into this story.
+- Open Question for whoever picks this up: `MapSmartPlugImportToPowerPoint.ExecuteAsync` marks an import `Completed` even when the fallback above still leaves genuinely-divergent rows unmapped (the AC #2 case) — should that surface as something other than a plain `Completed` status? Treated as a non-goal here (a new import-status value is a bigger, UX-touching change than this story's data-hygiene scope) unless Ralf says otherwise during dev-story activation.

@@ -297,20 +297,78 @@ public class SmartPlugImportRepository(
 
                 // Confirm this is really the (PowerPointId, IntervalStart) unique-constraint
                 // conflict this fallback exists for (AD-2 — no provider-specific error inspection)
-                // rather than an unrelated failure that would otherwise vanish silently.
-                var conflictConfirmed = await dbContext.SmartPlugReadings.AsNoTracking().AnyAsync(
-                    r => r.PowerPointId == powerPointId && r.IntervalStart == reading.IntervalStart, cancellationToken);
-                if (!conflictConfirmed)
+                // rather than an unrelated failure that would otherwise vanish silently. Story 3.7
+                // AC #1/#2: also pull the colliding row's DeviceName/KwhValue/IntervalEnd here so
+                // an exact duplicate can be resolved (deleted) instead of left orphaned forever.
+                // FirstOrDefaultAsync, not SingleOrDefaultAsync — AD-20's own rationale is "don't
+                // over-trust the DB constraint alone"; a genuine (PowerPointId, IntervalStart)
+                // uniqueness violation must fall through to the historical "unrelated failure,
+                // rethrow" path below rather than crash this fallback with an unhandled
+                // InvalidOperationException.
+                var conflictingReading = await dbContext.SmartPlugReadings.AsNoTracking()
+                    .Where(r => r.PowerPointId == powerPointId && r.IntervalStart == reading.IntervalStart)
+                    .Select(r => new { r.DeviceName, r.KwhValue, r.IntervalEnd })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (conflictingReading is null)
                 {
                     reading.PowerPointId = previousPowerPointId;
                     throw;
                 }
 
-                logger.LogWarning(
-                    "Skipped mapping SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) to PowerPointId={PowerPointId}: " +
-                    "a reading already exists at IntervalStart={IntervalStart:O} for that Power Point (unique-constraint conflict, " +
-                    "possibly a DST fall-back duplicate local timestamp).",
-                    reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
+                // AC #1: an exact duplicate — same DeviceName/KwhValue/IntervalEnd as the
+                // already-mapped reading (HouseholdId equality is implicit: both rows are read
+                // through this same request-scoped DbContext, so AD-3's global query filter
+                // already scopes both to the current household) — is dead data now that the
+                // mapped row is authoritative; delete it instead of leaving it behind with
+                // PowerPointId still NULL forever (Story 3.4 Dev Notes Open Question #4's AD-20
+                // gap, confirmed live in production at 179,324-row scale — see this story's
+                // Context). DeviceName must be part of the match: a Power Point can receive
+                // manually-mapped readings from more than one distinct SmartPlugImport/device
+                // over time (MapSmartPlugImportToPowerPoint imposes no device-identity
+                // constraint), so two different devices' readings could otherwise coincide on
+                // IntervalStart/KwhValue/IntervalEnd without actually being the same duplicate.
+                // Set-based, same idiom as the ExecuteUpdateAsync fast path above; `reading` is
+                // already detached so this can't be done via the change tracker.
+                if (conflictingReading.DeviceName == reading.DeviceName
+                    && conflictingReading.KwhValue == reading.KwhValue
+                    && conflictingReading.IntervalEnd == reading.IntervalEnd)
+                {
+                    var deletedCount = await dbContext.SmartPlugReadings
+                        .Where(r => r.Id == reading.Id)
+                        .ExecuteDeleteAsync(cancellationToken);
+
+                    // deletedCount can be 0 if a concurrent operation already removed this exact
+                    // row between the conflict-confirmation read above and this delete — don't
+                    // claim a deletion that didn't happen.
+                    if (deletedCount > 0)
+                    {
+                        logger.LogWarning(
+                            "Deleted duplicate SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) instead of mapping it to " +
+                            "PowerPointId={PowerPointId}: an already-mapped reading with identical DeviceName/KwhValue/IntervalEnd already " +
+                            "exists at IntervalStart={IntervalStart:O} for that Power Point.",
+                            reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) was already removed by the time its " +
+                            "duplicate-mapping conflict against PowerPointId={PowerPointId} at IntervalStart={IntervalStart:O} was resolved " +
+                            "— no delete was needed.",
+                            reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
+                    }
+                }
+                else
+                {
+                    // AC #2: genuinely divergent data at the same key (e.g. a DST fall-back
+                    // duplicate local timestamp) — never silently discard data that might
+                    // actually differ. Same tolerant behavior as before this story: leave the
+                    // reading unmapped, just log it.
+                    logger.LogWarning(
+                        "Skipped mapping SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) to PowerPointId={PowerPointId}: " +
+                        "a reading already exists at IntervalStart={IntervalStart:O} for that Power Point (unique-constraint conflict, " +
+                        "possibly a DST fall-back duplicate local timestamp).",
+                        reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
+                }
             }
         }
     }
