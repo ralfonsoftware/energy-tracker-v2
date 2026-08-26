@@ -34,6 +34,21 @@
   (\"log your first reading to get started\") rather than blank space or a
   default Status value."
 
+  ---- IMPORT ENTRY BUTTON (added 2026-08-26, FR-4 amendment) ----
+  Smart Plug Import's upload entry point moved off Settings onto both the
+  Dashboard and Trend History screens (one shared upload flow, two entry
+  points -- see key-smart-plug-import.html for the destination screen).
+  Rendered here as a compact `.import-btn` icon-only button in the topbar,
+  next to the date -- confirmed with Ralf as a compact icon button (density
+  preference: icon rows over text pills) rather than a text link or a
+  second button paired with "+ Log reading". It deliberately reuses the
+  nav-chrome active-state tokens ({components.nav-chrome.active-bg} /
+  {-active-foreground} and their -dark pairs) rather than inventing a new
+  token: this is chrome/an interactive trigger, not a Status signal, the
+  same reasoning that already justifies brand-accent on the primary button
+  and active nav item. 40x40 tap target, matching the icon-btn convention
+  already established in key-settings.html's a11y-fixed row actions.
+
   ---- NAV CHROME TOKENS (new in this file; not yet rendered elsewhere) ----
   DESIGN.md's Components -> Nav chrome names {components.nav-chrome.active-bg}
   / {-active-foreground} abstractly but no concrete hex had been rendered
@@ -111,6 +126,9 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 .mark { width: 20px; height: 20px; border-radius: 8px; }
 .wordmark { font-size: 14px; font-weight: 700; letter-spacing: 0.2px; }
 .date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.import-btn { width: 40px; height: 40px; border-radius: 12px; border: none; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.import-btn svg { width: 17px; height: 17px; }
 
 /* ---------- Status card ---------- */
 .panel-stack { position: relative; margin-bottom: 18px; }
@@ -177,6 +195,8 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 .theme.dark .nav-item svg { stroke: rgba(234,245,238,0.58); }
 .theme.dark .nav-item.active { background: rgba(47,179,151,0.16); color: #6FD1B1; }
 .theme.dark .nav-item.active svg { stroke: #6FD1B1; }
+.theme.dark .import-btn { background: rgba(47,179,151,0.16); }
+.theme.dark .import-btn svg { stroke: #6FD1B1; }
 .theme.dark .empty-icon { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.14); }
 .theme.dark .empty-icon svg { stroke: #9FBB8A; }
 .theme.dark .empty-title { color: #F3FBF5; }
@@ -210,6 +230,8 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 .theme.light .nav-item svg { stroke: rgba(30,42,28,0.66); }
 .theme.light .nav-item.active { background: rgba(30,122,97,0.14); color: #1E7A61; }
 .theme.light .nav-item.active svg { stroke: #1E7A61; }
+.theme.light .import-btn { background: rgba(30,122,97,0.14); }
+.theme.light .import-btn svg { stroke: #1E7A61; }
 .theme.light .empty-icon { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.12); }
 .theme.light .empty-icon svg { stroke: #6B8656; }
 .theme.light .empty-title { color: #16210F; }
@@ -225,6 +247,8 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
     (<code>FR-15</code> gate closed here — nothing due), the primary Log Reading trigger, and the bottom tab
     bar nav chrome (<code>Dashboard</code> active, brand-accent-tinted per <code>DESIGN.md</code>). The
     second frame in each theme is <code>FR-7</code>'s first-run empty state — no computable Status yet.
+    Topbar also carries the new Smart Plug Import entry icon (<code>FR-4</code> amendment, 2026-08-26) —
+    see <a href="key-smart-plug-import.html">key-smart-plug-import.html</a> for the destination screen.
   </p>
   <div class="theme-row">
 
@@ -239,7 +263,10 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
               <div class="screen-content">
                 <div class="topbar">
                   <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
-                  <span class="date">Sun, Aug 16</span>
+                  <div class="topbar-right">
+                    <button class="import-btn" title="Import Smart Plug data" aria-label="Import Smart Plug data"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></button>
+                    <span class="date">Sun, Aug 16</span>
+                  </div>
                 </div>
                 <div class="panel-stack">
                   <div class="panel-back"></div>
@@ -270,7 +297,10 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
               <div class="screen-content">
                 <div class="topbar">
                   <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
-                  <span class="date">Sun, Aug 16</span>
+                  <div class="topbar-right">
+                    <button class="import-btn" title="Import Smart Plug data" aria-label="Import Smart Plug data"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></button>
+                    <span class="date">Sun, Aug 16</span>
+                  </div>
                 </div>
                 <div class="empty-wrap">
                   <div class="empty-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg></div>
@@ -303,7 +333,10 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
               <div class="screen-content">
                 <div class="topbar">
                   <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
-                  <span class="date">Sun, Aug 16</span>
+                  <div class="topbar-right">
+                    <button class="import-btn" title="Import Smart Plug data" aria-label="Import Smart Plug data"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></button>
+                    <span class="date">Sun, Aug 16</span>
+                  </div>
                 </div>
                 <div class="panel-stack">
                   <div class="panel-back"></div>
@@ -334,7 +367,10 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
               <div class="screen-content">
                 <div class="topbar">
                   <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
-                  <span class="date">Sun, Aug 16</span>
+                  <div class="topbar-right">
+                    <button class="import-btn" title="Import Smart Plug data" aria-label="Import Smart Plug data"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></button>
+                    <span class="date">Sun, Aug 16</span>
+                  </div>
                 </div>
                 <div class="empty-wrap">
                   <div class="empty-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg></div>

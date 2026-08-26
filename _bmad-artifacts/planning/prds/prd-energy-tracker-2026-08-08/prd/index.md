@@ -6,7 +6,7 @@
   - [title: Energy Tracker v2 PRD
 status: final
 created: 2026-08-08
-updated: 2026-08-23](#title-energy-tracker-v2-prd-status-final-created-2026-08-08-updated-2026-08-23)
+updated: 2026-08-26](#title-energy-tracker-v2-prd-status-final-created-2026-08-08-updated-2026-08-26)
   - [0. Document Purpose](./0-document-purpose.md)
   - [1. Vision](./1-vision.md)
   - [2. Target User](./2-target-user.md)
@@ -28,6 +28,7 @@ updated: 2026-08-23](#title-energy-tracker-v2-prd-status-final-created-2026-08-0
       - [FR-31: Meter Reading History View](./4-features.md#fr-31-meter-reading-history-view)
       - [FR-9: Per-Plug Measured Data View](./4-features.md#fr-9-per-plug-measured-data-view)
       - [FR-24: Smart-Plug Import Gap Handling](./4-features.md#fr-24-smart-plug-import-gap-handling)
+      - [FR-32: Smart Plug Import Job Status & History](./4-features.md#fr-32-smart-plug-import-job-status-history)
       - [FR-25: Meter Reading Regression Detection](./4-features.md#fr-25-meter-reading-regression-detection)
     - [4.2 Tariff Savings Radar](./4-features.md#42-tariff-savings-radar)
       - [FR-10: Tariff Configuration](./4-features.md#fr-10-tariff-configuration)

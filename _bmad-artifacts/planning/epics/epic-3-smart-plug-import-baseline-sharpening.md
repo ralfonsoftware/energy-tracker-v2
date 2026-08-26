@@ -2,10 +2,10 @@
 
 Adds Smart Plug data (Eve Home `.xlsx`, Meross `.csv`) as an optional, additive signal that sharpens the Status Epic 2 already delivers — async import with completion notification, gap-tolerant parsing that never fabricates measured data. Builds on Epic 2's Status but never blocks it.
 
-**FRs covered:** FR-4, FR-5, FR-24
+**FRs covered:** FR-4 (amended 2026-08-26), FR-5, FR-24, FR-32 (added 2026-08-26)
 **NFRs:** NFR1 (Tier 3 async), NFR10 (no-silent-duplication on repeated writes)
-**Architecture:** AD-6, AD-9, AD-10, AD-20
-**UX-DRs:** UX-DR6 (gap-band reuse), UX-DR12 (Smart Plug Import surface), UX-DR14 (import empty/edge states)
+**Architecture:** AD-6 (extended 2026-08-26 — `BackgroundJobStatus.Queued`, lazy read-triggered retention sweep), AD-9, AD-10, AD-20
+**UX-DRs:** UX-DR6 (gap-band reuse), UX-DR9 (amended — Smart Plug Import off the nav-adjacent Settings path), UX-DR12 (amended — dual icon entry points, one shared screen), UX-DR14 (extended — six Job Status states + empty state), UX-DR20 (entry icon button + multi-file queue), UX-DR21 (Job Status & History list), UX-DR22 (accessibility follow-up)
 
 ## Story 3.1: Smart Plug File Upload & Async Parsing
 
@@ -155,3 +155,75 @@ So that re-uploading an export with overlapping history doesn't reprocess (or du
 - If duplicate rows within a group disagree on `KwhValue` (unexpected under the "same source data" assumption, but not provably impossible if Eve revises a not-yet-settled value between exports), the "most recent import wins" tie-break above also decides which `KwhValue` survives — flagged as an assumption to confirm against real duplicate data once this pass is actually run, not something to guess further at design time.
 - The uniqueness-guard AC is deliberately DB-level, not just the watermark filter, because the watermark alone doesn't protect the AwaitingPowerPointMapping → later-mapped path (readings are persisted before a Power Point is known) or Meross's unordered-file case from ever producing an exact-timestamp duplicate.
 - Deferred-work entry from story-3.2's review ("`ListReadingsByImportIdAsync`/`UpdateMappingAsync` load and update an import's full reading set unpaged") is related but distinct — that's about the *mapping* path's row volume, not the *parse* path this story targets; worth revisiting together since both stem from the same "Eve exports are unbounded and grow forever" root cause.
+
+## Story 3.5: Dual Entry Points & Multi-File Import Queuing
+
+As a Household member,
+I want to start a Smart Plug import from wherever I already am — Dashboard or Trend History — and queue several files at once,
+So that I don't have to detour through Settings, and uploading a batch of exports doesn't mean waiting for each one before starting the next.
+
+**Acceptance Criteria:**
+
+**Given** the Dashboard or Trend History screen
+**When** rendered
+**Then** a Smart Plug Import entry point (icon button) is visible on both, and Settings no longer hosts a separate upload entry (FR-4 amendment, UX-DR20)
+
+**Given** either entry point is tapped
+**When** the screen opens
+**Then** it is the same shared Smart Plug Import screen regardless of which one was tapped — not two different screens or routes (FR-4, UX-DR12)
+
+**Given** the file picker/dropzone
+**When** a Household member selects or drops multiple files in one action
+**Then** each file is enqueued as its own independent `BackgroundJob`/`SmartPlugImport` job immediately, not queued to be enqueued sequentially after the previous one finishes (FR-4)
+
+**Given** several files enqueued in one action
+**When** one file fails to parse or needs Power Point mapping
+**Then** the other files' processing is unaffected — one file's outcome never blocks or cancels another's (FR-4)
+
+**Given** a newly enqueued job
+**When** the queue is rendered
+**Then** it appears immediately with a Waiting or Processing indicator — the UI reflects queue state without waiting for any file to complete (FR-4, AD-6)
+
+**Given** the existing single-file async behavior from Story 3.1
+**When** multiple files are involved
+**Then** each file's async lifecycle (upload confirms immediately, parsing runs in background, completion polled via `GET /api/jobs/{id}`) is unchanged per file — this story only adds starting several at once, not a new processing model (AD-6)
+
+## Story 3.6: Smart Plug Import Job Status & History
+
+As a Household member,
+I want to see the status of every Smart Plug import my household has ever run — not just the one I'm watching finish — in six clearly distinct states,
+So that I can find and resolve one that needs my attention without having to remember who uploaded what.
+
+**Acceptance Criteria:**
+
+**Given** any Household member
+**When** they open the Smart Plug Import screen
+**Then** they see every import job queued by any member of their Household, not only their own (FR-32, AD-3 tenant isolation still scopes this to one Household, never cross-Household)
+
+**Given** a job's lifecycle
+**When** rendered in the list
+**Then** it shows exactly one of six states — Waiting, Processing, Success, Error, Needs Mapping, Flagged for Review — never folded into one another or a generic pending/done (FR-32, UX-DR21)
+
+**Given** a job enqueued but not yet dequeued (e.g. a cold start, or a later file in a multi-file queue)
+**When** the list is read
+**Then** it shows as Waiting — backed by a new `BackgroundJobStatus.Queued` value and a `BackgroundJob` row created at enqueue time, not only once dequeued (AD-6 extension)
+
+**Given** a job in Needs Mapping (Story 3.2's create-or-map condition)
+**When** a Household member selects that row
+**Then** it opens directly into that import's create-or-map-Power-Point prompt — the household never has to relocate the original upload to resolve it (FR-32)
+
+**Given** a job in Flagged for Review (Story 3.3's entirely-Gaps condition)
+**When** rendered
+**Then** it is visually and semantically distinct from Error — the file parsed without failure, it simply had nothing usable (FR-32, UX-DR21)
+
+**Given** a job that reached Success, Error, or Flagged for Review
+**When** 30 days have elapsed since its completion
+**Then** its job/audit record is removed the next time the list is read — a lazy, read-triggered sweep piggybacked on the list query, never an `IHostedService`/`Timer`-based schedule (AD-7) — and the `SmartPlugReading` data that job already wrote is never touched (AD-6 extension, AD-20)
+
+**Given** Waiting, Processing, or Needs Mapping jobs
+**When** 30 days elapse
+**Then** they are never auto-removed — only completed/resolved/failed states are subject to cleanup (FR-32)
+
+**Given** a Household with no Smart Plug import activity in the last 30 days
+**When** the screen is opened
+**Then** it shows an empty state, not an error or blank space (FR-32, UX-DR21)

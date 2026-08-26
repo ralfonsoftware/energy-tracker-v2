@@ -82,7 +82,14 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 .screen { border-radius: 14px; padding: 24px 24px 28px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .crumb { font-size: 12px; text-decoration: none; }
-.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 18px; }
+.page-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; }
+.import-btn { width: 40px; height: 40px; border-radius: 12px; border: none; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.import-btn svg { width: 17px; height: 17px; }
+.theme.dark .import-btn { background: rgba(47,179,151,0.16); }
+.theme.dark .import-btn svg { stroke: #6FD1B1; }
+.theme.light .import-btn { background: rgba(30,122,97,0.14); }
+.theme.light .import-btn svg { stroke: #1E7A61; }
 
 /* ---------- shared glass card ---------- */
 .card { border-radius: 18px; padding: 18px 18px 16px; margin-bottom: 14px; }
@@ -271,6 +278,9 @@ body.page-light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%);
     <code>Story 4.1</code> / <code>Story 4.3</code> — the one open UX question from the Epic 3
     Retro's Significant Discovery: where Story 2.8's Meter Reading list/edit surface lands once
     it's folded into Trend History instead of staying a standalone page.
+    Page title also carries the new Smart Plug Import entry icon (<code>FR-4</code> amendment,
+    2026-08-26) — the second of the two entry points, opening the same shared screen as the
+    Dashboard's. See <a href="key-smart-plug-import.html">key-smart-plug-import.html</a>.
   </p>
   <div class="decision-note dark">
     <strong>Placement:</strong> a third card, "Meter Readings," sits between the trend chart and
@@ -290,7 +300,10 @@ body.page-light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%);
         <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
         <div class="screen">
           <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
-          <div class="page-title">Trend History</div>
+          <div class="page-title-row">
+            <div class="page-title">Trend History</div>
+            <button class="import-btn" title="Import Smart Plug data" aria-label="Import Smart Plug data"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></button>
+          </div>
 
           <div class="card">
             <h3>Pace vs. yearly baseline</h3>
@@ -376,7 +389,10 @@ body.page-light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%);
         <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
         <div class="screen">
           <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
-          <div class="page-title">Trend History</div>
+          <div class="page-title-row">
+            <div class="page-title">Trend History</div>
+            <button class="import-btn" title="Import Smart Plug data" aria-label="Import Smart Plug data"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></button>
+          </div>
 
           <div class="card">
             <h3>Pace vs. yearly baseline</h3>

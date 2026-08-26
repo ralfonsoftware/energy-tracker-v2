@@ -9,8 +9,8 @@ The product's non-negotiable core loop: a Household member logs a Meter Reading 
 **FRs covered:** FR-1, FR-2, FR-3, FR-6, FR-7, FR-25, FR-28 (extension — re-parenting only; FR-28's core CRUD remains Epic 1), FR-30 (added post-Epic-2-retro 2026-08-18, extending Story 2.5's Status card), FR-31 (added 2026-08-23, dedicated Meter Reading history/browse surface — Story 2.8, shipped as a standalone page then absorbed into Epic 4's Story 4.1 per the Epic 3 retro 2026-08-23 — see Epic 4 below)
 
 ## Epic 3: Smart Plug Import & Baseline Sharpening
-Adds Smart Plug data (Eve Home `.xlsx`, Meross `.csv`) as an optional, additive signal that sharpens the Status Epic 2 already delivers — async import with completion notification, gap-tolerant parsing that never fabricates measured data. Builds on Epic 2's Status but never blocks it.
-**FRs covered:** FR-4, FR-5, FR-24
+Adds Smart Plug data (Eve Home `.xlsx`, Meross `.csv`) as an optional, additive signal that sharpens the Status Epic 2 already delivers — async import with completion notification, gap-tolerant parsing that never fabricates measured data. Builds on Epic 2's Status but never blocks it. Extended 2026-08-26 with dual entry points (Dashboard + Trend History, off Settings), multi-file queuing, and a household-wide Job Status & History view (FR-32) covering every import's lifecycle, not just the one currently running.
+**FRs covered:** FR-4 (amended), FR-5, FR-24, FR-32 (added)
 
 ## Epic 4: Trend History & Per-Plug Insight
 The calm-evening drill-down surface (UJ-3): browse Status/pace trend over time and per-device measured context organized by Room → Power Point → Device — explicitly framed as context, never a reconciled breakdown of the Main Meter total. Builds on Epics 2 and 3's data. Story 4.1 also absorbs Story 2.8's browsable/editable Meter Reading list (FR-31), consolidated here rather than left as Epic 2's separate standalone page — see the Epic 3 retro (2026-08-23) and the epic's own file for the full rationale.

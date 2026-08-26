@@ -41,6 +41,8 @@ A Household member can upload a Smart Plug export file (Eve Home `.xlsx`, Meross
 - An import tagged to a Power Point that doesn't yet exist prompts creation/mapping rather than silently failing.
 - Eve Home timestamps are interpreted as local time, not converted to UTC on import — avoids corrupting interval data at midnight boundaries.
 - Meross exports are matched to a Device/Power Point via the export filename pattern, not by trusting in-file metadata alone.
+- The upload entry point is surfaced on both the Dashboard and Trend History screens, not nested inside Settings — one shared upload flow, two discoverable entry points.
+- The upload UI accepts multiple files in a single action; each file queues and processes as its own independent async job — FR-4's async/completion-notification behavior applies per file, not per batch.
 
 *(Exact file schema — sheet names, cell references, column layout per source — is implementation detail; see `addendum.md` for the reference mapping carried over from v1.)*
 
@@ -118,6 +120,19 @@ The system detects gaps within an imported Smart Plug file's covered date range 
 - Gap values used to sharpen the baseline (FR-5) are bounded — e.g. capped at the average of the preceding week — and visibly flagged as interpolated, never presented as measured data.
 - A Gap at the very start of a household's first-ever import (no preceding week to average) is left unfilled and flagged as missing, not interpolated from nothing.
 - An import file whose data is entirely Gaps is flagged for review rather than wholesale-interpolated.
+
+### FR-32: Smart Plug Import Job Status & History
+
+A Household member can view the status of all Smart Plug import jobs — queued, processing, succeeded, failed, needs mapping, or flagged for review — at any time, independent of whether an import is currently running.
+
+**Consequences (testable):**
+- The list is Household-wide: any Household member sees every import job, not just the ones they personally queued.
+- Six states are shown: *Waiting*, *Processing*, *Success*, *Error*, *Needs Mapping*, and *Flagged for Review* — each a distinct, visible bucket, never folded into one another.
+- *Needs Mapping* surfaces FR-4's create-or-map-Power-Point prompt; selecting an entry in this state opens directly into that import's mapping prompt — the household doesn't have to relocate the original upload to resolve it.
+- *Flagged for Review* surfaces FR-24's entirely-Gaps case (an import file whose data is entirely Gaps) as its own distinct state, not lumped into *Error* — the file parsed without failure, it simply had nothing usable in it, which is a different situation than a parse/system failure.
+- A completed job's record (*Success*, *Error*, or *Flagged for Review*, including any error detail) is automatically removed 30 days after completion — the household never has to manually clean up import history.
+- That 30-day removal deletes only the job/audit entry (status, timestamps, error text) — it never deletes the `SmartPlugReading` data the job already wrote. Measured data already imported is permanent, consistent with the rest of the product never silently discarding recorded data.
+- A Household with no import activity in the last 30 days shows an empty state, not an error.
 
 ### FR-25: Meter Reading Regression Detection
 

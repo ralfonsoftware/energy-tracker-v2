@@ -7,3 +7,5 @@
 - §4.2 FR-15: 3-month default Tariff Check Reminder cadence (user-editable). *Confirmed.*
 - §Constraints: AI-assisted Wattage Plausibility (FR-17) is optional/gracefully-degradable across the whole product, not a hard dependency. *Confirmed.*
 - §4.6 FR-29: added directly to `epics/requirements-inventory.md` ahead of this PRD (2026-08-22 implementation-readiness check caught the drift) and scheduled as Story 1.10, extending Story 1.9's structure editor in Epic 1. *Confirmed, backfilled into this PRD the same day.*
+- §4.1 FR-4: import entry point moves to both Dashboard and Trend History (not Settings); upload UI queues multiple files per action, each its own async job. *Confirmed with Ralf.*
+- §4.1 FR-32: new Import Job Status & History view is Household-wide (not per-user-session); 30-day auto-delete removes only the job/audit record, never the imported `SmartPlugReading` data; *Needs Mapping* and *Flagged for Review* (Story 3.3's all-Gaps case) are each first-class statuses alongside Waiting/Processing/Success/Error — six states total, none folded into another. *Confirmed with Ralf.*

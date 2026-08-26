@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Key Screen — Smart Plug Import (Green Eco, Dark)</title>
+<title>Key Screen — Smart Plug Import + Job Status &amp; History (Green Eco, Dark)</title>
 <style>
 /*
   KEY SCREEN — SMART PLUG IMPORT (FR-4, FR-24)
@@ -59,9 +59,79 @@
   Dark mode only in this file — Light was validated separately this
   session (direction-green-eco.html, motion-demo.html,
   density-trend-history.html are all dark-only precedent for these
-  isolated component studies). Settings-area flow, kept in the same
-  phone-frame width as the other key screens for consistency (this
-  product is mobile-first end to end, not just for meter-side entry).
+  isolated component studies). Kept in the same phone-frame width as the
+  other key screens for consistency (this product is mobile-first end to
+  end, not just for meter-side entry).
+
+  ---- ENRICHMENT ADDED 2026-08-26 (FR-4 amendment + new FR-32) ----
+  Confirmed with Ralf (see .memlog.md): (1) the upload entry point moves
+  OFF Settings onto icon buttons on both Dashboard and Trend History (see
+  key-dashboard.html / key-trend-history.html) — both open this SAME
+  screen, one shared upload flow, two entry points; existing frames' crumb
+  changed from "← Settings" to "← Back" to reflect that the screen no
+  longer lives inside Settings. (2) Frame 1 below now previews the
+  household-wide job list inline (a "Recent imports" strip) instead of an
+  unrelated Settings-rows list, to show the upload area and the FR-32
+  history list coexisting on the one combined screen, per Ralf's
+  confirmed screen-structure call. (3) New Frame 6 renders FR-4's
+  multi-file queuing (several files selected in one action, each an
+  independent async job, queue reflects immediately). (4) New Frame 7
+  renders FR-32's full six-state catalog (Waiting / Processing / Success /
+  Error / Needs Mapping / Flagged for Review) as the actual household-wide
+  list, each row showing which household member queued it (FR-32:
+  visible to any member, not just whoever queued it). (5) New Frame 8
+  renders FR-32's required empty state (no import activity in 30 days —
+  never an error).
+
+  Six-state color/token mapping (Frame 7), reasoned from DESIGN.md's
+  existing discipline rather than invented fresh:
+    - Waiting    -> neutral/quiet (nothing has started; no chrome, no status)
+    - Processing -> {colors.brand-accent} (reused verbatim from the existing
+                    .processing-pill above — this is job-processing chrome,
+                    not a Pattern Detective Status, same reasoning already
+                    documented on that component)
+    - Success    -> neutral glass checkmark (reused verbatim from the
+                    existing .complete-check above, same reasoning)
+    - Error      -> `destructive` (shadcn default, red) — the FIRST concrete
+                    use of the reserved error-red anywhere in this product
+                    (Colors: "red — reserved exclusively for genuine system
+                    errors"). A failed parse/system error is exactly that
+                    reservation's intended case, unlike Needs Mapping or
+                    Flagged for Review below, which are both expected,
+                    non-error outcomes and must NOT use this color.
+    - Needs Mapping -> {colors.brand-accent}, same token as Processing but an
+                    actionable/tappable row (chevron, opens Story 3.2's
+                    create-or-map prompt directly) — brand-accent because
+                    it's an interactive trigger the household acts on, not
+                    because it's "good news"; consistent with brand-accent's
+                    documented use for "chrome and interactive elements."
+    - Flagged for Review -> the existing amber .gap-badge / gap-band
+                    vocabulary (confirmed with Ralf — reuse, not a new
+                    color), which already carries the exact "uncertain,
+                    not alarming" meaning FR-32 asks for. Its icon was
+                    changed from Frame 5's alert-triangle (a conventional
+                    "danger/warning" glyph, at odds with "not alarming")
+                    to a plain flag glyph in both Frame 5 and the new list —
+                    same amber color, less alarming shape. Auditing this
+                    reuse turned up that .gap-badge's own bg alpha (0.18)
+                    only cleared ~4.47:1 — a pre-existing borderline AA
+                    failure in a component this file had already shipped —
+                    so it was corrected to 0.12 (~5.0:1) here for both the
+                    original .gap-badge and this new .job-badge.flagged,
+                    not left as a newly-discovered but unfixed issue.
+  Error red was not previously rendered anywhere in this design system
+  (colors.md left it un-derived, shadcn default only). Resolved here as
+  #FCA5A5 @ 12% bg (dark, ~5.6:1) / #B91C1C @ 10% bg (light, ~5.4:1) —
+  standard Tailwind red-300/red-700, chosen (after computing actual
+  composited contrast, not guessing) because both clear 4.5:1 at
+  badge-text size against this file's real composited card tints, not for
+  any brand-specific reason. An initial pass tried red-400/red-600
+  (#F87171/#DC2626) but measured only ~4.0:1 dark / ~3.9:1 light — both
+  fail AA — so the darker/lighter pair above replaced them before this was
+  called final. This is the first concrete usage of destructive red in
+  the product; the light-mode value in particular is still un-rendered in
+  this dark-only file, so it's flagged [ASSUMPTION] pending a light-frame
+  render, same as any other net-new token introduced in a key-screen mock.
 */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -219,7 +289,7 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 .gap-badge {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase;
   color: #E2A542; /* {colors.status-trending-dark} */
-  background: rgba(226,165,66,0.18);
+  background: rgba(226,165,66,0.12); /* a11y fix 2026-08-26: was 0.18 (~4.47:1, fails AA at badge-text size); corrected to 5.0:1 */
   padding: 4px 10px; border-radius: 999px;
 }
 .gap-range { font-size: 13px; font-weight: 700; color: #EAF5EE; }
@@ -284,6 +354,51 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 .review-sub { font-size: 12px; color: rgba(234,245,238,0.5); margin-top: 1px; }
 .outline-btn { display: block; text-align: center; font-family: inherit; font-size: 13px; font-weight: 700; color: rgba(234,245,238,0.8); background: transparent; border: 1px solid rgba(210,235,220,0.2); border-radius: 999px; padding: 12px 16px; margin-top: 4px; }
 
+/* ---------- Job Status & History list (FR-32, added 2026-08-26) ----------
+   Six states, never folded into one another (PRD FR-32). Token mapping is
+   explained in full in the file-level comment at the top of this file. */
+.job-list { border-radius: 18px; overflow: hidden; }
+.job-row { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid rgba(210,235,220,0.08); }
+.job-row:last-child { border-bottom: none; }
+.job-row.tappable { cursor: pointer; }
+/* a11y note 2026-08-26 (dev handoff, not fixable in a static mock): Needs Mapping
+   and Flagged for Review rows must render as a native <button> or <a> with an
+   accessible name (e.g. "Map Office Desk import" / "Review Aug 1-9 flagged
+   import"), not a bare div with a click handler — same convention as the
+   .backdrop-dim/inert note above for the modal. */
+.job-icon { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(220,245,230,0.08); border: 1px solid rgba(210,235,220,0.14); }
+.job-icon svg { width: 16px; height: 16px; }
+.job-meta { flex: 1 1 auto; min-width: 0; }
+.job-name { font-size: 12.5px; font-weight: 700; color: #EAF5EE; overflow-wrap: anywhere; }
+.job-sub { font-size: 11px; color: rgba(234,245,238,0.42); margin-top: 2px; }
+.job-badge { flex: 0 0 auto; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.job-chevron { flex: 0 0 auto; color: rgba(234,245,238,0.32); font-size: 13px; }
+.job-badge.waiting { color: rgba(234,245,238,0.6); background: rgba(220,245,230,0.08); }
+.job-icon.waiting svg { stroke: rgba(234,245,238,0.5); }
+.job-badge.processing { color: #8FE9CE; background: rgba(47,179,151,0.16); } /* {colors.brand-accent} — reused verbatim from .processing-pill */
+.job-icon.processing svg { stroke: #8FE9CE; }
+.job-badge.success { color: #EAF5EE; background: rgba(220,245,230,0.14); } /* neutral — reused verbatim from .complete-check, no status/brand color */
+.job-icon.success svg { stroke: #EAF5EE; }
+.job-badge.error { color: #FCA5A5; background: rgba(252,165,165,0.12); } /* `destructive` — first concrete use of reserved error-red in this product; verified 5.6:1, see file-header comment */
+.job-icon.error svg { stroke: #FCA5A5; }
+.job-badge.needs-mapping { color: #8FE9CE; background: rgba(47,179,151,0.16); } /* {colors.brand-accent} — actionable/tappable, not "good news" */
+.job-icon.needs-mapping svg { stroke: #8FE9CE; }
+.job-badge.flagged { color: #E2A542; background: rgba(226,165,66,0.12); } /* {colors.status-trending} amber — same gap-band vocabulary as .gap-badge above, same a11y fix applied */
+.job-icon.flagged svg { stroke: #E2A542; }
+
+/* ---------- multi-file queue (FR-4 amendment, added 2026-08-26) ---------- */
+.queue-file { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(210,235,220,0.08); }
+.queue-file:last-child { border-bottom: none; }
+.queue-progress-track { height: 3px; border-radius: 3px; background: rgba(220,245,230,0.08); overflow: hidden; margin-top: 6px; }
+.queue-progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #2FB397, #6FE3C4); }
+
+/* ---------- empty state (FR-32, added 2026-08-26 — same idiom as Dashboard's FR-7 empty state) ---------- */
+.empty-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 46px 8px 34px; }
+.empty-icon { width: 52px; height: 52px; border-radius: 18px; background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.14); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.empty-icon svg { width: 22px; height: 22px; stroke: #9FBB8A; }
+.empty-title { font-size: 15px; font-weight: 700; color: #F3FBF5; margin-bottom: 6px; }
+.empty-body { font-size: 12.5px; line-height: 1.55; color: rgba(234,245,238,0.55); max-width: 240px; }
+
 /* ---------- calm motion on the processing dot only — gated per EXPERIENCE.md's
    Interaction Primitives contract; static (no pulse) under reduced motion ---------- */
 @media (prefers-reduced-motion: no-preference) {
@@ -299,26 +414,30 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
 <div class="wrap">
   <h1>Smart Plug Import — Key Screens</h1>
   <p class="intro">
-    Five states of the same flow (<code>FR-4</code>, <code>FR-24</code>, <code>Story 3.2</code>), reached
-    from Settings. State 1 shows the moment right after a file is selected — upload confirms
-    immediately, parsing runs in the background, and the rest of the screen stays fully usable. State 2
-    shows a mid-range gap with prior history to average from, handled honestly rather than silently
-    smoothed over. State 3 is the other load-bearing branch from parsing itself — the file's tag doesn't
-    match any existing Power Point, so parsing pauses to ask rather than silently dropping or misfiling
-    the data. States 4 and 5 (added this session) are FR-24's two remaining edge cases: a gap with
-    nothing preceding it to average from, and an import that's entirely gaps.
+    Eight states of the same shared screen (<code>FR-4</code>, <code>FR-24</code>, <code>FR-32</code>,
+    <code>Story 3.2</code>), now reached via icon entry points on both Dashboard and Trend History (no
+    longer nested in Settings — see <a href="key-dashboard.html">key-dashboard.html</a> /
+    <a href="key-trend-history.html">key-trend-history.html</a>). State 1 shows the moment right after a
+    file is selected — upload confirms immediately, parsing runs in the background, and a live preview of
+    the household's job history sits right below it on the same screen. State 2 shows a mid-range gap with
+    prior history to average from, handled honestly rather than silently smoothed over. State 3 is the
+    other load-bearing branch from parsing itself — the file's tag doesn't match any existing Power Point,
+    so parsing pauses to ask rather than silently dropping or misfiling the data. States 4 and 5 are FR-24's
+    two remaining edge cases: a gap with nothing preceding it to average from, and an import that's
+    entirely gaps. States 6–8 (added 2026-08-26, the FR-4 amendment + new FR-32) cover multi-file queuing,
+    the full six-state Job Status &amp; History list, and its empty state.
   </p>
 
   <div class="frames">
 
     <!-- ================= STATE 1 — canonical / in-progress ================= -->
     <div class="frame-col">
-      <div class="frame-label">1 · Uploading, non-blocking</div>
-      <div class="frame-sub">File just selected. Processing is async (Tier 3 NFR) — nothing here locks the UI.</div>
+      <div class="frame-label">1 · Uploading, non-blocking (combined screen)</div>
+      <div class="frame-sub">File just selected. Processing is async (Tier 3 NFR) — nothing here locks the UI, and the household job history lives right below it on the same screen (see Frame 7).</div>
       <div class="phone">
         <div class="screen">
           <div class="topbar">
-            <a class="crumb" href="#">← Settings</a>
+            <a class="crumb" href="#">← Back</a>
             <span class="date">Sun, Aug 9</span>
           </div>
           <div class="page-title">Smart Plug Import</div>
@@ -347,13 +466,26 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
             </p>
           </div>
 
-          <p class="list-label">Also in Settings</p>
-          <div class="settings-list card">
-            <div class="settings-row"><span>Room / Power Point / Device management</span><span class="arrow">→</span></div>
-            <div class="settings-row"><span>Yearly Baseline</span><span class="arrow">→</span></div>
-            <div class="settings-row"><span>Data export</span><span class="arrow">→</span></div>
+          <p class="list-label">Recent imports — visible to the whole household</p>
+          <div class="job-list card">
+            <div class="job-row">
+              <span class="job-icon success"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">MerossCsv-Garage-Jul2026.csv</div>
+                <div class="job-sub">Queued by Mira · 2 days ago</div>
+              </div>
+              <span class="job-badge success">Success</span>
+            </div>
+            <div class="job-row">
+              <span class="job-icon waiting"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">EveHome-OfficeDesk-Aug2026.xlsx</div>
+                <div class="job-sub">Queued by Sam · just now</div>
+              </div>
+              <span class="job-badge waiting">Waiting</span>
+            </div>
           </div>
-          <p class="footer-note">Everything above stays tappable while the import runs — it isn't waiting on it.</p>
+          <p class="footer-note">The full history — every state, every household member's imports — is one tap away (Frame 7). Nothing above blocks on the upload still running.</p>
         </div>
       </div>
     </div>
@@ -365,7 +497,7 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
       <div class="phone">
         <div class="screen">
           <div class="topbar">
-            <a class="crumb" href="#">← Settings</a>
+            <a class="crumb" href="#">← Back</a>
             <span class="date">Sun, Aug 9</span>
           </div>
           <div class="page-title">Smart Plug Import</div>
@@ -414,7 +546,7 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
         <div class="screen" style="position:relative;">
           <div class="backdrop-dim">
             <div class="topbar">
-              <a class="crumb" href="#">← Settings</a>
+              <a class="crumb" href="#">← Back</a>
               <span class="date">Sun, Aug 9</span>
             </div>
             <div class="page-title">Smart Plug Import</div>
@@ -455,7 +587,7 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
       <div class="phone">
         <div class="screen">
           <div class="topbar">
-            <a class="crumb" href="#">← Settings</a>
+            <a class="crumb" href="#">← Back</a>
             <span class="date">Sun, Aug 9</span>
           </div>
           <div class="page-title">Smart Plug Import</div>
@@ -500,13 +632,17 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
       <div class="phone">
         <div class="screen">
           <div class="topbar">
-            <a class="crumb" href="#">← Settings</a>
+            <a class="crumb" href="#">← Back</a>
             <span class="date">Sun, Aug 9</span>
           </div>
           <div class="page-title">Smart Plug Import</div>
 
           <div class="review-banner">
-            <span class="review-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></span>
+            <!-- 2026-08-26: swapped from an alert-triangle to a flag glyph — same amber
+                 "uncertain, not alarming" color, but a triangle-exclamation reads as a
+                 conventional danger/warning sign, at odds with FR-32's explicit "distinct
+                 from Error, not alarming" requirement for this exact state. -->
+            <span class="review-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h12l-3 4 3 4H6"/></svg></span>
             <div>
               <div class="review-title">Needs a look before it's used</div>
               <div class="review-sub">MerossCsv-Garage-Aug2026.csv</div>
@@ -534,6 +670,157 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 1
           </div>
 
           <span class="outline-btn">Review file details</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 6 — multi-file queue (added 2026-08-26, FR-4 amendment) ================= -->
+    <div class="frame-col">
+      <div class="frame-label">6 · Multi-file queue</div>
+      <div class="frame-sub">Three files selected in one action — each queues and processes as its own independent async job, reflected immediately, not batched.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Back</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Smart Plug Import</div>
+
+          <div class="dropzone">
+            <p class="hint">3 files selected.</p>
+            <p class="formats">Accepts Eve Home exports (.xlsx) or Meross exports (.csv).</p>
+            <span class="choose-btn">Add more files</span>
+          </div>
+
+          <div class="card">
+            <h3>Queued this action</h3>
+            <div class="queue-file">
+              <span class="file-icon">XL</span>
+              <div class="file-meta">
+                <div class="file-name">EveHome-FridgeCircuit-Aug2026.xlsx</div>
+                <div class="file-sub">384 KB · Kitchen → Fridge Circuit</div>
+                <div class="queue-progress-track"><div class="queue-progress-fill" style="width:72%"></div></div>
+              </div>
+              <span class="job-badge processing">Processing</span>
+            </div>
+            <div class="queue-file">
+              <span class="file-icon">CSV</span>
+              <div class="file-meta">
+                <div class="file-name">MerossCsv-Garage-Aug2026.csv</div>
+                <div class="file-sub">61 KB · Garage → Freezer</div>
+                <div class="queue-progress-track"><div class="queue-progress-fill" style="width:18%"></div></div>
+              </div>
+              <span class="job-badge processing">Processing</span>
+            </div>
+            <div class="queue-file">
+              <span class="file-icon">CSV</span>
+              <div class="file-meta">
+                <div class="file-name">Power Monitor Day Data - Office Desk - 20260809.csv</div>
+                <div class="file-sub">58 KB · Office Desk</div>
+                <div class="queue-progress-track"><div class="queue-progress-fill" style="width:0%"></div></div>
+              </div>
+              <span class="job-badge waiting">Waiting</span>
+            </div>
+          </div>
+
+          <p class="async-note" style="margin-top:0;">
+            Each file is its own job — <b>one failing or needing mapping never blocks the other two.</b> The third file above hasn't started yet; it's simply next in the household's queue.
+          </p>
+          <p class="footer-note">All three now appear in Job Status &amp; History (Frame 7) the instant they were queued — not once they finish.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 7 — Job Status & History, all six states (new FR-32, added 2026-08-26) ================= -->
+    <div class="frame-col">
+      <div class="frame-label">7 · Job Status &amp; History — six states</div>
+      <div class="frame-sub">Household-wide (FR-32) — every member sees every import job, not just their own. Needs Mapping is directly tappable; Flagged for Review deliberately reuses the amber "uncertain" vocabulary, not Error's red.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Back</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Import Status &amp; History</div>
+
+          <div class="job-list card">
+            <div class="job-row">
+              <span class="job-icon waiting"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">Office Desk plug data.csv</div>
+                <div class="job-sub">Queued by Sam · just now</div>
+              </div>
+              <span class="job-badge waiting">Waiting</span>
+            </div>
+            <div class="job-row">
+              <span class="job-icon processing"><span class="processing-dot" style="background:#8FE9CE;"></span></span>
+              <div class="job-meta">
+                <div class="job-name">EveHome-FridgeCircuit-Aug2026.xlsx</div>
+                <div class="job-sub">Queued by Sam · 30 sec ago</div>
+              </div>
+              <span class="job-badge processing">Processing</span>
+            </div>
+            <div class="job-row">
+              <span class="job-icon success"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">MerossCsv-Garage-Jul2026.csv</div>
+                <div class="job-sub">Queued by Mira · 2 days ago</div>
+              </div>
+              <span class="job-badge success">Success</span>
+            </div>
+            <div class="job-row">
+              <span class="job-icon error"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">Garage-BadExport.csv</div>
+                <div class="job-sub">Queued by Mira · 3 days ago · Couldn't be read as a Meross export</div>
+              </div>
+              <span class="job-badge error">Error</span>
+            </div>
+            <div class="job-row tappable">
+              <span class="job-icon needs-mapping"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 014 4c0 2-2 3-2 5H10c0-2-2-3-2-5a4 4 0 014-4zM12 21v-2M8 21h8"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">Power Monitor - Office Desk - 20260807.csv</div>
+                <div class="job-sub">Queued by Sam · 4 days ago · Tap to create or map "Office Desk"</div>
+              </div>
+              <span class="job-badge needs-mapping">Needs Mapping</span>
+              <span class="job-chevron" aria-hidden="true">→</span>
+            </div>
+            <div class="job-row tappable">
+              <span class="job-icon flagged"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h12l-3 4 3 4H6"/></svg></span>
+              <div class="job-meta">
+                <div class="job-name">MerossCsv-Garage-Aug2026.csv</div>
+                <div class="job-sub">Queued by Mira · 5 days ago · Entirely gaps, nothing usable</div>
+              </div>
+              <span class="job-badge flagged">Flagged for Review</span>
+              <span class="job-chevron" aria-hidden="true">→</span>
+            </div>
+          </div>
+
+          <p class="footer-note">Success, Error, and Flagged for Review records fade out on their own 30 days after completion — the imported data itself is never touched. Waiting, Processing, and Needs Mapping never auto-clear.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= STATE 8 — no import activity, empty state (new FR-32, added 2026-08-26) ================= -->
+    <div class="frame-col">
+      <div class="frame-label">8 · No recent activity</div>
+      <div class="frame-sub">A household with nothing to show in the last 30 days gets a quiet empty state — never an error.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <a class="crumb" href="#">← Back</a>
+            <span class="date">Sun, Aug 9</span>
+          </div>
+          <div class="page-title">Import Status &amp; History</div>
+
+          <div class="card" style="padding-bottom:0;">
+            <div class="empty-wrap">
+              <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3"/></svg></div>
+              <div class="empty-title">No imports yet</div>
+              <div class="empty-body">Nothing uploaded in the last 30 days. Import a Smart Plug export to see it appear here.</div>
+            </div>
+          </div>
+          <p class="footer-note">Same onboarding-empty discipline as the Dashboard's first-run state (FR-7) — quiet, not alarming, not a default value standing in for missing data.</p>
         </div>
       </div>
     </div>
