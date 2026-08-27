@@ -18,20 +18,41 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Perf fix (production incident 2026-08-26, SQL Server side — see the SqlServer
+            // migrations project's identically-named migration for the full incident writeup):
+            // the join below has no supporting index — IX_SmartPlugReadings_HouseholdId alone
+            // means m's candidate set is the entire household's mapped rows per unmapped row, not
+            // just the matching IntervalStart. Mirrored here for AD-2 parity even though this
+            // provider's path didn't fail in CI, since the same unindexed join would hit the same
+            // wall on a large enough self-hosted install. Temporary — dropped immediately after
+            // the DELETE, so this migration is still pure DML, no persisted schema change.
+            migrationBuilder.Sql("""
+                CREATE INDEX IF NOT EXISTS "IX_Temp_SmartPlugReadings_CleanupOrphanedDuplicates"
+                ON "SmartPlugReadings" ("HouseholdId", "IntervalStart")
+                INCLUDE ("DeviceName", "IntervalEnd", "KwhValue")
+                WHERE "PowerPointId" IS NOT NULL;
+                """);
+
             // Deletes only unmapped rows (PowerPointId IS NULL) that have an exact mapped twin —
             // same HouseholdId/DeviceName/IntervalStart/IntervalEnd/KwhValue, differing only in
             // PowerPointId/RoomName/PowerPointName/SmartPlugImportId. An unmapped row with no such
             // twin (e.g. a device tag still genuinely AwaitingPowerPointMapping) is untouched.
+            // HouseholdId/IntervalStart lead the join (matching the temp index's key order) so the
+            // optimizer seeks rather than scans.
             migrationBuilder.Sql("""
                 DELETE FROM "SmartPlugReadings" AS u
                 USING "SmartPlugReadings" AS m
                 WHERE u."PowerPointId" IS NULL
                   AND m."PowerPointId" IS NOT NULL
                   AND m."HouseholdId" = u."HouseholdId"
-                  AND m."DeviceName" = u."DeviceName"
                   AND m."IntervalStart" = u."IntervalStart"
+                  AND m."DeviceName" = u."DeviceName"
                   AND m."IntervalEnd" = u."IntervalEnd"
                   AND m."KwhValue" = u."KwhValue";
+                """);
+
+            migrationBuilder.Sql("""
+                DROP INDEX IF EXISTS "IX_Temp_SmartPlugReadings_CleanupOrphanedDuplicates";
                 """);
         }
 

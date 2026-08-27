@@ -162,7 +162,7 @@ jobs:
       # Retries with backoff: Azure SQL firewall rule changes can take up to 5 minutes to
       # propagate, so the first attempt(s) immediately after rule creation may legitimately fail.
       - name: Apply pending EF Core migrations
-        timeout-minutes: 10
+        timeout-minutes: 20
         env:
           DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
         run: |
@@ -183,8 +183,12 @@ jobs:
           # step (e.g. AddSmartPlugReadingUniqueIndex's dedup DELETE, a ROW_NUMBER()-partitioned
           # full-table scan joined to SmartPlugImports) can run well past that against Basic-tier
           # Azure SQL (5 DTU, infra/modules/database-sqlserver.bicep) — same reasoning already
-          # applied to SmartPlugImportRepository.UpdateMappingAsync's own 180s override.
-          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;User ID=etadmin;Password=\"${ESCAPED_PASSWORD}\";Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=300;"
+          # applied to SmartPlugImportRepository.UpdateMappingAsync's own 180s override. Bumped
+          # 300s -> 600s (with the step's timeout-minutes raised to match) after
+          # CleanupOrphanedUnmappedSmartPlugReadingDuplicates timed out in production at 179k-row
+          # scale even at 300s — its Up() now runs as three separate commands (temp index create,
+          # delete, temp index drop), each getting this full budget independently.
+          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;User ID=etadmin;Password=\"${ESCAPED_PASSWORD}\";Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=600;"
 
           for attempt in 1 2 3 4 5; do
             if dotnet ef database update \

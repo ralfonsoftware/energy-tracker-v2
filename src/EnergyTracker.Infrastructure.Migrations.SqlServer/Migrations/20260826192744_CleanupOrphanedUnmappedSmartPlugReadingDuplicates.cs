@@ -18,6 +18,22 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Perf fix (production incident 2026-08-26): the join below has no supporting index —
+            // IX_SmartPlugReadings_HouseholdId alone means m's candidate set is the *entire*
+            // household's mapped rows per unmapped row, not just the matching IntervalStart. At
+            // the confirmed 179,324-row production scale, that unindexed nested loop timed out
+            // both the 300s SQL command timeout and the 10-minute app-deploy.yml step timeout
+            // against Basic-tier Azure SQL (5 DTU). This temporary index narrows the per-row
+            // candidate set to an index seek; it's dropped immediately after the DELETE since it
+            // exists only to make this one-time cleanup affordable, not as a lasting index — this
+            // migration is still pure DML, no persisted schema change.
+            migrationBuilder.Sql("""
+                CREATE NONCLUSTERED INDEX [IX_Temp_SmartPlugReadings_CleanupOrphanedDuplicates]
+                ON [SmartPlugReadings] ([HouseholdId], [IntervalStart])
+                INCLUDE ([DeviceName], [IntervalEnd], [KwhValue])
+                WHERE [PowerPointId] IS NOT NULL;
+                """);
+
             // Deletes only unmapped rows (PowerPointId IS NULL) that have an exact mapped twin —
             // same HouseholdId/DeviceName/IntervalStart/IntervalEnd/KwhValue, differing only in
             // PowerPointId/RoomName/PowerPointName/SmartPlugImportId. An unmapped row with no such
@@ -28,17 +44,24 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
             // different set of rows than the identically-worded Postgres migration for
             // case-varying DeviceName data. The varbinary cast forces byte-exact comparison on
             // both engines without depending on knowing this server's configured collation name.
+            // HouseholdId/IntervalStart lead the join (matching the temp index's key order) so the
+            // optimizer seeks rather than scans; DeviceName/IntervalEnd/KwhValue are residual
+            // filters served straight from the index's INCLUDE columns.
             migrationBuilder.Sql("""
                 DELETE u
                 FROM [SmartPlugReadings] u
                 JOIN [SmartPlugReadings] m
                   ON m.[HouseholdId] = u.[HouseholdId]
-                  AND CAST(m.[DeviceName] AS varbinary(900)) = CAST(u.[DeviceName] AS varbinary(900))
                   AND m.[IntervalStart] = u.[IntervalStart]
+                  AND CAST(m.[DeviceName] AS varbinary(900)) = CAST(u.[DeviceName] AS varbinary(900))
                   AND m.[IntervalEnd] = u.[IntervalEnd]
                   AND m.[KwhValue] = u.[KwhValue]
                 WHERE u.[PowerPointId] IS NULL
                   AND m.[PowerPointId] IS NOT NULL;
+                """);
+
+            migrationBuilder.Sql("""
+                DROP INDEX [IX_Temp_SmartPlugReadings_CleanupOrphanedDuplicates] ON [SmartPlugReadings];
                 """);
         }
 
