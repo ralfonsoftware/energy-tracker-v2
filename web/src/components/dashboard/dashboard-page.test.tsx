@@ -42,6 +42,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -63,6 +64,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -83,6 +85,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -104,6 +107,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -126,6 +130,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={onSettingsClick}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -151,6 +156,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={onHistoryClick}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -169,12 +175,39 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={onHistoryClick}
+        onSmartPlugImportClick={noop}
       />,
     )
 
     const trigger = await screen.findByRole('button', { name: 'View reading history' })
     await user.click(trigger)
     expect(onHistoryClick).toHaveBeenCalledOnce()
+  })
+
+  it('renders the Smart Plug Import entry point in the topbar and calls onSmartPlugImportClick when tapped (Story 3.5)', async () => {
+    const user = userEvent.setup()
+    const onSmartPlugImportClick = vi.fn()
+    render(
+      <DashboardPage
+        household={household}
+        status={null}
+        statusLoading={false}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onHistoryClick={noop}
+        onSmartPlugImportClick={onSmartPlugImportClick}
+      />,
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Import Smart Plug data' })
+    expect(trigger).toBeInTheDocument()
+    await user.click(trigger)
+    expect(onSmartPlugImportClick).toHaveBeenCalledOnce()
   })
 
   it('does not render the invite-generation panel — relocated to Settings so it never competes with the Status card for visual weight (AC #10)', () => {
@@ -192,6 +225,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -233,6 +267,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -252,6 +287,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -293,6 +329,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -313,6 +350,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 
@@ -332,6 +370,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onHistoryClick={noop}
+        onSmartPlugImportClick={noop}
       />,
     )
 

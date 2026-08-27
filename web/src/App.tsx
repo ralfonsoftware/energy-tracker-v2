@@ -5,6 +5,7 @@ import { InviteAcceptForm } from '@/components/household-invite/invite-accept-fo
 import { SettingsPage } from '@/components/settings/settings-page'
 import { DashboardPage } from '@/components/dashboard/dashboard-page'
 import { MeterReadingHistoryPage } from '@/components/meter-reading/meter-reading-history-page'
+import { SmartPlugImportPage } from '@/components/smart-plug-import/smart-plug-import-page'
 import { registerOfflineSync } from '@/lib/meter-reading-sync'
 import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import { fetchCurrentStatus, type StatusDto } from '@/lib/status-api'
@@ -36,7 +37,7 @@ function App() {
   // precedent (see invite-accept-form.tsx's /join/{token} handling for the one existing exception,
   // which predates this and stays URL-addressable for its own reason: it must survive a full-page
   // OIDC redirect round trip).
-  const [view, setView] = useState<'dashboard' | 'settings' | 'history'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'settings' | 'history' | 'smartPlugImport'>('dashboard')
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
   const [openRegressionPrompt, setOpenRegressionPrompt] = useState<MeterRegressionPromptDto | null>(null)
   const [logSheetOpen, setLogSheetOpen] = useState(false)
@@ -248,6 +249,10 @@ function App() {
     return <MeterReadingHistoryPage locale={state.household.locale} onBack={() => setView('dashboard')} />
   }
 
+  if (view === 'smartPlugImport') {
+    return <SmartPlugImportPage onBack={() => setView('dashboard')} />
+  }
+
   return (
     <DashboardPage
       household={state.household}
@@ -267,6 +272,7 @@ function App() {
       }}
       onSettingsClick={() => setView('settings')}
       onHistoryClick={() => setView('history')}
+      onSmartPlugImportClick={() => setView('smartPlugImport')}
     />
   )
 }
