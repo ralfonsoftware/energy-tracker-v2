@@ -1,5 +1,15 @@
 # generated: 2026-08-09
-# last_updated: 2026-08-26
+# last_updated: 2026-08-27
+# 2026-08-27: stories 3-5-dual-entry-points-multi-file-import-queuing and
+#   3-6-smart-plug-import-job-status-history added to backlog under Epic 3 (sprint-planning
+#   refresh, Ralf's request). Both already existed in epic-3-smart-plug-import-baseline-
+#   sharpening.md (Story 3.5: Dual Entry Points & Multi-File Import Queuing / FR-4 amendment,
+#   UX-DR12/UX-DR20; Story 3.6: Smart Plug Import Job Status & History / FR-32, AD-6 extension,
+#   UX-DR21) but were previously left as untracked backlog-only entries — the 2026-08-26 3.7 entry
+#   above explicitly notes they were deliberately not addressed by that change. No story files
+#   exist yet for either under _bmad-artifacts/implementation, so both stay `backlog`. epic-3
+#   reopened from done to in-progress, since not all its stories are complete now (mirrors the
+#   same reopen/re-close pattern used for Story 3.7 above).
 # 2026-08-26: story 3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping code-reviewed and
 #   moved to done (Amelia, code-review). 0 decision-needed, 5 patch (all applied — see the story
 #   file's Review Findings and Change Log), 1 defer (logged in deferred-work.md), 8 dismissed.
@@ -183,7 +193,10 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-23
+last_updated: 2026-08-27
+# 2026-08-27: stories 3-5-dual-entry-points-multi-file-import-queuing and
+#   3-6-smart-plug-import-job-status-history added to backlog under epic-3 (sprint-planning
+#   refresh); epic-3 reopened from done to in-progress since not all its stories are done.
 # 2026-08-23: epic-3-retrospective completed — 4/4 stories reviewed (3.1-3.4), plus orphaned
 #   stories 1.10/2.7/2.8 (added after their own epics' retros already closed). 0 production
 #   incidents, deployed and verified live on Azure by Ralf. Significant discovery: Epic 4's
@@ -479,11 +492,13 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: done
+  epic-3: in-progress
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
   3-4-incremental-smart-plug-import: done
+  3-5-dual-entry-points-multi-file-import-queuing: backlog
+  3-6-smart-plug-import-job-status-history: backlog
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   epic-3-retrospective: done
 
