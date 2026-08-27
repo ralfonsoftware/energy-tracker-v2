@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { LogReadingSheet } from '@/components/meter-reading/log-reading-sheet'
@@ -27,6 +27,7 @@ interface DashboardPageProps {
   onRegressionResolved: () => void
   onSettingsClick: () => void
   onHistoryClick: () => void
+  onSmartPlugImportClick: () => void
 }
 
 // The composed real Dashboard (mockups/key-dashboard.html): Status card as the first,
@@ -48,6 +49,7 @@ export function DashboardPage({
   onRegressionResolved,
   onSettingsClick,
   onHistoryClick,
+  onSmartPlugImportClick,
 }: DashboardPageProps) {
   const { t } = useTranslation()
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
@@ -117,7 +119,18 @@ export function DashboardPage({
 
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
-      <h1 className="text-lg font-bold">{t('app.title')}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-bold">{t('app.title')}</h1>
+        <button
+          type="button"
+          onClick={onSmartPlugImportClick}
+          aria-label={t('smartPlugImport.entryPointLabel')}
+          title={t('smartPlugImport.entryPointLabel')}
+          className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
+        >
+          <Upload className="size-4" aria-hidden="true" />
+        </button>
+      </div>
 
       <StatusCard
         status={status}

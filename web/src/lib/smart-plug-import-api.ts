@@ -68,7 +68,7 @@ export interface PowerPointDto {
 
 // POST confirms immediately (202 Accepted) with a job id — parsing runs asynchronously via the
 // job queue (AC #1). The caller learns completion by polling fetchJobStatus, never a callback.
-export async function uploadSmartPlugFile(file: File): Promise<string> {
+export async function uploadSmartPlugFile(file: File, signal?: AbortSignal): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -76,6 +76,7 @@ export async function uploadSmartPlugFile(file: File): Promise<string> {
     method: 'POST',
     credentials: 'include',
     body: formData,
+    signal,
   })
 
   if (!response.ok) {

@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { TaggingScaffoldManager } from '@/components/tagging-scaffold/tagging-scaffold-manager'
 import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline-form'
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
-import { SmartPlugImportPanel } from '@/components/smart-plug-import/smart-plug-import-panel'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 
 interface SettingsPageProps {
@@ -16,6 +15,8 @@ interface SettingsPageProps {
 // page currently covers Room/Power Point/Device management (Story 1.9), Yearly Baseline (Story
 // 2.1), and member invitation (Story 1.8's InviteGeneratePanel, relocated here from the Dashboard
 // placeholder shell by a code review of Story 2.5, once this page existed as a real destination).
+// Smart Plug Import moved OFF this page by Story 3.5 (FR-4 amendment, UX-DR20) — it's now a
+// dedicated Dashboard-launched screen, not a Settings-embedded panel.
 export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
   const { t } = useTranslation()
 
@@ -31,7 +32,6 @@ export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
       <div className="flex flex-col gap-[var(--spacing-card-gap)]">
         <YearlyBaselineForm householdId={householdId} />
         <TaggingScaffoldManager />
-        <SmartPlugImportPanel />
         <InviteGeneratePanel />
       </div>
 

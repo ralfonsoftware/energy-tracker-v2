@@ -194,6 +194,60 @@
 
 generated: 2026-08-09
 last_updated: 2026-08-27
+# 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to done (adversarial code
+#   review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 0 decision-needed, 6
+#   patch findings (all applied — see the story file's Review Findings and Change Log), 4 deferred
+#   (logged in deferred-work.md), 6 dismissed. Highlights: `useSmartPlugImportJob`'s upload fired
+#   from a mount-only effect with no guard against React StrictMode's dev double-invocation, so
+#   every local-dev file selection silently created two backend jobs for one file (only the second
+#   survived UI polling) — fixed via an AbortController aborted on cleanup, React's own documented
+#   fix for this class of bug; the shared "parsing in the background" note stayed pinned on even
+#   after every queued item had already finished (old single-file panel correctly gated it on
+#   `processing` state) — fixed by lifting each item's active/processing status up via a stable
+#   callback into an `activeIds` set; the deleted `queuedNote` copy left the new "Waiting" badge
+#   with no explanation — restored per-item; a new concurrency test resolved 3 files to one shared
+#   hardcoded jobId with no matching `/api/jobs/{id}` mock case, only passing because fake timers
+#   never advanced far enough to expose it — fixed with distinct per-file jobIds and matching mocks;
+#   no test exercised the drag-and-drop path despite AC #4/#6 explicitly naming it — added; the new
+#   dedicated page did no focus management on mount — fixed by focusing the heading. Applying the
+#   fix for the asyncNote finding initially introduced a real render-loop bug (an inline per-item
+#   callback in a `useEffect` dependency array caused the active-tracking set to oscillate every
+#   parent render), caught by a hung `vitest run` during post-patch verification and fixed by
+#   passing the parent's stable `useCallback`'d dispatcher straight through instead. Full frontend
+#   suite green after patches: 196/196, tsc/oxlint/vite build clean. Backend untouched by this
+#   story or its patches (frontend-only diff, unchanged from the review's own confirmation).
+# 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to review (dev-story
+#   implementation complete — frontend-only, no backend files touched). Task 2's rewrite extracted
+#   Story 3.1's inline single-file upload+poll+state-machine logic into a new
+#   useSmartPlugImportJob(file) hook, one instance per queue item, so several files selected in one
+#   action upload concurrently and poll independently with no shared state (AC #4/#5 fall out of
+#   the per-instance closure, no explicit Promise.allSettled orchestration needed). AC #6's
+#   "Waiting or Processing indicator" reuses Story 3.1's existing 404-while-polling-means-queued
+#   client-side flag exactly per this story's own Dev Notes — no BackgroundJobStatus.Queued/backend
+#   change (that's Story 3.6/FR-32's job). Old smart-plug-import-panel.tsx deleted outright (full
+#   rewrite, not a patch) along with its test file, replaced by smart-plug-import-page.tsx (new
+#   dedicated Dashboard-launched screen, no NavChrome slot, same shape as Story 2.8's
+#   MeterReadingHistoryPage) + smart-plug-import-page.test.tsx. Settings no longer renders the
+#   panel (new settings-page.test.tsx guards the negative assertion). Dashboard gained its first
+#   topbar (previously just a bare <h1>) housing the new 40x40 icon entry point, reusing
+#   nav-chrome-active-bg/-foreground tokens verbatim (UX-DR20). Trend History's own entry point
+#   deferred to whichever Epic 4 story first builds that screen (deferred-work.md entry added, per
+#   this story's own Dev Notes instruction) — the shared SmartPlugImportPage destination is already
+#   in place and needs only a second button wired to it. 192 frontend tests green (17 new in the
+#   rewritten queue test file, 1 new in dashboard-page.test.tsx, 1 new settings-page.test.tsx),
+#   tsc/oxlint clean, dotnet build clean, SmartPlugImportEndpointsTests.cs re-run standalone
+#   (16/16 green) confirming zero backend regression from this frontend-only diff.
+# 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to in-progress (dev-story
+#   activation).
+# 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing drafted (create-story) -
+#   status set to ready-for-dev. Scoped down from the epic's literal two-entry-point AC to
+#   Dashboard-only for now: Trend History (Epic 4, still fully backlog) has no screen yet in this
+#   codebase to attach an icon to, so that half is deferred to whichever Epic 4 story first builds
+#   Trend History (tracked in deferred-work.md). The new dedicated SmartPlugImportPage this story
+#   builds is structured so that future entry point needs zero rework, only a second button.
+#   Confirmed the multi-file "queue appears immediately" AC needs no BackgroundJobStatus.Queued/
+#   enqueue-time-row backend work (that's Story 3.6/FR-32's job per AD-6's own invariants-rules.md
+#   note) - reuses Story 3.1's existing 404-while-polling-means-queued idiom per queue item instead.
 # 2026-08-27: stories 3-5-dual-entry-points-multi-file-import-queuing and
 #   3-6-smart-plug-import-job-status-history added to backlog under epic-3 (sprint-planning
 #   refresh); epic-3 reopened from done to in-progress since not all its stories are done.
@@ -497,7 +551,7 @@ development_status:
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
   3-4-incremental-smart-plug-import: done
-  3-5-dual-entry-points-multi-file-import-queuing: backlog
+  3-5-dual-entry-points-multi-file-import-queuing: done
   3-6-smart-plug-import-job-status-history: backlog
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   epic-3-retrospective: done
