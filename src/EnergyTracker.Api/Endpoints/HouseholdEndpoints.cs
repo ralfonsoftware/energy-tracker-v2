@@ -53,6 +53,12 @@ public static class HouseholdEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            // Story 3.6/UX-DR21: the OIDC `name` claim, when the provider returns one — nullable,
+            // never fabricated, feeds the household-wide job list's "Queued by" line. See
+            // HouseholdClaimTypes.ResolveDisplayName for why this isn't a plain ClaimTypes.Name
+            // read (review-round-2 patch).
+            var displayName = HouseholdClaimTypes.ResolveDisplayName(user);
+
             try
             {
                 var household = await createHousehold.ExecuteAsync(
@@ -60,6 +66,7 @@ public static class HouseholdEndpoints
                     subjectClaim.Value,
                     request.Locale,
                     request.Currency,
+                    displayName,
                     cancellationToken);
 
                 return Results.Ok(ToDetailsResponse(household));

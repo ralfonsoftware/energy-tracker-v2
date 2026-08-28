@@ -9,4 +9,9 @@ namespace EnergyTracker.Application.Ports;
 public interface ICurrentHouseholdAccessor
 {
     Guid? HouseholdId { get; }
+
+    // The caller's own HouseholdMember row id — null under the exact same conditions HouseholdId
+    // is null. Feeds BackgroundJob.QueuedByHouseholdMemberId (Story 3.6/AD-6 extension) so a
+    // queued job records who queued it, not just which Household.
+    Guid? HouseholdMemberId { get; }
 }

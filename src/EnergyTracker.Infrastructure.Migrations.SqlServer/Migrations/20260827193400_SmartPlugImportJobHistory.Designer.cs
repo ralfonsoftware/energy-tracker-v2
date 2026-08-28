@@ -4,6 +4,7 @@ using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 {
     [DbContext(typeof(EnergyTrackerDbContext))]
-    partial class EnergyTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827193400_SmartPlugImportJobHistory")]
+    partial class SmartPlugImportJobHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -86,7 +89,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.Property<string>("JobType")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("OriginalFileName")
                         .HasColumnType("nvarchar(max)");
@@ -102,8 +105,6 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasIndex("HouseholdId");
 
                     b.HasIndex("QueuedByHouseholdMemberId");
-
-                    b.HasIndex("HouseholdId", "JobType", "CreatedAtUtc");
 
                     b.ToTable("BackgroundJobs", (string)null);
                 });

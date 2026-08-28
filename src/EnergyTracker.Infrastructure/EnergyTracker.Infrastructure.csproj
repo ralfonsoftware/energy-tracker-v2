@@ -6,6 +6,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Story 3.6/AD-6 extension: BackgroundJobProcessor.ProcessAsync and JobMessage are internal
+         (job-processing plumbing, not a public port) — Infrastructure.Tests needs direct access
+         to exercise the enqueue-time Queued row -> dequeue-time transition, same precedent as
+         EnergyTracker.Api's own InternalsVisibleTo for OIDC claim-validation logic. -->
+    <InternalsVisibleTo Include="EnergyTracker.Infrastructure.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- IHttpContextAccessor (used by CurrentHouseholdAccessor) and the cookie/OIDC auth types
          ship in the ASP.NET Core shared framework, not a NuGet package — Infrastructure isn't
          Sdk.Web like Api, so it needs this FrameworkReference explicitly to see them. -->

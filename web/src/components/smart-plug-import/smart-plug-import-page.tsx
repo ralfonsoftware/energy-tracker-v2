@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { GapCard } from '@/components/smart-plug-import/gap-card'
+import { JobHistoryList } from '@/components/smart-plug-import/job-history-list'
 import { PowerPointMappingDialog } from '@/components/smart-plug-import/power-point-mapping-dialog'
 import { useSmartPlugImportJob } from '@/components/smart-plug-import/use-smart-plug-import-job'
 
@@ -132,6 +133,8 @@ export function SmartPlugImportPage({ onBack }: SmartPlugImportPageProps) {
           {activeIds.size > 0 && <p className="text-muted-foreground text-sm">{t('smartPlugImport.asyncNote')}</p>}
         </div>
       )}
+
+      <JobHistoryList />
     </main>
   )
 }

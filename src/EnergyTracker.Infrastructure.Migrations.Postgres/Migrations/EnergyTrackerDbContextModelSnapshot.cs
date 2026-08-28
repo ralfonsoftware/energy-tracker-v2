@@ -88,12 +88,22 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("OriginalFileName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("QueuedByHouseholdMemberId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("HouseholdId");
+
+                    b.HasIndex("QueuedByHouseholdMemberId");
+
+                    b.HasIndex("HouseholdId", "JobType", "CreatedAtUtc");
 
                     b.ToTable("BackgroundJobs", (string)null);
                 });
@@ -219,6 +229,9 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("text");
 
                     b.Property<string>("ExternalIssuer")
                         .IsRequired()
@@ -533,7 +546,7 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("SmartPlugImportId")
+                    b.Property<Guid?>("SmartPlugImportId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -607,6 +620,11 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                         .HasForeignKey("HouseholdId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("EnergyTracker.Domain.HouseholdMember", null)
+                        .WithMany()
+                        .HasForeignKey("QueuedByHouseholdMemberId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.Device", b =>
@@ -770,8 +788,7 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasOne("EnergyTracker.Domain.SmartPlugImport", null)
                         .WithMany()
                         .HasForeignKey("SmartPlugImportId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.StatusSnapshot", b =>

@@ -12,7 +12,10 @@ public class SmartPlugReading
 
     public required Guid HouseholdId { get; set; }
 
-    public required Guid SmartPlugImportId { get; set; }
+    // Nullable so the sweep (Story 3.6/AD-6 extension) can delete a swept-away SmartPlugImport
+    // row while this reading survives (SetNull FK) — AD-20's "detach, never delete" rule for
+    // Smart Plug data.
+    public Guid? SmartPlugImportId { get; set; }
 
     public Guid? PowerPointId { get; set; }
 

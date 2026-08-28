@@ -21,7 +21,21 @@ public class SqlServerMigrationTests : IAsyncLifetime
     private sealed class FixedHouseholdAccessor(Guid householdId) : ICurrentHouseholdAccessor
     {
         public Guid? HouseholdId { get; } = householdId;
+
+        public Guid? HouseholdMemberId => null;
     }
+
+    // Story 3.6/AD-6 extension added OriginalFileName/QueuedByHouseholdMemberId to BackgroundJob.
+    // Tests below seed data at a migration checkpoint BEFORE that migration — EF's own
+    // (current-model) tracked insert would reference columns that don't exist yet in the
+    // physical schema at that point in history, so this raw INSERT is scoped to only the columns
+    // that checkpoint's schema actually has. The Household row this job's HouseholdId FK
+    // references must already be committed (not merely tracked) before this runs.
+    private static async Task InsertBackgroundJobPreStory36Async(EnergyTrackerDbContext dbContext, BackgroundJob job, CancellationToken cancellationToken) =>
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [BackgroundJobs] ([Id], [HouseholdId], [JobType], [Status], [CreatedAtUtc], [CompletedAtUtc])
+            VALUES ({job.Id}, {job.HouseholdId}, {job.JobType}, {(int)job.Status}, {job.CreatedAtUtc}, {job.CompletedAtUtc})
+            """, cancellationToken);
 
     [Fact]
     public async Task SqlServer_migrations_apply_cleanly_to_a_real_database()
@@ -60,6 +74,9 @@ public class SqlServerMigrationTests : IAsyncLifetime
 
         var now = DateTimeOffset.UtcNow;
         dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = now });
+        // Committed alone, ahead of the raw BackgroundJob inserts below, whose HouseholdId FK
+        // requires the row to already exist (not merely tracked).
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = now };
         dbContext.Rooms.Add(room);
         var powerPoint = new PowerPoint { Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Fridge", CreatedAtUtc = now };
@@ -74,7 +91,8 @@ public class SqlServerMigrationTests : IAsyncLifetime
             Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
             Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
         };
-        dbContext.BackgroundJobs.AddRange(olderJob, newerJob);
+        await InsertBackgroundJobPreStory36Async(dbContext, olderJob, TestContext.Current.CancellationToken);
+        await InsertBackgroundJobPreStory36Async(dbContext, newerJob, TestContext.Current.CancellationToken);
         var olderImport = new SmartPlugImport
         {
             Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = olderJob.Id,
@@ -211,6 +229,9 @@ public class SqlServerMigrationTests : IAsyncLifetime
 
         var now = DateTimeOffset.UtcNow;
         dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = now });
+        // Committed alone, ahead of the raw BackgroundJob inserts below, whose HouseholdId FK
+        // requires the row to already exist (not merely tracked).
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = now };
         dbContext.Rooms.Add(room);
         var powerPoint = new PowerPoint { Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Fridge", CreatedAtUtc = now };
@@ -230,7 +251,9 @@ public class SqlServerMigrationTests : IAsyncLifetime
             Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
             Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
         };
-        dbContext.BackgroundJobs.AddRange(mappedJob, orphanedJob, stillAwaitingJob);
+        await InsertBackgroundJobPreStory36Async(dbContext, mappedJob, TestContext.Current.CancellationToken);
+        await InsertBackgroundJobPreStory36Async(dbContext, orphanedJob, TestContext.Current.CancellationToken);
+        await InsertBackgroundJobPreStory36Async(dbContext, stillAwaitingJob, TestContext.Current.CancellationToken);
         var mappedImport = new SmartPlugImport
         {
             Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = mappedJob.Id,
@@ -291,5 +314,64 @@ public class SqlServerMigrationTests : IAsyncLifetime
             .Select(r => r.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
         remainingReadingIds.ShouldBe([mappedReadingId, stillAwaitingReadingId], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task SmartPlugImportId_FK_is_ON_DELETE_SET_NULL_so_the_reading_survives_when_its_import_is_deleted()
+    {
+        // Story 3.6/AD-6 extension Task 3 — confirms the FK behavior the retention sweep depends
+        // on directly against the real engine, not just the EF model: deleting a SmartPlugImport
+        // row must never fail (Restrict would throw a FK-violation, Cascade would silently
+        // destroy the reading data AD-20 requires survive) — the reading must survive with
+        // SmartPlugImportId nulled and every other field untouched.
+        var householdId = Guid.NewGuid();
+        var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
+        optionsBuilder.UseSqlServer(_container.GetConnectionString(),
+            o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer"));
+
+        await using var dbContext = new EnergyTrackerDbContext(optionsBuilder.Options, new FixedHouseholdAccessor(householdId));
+        await dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = now });
+        var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = now };
+        dbContext.Rooms.Add(room);
+        var powerPoint = new PowerPoint { Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Fridge", CreatedAtUtc = now };
+        dbContext.PowerPoints.Add(powerPoint);
+        var job = new BackgroundJob
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+        };
+        dbContext.BackgroundJobs.Add(job);
+        var import = new SmartPlugImport
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = job.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "export.xlsx",
+            Status = SmartPlugImportStatus.Completed, DeviceTag = "Fridge",
+            CreatedAtUtc = now, CompletedAtUtc = now,
+        };
+        dbContext.SmartPlugImports.Add(import);
+        var readingId = Guid.NewGuid();
+        var intervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        dbContext.SmartPlugReadings.Add(new SmartPlugReading
+        {
+            Id = readingId, HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = powerPoint.Id,
+            RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
+            IntervalStart = intervalStart, IntervalEnd = intervalStart, KwhValue = 0.5m,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        await dbContext.SmartPlugImports.Where(i => i.Id == import.Id).ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+        dbContext.ChangeTracker.Clear();
+        var survivingReading = await dbContext.SmartPlugReadings.SingleAsync(r => r.Id == readingId, TestContext.Current.CancellationToken);
+        survivingReading.SmartPlugImportId.ShouldBeNull();
+        survivingReading.PowerPointId.ShouldBe(powerPoint.Id);
+        survivingReading.RoomName.ShouldBe("Kitchen");
+        survivingReading.PowerPointName.ShouldBe("Fridge");
+        survivingReading.DeviceName.ShouldBe("Fridge");
+        survivingReading.IntervalStart.ShouldBe(intervalStart);
+        survivingReading.KwhValue.ShouldBe(0.5m);
     }
 }

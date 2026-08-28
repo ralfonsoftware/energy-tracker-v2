@@ -22,7 +22,7 @@ public class CreateHouseholdTests
     {
         var sut = new CreateHousehold(_repository);
 
-        var household = await sut.ExecuteAsync("https://issuer.example", "subject-1", locale, currency, TestContext.Current.CancellationToken);
+        var household = await sut.ExecuteAsync("https://issuer.example", "subject-1", locale, currency, "Sam", TestContext.Current.CancellationToken);
 
         household.Locale.ShouldBe(locale);
         household.Currency.ShouldBe(currency);
@@ -33,7 +33,21 @@ public class CreateHouseholdTests
             Arg.Is<HouseholdMember>(m =>
                 m.HouseholdId == household.Id &&
                 m.ExternalIssuer == "https://issuer.example" &&
-                m.ExternalSubjectId == "subject-1"),
+                m.ExternalSubjectId == "subject-1" &&
+                m.DisplayName == "Sam"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Creates_the_creator_member_with_no_DisplayName_when_the_OIDC_principal_carries_no_name_claim()
+    {
+        var sut = new CreateHousehold(_repository);
+
+        var household = await sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", "EUR", null, TestContext.Current.CancellationToken);
+
+        await _repository.Received(1).AddAsync(
+            Arg.Is<Household>(h => h.Id == household.Id),
+            Arg.Is<HouseholdMember>(m => m.DisplayName == null),
             Arg.Any<CancellationToken>());
     }
 
@@ -46,7 +60,7 @@ public class CreateHouseholdTests
         var sut = new CreateHousehold(_repository);
 
         await Should.ThrowAsync<HouseholdValidationException>(() =>
-            sut.ExecuteAsync("https://issuer.example", "subject-1", locale, "EUR", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync("https://issuer.example", "subject-1", locale, "EUR", "Sam", TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AddAsync(Arg.Any<Household>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }
@@ -61,7 +75,7 @@ public class CreateHouseholdTests
         var sut = new CreateHousehold(_repository);
 
         await Should.ThrowAsync<HouseholdValidationException>(() =>
-            sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", currency, TestContext.Current.CancellationToken));
+            sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", currency, "Sam", TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AddAsync(Arg.Any<Household>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }
@@ -82,7 +96,7 @@ public class CreateHouseholdTests
         var sut = new CreateHousehold(_repository);
 
         var exception = await Should.ThrowAsync<HouseholdAlreadyExistsException>(() =>
-            sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", "EUR", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", "EUR", "Sam", TestContext.Current.CancellationToken));
 
         exception.ExistingHouseholdId.ShouldBe(existingHouseholdId);
         await _repository.DidNotReceive().AddAsync(Arg.Any<Household>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());

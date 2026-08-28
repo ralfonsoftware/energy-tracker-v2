@@ -29,7 +29,7 @@ public class AcceptHouseholdInviteTests
         _repository.AcceptInviteAsync(invite, Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>()).Returns(joinedHousehold);
         var sut = new AcceptHouseholdInvite(_repository);
 
-        var household = await sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", TestContext.Current.CancellationToken);
+        var household = await sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken);
 
         household.ShouldBe(joinedHousehold);
         await _repository.Received(1).AcceptInviteAsync(
@@ -37,7 +37,8 @@ public class AcceptHouseholdInviteTests
             Arg.Is<HouseholdMember>(m =>
                 m.HouseholdId == invite.HouseholdId &&
                 m.ExternalIssuer == "https://issuer.example" &&
-                m.ExternalSubjectId == "subject-1"),
+                m.ExternalSubjectId == "subject-1" &&
+                m.DisplayName == "Mira"),
             Arg.Any<CancellationToken>());
     }
 
@@ -48,7 +49,7 @@ public class AcceptHouseholdInviteTests
         var sut = new AcceptHouseholdInvite(_repository);
 
         await Should.ThrowAsync<HouseholdInviteNotFoundException>(() =>
-            sut.ExecuteAsync("unknown-token", "https://issuer.example", "subject-1", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync("unknown-token", "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public class AcceptHouseholdInviteTests
         var sut = new AcceptHouseholdInvite(_repository);
 
         await Should.ThrowAsync<HouseholdInviteExpiredOrConsumedException>(() =>
-            sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }
@@ -72,7 +73,7 @@ public class AcceptHouseholdInviteTests
         var sut = new AcceptHouseholdInvite(_repository);
 
         await Should.ThrowAsync<HouseholdInviteExpiredOrConsumedException>(() =>
-            sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }
@@ -94,7 +95,7 @@ public class AcceptHouseholdInviteTests
         var sut = new AcceptHouseholdInvite(_repository);
 
         var exception = await Should.ThrowAsync<HouseholdAlreadyExistsException>(() =>
-            sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(invite.Token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
         exception.ExistingHouseholdId.ShouldBe(existingHouseholdId);
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());

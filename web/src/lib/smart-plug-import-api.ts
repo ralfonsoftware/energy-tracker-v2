@@ -20,7 +20,11 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
-export type JobStatusValue = 'processing' | 'completed' | 'failed'
+// 'queued' added review-round-2 (Story 3.6): the backend now inserts a Queued BackgroundJob row
+// at enqueue time, so GET /api/jobs/{id} returns 200 status:'queued' for a job not yet dequeued
+// instead of 404 — use-smart-plug-import-job.ts's own `queued` flag now derives from this instead
+// of the (now-defeated) 404-means-queued heuristic.
+export type JobStatusValue = 'queued' | 'processing' | 'completed' | 'failed'
 
 // Matches the backend's lowercased-enum convention already used for `importStatus`.
 export type SmartPlugImportGapTreatment = 'estimated' | 'missing' | 'flaggedforreview'
@@ -127,6 +131,34 @@ export async function fetchPowerPoints(): Promise<PowerPointDto[]> {
   }
 
   return (await response.json()) as PowerPointDto[]
+}
+
+// The six states FR-32/UX-DR21 require, never folded into one another or a generic pending/done.
+export type SmartPlugImportJobStateValue = 'waiting' | 'processing' | 'success' | 'error' | 'needsMapping' | 'flaggedForReview'
+
+export interface SmartPlugImportJobDto {
+  jobId: string
+  fileName: string | null
+  state: SmartPlugImportJobStateValue
+  // null means render a generic fallback — never fabricate a name (UX-DR21).
+  queuedByDisplayName: string | null
+  queuedAtUtc: string
+  completedAtUtc: string | null
+  errorMessage: string | null
+  smartPlugImportId: string | null
+  deviceTag: string | null
+  gaps: SmartPlugImportGapDto[]
+}
+
+// Story 3.6/FR-32: the household-wide Job Status & History list — every import job any member
+// has ever queued, not just the caller's own (AC #1).
+export async function fetchSmartPlugImportJobs(): Promise<SmartPlugImportJobDto[]> {
+  const response = await fetch('/api/smart-plug-import-jobs', { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as SmartPlugImportJobDto[]
 }
 
 export async function createPowerPoint(roomId: string, name: string): Promise<PowerPointDto> {

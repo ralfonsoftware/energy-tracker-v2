@@ -210,6 +210,22 @@
       "noExisting": "Noch keine vorhandenen Power Points.",
       "mapError": "Beim Zuordnen dieses Imports ist etwas schiefgelaufen. Bitte versuche es erneut.",
       "retry": "Erneut versuchen"
+    },
+    "jobHistory": {
+      "listLabel": "Letzte Importe — für den ganzen Haushalt sichtbar",
+      "unknownFile": "Unbekannte Datei",
+      "queuedBy": "In die Warteschlange gestellt von {{member}}",
+      "queuedByFallback": "einem Haushaltsmitglied",
+      "mapAriaLabel": "{{fileName}} zuordnen",
+      "reviewAriaLabel": "{{fileName}} prüfen",
+      "badges": {
+        "success": "Erfolgreich",
+        "error": "Fehler",
+        "needsMapping": "Zuordnung erforderlich",
+        "flaggedForReview": "Zur Prüfung markiert"
+      },
+      "emptyTitle": "Noch keine Importe",
+      "emptyBody": "In den letzten 30 Tagen wurde nichts hochgeladen. Importiere einen Smart-Plug-Export, damit er hier erscheint."
     }
   }
 }

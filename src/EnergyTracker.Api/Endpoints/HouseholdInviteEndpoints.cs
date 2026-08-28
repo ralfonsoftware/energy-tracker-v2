@@ -69,12 +69,17 @@ public static class HouseholdInviteEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            // Story 3.6/UX-DR21: same nullable, never-fabricated OIDC `name` claim read as
+            // HouseholdEndpoints' POST /households (see HouseholdClaimTypes.ResolveDisplayName).
+            var displayName = HouseholdClaimTypes.ResolveDisplayName(user);
+
             try
             {
                 var household = await acceptHouseholdInvite.ExecuteAsync(
                     token,
                     issuerClaim.Value,
                     subjectClaim.Value,
+                    displayName,
                     cancellationToken);
 
                 return Results.Ok(new HouseholdResponse(household.Id, household.Locale, household.Currency, household.YearlyBaselineKwh, household.Version));

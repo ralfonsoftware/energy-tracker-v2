@@ -25,41 +25,98 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
 
         var dbContext = services.GetRequiredService<EnergyTrackerDbContext>();
 
-        var job = new BackgroundJob
+        // Story 3.6/AD-6 extension: the BackgroundJobEnqueueRecorder already inserted a Queued
+        // row for this JobId at enqueue time — this is now a lookup + transition, not a blind
+        // insert.
+        var job = await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == message.JobId, cancellationToken);
+        if (job is null)
         {
-            Id = message.JobId,
-            HouseholdId = message.HouseholdId,
-            JobType = message.JobType,
-            Status = BackgroundJobStatus.Processing,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
-        };
-        dbContext.BackgroundJobs.Add(job);
+            // Defensive fallback only — should not happen once the enqueue-time recorder ships,
+            // but protects a message somehow enqueued before this story deployed (no Queued row
+            // exists for it).
+            job = new BackgroundJob
+            {
+                Id = message.JobId,
+                HouseholdId = message.HouseholdId,
+                JobType = message.JobType,
+                Status = BackgroundJobStatus.Processing,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            dbContext.BackgroundJobs.Add(job);
 
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Idempotency guard against redelivery (e.g. Azure Storage Queue's visibility
+                // timeout expiring mid-processing on a slow file): a row for this JobId already
+                // exists, so our insert hit the primary key. Optimistic (try-insert, reconcile on
+                // conflict) rather than check-then-act, so the common case — no redelivery —
+                // costs one round trip, not two, and there's no TOCTOU gap between the check and
+                // the insert. A row already in a terminal state means an earlier delivery already
+                // finished — skip, or the message would never get deleted and retry forever with
+                // no dead-letter path. A row still Processing is either a live concurrent
+                // redelivery or an orphan from a crashed instance — reuse it (UPDATE, not INSERT)
+                // so a genuinely stuck job still gets retried.
+                dbContext.Entry(job).State = EntityState.Detached;
+                var existingJob = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == message.JobId, cancellationToken);
+                if (existingJob.Status != BackgroundJobStatus.Processing)
+                {
+                    logger.LogWarning(
+                        "Background job {JobId} already recorded as {Status}; skipping duplicate delivery.", message.JobId, existingJob.Status);
+                    return;
+                }
+
+                job = existingJob;
+            }
         }
-        catch (DbUpdateException)
+        else if (job.Status == BackgroundJobStatus.Queued)
         {
-            // Idempotency guard against redelivery (e.g. Azure Storage Queue's visibility timeout
-            // expiring mid-processing on a slow file): a row for this JobId already exists, so our
-            // insert hit the primary key. Optimistic (try-insert, reconcile on conflict) rather
-            // than check-then-act, so the common case — no redelivery — costs one round trip, not
-            // two, and there's no TOCTOU gap between the check and the insert. A row already in a
-            // terminal state means an earlier delivery already finished — skip, or the message
-            // would never get deleted and retry forever with no dead-letter path. A row still
-            // Processing is either a live concurrent redelivery or an orphan from a crashed
-            // instance — reuse it (UPDATE, not INSERT) so a genuinely stuck job still gets retried.
-            dbContext.Entry(job).State = EntityState.Detached;
-            var existingJob = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == message.JobId, cancellationToken);
-            if (existingJob.Status != BackgroundJobStatus.Processing)
+            // Conditional, atomic transition — review-round-2 patch: a plain read-then-write here
+            // (the pre-patch behavior) let two concurrent redeliveries of the same message (e.g.
+            // Azure Storage Queue visibility-timeout expiry mid-processing of a large import) both
+            // observe Status == Queued and both proceed to process the same import. Same
+            // idempotency discipline as the insert-conflict branch above, just expressed as a
+            // conditional update instead of a conditional insert.
+            var transitioned = await dbContext.BackgroundJobs
+                .Where(j => j.Id == job.Id && j.Status == BackgroundJobStatus.Queued)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, BackgroundJobStatus.Processing), cancellationToken);
+
+            if (transitioned > 0)
+            {
+                // ExecuteUpdateAsync bypasses the change tracker — keep the already-tracked `job`
+                // in sync so the SaveChangesAsync at the end of this method only writes the
+                // Status/ErrorMessage/CompletedAtUtc changes made below, not a stale Status.
+                job.Status = BackgroundJobStatus.Processing;
+            }
+            else
+            {
+                // Lost the race — another concurrent delivery already transitioned this row.
+                // Reuse it (UPDATE, not INSERT) if it's now Processing (the other delivery is
+                // still live, or is a crashed-instance orphan worth retrying); skip if it already
+                // reached a terminal state (that other delivery already finished).
+                job = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == job.Id, cancellationToken);
+                if (job.Status != BackgroundJobStatus.Processing)
+                {
+                    logger.LogWarning(
+                        "Background job {JobId} already recorded as {Status}; skipping duplicate delivery.", message.JobId, job.Status);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            // Same idempotency reasoning as the insert-conflict branch above: a row already
+            // Processing is a live concurrent redelivery or a crashed-instance orphan (reuse it);
+            // a row in a terminal state means an earlier delivery already finished — skip.
+            if (job.Status != BackgroundJobStatus.Processing)
             {
                 logger.LogWarning(
-                    "Background job {JobId} already recorded as {Status}; skipping duplicate delivery.", message.JobId, existingJob.Status);
+                    "Background job {JobId} already recorded as {Status}; skipping duplicate delivery.", message.JobId, job.Status);
                 return;
             }
-
-            job = existingJob;
         }
 
         try

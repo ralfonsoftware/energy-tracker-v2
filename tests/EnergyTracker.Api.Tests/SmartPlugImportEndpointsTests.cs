@@ -577,4 +577,80 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         readings.Count.ShouldBe(7);
         readings.Select(r => r.IntervalStart).Distinct().Count().ShouldBe(7);
     }
+
+    [Fact]
+    public async Task GET_smart_plug_import_jobs_is_scoped_to_the_callers_own_Household()
+    {
+        var (clientA, _) = await CreateHouseholdAsync();
+        var roomResponse = await clientA.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        await clientA.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
+
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await clientA.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        await PollJobToTerminalAsync(clientA, uploadBody!.JobId);
+
+        var (clientB, _) = await CreateHouseholdAsync();
+
+        var jobsForB = await clientB.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
+            "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
+
+        jobsForB.ShouldNotBeNull();
+        jobsForB.ShouldNotContain(j => j.JobId == uploadBody.JobId);
+    }
+
+    [Fact]
+    public async Task GET_smart_plug_import_jobs_returns_jobs_queued_by_other_members_of_the_same_Household()
+    {
+        // AC #1's actual load-bearing assertion — the list is household-wide, not caller-scoped:
+        // Member B queues the import, Member A (who queued nothing) must still see it.
+        var clientA = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString(), name: "Mira");
+        var householdResponse = await clientA.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        householdResponse.EnsureSuccessStatusCode();
+        var roomResponse = await clientA.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        await clientA.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
+
+        var inviteResponse = await clientA.PostAsync("/api/household-invites", null, TestContext.Current.CancellationToken);
+        var invite = await inviteResponse.Content.ReadFromJsonAsync<HouseholdInviteResponse>(TestContext.Current.CancellationToken);
+        var clientB = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString(), name: "Sam");
+        var acceptResponse = await clientB.PostAsync($"/api/household-invites/{invite!.Token}/accept", null, TestContext.Current.CancellationToken);
+        acceptResponse.EnsureSuccessStatusCode();
+
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await clientB.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        await PollJobToTerminalAsync(clientB, uploadBody!.JobId);
+
+        var jobsForA = await clientA.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
+            "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
+
+        jobsForA.ShouldNotBeNull();
+        var job = jobsForA.ShouldHaveSingleItem();
+        job.JobId.ShouldBe(uploadBody.JobId);
+        job.State.ShouldBe("success");
+        job.QueuedByDisplayName.ShouldBe("Sam");
+        job.FileName.ShouldBe(Path.GetFileName(EveSampleFilePath));
+    }
+
+    [Fact]
+    public async Task GET_smart_plug_import_jobs_surfaces_a_NeedsMapping_row_with_its_import_id_and_device_tag()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var terminalStatus = await PollJobToTerminalAsync(client, uploadBody!.JobId);
+        terminalStatus.ImportStatus.ShouldBe("awaitingpowerpointmapping");
+
+        var jobs = await client.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
+            "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
+
+        var job = jobs!.ShouldHaveSingleItem();
+        job.State.ShouldBe("needsMapping");
+        job.SmartPlugImportId.ShouldBe(terminalStatus.SmartPlugImportId);
+        job.DeviceTag.ShouldBe(terminalStatus.SmartPlugImportDeviceTag);
+    }
 }
