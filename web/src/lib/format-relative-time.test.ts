@@ -19,4 +19,10 @@ describe('formatRelativeTime', () => {
   it('is locale-aware', () => {
     expect(formatRelativeTime('2026-08-07T12:00:00Z', 'de-DE', now)).toBe('vorgestern')
   })
+
+  it('renders "now" instead of a future tense for ordinary clock skew a few seconds ahead', () => {
+    // Review-round-2 patch: `iso` is meant to always be in the past, but server/client clock
+    // drift can put it fractionally ahead — must clamp to "now", never "in N seconds".
+    expect(formatRelativeTime('2026-08-09T12:00:05Z', 'en-US', now)).toBe('now')
+  })
 })

@@ -74,8 +74,37 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
         }
         else if (job.Status == BackgroundJobStatus.Queued)
         {
-            job.Status = BackgroundJobStatus.Processing;
-            await dbContext.SaveChangesAsync(cancellationToken);
+            // Conditional, atomic transition — review-round-2 patch: a plain read-then-write here
+            // (the pre-patch behavior) let two concurrent redeliveries of the same message (e.g.
+            // Azure Storage Queue visibility-timeout expiry mid-processing of a large import) both
+            // observe Status == Queued and both proceed to process the same import. Same
+            // idempotency discipline as the insert-conflict branch above, just expressed as a
+            // conditional update instead of a conditional insert.
+            var transitioned = await dbContext.BackgroundJobs
+                .Where(j => j.Id == job.Id && j.Status == BackgroundJobStatus.Queued)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, BackgroundJobStatus.Processing), cancellationToken);
+
+            if (transitioned > 0)
+            {
+                // ExecuteUpdateAsync bypasses the change tracker — keep the already-tracked `job`
+                // in sync so the SaveChangesAsync at the end of this method only writes the
+                // Status/ErrorMessage/CompletedAtUtc changes made below, not a stale Status.
+                job.Status = BackgroundJobStatus.Processing;
+            }
+            else
+            {
+                // Lost the race — another concurrent delivery already transitioned this row.
+                // Reuse it (UPDATE, not INSERT) if it's now Processing (the other delivery is
+                // still live, or is a crashed-instance orphan worth retrying); skip if it already
+                // reached a terminal state (that other delivery already finished).
+                job = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == job.Id, cancellationToken);
+                if (job.Status != BackgroundJobStatus.Processing)
+                {
+                    logger.LogWarning(
+                        "Background job {JobId} already recorded as {Status}; skipping duplicate delivery.", message.JobId, job.Status);
+                    return;
+                }
+            }
         }
         else
         {

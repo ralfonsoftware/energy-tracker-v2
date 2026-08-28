@@ -1,5 +1,6 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EnergyTracker.Infrastructure.Adapters;
@@ -27,5 +28,16 @@ public class BackgroundJobEnqueueRecorder(IServiceScopeFactory scopeFactory)
         });
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    // Review-round-2 patch: compensating action for a queue adapter whose send fails *after*
+    // RecordAsync above already committed the Queued row — without this, a transient send failure
+    // (network blip, throttling) leaves a permanent phantom "Waiting" row, since Waiting/
+    // Processing/Needs Mapping rows are exempt from the 30-day sweep.
+    public async Task DeleteAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        await dbContext.BackgroundJobs.Where(j => j.Id == jobId).ExecuteDeleteAsync(cancellationToken);
     }
 }

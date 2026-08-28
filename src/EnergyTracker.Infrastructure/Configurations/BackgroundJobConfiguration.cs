@@ -36,6 +36,13 @@ public class BackgroundJobConfiguration : IEntityTypeConfiguration<BackgroundJob
         // AD-3's query filter runs on every BackgroundJob query — index the column it filters on.
         builder.HasIndex(j => j.HouseholdId);
 
+        // Review-round-2 patch: covers ListByJobTypeAsync (filters HouseholdId+JobType, orders by
+        // CreatedAtUtc) and SweepExpiredAsync's eligibility query (filters HouseholdId+JobType,
+        // reads CompletedAtUtc) — both are hot paths hit on every Smart Plug Import screen open,
+        // against a table this story's own Dev Notes call capable of holding hundreds of
+        // thousands of rows.
+        builder.HasIndex(j => new { j.HouseholdId, j.JobType, j.CreatedAtUtc });
+
         // AD-3's standard query filter is wired in EnergyTrackerDbContext.OnModelCreating.
     }
 }

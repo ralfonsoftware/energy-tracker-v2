@@ -1,5 +1,20 @@
 # generated: 2026-08-09
 # last_updated: 2026-08-28
+# 2026-08-28: story 3-6-smart-plug-import-job-status-history code-reviewed and moved to done
+#   (Blind Hunter + Edge Case Hunter + Acceptance Auditor). 2 decision-needed (both resolved during
+#   review): the Story 3.5 "Waiting"-badge regression fixed rather than left degraded; the OIDC
+#   `name`-claim mapping live-verified via Claude-in-Chrome against this project's dedicated Auth0
+#   test user - confirmed as a real bug (ClaimTypes.Name never populates against this app's exact
+#   OIDC config; the raw "name" claim does), fixed by reading the raw claim first. 10 further patch
+#   findings applied, including two sweep-correctness bugs (a Failed job with no paired
+#   SmartPlugImport row was permanently un-sweepable via the old inner join; a Needs-Mapping job
+#   resolved long after its original parse was getting swept on the very next list read because the
+#   cutoff compared against the stale BackgroundJob.CompletedAtUtc instead of the import's own) and
+#   a redelivery race in BackgroundJobProcessor's Queued->Processing transition. 1 defer
+#   (pre-existing HouseholdMember query-filter convention, not exploitable via any current call
+#   path), 2 dismissed as noise. Full backend suite green (414/414), full frontend suite green
+#   (208/208). epic-3 flipped back to done - all its stories (3.1-3.7) plus its retrospective are
+#   now complete, matching the reset-to-done pattern used after Story 3.7.
 # 2026-08-28: story 3-6-smart-plug-import-job-status-history moved to review (dev-story
 #   implementation complete) - see the matching, fuller entry further down this file for detail.
 #   Full backend suite green (403/403), full frontend suite green (205/205).
@@ -587,13 +602,13 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
+  epic-3: done
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
   3-4-incremental-smart-plug-import: done
   3-5-dual-entry-points-multi-file-import-queuing: done
-  3-6-smart-plug-import-job-status-history: review
+  3-6-smart-plug-import-job-status-history: done
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   epic-3-retrospective: done
 

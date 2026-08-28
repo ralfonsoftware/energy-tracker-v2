@@ -113,7 +113,7 @@ export function JobHistoryList() {
             const rowContent = (
               <>
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60">
-                  <Icon className="size-4" aria-hidden="true" />
+                  <Icon className={`size-4${job.state === 'processing' ? ' animate-spin' : ''}`} aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">

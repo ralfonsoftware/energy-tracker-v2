@@ -42,12 +42,15 @@ public class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> option
             new(ClaimTypes.NameIdentifier, subjectValues.ToString(), ClaimValueTypes.String, issuer),
             new(HouseholdClaimTypes.ValidatedIssuer, issuer),
         };
-        // Story 3.6/UX-DR21: an optional `name` claim, mirroring GetClaimsFromUserInfoEndpoint's
-        // real merge into ClaimTypes.Name (Program.cs) — absent by default, same as a provider
+        // Story 3.6/UX-DR21: an optional `name` claim under its raw JSON claim type — review-
+        // round-2 patch: mirrors the real Auth0/GetClaimsFromUserInfoEndpoint behavior confirmed
+        // empirically against a live test-user session (userinfo-sourced claims keep their raw
+        // JSON key, they are not remapped to ClaimTypes.Name the way ID-token claims are), not
+        // the originally-assumed ClaimTypes.Name shape. Absent by default, same as a provider
         // that returns no name claim, never fabricated.
         if (Request.Headers.TryGetValue(NameHeader, out var nameValues))
         {
-            claims.Add(new Claim(ClaimTypes.Name, nameValues.ToString()));
+            claims.Add(new Claim("name", nameValues.ToString()));
         }
 
         var identity = new ClaimsIdentity(claims, SchemeName);

@@ -57,17 +57,25 @@ public class ListSmartPlugImportJobs(IBackgroundJobRepository backgroundJobRepos
             : [];
         var displayNamesByMemberId = members.ToDictionary(m => m.Id, m => m.DisplayName);
 
+        // Review-round-2 patch: batched the same way as imports/members above instead of one
+        // ListGapsByImportIdAsync call per Flagged for Review row inside the loop below (N+1).
+        // A FlaggedForReview import always carries exactly one gap row (Story 3.3/3.7's own
+        // PersistFlaggedForReviewImportAsync precedent).
+        var flaggedImportIds = imports.Where(i => i.Status == SmartPlugImportStatus.FlaggedForReview).Select(i => i.Id).ToList();
+        var gaps = flaggedImportIds.Count > 0
+            ? await smartPlugImportRepository.ListGapsByImportIdsAsync(flaggedImportIds, cancellationToken)
+            : [];
+        var gapsByImportId = gaps.GroupBy(g => g.SmartPlugImportId).ToDictionary(g => g.Key, g => (IReadOnlyList<SmartPlugImportGap>)g.ToList());
+
         var results = new List<SmartPlugImportJobResult>(jobs.Count);
         foreach (var job in jobs)
         {
             importsByJobId.TryGetValue(job.Id, out var import);
             var state = DeriveState(job, import);
 
-            // A FlaggedForReview import always carries exactly one gap row (Story 3.3/3.7's own
-            // PersistFlaggedForReviewImportAsync precedent) — small, bounded, safe to load per row
-            // rather than batch across every job in the list.
-            IReadOnlyList<SmartPlugImportGap> gaps = state == SmartPlugImportJobState.FlaggedForReview && import is not null
-                ? await smartPlugImportRepository.ListGapsByImportIdAsync(import.Id, cancellationToken)
+            var jobGaps = state == SmartPlugImportJobState.FlaggedForReview && import is not null
+                && gapsByImportId.TryGetValue(import.Id, out var importGaps)
+                ? importGaps
                 : [];
 
             var displayName = job.QueuedByHouseholdMemberId is { } memberId && displayNamesByMemberId.TryGetValue(memberId, out var name)
@@ -84,7 +92,7 @@ public class ListSmartPlugImportJobs(IBackgroundJobRepository backgroundJobRepos
                 job.ErrorMessage,
                 import?.Id,
                 import?.DeviceTag,
-                gaps));
+                jobGaps));
         }
 
         return results;
@@ -103,6 +111,11 @@ public class ListSmartPlugImportJobs(IBackgroundJobRepository backgroundJobRepos
         {
             SmartPlugImportStatus.AwaitingPowerPointMapping => SmartPlugImportJobState.NeedsMapping,
             SmartPlugImportStatus.FlaggedForReview => SmartPlugImportJobState.FlaggedForReview,
+            // Review-round-2 patch: a Completed job with no paired SmartPlugImport row (legacy
+            // data, or a future JobType with no import concept) used to fall through to Success
+            // here — silently misreporting a data-integrity gap as a clean success instead of
+            // surfacing it.
+            null => SmartPlugImportJobState.Error,
             _ => SmartPlugImportJobState.Success,
         },
         _ => throw new InvalidOperationException($"Unexpected BackgroundJobStatus '{job.Status}' for job {job.Id}."),

@@ -431,6 +431,43 @@ describe('SmartPlugImportPage', () => {
     await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
   })
 
+  it('shows a Waiting badge (not Processing) for a status:"queued" response, then completes', async () => {
+    // Review-round-2 patch (Story 3.6): the backend now inserts a Queued row at enqueue time, so
+    // GET /api/jobs/{id} returns 200 status:'queued' instead of 404 for a job not yet dequeued —
+    // companion to the 404-based test above, covering the new (now-primary) path directly.
+    let statusCallCount = 0
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
+      if (url === '/api/smart-plug-imports') {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+
+      statusCallCount += 1
+      if (statusCallCount <= 5) {
+        return Promise.resolve(
+          jsonResponse({ id: 'job-1', status: 'queued', importStatus: null, errorMessage: null, createdAtUtc: '', completedAtUtc: null }),
+        )
+      }
+
+      return Promise.resolve(
+        jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
+      )
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SmartPlugImportPage onBack={() => {}} />)
+
+    await selectFiles(makeFile('export.xlsx'))
+    await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
+
+    await vi.advanceTimersByTimeAsync(2000 * 5)
+    expect(screen.queryByText('Import failed')).not.toBeInTheDocument()
+    expect(screen.getByText('Waiting')).toBeInTheDocument()
+    expect(screen.queryByText('Processing')).not.toBeInTheDocument()
+    expect(screen.getByText('Still queued — large files can take a while to start processing.')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
+  })
+
   it('shows an error and keeps the row when the upload itself is rejected (unsupported type)', async () => {
     vi.stubGlobal('fetch', vi.fn(withJobHistoryStub(() => Promise.resolve(jsonResponse({ detail: 'bad type' }, 400)))))
     render(<SmartPlugImportPage onBack={() => {}} />)

@@ -417,6 +417,14 @@ public class SmartPlugImportRepository(
             .OrderBy(g => g.StartDate)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<SmartPlugImportGap>> ListGapsByImportIdsAsync(
+        IReadOnlyList<Guid> smartPlugImportIds, CancellationToken cancellationToken) =>
+        await dbContext.SmartPlugImportGaps
+            .AsNoTracking()
+            .Where(g => smartPlugImportIds.Contains(g.SmartPlugImportId))
+            .OrderBy(g => g.StartDate)
+            .ToListAsync(cancellationToken);
+
     public async Task AddFlaggedForReviewAsync(SmartPlugImport import, SmartPlugImportGap gap, CancellationToken cancellationToken)
     {
         await dbContext.SmartPlugImports.AddAsync(import, cancellationToken);
@@ -433,27 +441,37 @@ public class SmartPlugImportRepository(
 
     public async Task SweepExpiredAsync(Guid householdId, DateTimeOffset cutoffUtc, CancellationToken cancellationToken)
     {
-        // Eligible-for-deletion rule (Story 3.6/AD-6 extension): the job finished before the
-        // cutoff AND reached a terminal, resolved state — Error (BackgroundJobStatus.Failed) or
-        // Success/Flagged for Review (BackgroundJobStatus.Completed with the joined
-        // SmartPlugImport.Status Completed or FlaggedForReview). Needs Mapping
-        // (AwaitingPowerPointMapping) is deliberately excluded here even though the background
-        // job itself is Completed — the import is still unresolved (AC #7).
-        var eligible = await dbContext.BackgroundJobs
-            .Where(j => j.HouseholdId == householdId
-                && j.JobType == JobTypes.ProcessSmartPlugImport
-                && j.CompletedAtUtc != null
-                && j.CompletedAtUtc < cutoffUtc)
-            .Join(
-                dbContext.SmartPlugImports,
-                job => job.Id,
-                import => import.BackgroundJobId,
-                (job, import) => new { job.Id, job.Status, ImportId = import.Id, ImportStatus = import.Status })
-            .Where(x => x.Status == BackgroundJobStatus.Failed
-                || (x.Status == BackgroundJobStatus.Completed
-                    && (x.ImportStatus == SmartPlugImportStatus.Completed || x.ImportStatus == SmartPlugImportStatus.FlaggedForReview)))
-            .Select(x => new { BackgroundJobId = x.Id, SmartPlugImportId = x.ImportId })
-            .ToListAsync(cancellationToken);
+        // Eligible-for-deletion rule (Story 3.6/AD-6 extension): the job reached a terminal,
+        // resolved state — Error (BackgroundJobStatus.Failed) or Success/Flagged for Review
+        // (BackgroundJobStatus.Completed with the joined SmartPlugImport.Status Completed or
+        // FlaggedForReview) — before the cutoff. Needs Mapping (AwaitingPowerPointMapping) is
+        // deliberately excluded here even though the background job itself is Completed — the
+        // import is still unresolved (AC #7).
+        //
+        // LEFT JOIN (not inner) — review-round-2 patch: a Failed job can have no paired
+        // SmartPlugImport row at all (e.g. an unknown JobType, or a JSON-deserialize failure
+        // inside BackgroundJobProcessor before ProcessSmartPlugImport.ExecuteAsync's own
+        // paired-row-on-failure logic ever runs). An inner join silently excluded that class of
+        // job from the sweep forever.
+        //
+        // The cutoff compares against the import row's own CompletedAtUtc when one exists, not
+        // the BackgroundJob row's — review-round-2 patch: MapSmartPlugImportToPowerPoint updates
+        // only the import's CompletedAtUtc when a Needs Mapping job is later resolved, so
+        // comparing against the job's original (parse-time) CompletedAtUtc would sweep a
+        // just-resolved import on the very next list read whenever the original parse happened
+        // more than 30 days ago.
+        var eligible = await (
+            from job in dbContext.BackgroundJobs
+            where job.HouseholdId == householdId && job.JobType == JobTypes.ProcessSmartPlugImport
+            join import in dbContext.SmartPlugImports on job.Id equals import.BackgroundJobId into importGroup
+            from import in importGroup.DefaultIfEmpty()
+            let completedAtUtc = import != null ? import.CompletedAtUtc : job.CompletedAtUtc
+            where completedAtUtc != null && completedAtUtc < cutoffUtc
+                && (job.Status == BackgroundJobStatus.Failed
+                    || (job.Status == BackgroundJobStatus.Completed && import != null
+                        && (import.Status == SmartPlugImportStatus.Completed || import.Status == SmartPlugImportStatus.FlaggedForReview)))
+            select new { BackgroundJobId = job.Id, SmartPlugImportId = (Guid?)(import == null ? null : import.Id) }
+        ).ToListAsync(cancellationToken);
 
         if (eligible.Count == 0)
         {
@@ -463,21 +481,24 @@ public class SmartPlugImportRepository(
         // Set-based, in FK-dependency order (UpdateMappingAsync's own doc comment establishes the
         // same discipline for this table) — never load-then-remove, these tables can hold
         // hundreds of thousands of rows.
-        var importIds = eligible.Select(x => x.SmartPlugImportId).ToList();
+        var importIds = eligible.Where(x => x.SmartPlugImportId is not null).Select(x => x.SmartPlugImportId!.Value).ToList();
         var jobIds = eligible.Select(x => x.BackgroundJobId).ToList();
 
-        await dbContext.SmartPlugImportGaps
-            .Where(g => importIds.Contains(g.SmartPlugImportId))
-            .ExecuteDeleteAsync(cancellationToken);
+        if (importIds.Count > 0)
+        {
+            await dbContext.SmartPlugImportGaps
+                .Where(g => importIds.Contains(g.SmartPlugImportId))
+                .ExecuteDeleteAsync(cancellationToken);
 
-        // Task 3's SetNull FK detaches (never deletes) the matching SmartPlugReading rows
-        // automatically at the database level (AD-20).
-        await dbContext.SmartPlugImports
-            .Where(i => importIds.Contains(i.Id))
-            .ExecuteDeleteAsync(cancellationToken);
+            // Task 3's SetNull FK detaches (never deletes) the matching SmartPlugReading rows
+            // automatically at the database level (AD-20).
+            await dbContext.SmartPlugImports
+                .Where(i => importIds.Contains(i.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
-        // BackgroundJobs last — SmartPlugImport.BackgroundJobId's FK is Restrict, so the import
-        // row must already be gone before this delete can succeed.
+        // BackgroundJobs last — SmartPlugImport.BackgroundJobId's FK is Restrict, so any paired
+        // import row must already be gone before this delete can succeed.
         await dbContext.BackgroundJobs
             .Where(j => jobIds.Contains(j.Id))
             .ExecuteDeleteAsync(cancellationToken);

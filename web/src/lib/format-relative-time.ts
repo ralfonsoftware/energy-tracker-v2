@@ -11,7 +11,11 @@ const UNITS: { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] = [
 ]
 
 export function formatRelativeTime(iso: string, locale: string, now: Date = new Date()): string {
-  const deltaSeconds = (new Date(iso).getTime() - now.getTime()) / 1000
+  // Clamped to <= 0: `iso` timestamps are always meant to be in the past, but ordinary clock
+  // skew between the server that stamped it and the viewer's own clock can make it come out
+  // fractionally ahead — without this, a job queued moments ago would render as "in 5 seconds"
+  // instead of "now".
+  const deltaSeconds = Math.min(0, (new Date(iso).getTime() - now.getTime()) / 1000)
   const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
 
   for (const { unit, seconds } of UNITS) {

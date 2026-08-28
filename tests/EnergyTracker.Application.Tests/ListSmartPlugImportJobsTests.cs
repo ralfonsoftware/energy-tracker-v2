@@ -17,6 +17,8 @@ public class ListSmartPlugImportJobsTests
             .Returns((IReadOnlyList<SmartPlugImport>)[]);
         _backgroundJobRepository.FindMembersByIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<HouseholdMember>)[]);
+        _smartPlugImportRepository.ListGapsByImportIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<SmartPlugImportGap>)[]);
     }
 
     private ListSmartPlugImportJobs Sut() => new(_backgroundJobRepository, _smartPlugImportRepository);
@@ -142,7 +144,7 @@ public class ListSmartPlugImportJobsTests
         };
         ReturnJobs(job);
         ReturnImports(import);
-        _smartPlugImportRepository.ListGapsByImportIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns([gap]);
+        _smartPlugImportRepository.ListGapsByImportIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>()).Returns([gap]);
         var sut = Sut();
 
         var result = await sut.ExecuteAsync(_householdId, TestContext.Current.CancellationToken);
@@ -150,6 +152,60 @@ public class ListSmartPlugImportJobsTests
         result[0].State.ShouldBe(SmartPlugImportJobState.FlaggedForReview);
         result[0].Gaps.ShouldHaveSingleItem();
         result[0].Gaps[0].ShouldBe(gap);
+    }
+
+    [Fact]
+    public async Task Gaps_for_multiple_FlaggedForReview_rows_are_batched_in_one_call_not_one_per_row()
+    {
+        // Review-round-2 patch regression guard: this used to be a per-row ListGapsByImportIdAsync
+        // call inside the loop (N+1), despite the same method batching the analogous import/
+        // member lookups. Two Flagged for Review jobs must resolve their gaps via exactly one
+        // ListGapsByImportIdsAsync call, each getting only its own gap back.
+        var jobA = MakeJob(BackgroundJobStatus.Completed);
+        var importA = MakeImport(jobA.Id, SmartPlugImportStatus.FlaggedForReview);
+        var jobB = MakeJob(BackgroundJobStatus.Completed);
+        var importB = MakeImport(jobB.Id, SmartPlugImportStatus.FlaggedForReview);
+        var gapA = new SmartPlugImportGap
+        {
+            Id = Guid.NewGuid(), HouseholdId = _householdId, SmartPlugImportId = importA.Id, PowerPointId = null,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        var gapB = new SmartPlugImportGap
+        {
+            Id = Guid.NewGuid(), HouseholdId = _householdId, SmartPlugImportId = importB.Id, PowerPointId = null,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        ReturnJobs(jobA, jobB);
+        ReturnImports(importA, importB);
+        _smartPlugImportRepository.ListGapsByImportIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns([gapA, gapB]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(_householdId, TestContext.Current.CancellationToken);
+
+        result.Single(r => r.SmartPlugImportId == importA.Id).Gaps.ShouldBe([gapA]);
+        result.Single(r => r.SmartPlugImportId == importB.Id).Gaps.ShouldBe([gapB]);
+        await _smartPlugImportRepository.Received(1).ListGapsByImportIdsAsync(
+            Arg.Is<IReadOnlyList<Guid>>(ids => ids.Count == 2 && ids.Contains(importA.Id) && ids.Contains(importB.Id)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Completed_job_with_no_matching_SmartPlugImport_row_derives_to_Error_instead_of_silently_Success()
+    {
+        // Review-round-2 patch: a Completed BackgroundJob with no paired SmartPlugImport row
+        // (legacy data, or a future JobType with no import concept) used to silently derive
+        // Success — masking a data-integrity gap instead of surfacing it.
+        var job = MakeJob(BackgroundJobStatus.Completed);
+        ReturnJobs(job);
+        // No matching import returned for this job's id (constructor default: empty imports list).
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(_householdId, TestContext.Current.CancellationToken);
+
+        result[0].State.ShouldBe(SmartPlugImportJobState.Error);
     }
 
     [Fact]

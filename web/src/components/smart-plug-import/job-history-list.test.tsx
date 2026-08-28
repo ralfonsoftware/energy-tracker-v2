@@ -113,6 +113,27 @@ describe('JobHistoryList', () => {
     await waitFor(() => expect(screen.getByText('Flagged for review')).toBeInTheDocument())
   })
 
+  it('animates only the Processing row\'s icon, not other states', async () => {
+    const jobs = [
+      makeJob({ jobId: 'waiting', state: 'waiting', fileName: 'a.csv' }),
+      makeJob({ jobId: 'processing', state: 'processing', fileName: 'b.csv' }),
+      makeJob({ jobId: 'success', state: 'success', fileName: 'c.csv' }),
+    ]
+    stubFetch(jobs)
+
+    render(<JobHistoryList />)
+    await waitFor(() => expect(screen.getByText('b.csv')).toBeInTheDocument())
+
+    const processingRow = screen.getByText('b.csv').closest('.border-b')
+    expect(processingRow?.querySelector('svg')).toHaveClass('animate-spin')
+
+    const waitingRow = screen.getByText('a.csv').closest('.border-b')
+    expect(waitingRow?.querySelector('svg')).not.toHaveClass('animate-spin')
+
+    const successRow = screen.getByText('c.csv').closest('.border-b')
+    expect(successRow?.querySelector('svg')).not.toHaveClass('animate-spin')
+  })
+
   it('renders the fallback string, never blank/undefined, when queuedByDisplayName is null', async () => {
     const job = makeJob({ queuedByDisplayName: null })
     stubFetch([job])

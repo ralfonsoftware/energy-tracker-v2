@@ -20,7 +20,11 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
-export type JobStatusValue = 'processing' | 'completed' | 'failed'
+// 'queued' added review-round-2 (Story 3.6): the backend now inserts a Queued BackgroundJob row
+// at enqueue time, so GET /api/jobs/{id} returns 200 status:'queued' for a job not yet dequeued
+// instead of 404 — use-smart-plug-import-job.ts's own `queued` flag now derives from this instead
+// of the (now-defeated) 404-means-queued heuristic.
+export type JobStatusValue = 'queued' | 'processing' | 'completed' | 'failed'
 
 // Matches the backend's lowercased-enum convention already used for `importStatus`.
 export type SmartPlugImportGapTreatment = 'estimated' | 'missing' | 'flaggedforreview'

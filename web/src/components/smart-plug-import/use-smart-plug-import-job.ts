@@ -89,6 +89,14 @@ export function useSmartPlugImportJob(file: File): SmartPlugImportJob {
         }
 
         consecutiveFailures = 0
+        if (job.status === 'queued') {
+          // Review-round-2 patch (Story 3.6): the backend now inserts a Queued row at enqueue
+          // time, so this job already exists and 200s here instead of 404ing — the old
+          // 404-means-queued heuristic below never fires for it anymore. Same "Waiting" signal,
+          // read from the status body instead.
+          setQueued(true)
+          return
+        }
         setQueued(false)
         if (job.status === 'completed') {
           setGaps(job.gaps ?? [])

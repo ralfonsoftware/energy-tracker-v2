@@ -70,8 +70,8 @@ public static class HouseholdInviteEndpoints
             }
 
             // Story 3.6/UX-DR21: same nullable, never-fabricated OIDC `name` claim read as
-            // HouseholdEndpoints' POST /households.
-            var displayName = user.FindFirst(ClaimTypes.Name)?.Value;
+            // HouseholdEndpoints' POST /households (see HouseholdClaimTypes.ResolveDisplayName).
+            var displayName = HouseholdClaimTypes.ResolveDisplayName(user);
 
             try
             {

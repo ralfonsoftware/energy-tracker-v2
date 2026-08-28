@@ -69,6 +69,12 @@ public interface ISmartPlugImportRepository
     // Lets GET /api/jobs/{id} surface an import's detected gaps alongside its own status (Task 5).
     Task<IReadOnlyList<SmartPlugImportGap>> ListGapsByImportIdAsync(Guid smartPlugImportId, CancellationToken cancellationToken);
 
+    // Batch-load, keyed by SmartPlugImportId — review-round-2 patch: lets ListSmartPlugImportJobs
+    // resolve every Flagged for Review row's gap in one query instead of N+1, mirroring
+    // FindAllByBackgroundJobIdsAsync's batching for the same method.
+    Task<IReadOnlyList<SmartPlugImportGap>> ListGapsByImportIdsAsync(
+        IReadOnlyList<Guid> smartPlugImportIds, CancellationToken cancellationToken);
+
     // AC #7: an import whose file parsed to zero rows at all — persists the SmartPlugImport
     // (FlaggedForReview, no readings) and its single whole-file gap row together, one transaction,
     // mirroring AddAsync's "no partially persisted import" discipline.

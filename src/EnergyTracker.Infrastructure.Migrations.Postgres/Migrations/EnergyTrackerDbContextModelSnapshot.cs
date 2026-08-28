@@ -103,6 +103,8 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 
                     b.HasIndex("QueuedByHouseholdMemberId");
 
+                    b.HasIndex("HouseholdId", "JobType", "CreatedAtUtc");
+
                     b.ToTable("BackgroundJobs", (string)null);
                 });
 
