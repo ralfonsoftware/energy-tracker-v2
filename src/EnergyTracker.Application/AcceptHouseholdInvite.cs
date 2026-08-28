@@ -14,6 +14,7 @@ public class AcceptHouseholdInvite(IHouseholdRepository repository)
         string token,
         string externalIssuer,
         string externalSubjectId,
+        string? displayName,
         CancellationToken cancellationToken)
     {
         var invite = await repository.FindInviteByTokenAsync(token, cancellationToken)
@@ -38,6 +39,7 @@ public class AcceptHouseholdInvite(IHouseholdRepository repository)
             HouseholdId = invite.HouseholdId,
             ExternalIssuer = externalIssuer,
             ExternalSubjectId = externalSubjectId,
+            DisplayName = displayName,
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
 

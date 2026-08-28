@@ -1,5 +1,18 @@
 # generated: 2026-08-09
-# last_updated: 2026-08-27
+# last_updated: 2026-08-28
+# 2026-08-28: story 3-6-smart-plug-import-job-status-history moved to review (dev-story
+#   implementation complete) - see the matching, fuller entry further down this file for detail.
+#   Full backend suite green (403/403), full frontend suite green (205/205).
+# 2026-08-27: story 3-6-smart-plug-import-job-status-history drafted (create-story) - status set
+#   to ready-for-dev. epic-3 already in-progress (Story 3.5 just merged, Story 3.7 done), so no
+#   epic status change needed. Story context flags two load-bearing implementation hazards found
+#   during drafting: SmartPlugReading.SmartPlugImportId's FK is Restrict today, which will hard-fail
+#   the story's own 30-day retention sweep on delete unless changed to nullable+SetNull first; and
+#   BackgroundJobStatus.Queued must be appended after Failed, never inserted before Processing, to
+#   avoid reinterpreting every already-persisted job's stored int status. Also designed a new
+#   HouseholdMember.DisplayName field (captured from the OIDC name claim at membership-creation
+#   time) since no member-attribution/display-name concept exists anywhere in this codebase yet,
+#   needed for UX-DR21's "Queued by {member}" row meta line.
 # 2026-08-27: stories 3-5-dual-entry-points-multi-file-import-queuing and
 #   3-6-smart-plug-import-job-status-history added to backlog under Epic 3 (sprint-planning
 #   refresh, Ralf's request). Both already existed in epic-3-smart-plug-import-baseline-
@@ -193,7 +206,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-27
+last_updated: 2026-08-28
 # 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to done (adversarial code
 #   review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 0 decision-needed, 6
 #   patch findings (all applied — see the story file's Review Findings and Change Log), 4 deferred
@@ -515,6 +528,34 @@ last_updated: 2026-08-27
 #   3 action items recorded (Auth0 test user for local live-verification, shadcn CLI alias-bug
 #   root-cause, deferred-work.md Story 2.4 items flagged for Story 3.3's author). See
 #   epic-2-retro-2026-08-18.md.
+# 2026-08-27: story 3-6-smart-plug-import-job-status-history moved to in-progress (dev-story
+#   activation).
+# 2026-08-28: story 3-6-smart-plug-import-job-status-history moved to review (dev-story
+#   implementation complete). All 6 tasks: BackgroundJobStatus.Queued appended (not inserted)
+#   + BackgroundJobEnqueueRecorder (new shared singleton) persists a Queued BackgroundJob row
+#   synchronously before the 202 response, so GET /api/jobs/{id} never 404s for a freshly-queued
+#   job anymore; BackgroundJobProcessor.ProcessAsync became a lookup+transition instead of a blind
+#   insert. HouseholdMember.DisplayName captured from the OIDC name claim at household-creation/
+#   invite-acceptance time; ICurrentHouseholdAccessor gained HouseholdMemberId. SmartPlugReading.
+#   SmartPlugImportId made nullable with an ON DELETE SET NULL FK (verified directly against both
+#   real engines) so the new lazy 30-day sweep (piggybacked on ListSmartPlugImportJobs's own query
+#   path, no IHostedService) can delete SmartPlugImport/BackgroundJob/SmartPlugImportGap audit rows
+#   while every SmartPlugReading survives, detached. New GET /api/smart-plug-import-jobs endpoint
+#   + JobHistoryList frontend component render the six-state (Waiting/Processing/Success/Error/
+#   Needs Mapping/Flagged for Review) household-wide list below the existing upload queue on the
+#   same screen. Two real bugs caught by the test suite, not by inspection: a Postgres-incompatible
+#   ValueTuple LINQ projection in CurrentHouseholdAccessor that 500'd every authenticated request
+#   (Npgsql can't read a server-side tuple projection as a composite "record" type), and a missing
+#   unmounted-component guard in JobHistoryList that caused a genuine flaky test only when the full
+#   frontend suite ran together. Two interactions discovered and deliberately left unfixed (logged
+#   in deferred-work.md instead): adding the Queued row pre-empts use-smart-plug-import-job.ts's
+#   existing 404-means-queued heuristic, degrading the per-session queue's "Waiting" badge to
+#   always "Processing" (cosmetic only, and that file is explicitly out of scope per this story's
+#   own Known Non-Goals); and the OIDC name-claim mapping was verified only against this repo's
+#   TestAuthHandler test double, not a live Auth0 session (no Chrome/Auth0 access in this automated
+#   run). Full backend suite green: 403 tests (199 Application, 73 Infrastructure via Testcontainers
+#   Postgres+SqlServer, 128 Api.Tests via Testcontainers, 3 Architecture), dotnet build clean. Full
+#   frontend suite green: 205 tests, tsc/oxlint/vite build clean.
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -552,7 +593,7 @@ development_status:
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
   3-4-incremental-smart-plug-import: done
   3-5-dual-entry-points-multi-file-import-queuing: done
-  3-6-smart-plug-import-job-status-history: backlog
+  3-6-smart-plug-import-job-status-history: review
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   epic-3-retrospective: done
 

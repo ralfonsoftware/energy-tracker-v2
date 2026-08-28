@@ -8,6 +8,23 @@ function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
 }
 
+// SmartPlugImportPage now also renders JobHistoryList (Story 3.6), which fetches
+// GET /api/smart-plug-import-jobs on mount and on its own poll interval — every fetch mock below
+// needs to answer that call with an array (its own contract), not fall through to whatever
+// job-status shape that mock's own handler returns for "any other URL". Wraps a test's own
+// per-URL handler so it doesn't have to repeat this branch itself.
+function withJobHistoryStub(
+  handler: (url: string, init?: RequestInit) => Promise<Response>,
+): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
+  return (input, init) => {
+    const url = String(input)
+    if (url === '/api/smart-plug-import-jobs') {
+      return Promise.resolve(jsonResponse([]))
+    }
+    return handler(url, init)
+  }
+}
+
 function makeFile(name: string) {
   return new File(['data'], name)
 }
@@ -68,8 +85,7 @@ describe('SmartPlugImportPage', () => {
     // so a poll tick landing mid-test — however unlikely under fake timers — exercises the real
     // per-item polling path instead of falling through to an unhandled/null response.
     const jobIdByFileName: Record<string, string> = { 'a.xlsx': 'job-a', 'b.csv': 'job-b', 'c.csv': 'job-c' }
-    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input)
+    const fetchMock = vi.fn(withJobHistoryStub(async (url, init) => {
       if (url === '/api/smart-plug-imports') {
         await gate
         return jsonResponse({ jobId: jobIdByFileName[fileNameFromUploadInit(init)] }, 202)
@@ -78,7 +94,7 @@ describe('SmartPlugImportPage', () => {
         return jsonResponse({ id: url.split('/').pop(), status: 'processing', errorMessage: null, createdAtUtc: '', completedAtUtc: null })
       }
       throw new Error(`Unexpected fetch: ${url}`)
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<SmartPlugImportPage onBack={() => {}} />)
@@ -92,22 +108,22 @@ describe('SmartPlugImportPage', () => {
     expect(screen.getAllByText('Uploading…')).toHaveLength(3)
 
     // Confirm uploads fired concurrently, not one-by-one: all 3 POSTs already happened even
-    // though none has resolved yet.
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    // though none has resolved yet. +1 for JobHistoryList's own mount-time
+    // GET /api/smart-plug-import-jobs fetch (Story 3.6).
+    expect(fetchMock).toHaveBeenCalledTimes(4)
 
     releaseUploads!()
     await waitFor(() => expect(screen.getAllByText('Processing')).toHaveLength(3))
   })
 
   it('dropping 3 files in one action renders 3 queue rows and uploads all 3 concurrently (AC #4/#6)', async () => {
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input)
+    const fetchMock = vi.fn(withJobHistoryStub((url, init) => {
       if (url === '/api/smart-plug-imports') {
         const jobId = `job-${fileNameFromUploadInit(init)}`
         return Promise.resolve(jsonResponse({ jobId }, 202))
       }
       return Promise.resolve(jsonResponse({ id: url, status: 'processing', errorMessage: null, createdAtUtc: '', completedAtUtc: null }))
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<SmartPlugImportPage onBack={() => {}} />)
@@ -117,13 +133,13 @@ describe('SmartPlugImportPage', () => {
     expect(screen.getByText('d2.csv')).toBeInTheDocument()
     expect(screen.getByText('d3.csv')).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByText('Processing')).toHaveLength(3))
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    // +1 for JobHistoryList's own mount-time GET /api/smart-plug-import-jobs fetch (Story 3.6).
+    expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 
   it("one item's failure does not affect the polling or rendered state of the other two (AC #5)", async () => {
     let uploadCallCount = 0
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input)
+    const fetchMock = vi.fn(withJobHistoryStub((url, init) => {
       if (url === '/api/smart-plug-imports') {
         uploadCallCount += 1
         const name = fileNameFromUploadInit(init)
@@ -139,7 +155,7 @@ describe('SmartPlugImportPage', () => {
         return Promise.resolve(jsonResponse({ id: 'job-2', status: 'failed', errorMessage: 'parse error', createdAtUtc: '', completedAtUtc: '' }))
       }
       throw new Error(`Unexpected fetch: ${url}`)
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<SmartPlugImportPage onBack={() => {}} />)
@@ -161,7 +177,7 @@ describe('SmartPlugImportPage', () => {
     // two effect invocations), rather than a bare mock that would "succeed" twice regardless of
     // whether the code aborts anything.
     let successfulUploads = 0
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url, init) => {
       if (url === '/api/smart-plug-imports') {
         return new Promise<Response>((resolve, reject) => {
           const signal = init?.signal
@@ -182,7 +198,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'processing', errorMessage: null, createdAtUtc: '', completedAtUtc: null }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />, { wrapper: StrictMode })
 
@@ -193,7 +209,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('uploads the selected file immediately and shows Processing while polling', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202)))
+    const fetchMock = vi.fn(withJobHistoryStub(() => Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -205,7 +221,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('polls GET /api/jobs/{id} until the job completes, then shows the complete state', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -213,7 +229,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -226,7 +242,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('hides the shared background-processing note once the (only) queued item has completed', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -234,7 +250,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -249,7 +265,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('shows the failed state when the job reaches a failed status', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -257,7 +273,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'failed', errorMessage: 'boom', createdAtUtc: '', completedAtUtc: '' }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -271,7 +287,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('shows a needs-mapping badge and the create/map dialog when the import completes without a Power Point match', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -297,7 +313,7 @@ describe('SmartPlugImportPage', () => {
       }
 
       throw new Error(`Unexpected fetch: ${url}`)
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -311,7 +327,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('flips to the completed state once the mapping dialog reports success', async () => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url, init) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -340,7 +356,7 @@ describe('SmartPlugImportPage', () => {
       }
 
       throw new Error(`Unexpected fetch: ${url} ${init?.method ?? ''}`)
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -356,7 +372,7 @@ describe('SmartPlugImportPage', () => {
 
   it('tolerates a transient polling failure and keeps polling instead of failing immediately', async () => {
     let statusCallCount = 0
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -369,7 +385,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -385,7 +401,7 @@ describe('SmartPlugImportPage', () => {
 
   it('shows a Waiting badge (not Processing) while repeatedly 404ing behind another import, then completes', async () => {
     let statusCallCount = 0
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -398,7 +414,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -416,7 +432,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('shows an error and keeps the row when the upload itself is rejected (unsupported type)', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ detail: 'bad type' }, 400))))
+    vi.stubGlobal('fetch', vi.fn(withJobHistoryStub(() => Promise.resolve(jsonResponse({ detail: 'bad type' }, 400)))))
     render(<SmartPlugImportPage onBack={() => {}} />)
 
     await selectFiles(makeFile('notes.csv'))
@@ -428,7 +444,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('shows the flagged-for-review state and its gap card when the import is entirely gaps', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -444,7 +460,7 @@ describe('SmartPlugImportPage', () => {
           gaps: [{ startDate: '2026-08-01', endDate: '2026-08-09', treatment: 'flaggedforreview', estimatedTotalKwh: null }],
         }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -458,7 +474,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('renders gap cards in the completed state when the job carries gaps', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -474,7 +490,7 @@ describe('SmartPlugImportPage', () => {
           gaps: [{ startDate: '2026-04-12', endDate: '2026-04-17', treatment: 'estimated', estimatedTotalKwh: 24.6 }],
         }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -488,7 +504,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('removes a completed item from the queue when "Remove from queue" is tapped', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -496,7 +512,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'completed', importStatus: 'completed', errorMessage: null, createdAtUtc: '', completedAtUtc: '' }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     render(<SmartPlugImportPage onBack={() => {}} />)
 
@@ -511,7 +527,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('shows "Add more files" instead of the initial hint once a file has already been queued', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))))
+    vi.stubGlobal('fetch', vi.fn(withJobHistoryStub(() => Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202)))))
     render(<SmartPlugImportPage onBack={() => {}} />)
 
     await selectFiles(makeFile('export.xlsx'))
@@ -521,7 +537,7 @@ describe('SmartPlugImportPage', () => {
   })
 
   it('clears each item\'s polling interval on unmount', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {
         return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
       }
@@ -529,7 +545,7 @@ describe('SmartPlugImportPage', () => {
       return Promise.resolve(
         jsonResponse({ id: 'job-1', status: 'processing', errorMessage: null, createdAtUtc: '', completedAtUtc: null }),
       )
-    })
+    }))
     vi.stubGlobal('fetch', fetchMock)
     const { unmount } = render(<SmartPlugImportPage onBack={() => {}} />)
 

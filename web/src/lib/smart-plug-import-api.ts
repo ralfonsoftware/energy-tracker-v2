@@ -129,6 +129,34 @@ export async function fetchPowerPoints(): Promise<PowerPointDto[]> {
   return (await response.json()) as PowerPointDto[]
 }
 
+// The six states FR-32/UX-DR21 require, never folded into one another or a generic pending/done.
+export type SmartPlugImportJobStateValue = 'waiting' | 'processing' | 'success' | 'error' | 'needsMapping' | 'flaggedForReview'
+
+export interface SmartPlugImportJobDto {
+  jobId: string
+  fileName: string | null
+  state: SmartPlugImportJobStateValue
+  // null means render a generic fallback — never fabricate a name (UX-DR21).
+  queuedByDisplayName: string | null
+  queuedAtUtc: string
+  completedAtUtc: string | null
+  errorMessage: string | null
+  smartPlugImportId: string | null
+  deviceTag: string | null
+  gaps: SmartPlugImportGapDto[]
+}
+
+// Story 3.6/FR-32: the household-wide Job Status & History list — every import job any member
+// has ever queued, not just the caller's own (AC #1).
+export async function fetchSmartPlugImportJobs(): Promise<SmartPlugImportJobDto[]> {
+  const response = await fetch('/api/smart-plug-import-jobs', { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as SmartPlugImportJobDto[]
+}
+
 export async function createPowerPoint(roomId: string, name: string): Promise<PowerPointDto> {
   const response = await fetch('/api/power-points', {
     method: 'POST',

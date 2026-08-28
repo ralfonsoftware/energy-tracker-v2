@@ -26,6 +26,13 @@ public class BackgroundJobConfiguration : IEntityTypeConfiguration<BackgroundJob
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Optional FK — no .IsRequired(), unlike every other FK to Household in this file.
+        // Restrict, not Cascade — same convention. Story 3.6/AD-6 extension.
+        builder.HasOne<HouseholdMember>()
+            .WithMany()
+            .HasForeignKey(j => j.QueuedByHouseholdMemberId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // AD-3's query filter runs on every BackgroundJob query — index the column it filters on.
         builder.HasIndex(j => j.HouseholdId);
 

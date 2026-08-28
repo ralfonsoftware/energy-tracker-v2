@@ -9,7 +9,7 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // Default adapter (AD-6) — self-host and local dev, zero extra containers. Registered as a
 // singleton so the same Channel instance backs both scoped API requests calling EnqueueAsync and
 // the paired hosted BackgroundService reading it back off.
-public class InProcessChannelJobQueue : IBackgroundJobQueue
+public class InProcessChannelJobQueue(BackgroundJobEnqueueRecorder enqueueRecorder) : IBackgroundJobQueue
 {
     private readonly Channel<JobMessage> _channel = Channel.CreateUnbounded<JobMessage>();
 
@@ -17,6 +17,11 @@ public class InProcessChannelJobQueue : IBackgroundJobQueue
 
     public async Task EnqueueAsync<TPayload>(JobEnvelope<TPayload> envelope, CancellationToken cancellationToken)
     {
+        // Story 3.6/AD-6 extension: the BackgroundJob row (Queued) is persisted before the
+        // channel write, so a job is visible in the household-wide job list the instant it's
+        // enqueued, not only once dequeued.
+        await enqueueRecorder.RecordAsync(envelope, cancellationToken);
+
         var message = new JobMessage(envelope.JobId, envelope.HouseholdId, envelope.JobType, JsonSerializer.Serialize(envelope.Payload));
         await _channel.Writer.WriteAsync(message, cancellationToken);
     }

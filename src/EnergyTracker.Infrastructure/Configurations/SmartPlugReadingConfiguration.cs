@@ -35,11 +35,14 @@ public class SmartPlugReadingConfiguration : IEntityTypeConfiguration<SmartPlugR
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Nullable, SetNull (not Restrict) — Story 3.6/AD-6 extension's 30-day retention sweep
+        // deletes a swept-away SmartPlugImport row; this reading must survive with
+        // SmartPlugImportId set to NULL rather than block the delete or cascade it away (AD-20:
+        // the sweep deletes only audit rows, never SmartPlugReading data).
         builder.HasOne<SmartPlugImport>()
             .WithMany()
             .HasForeignKey(r => r.SmartPlugImportId)
-            .IsRequired()
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Nullable — an unmatched reading (AwaitingPowerPointMapping) has no Power Point yet.
         // Restrict, not Cascade: Power Point rows are soft-deleted (ArchivedAt), never hard-

@@ -314,8 +314,12 @@ builder.Services.AddScoped<EditMeterReading>();
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
 builder.Services.AddScoped<JobHouseholdContext>();
 builder.Services.AddSingleton<BackgroundJobProcessor>();
+// Singleton — both queue adapters below (InProcessChannelJobQueue/AzureStorageQueueJobQueue) are
+// themselves singletons and inject this directly (Story 3.6/AD-6 extension).
+builder.Services.AddSingleton<BackgroundJobEnqueueRecorder>();
 builder.Services.AddScoped<IBackgroundJobRepository, BackgroundJobRepository>();
 builder.Services.AddScoped<GetBackgroundJobStatus>();
+builder.Services.AddScoped<ListSmartPlugImportJobs>();
 builder.Services.AddScoped<ISmartPlugParser, EveHomeXlsxParser>();
 builder.Services.AddScoped<ISmartPlugParser, MerossCsvParser>();
 builder.Services.AddScoped<ISmartPlugImportRepository, SmartPlugImportRepository>();

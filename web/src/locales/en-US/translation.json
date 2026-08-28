@@ -210,6 +210,22 @@
       "noExisting": "No existing Power Points yet.",
       "mapError": "Something went wrong mapping this import. Please try again.",
       "retry": "Retry"
+    },
+    "jobHistory": {
+      "listLabel": "Recent imports — visible to the whole household",
+      "unknownFile": "Unknown file",
+      "queuedBy": "Queued by {{member}}",
+      "queuedByFallback": "a household member",
+      "mapAriaLabel": "Map {{fileName}}",
+      "reviewAriaLabel": "Review {{fileName}}",
+      "badges": {
+        "success": "Success",
+        "error": "Error",
+        "needsMapping": "Needs Mapping",
+        "flaggedForReview": "Flagged for Review"
+      },
+      "emptyTitle": "No imports yet",
+      "emptyBody": "Nothing uploaded in the last 30 days. Import a Smart Plug export to see it appear here."
     }
   }
 }

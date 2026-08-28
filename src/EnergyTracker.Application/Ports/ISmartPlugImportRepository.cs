@@ -73,4 +73,18 @@ public interface ISmartPlugImportRepository
     // (FlaggedForReview, no readings) and its single whole-file gap row together, one transaction,
     // mirroring AddAsync's "no partially persisted import" discipline.
     Task AddFlaggedForReviewAsync(SmartPlugImport import, SmartPlugImportGap gap, CancellationToken cancellationToken);
+
+    // Batch-load, keyed by BackgroundJobId — lets ListSmartPlugImportJobs (Story 3.6) resolve
+    // each Completed job's own SmartPlugImport.Status in one query instead of N+1.
+    Task<IReadOnlyList<SmartPlugImport>> FindAllByBackgroundJobIdsAsync(
+        IReadOnlyList<Guid> backgroundJobIds, CancellationToken cancellationToken);
+
+    // Story 3.6/AD-6 extension: deletes every SmartPlugImport (+ its SmartPlugImportGap rows, +
+    // its BackgroundJob row) that completed before cutoffUtc AND reached a terminal, resolved
+    // state — Success (SmartPlugImportStatus.Completed) or Error (BackgroundJobStatus.Failed) or
+    // Flagged for Review (SmartPlugImportStatus.FlaggedForReview). Needs Mapping
+    // (AwaitingPowerPointMapping) is explicitly excluded regardless of age — the background job
+    // finished, but the import itself is still unresolved. SmartPlugReading rows are never
+    // deleted, only detached via the SetNull FK (AD-20).
+    Task SweepExpiredAsync(Guid householdId, DateTimeOffset cutoffUtc, CancellationToken cancellationToken);
 }

@@ -27,6 +27,8 @@ public class StatusRecomputeServiceTests : IAsyncLifetime
     private sealed class FixedHouseholdAccessor(Guid householdId) : ICurrentHouseholdAccessor
     {
         public Guid? HouseholdId { get; } = householdId;
+
+        public Guid? HouseholdMemberId => null;
     }
 
     private async Task<EnergyTrackerDbContext> OpenMigratedDbContextAsync(Guid householdId, CancellationToken cancellationToken)

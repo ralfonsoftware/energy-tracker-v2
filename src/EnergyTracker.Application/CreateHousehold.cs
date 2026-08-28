@@ -19,6 +19,7 @@ public class CreateHousehold(IHouseholdRepository repository)
         string externalSubjectId,
         string locale,
         string currency,
+        string? displayName,
         CancellationToken cancellationToken)
     {
         if (!SupportedLocales.Contains(locale))
@@ -53,6 +54,7 @@ public class CreateHousehold(IHouseholdRepository repository)
             HouseholdId = household.Id,
             ExternalIssuer = externalIssuer,
             ExternalSubjectId = externalSubjectId,
+            DisplayName = displayName,
             CreatedAtUtc = now,
         };
 

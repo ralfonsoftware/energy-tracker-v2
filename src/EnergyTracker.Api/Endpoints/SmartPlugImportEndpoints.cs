@@ -75,7 +75,10 @@ public static class SmartPlugImportEndpoints
             try
             {
                 await jobQueue.EnqueueAsync(
-                    new JobEnvelope<ProcessSmartPlugImportPayload>(jobId, householdId, JobTypes.ProcessSmartPlugImport, payload),
+                    new JobEnvelope<ProcessSmartPlugImportPayload>(
+                        jobId, householdId, JobTypes.ProcessSmartPlugImport, payload,
+                        QueuedByHouseholdMemberId: householdAccessor.HouseholdMemberId,
+                        OriginalFileName: file.FileName),
                     cancellationToken);
             }
             catch
@@ -139,8 +142,45 @@ public static class SmartPlugImportEndpoints
             }
         });
 
+        api.MapGet("/smart-plug-import-jobs", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            ListSmartPlugImportJobs listSmartPlugImportJobs,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            var jobs = await listSmartPlugImportJobs.ExecuteAsync(householdId, cancellationToken);
+            return Results.Ok(jobs.Select(ToJobHistoryResponse).ToList());
+        });
+
         return api;
     }
+
+    private static SmartPlugImportJobHistoryResponse ToJobHistoryResponse(SmartPlugImportJobResult result) => new(
+        result.JobId,
+        result.FileName,
+        ToStateString(result.State),
+        result.QueuedByDisplayName,
+        result.QueuedAtUtc,
+        result.CompletedAtUtc,
+        result.ErrorMessage,
+        result.SmartPlugImportId,
+        result.DeviceTag,
+        result.Gaps.Select(ToGapDto).ToList());
+
+    // camelCase matching System.Text.Json's default naming policy (e.g. NeedsMapping ->
+    // "needsMapping") — deliberately not the ToLowerInvariant() convention this file's sibling
+    // endpoints use for BackgroundJobStatus/SmartPlugImportStatus, since those concatenate into
+    // unreadable all-lowercase strings ("awaitingpowerpointmapping") that this DTO's own six-
+    // state contract (Task 4) spells out in camelCase explicitly.
+    private static string ToStateString(SmartPlugImportJobState state) =>
+        char.ToLowerInvariant(state.ToString()[0]) + state.ToString()[1..];
+
+    private static SmartPlugImportGapDto ToGapDto(SmartPlugImportGap gap) => new(
+        gap.StartDate, gap.EndDate, gap.Treatment.ToString().ToLowerInvariant(), gap.EstimatedTotalKwh);
 }
 
 public record SmartPlugImportUploadResponse(Guid JobId);
@@ -148,3 +188,15 @@ public record SmartPlugImportUploadResponse(Guid JobId);
 public record MapSmartPlugImportRequest(Guid PowerPointId);
 
 public record SmartPlugImportMappingResponse(Guid Id, string Status);
+
+public record SmartPlugImportJobHistoryResponse(
+    Guid JobId,
+    string? FileName,
+    string State,
+    string? QueuedByDisplayName,
+    DateTimeOffset QueuedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    string? ErrorMessage,
+    Guid? SmartPlugImportId,
+    string? DeviceTag,
+    IReadOnlyList<SmartPlugImportGapDto> Gaps);

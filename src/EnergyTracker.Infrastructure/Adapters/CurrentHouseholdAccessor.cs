@@ -23,28 +23,45 @@ public class CurrentHouseholdAccessor(
 {
     private bool _resolved;
     private Guid? _householdId;
+    private Guid? _householdMemberId;
 
     public Guid? HouseholdId
     {
         get
         {
-            if (!_resolved)
-            {
-                _householdId = Resolve();
-                _resolved = true;
-            }
-
+            EnsureResolved();
             return _householdId;
         }
     }
 
-    private Guid? Resolve()
+    public Guid? HouseholdMemberId
+    {
+        get
+        {
+            EnsureResolved();
+            return _householdMemberId;
+        }
+    }
+
+    private void EnsureResolved()
+    {
+        if (_resolved)
+        {
+            return;
+        }
+
+        (_householdMemberId, _householdId) = Resolve();
+        _resolved = true;
+    }
+
+    private (Guid? MemberId, Guid? HouseholdId) Resolve()
     {
         // AD-3's job-processing resolution path: no HTTP request exists while a dequeued job
-        // envelope is being processed, so there's nothing to read a principal from.
+        // envelope is being processed, so there's nothing to read a principal from. No
+        // HouseholdMember concept applies to a job-processing scope either.
         if (httpContextAccessor.HttpContext is null)
         {
-            return jobHouseholdContext.HouseholdId;
+            return (null, jobHouseholdContext.HouseholdId);
         }
 
         var user = httpContextAccessor.HttpContext?.User;
@@ -52,16 +69,23 @@ public class CurrentHouseholdAccessor(
         var issuerClaim = user?.FindFirst(HouseholdClaimTypes.ValidatedIssuer);
         if (subjectClaim is null || issuerClaim is null)
         {
-            return null;
+            return (null, null);
         }
 
         var issuer = issuerClaim.Value;
         var subject = subjectClaim.Value;
 
         using var dbContext = dbContextFactory.CreateDbContext();
-        return dbContext.HouseholdMembers
+        // Selects both the member's own id and its HouseholdId in one query — same cost as the
+        // single-field projection this replaces (Story 3.6/AD-6 extension). Projects into an
+        // anonymous type, not a ValueTuple directly — Npgsql can't translate/read a server-side
+        // tuple projection (it tries to read it back as a Postgres composite "record" type and
+        // throws NotSupportedException); converting to a tuple happens client-side afterward.
+        var result = dbContext.HouseholdMembers
             .Where(m => m.ExternalIssuer == issuer && m.ExternalSubjectId == subject)
-            .Select(m => (Guid?)m.HouseholdId)
+            .Select(m => new { MemberId = (Guid?)m.Id, HouseholdId = (Guid?)m.HouseholdId })
             .SingleOrDefault();
+
+        return result is null ? (null, null) : (result.MemberId, result.HouseholdId);
     }
 }

@@ -19,6 +19,8 @@ public abstract class MeterReadingRepositoryTestsBase
     private sealed class FixedHouseholdAccessor(Guid householdId) : ICurrentHouseholdAccessor
     {
         public Guid? HouseholdId { get; } = householdId;
+
+        public Guid? HouseholdMemberId => null;
     }
 
     protected abstract Task<EnergyTrackerDbContext> OpenMigratedDbContextAsync(Guid householdId, CancellationToken cancellationToken);

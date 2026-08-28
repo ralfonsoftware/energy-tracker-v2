@@ -20,6 +20,7 @@ public class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> option
     public const string SchemeName = "Test";
     public const string IssuerHeader = "X-Test-Issuer";
     public const string SubjectHeader = "X-Test-Subject";
+    public const string NameHeader = "X-Test-Name";
     public const string DefaultIssuer = "https://test-issuer.example";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -36,11 +37,19 @@ public class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> option
         // Mirrors Program.cs's real OnTokenValidated behavior: the subject claim plus a
         // dedicated, explicitly-captured issuer claim (production no longer trusts ambient
         // Claim.Issuer for tenant resolution — see HouseholdClaimTypes.ValidatedIssuer).
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, subjectValues.ToString(), ClaimValueTypes.String, issuer),
-            new Claim(HouseholdClaimTypes.ValidatedIssuer, issuer),
+            new(ClaimTypes.NameIdentifier, subjectValues.ToString(), ClaimValueTypes.String, issuer),
+            new(HouseholdClaimTypes.ValidatedIssuer, issuer),
         };
+        // Story 3.6/UX-DR21: an optional `name` claim, mirroring GetClaimsFromUserInfoEndpoint's
+        // real merge into ClaimTypes.Name (Program.cs) — absent by default, same as a provider
+        // that returns no name claim, never fabricated.
+        if (Request.Headers.TryGetValue(NameHeader, out var nameValues))
+        {
+            claims.Add(new Claim(ClaimTypes.Name, nameValues.ToString()));
+        }
+
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);
