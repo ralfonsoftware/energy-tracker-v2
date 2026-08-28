@@ -232,7 +232,14 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
 
         var jobId = Guid.NewGuid();
-        var completedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        // Truncated to microsecond precision (same fix as ArchiveRoom/ArchiveDevice/
+        // ArchivePowerPoint already apply before persisting) — Postgres' timestamptz column only
+        // stores microsecond precision, so an untruncated DateTimeOffset.UtcNow tick value can
+        // silently fail to round-trip exactly, making the ShouldBe(completedAt) assertion below
+        // flaky against a real Postgres round trip (CI-only: local clock resolution rarely
+        // produces the sub-microsecond ticks that expose this).
+        var rawCompletedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var completedAt = rawCompletedAt.AddTicks(-(rawCompletedAt.Ticks % TimeSpan.TicksPerMicrosecond));
         using (var seedScope = provider.CreateScope())
         {
             var dbContext = seedScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
