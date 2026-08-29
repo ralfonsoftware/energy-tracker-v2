@@ -309,6 +309,8 @@ builder.Services.AddScoped<GetOpenMeterRegressionPrompt>();
 builder.Services.AddScoped<GetCurrentStatus>();
 builder.Services.AddScoped<GetMeterReadingHistory>();
 builder.Services.AddScoped<EditMeterReading>();
+builder.Services.AddScoped<IStatusSnapshotRepository, StatusSnapshotRepository>();
+builder.Services.AddScoped<GetStatusHistory>();
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.

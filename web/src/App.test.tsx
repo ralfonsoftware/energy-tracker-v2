@@ -229,24 +229,50 @@ describe('App', () => {
     })
   })
 
-  describe('Meter Reading History navigation (Story 2.8)', () => {
-    it('switches to the Meter Reading History surface and back via local view state, not a URL route', async () => {
+  describe('Trend History navigation (Story 4.1 — absorbs Story 2.8s standalone Meter Reading History)', () => {
+    it('switches to the Trend History surface (rendering the chart and the Meter Readings card) and back via local view state, not a URL route', async () => {
       const user = userEvent.setup()
       mockFetchRoutes([
         { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
         { method: 'GET', url: '/api/status', respond: () => jsonResponse({ status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }) },
         { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
+        { method: 'GET', url: '/api/status/history', respond: () => jsonResponse([]) },
         { method: 'GET', url: '/api/meter-readings?page=1&pageSize=20', respond: () => jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }) },
       ])
 
       render(<App />)
 
-      await user.click(await screen.findByRole('button', { name: 'View reading history' }))
-      expect(await screen.findByRole('heading', { name: 'Meter Reading History' })).toBeInTheDocument()
+      await user.click(await screen.findByRole('button', { name: 'Trend History' }))
+      expect(await screen.findByRole('heading', { name: 'Trend History' })).toBeInTheDocument()
+      expect(await screen.findByText('Not enough history yet to show a trend.')).toBeInTheDocument()
+      expect(await screen.findByText('Meter Readings — 0 logged')).toBeInTheDocument()
       expect(window.location.pathname).toBe('/')
 
-      await user.click(screen.getByRole('button', { name: 'Go to Energy Tracker' }))
+      await user.click(screen.getByRole('button', { name: 'Dashboard' }))
       expect(await screen.findByRole('heading', { name: 'Energy Tracker' })).toBeInTheDocument()
+    })
+
+    it('remembers Trend History as the return destination for Smart Plug Import, launched from its own entry point (code review fix)', async () => {
+      const user = userEvent.setup()
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'GET', url: '/api/status', respond: () => jsonResponse({ status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }) },
+        { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
+        { method: 'GET', url: '/api/status/history', respond: () => jsonResponse([]) },
+        { method: 'GET', url: '/api/meter-readings?page=1&pageSize=20', respond: () => jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }) },
+        { method: 'GET', url: '/api/smart-plug-import-jobs', respond: () => jsonResponse([]) },
+      ])
+
+      render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Trend History' }))
+      await screen.findByRole('heading', { name: 'Trend History' })
+
+      await user.click(screen.getByRole('button', { name: 'Import Smart Plug data' }))
+      expect(await screen.findByRole('heading', { name: 'Smart Plug Import' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Go to Energy Tracker' }))
+      expect(await screen.findByRole('heading', { name: 'Trend History' })).toBeInTheDocument()
     })
   })
 

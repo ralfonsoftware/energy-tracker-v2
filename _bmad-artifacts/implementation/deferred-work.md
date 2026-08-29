@@ -180,7 +180,11 @@
 
 ## Deferred from: story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 
-- Trend History's Smart Plug Import icon entry point (UX-DR20, epic-3 Story 3.5 AC #2) is deferred to whichever Epic 4 story first builds the Trend History screen — the shared `SmartPlugImportPage`/`view === 'smartPlugImport'` destination this story built is already in place and needs no changes, only a second entry-point button wired to `setView('smartPlugImport')` the same way `DashboardPage`'s new icon button is wired today [web/src/App.tsx, web/src/components/dashboard/dashboard-page.tsx].
+- Trend History's Smart Plug Import icon entry point (UX-DR20, epic-3 Story 3.5 AC #2) is deferred to whichever Epic 4 story first builds the Trend History screen — the shared `SmartPlugImportPage`/`view === 'smartPlugImport'` destination this story built is already in place and needs no changes, only a second entry-point button wired to `setView('smartPlugImport')` the same way `DashboardPage`'s new icon button is wired today [web/src/App.tsx, web/src/components/dashboard/dashboard-page.tsx]. **Shipped by story-4-1-trend-history-view (2026-08-29)** — `TrendHistoryPage`'s page-title-row now carries the same icon button, wired to its own `onSmartPlugImportClick` prop [web/src/components/trend-history/trend-history-page.tsx].
+
+## Deferred from: story-4-1-trend-history-view (2026-08-29)
+
+- `GetStatusHistory`/`StatusSnapshotRepository.GetForHouseholdAsync` reads a household's entire `StatusSnapshot` lifetime with no pagination or trailing-window bound, unlike `GetCurrentStatus`'s bounded-window read (Epic 3 Retro Action Item #2, PR #21) — a latent NFR1 perf risk for a long-lived household with years of recompute history. Deliberately not addressed here: no AC requires bounding, and Trend History's whole point is showing the full trend, not a windowed one. Mirrors the "pre-existing pattern extended, not yet a measured problem at current data volumes" framing already used for the identical class of issue elsewhere in this file (Story 2.4's entry above). [src/EnergyTracker.Application/GetStatusHistory.cs, src/EnergyTracker.Infrastructure/Adapters/StatusSnapshotRepository.cs]
 
 ## Deferred from: code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 

@@ -110,8 +110,6 @@
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   },
   "meterReadingHistory": {
-    "heading": "Zählerstandsverlauf",
-    "backToApp": "Zu Energy Tracker",
     "loading": "Wird geladen…",
     "emptyState": "Noch keine Zählerstände erfasst.",
     "valueColumn": "Wert",
@@ -132,7 +130,6 @@
     "pageIndicator": "Seite {{page}} von {{totalPages}}"
   },
   "dashboard": {
-    "historyTrigger": "Zählerstandsverlauf ansehen",
     "status": {
       "headline": {
         "withinRange": "Ruhige Woche.",
@@ -170,6 +167,21 @@
       "trendHistory": "Verlauf",
       "tariffRadar": "Tarifradar",
       "settings": "Einstellungen"
+    }
+  },
+  "trendHistory": {
+    "emptyState": "Noch nicht genug Verlaufsdaten für einen Trend.",
+    "chartLoadError": "Der Trendverlauf konnte nicht geladen werden — bitte versuche es erneut.",
+    "chartCaption": {
+      "on": "Aktuell genau auf dem Basiswert.",
+      "under": "Aktuell {{kwh}} kWh unter dem Basiswert.",
+      "over": "Aktuell {{kwh}} kWh über dem Basiswert."
+    },
+    "gapLabel": "Kein Zählerstand {{range}}",
+    "readingsCard": {
+      "summary": "Zählerstände — {{count}} erfasst",
+      "expand": "Durchsuchen & korrigieren",
+      "collapse": "Verbergen"
     }
   },
   "smartPlugImport": {
