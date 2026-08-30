@@ -30,7 +30,10 @@ export function TrendChart({ entries, locale }: TrendChartProps) {
     return <p className="text-muted-foreground text-sm">{t('trendHistory.emptyState')}</p>
   }
 
-  const values = entries.map((entry) => -computeStatusDifference(entry.paceToDateKwh, entry.baselineToDateKwh).rawDifference)
+  // rawDifference = pace − baseline: positive means over baseline, negative means under (same
+  // sign the caption below uses). Plot it as-is so "over" renders above the zero line (toward
+  // +axisMax) and "under" renders below it (toward −axisMax) — matching the caption's wording.
+  const values = entries.map((entry) => computeStatusDifference(entry.paceToDateKwh, entry.baselineToDateKwh).rawDifference)
   const maxAbsValue = Math.max(1, ...values.map((v) => Math.abs(v)))
   const halfHeight = (CHART_BOTTOM - CHART_TOP) / 2
 
@@ -145,6 +148,7 @@ export function TrendChart({ entries, locale }: TrendChartProps) {
           cy={y(lastIndex)}
           r={3}
           fill={entries[lastIndex].status === 'trending' ? 'var(--color-status-trending)' : 'var(--color-status-within-range)'}
+          data-testid="trend-chart-point"
         />
       </svg>
       <p className="text-muted-foreground mt-2 text-sm">{caption}</p>
