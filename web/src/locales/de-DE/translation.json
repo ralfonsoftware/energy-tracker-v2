@@ -182,6 +182,13 @@
       "summary": "Zählerstände — {{count}} erfasst",
       "expand": "Durchsuchen & korrigieren",
       "collapse": "Verbergen"
+    },
+    "perPlugCard": {
+      "heading": "Raum → Steckdose → Gerät",
+      "loading": "Deine Smart-Plug-Daten werden geladen…",
+      "caveat": "Gemessener Kontext, keine abgeglichene Zuordnung zu deinem Hauptzähler-Gesamtwert — diese Werte summieren sich nicht darauf.",
+      "emptyState": "Noch keine Smart-Plug-Daten importiert.",
+      "loadError": "Deine Smart-Plug-Daten konnten nicht geladen werden — bitte versuche es erneut."
     }
   },
   "smartPlugImport": {

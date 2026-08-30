@@ -182,6 +182,13 @@
       "summary": "Meter Readings — {{count}} logged",
       "expand": "Browse & correct",
       "collapse": "Hide"
+    },
+    "perPlugCard": {
+      "heading": "Room → Power Point → Device",
+      "loading": "Loading your Smart Plug data…",
+      "caveat": "Measured context, not a reconciled attribution of your Main Meter total — these figures won't sum to it.",
+      "emptyState": "No Smart Plug data imported yet.",
+      "loadError": "Couldn't load your Smart Plug data — try again."
     }
   },
   "smartPlugImport": {
