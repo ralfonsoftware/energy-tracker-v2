@@ -96,6 +96,43 @@ describe('TrendChart', () => {
     expect(screen.getByText(/Sept\./)).toBeInTheDocument()
   })
 
+  it('plots an over-baseline point above the zero line, matching the "over" caption (regression)', () => {
+    // Bug: the point was plotted below the zero line (toward the −axisMax label) while the
+    // caption said "over the baseline" — pace exceeding baseline must render above zero (toward
+    // +axisMax), matching computeStatusDifference's sign (rawDifference = pace − baseline > 0).
+    const entries = [
+      entry({ computedAtUtc: '2026-08-01T00:00:00+00:00', paceToDateKwh: 1000, baselineToDateKwh: 1000 }),
+      entry({ computedAtUtc: '2026-08-02T00:00:00+00:00', paceToDateKwh: 1106, baselineToDateKwh: 1000 }),
+    ]
+
+    const { container } = render(<TrendChart entries={entries} locale="en-US" />)
+
+    expect(screen.getByText('Currently 106 kWh over baseline.')).toBeInTheDocument()
+
+    const point = container.querySelector('[data-testid="trend-chart-point"]')
+    const zeroLine = container.querySelector('line[stroke-dasharray]')
+    const pointY = Number(point?.getAttribute('cy'))
+    const baselineY = Number(zeroLine?.getAttribute('y1'))
+    expect(pointY).toBeLessThan(baselineY)
+  })
+
+  it('plots an under-baseline point below the zero line, matching the "under" caption (regression)', () => {
+    const entries = [
+      entry({ computedAtUtc: '2026-08-01T00:00:00+00:00', paceToDateKwh: 1000, baselineToDateKwh: 1000 }),
+      entry({ computedAtUtc: '2026-08-02T00:00:00+00:00', paceToDateKwh: 894, baselineToDateKwh: 1000 }),
+    ]
+
+    const { container } = render(<TrendChart entries={entries} locale="en-US" />)
+
+    expect(screen.getByText('Currently 106 kWh under baseline.')).toBeInTheDocument()
+
+    const point = container.querySelector('[data-testid="trend-chart-point"]')
+    const zeroLine = container.querySelector('line[stroke-dasharray]')
+    const pointY = Number(point?.getAttribute('cy'))
+    const baselineY = Number(zeroLine?.getAttribute('y1'))
+    expect(pointY).toBeGreaterThan(baselineY)
+  })
+
   it('renders distinct, stable React keys per segment/gap even when two entries share a ComputedAtUtc value', () => {
     // StatusSnapshotRepository's own ordering comment documents ComputedAtUtc is not guaranteed
     // unique — two rows can tie and are only disambiguated by Id (never sent to the client), so
