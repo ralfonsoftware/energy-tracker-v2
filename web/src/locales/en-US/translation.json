@@ -110,8 +110,6 @@
     "errorGeneric": "Something went wrong. Please try again."
   },
   "meterReadingHistory": {
-    "heading": "Meter Reading History",
-    "backToApp": "Go to Energy Tracker",
     "loading": "Loading…",
     "emptyState": "No Meter Readings logged yet.",
     "valueColumn": "Value",
@@ -132,7 +130,6 @@
     "pageIndicator": "Page {{page}} of {{totalPages}}"
   },
   "dashboard": {
-    "historyTrigger": "View reading history",
     "status": {
       "headline": {
         "withinRange": "Quiet week.",
@@ -170,6 +167,21 @@
       "trendHistory": "Trend History",
       "tariffRadar": "Tariff Radar",
       "settings": "Settings"
+    }
+  },
+  "trendHistory": {
+    "emptyState": "Not enough history yet to show a trend.",
+    "chartLoadError": "Couldn't load the trend chart — try again.",
+    "chartCaption": {
+      "on": "Currently right on baseline.",
+      "under": "Currently {{kwh}} kWh under baseline.",
+      "over": "Currently {{kwh}} kWh over baseline."
+    },
+    "gapLabel": "No reading {{range}}",
+    "readingsCard": {
+      "summary": "Meter Readings — {{count}} logged",
+      "expand": "Browse & correct",
+      "collapse": "Hide"
     }
   },
   "smartPlugImport": {

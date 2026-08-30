@@ -4,7 +4,7 @@ import { HouseholdCreationForm, type CreatedHousehold } from '@/components/house
 import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
 import { SettingsPage } from '@/components/settings/settings-page'
 import { DashboardPage } from '@/components/dashboard/dashboard-page'
-import { MeterReadingHistoryPage } from '@/components/meter-reading/meter-reading-history-page'
+import { TrendHistoryPage } from '@/components/trend-history/trend-history-page'
 import { SmartPlugImportPage } from '@/components/smart-plug-import/smart-plug-import-page'
 import { registerOfflineSync } from '@/lib/meter-reading-sync'
 import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
@@ -37,7 +37,11 @@ function App() {
   // precedent (see invite-accept-form.tsx's /join/{token} handling for the one existing exception,
   // which predates this and stays URL-addressable for its own reason: it must survive a full-page
   // OIDC redirect round trip).
-  const [view, setView] = useState<'dashboard' | 'settings' | 'history' | 'smartPlugImport'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'settings' | 'trendHistory' | 'smartPlugImport'>('dashboard')
+  // Story 4.1 gave Smart Plug Import a second entry point (Trend History, alongside Dashboard's
+  // original one) — both land on the same 'smartPlugImport' view, so its own Back button needs to
+  // remember which one launched it rather than always returning to Dashboard.
+  const [smartPlugImportReturnView, setSmartPlugImportReturnView] = useState<'dashboard' | 'trendHistory'>('dashboard')
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
   const [openRegressionPrompt, setOpenRegressionPrompt] = useState<MeterRegressionPromptDto | null>(null)
   const [logSheetOpen, setLogSheetOpen] = useState(false)
@@ -242,15 +246,31 @@ function App() {
   }
 
   if (view === 'settings') {
-    return <SettingsPage householdId={state.household.id} onBack={() => setView('dashboard')} />
+    return (
+      <SettingsPage
+        householdId={state.household.id}
+        onBack={() => setView('dashboard')}
+        onTrendHistoryClick={() => setView('trendHistory')}
+      />
+    )
   }
 
-  if (view === 'history') {
-    return <MeterReadingHistoryPage locale={state.household.locale} onBack={() => setView('dashboard')} />
+  if (view === 'trendHistory') {
+    return (
+      <TrendHistoryPage
+        locale={state.household.locale}
+        onBack={() => setView('dashboard')}
+        onSettingsClick={() => setView('settings')}
+        onSmartPlugImportClick={() => {
+          setSmartPlugImportReturnView('trendHistory')
+          setView('smartPlugImport')
+        }}
+      />
+    )
   }
 
   if (view === 'smartPlugImport') {
-    return <SmartPlugImportPage onBack={() => setView('dashboard')} />
+    return <SmartPlugImportPage onBack={() => setView(smartPlugImportReturnView)} />
   }
 
   return (
@@ -271,8 +291,11 @@ function App() {
         void refreshStatus()
       }}
       onSettingsClick={() => setView('settings')}
-      onHistoryClick={() => setView('history')}
-      onSmartPlugImportClick={() => setView('smartPlugImport')}
+      onTrendHistoryClick={() => setView('trendHistory')}
+      onSmartPlugImportClick={() => {
+        setSmartPlugImportReturnView('dashboard')
+        setView('smartPlugImport')
+      }}
     />
   )
 }

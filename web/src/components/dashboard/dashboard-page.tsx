@@ -26,7 +26,7 @@ interface DashboardPageProps {
   openRegressionPrompt: MeterRegressionPromptDto | null
   onRegressionResolved: () => void
   onSettingsClick: () => void
-  onHistoryClick: () => void
+  onTrendHistoryClick: () => void
   onSmartPlugImportClick: () => void
 }
 
@@ -48,7 +48,7 @@ export function DashboardPage({
   openRegressionPrompt,
   onRegressionResolved,
   onSettingsClick,
-  onHistoryClick,
+  onTrendHistoryClick,
   onSmartPlugImportClick,
 }: DashboardPageProps) {
   const { t } = useTranslation()
@@ -93,28 +93,19 @@ export function DashboardPage({
   }, [showPopulated])
 
   const detailTrigger = showPopulated ? (
-    <>
-      <StatusDetailDialog
-        open={detailDialogOpen}
-        onOpenChange={setDetailDialogOpen}
-        locale={household.locale}
-        trigger={
-          <button
-            type="button"
-            className="mt-3 text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
-          >
-            {t('dashboard.statusDetail.trigger')}
-          </button>
-        }
-      />
-      <button
-        type="button"
-        onClick={onHistoryClick}
-        className="mt-1 block text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
-      >
-        {t('dashboard.historyTrigger')}
-      </button>
-    </>
+    <StatusDetailDialog
+      open={detailDialogOpen}
+      onOpenChange={setDetailDialogOpen}
+      locale={household.locale}
+      trigger={
+        <button
+          type="button"
+          className="mt-3 text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          {t('dashboard.statusDetail.trigger')}
+        </button>
+      }
+    />
   ) : undefined
 
   return (
@@ -143,7 +134,7 @@ export function DashboardPage({
 
       {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}
 
-      <NavChrome active="dashboard" onDashboardClick={() => {}} onSettingsClick={onSettingsClick} />
+      <NavChrome active="dashboard" onDashboardClick={() => {}} onTrendHistoryClick={onTrendHistoryClick} onSettingsClick={onSettingsClick} />
 
       <MeterRegressionPromptDialog prompt={openRegressionPrompt} onResolved={onRegressionResolved} />
     </main>

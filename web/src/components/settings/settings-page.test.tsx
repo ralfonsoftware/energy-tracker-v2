@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsPage } from './settings-page'
 
@@ -28,10 +29,33 @@ describe('SettingsPage', () => {
       }),
     )
 
-    render(<SettingsPage householdId={householdId} onBack={() => {}} />)
+    render(<SettingsPage householdId={householdId} onBack={() => {}} onTrendHistoryClick={() => {}} />)
 
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.queryByText('Smart Plug Import')).not.toBeInTheDocument()
     expect(screen.queryByText('Drop a file here, or choose one to upload.')).not.toBeInTheDocument()
+  })
+
+  it('threads onTrendHistoryClick through to the NavChrome Trend History tab (Story 4.1)', async () => {
+    const user = userEvent.setup()
+    const onTrendHistoryClick = vi.fn()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request) => {
+        const url = String(input)
+        if (url === '/api/rooms' || url === '/api/power-points' || url === '/api/devices') {
+          return Promise.resolve(jsonResponse([]))
+        }
+        if (url === `/api/households/${householdId}`) {
+          return Promise.resolve(jsonResponse({ id: householdId, locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }))
+        }
+        return Promise.resolve(jsonResponse(null))
+      }),
+    )
+
+    render(<SettingsPage householdId={householdId} onBack={() => {}} onTrendHistoryClick={onTrendHistoryClick} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Trend History' }))
+    expect(onTrendHistoryClick).toHaveBeenCalledOnce()
   })
 })

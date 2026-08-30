@@ -7,6 +7,7 @@ type NavTab = 'dashboard' | 'trendHistory' | 'tariffRadar' | 'settings'
 interface NavChromeProps {
   active: NavTab
   onDashboardClick: () => void
+  onTrendHistoryClick: () => void
   onSettingsClick: () => void
 }
 
@@ -14,11 +15,10 @@ const ITEM_CLASSNAME =
   'flex min-w-14 flex-col items-center gap-1 rounded-2xl px-2.5 py-1.5 text-muted-foreground'
 const ACTIVE_CLASSNAME = 'bg-nav-chrome-active-bg text-nav-chrome-active-foreground'
 
-// The bottom tab bar shell — all four top-level entries per UX-DR9. Only Dashboard (this
-// surface) and Settings (Story 1.9, already built) are interactive; Trend History and Tariff
-// Radar don't have a surface yet (Epic 4/Epic 5) and render as inert placeholders rather than a
-// tap that goes nowhere. Confirmed with Ralf during dev-story activation.
-export function NavChrome({ active, onDashboardClick, onSettingsClick }: NavChromeProps) {
+// The bottom tab bar shell — all four top-level entries per UX-DR9. Dashboard, Trend History
+// (Story 4.1) and Settings (Story 1.9) are interactive; only Tariff Radar doesn't have a surface
+// yet (Epic 5) and renders as an inert placeholder rather than a tap that goes nowhere.
+export function NavChrome({ active, onDashboardClick, onTrendHistoryClick, onSettingsClick }: NavChromeProps) {
   const { t } = useTranslation()
 
   return (
@@ -33,10 +33,15 @@ export function NavChrome({ active, onDashboardClick, onSettingsClick }: NavChro
         <span className="text-[9.5px] font-semibold">{t('dashboard.nav.dashboard')}</span>
       </button>
 
-      <div className={ITEM_CLASSNAME} role="button" aria-disabled="true">
+      <button
+        type="button"
+        className={cn(ITEM_CLASSNAME, active === 'trendHistory' && ACTIVE_CLASSNAME)}
+        aria-current={active === 'trendHistory' ? 'page' : undefined}
+        onClick={onTrendHistoryClick}
+      >
         <LineChart className="size-5" aria-hidden="true" />
         <span className="text-[9.5px] font-semibold">{t('dashboard.nav.trendHistory')}</span>
-      </div>
+      </button>
 
       <div className={ITEM_CLASSNAME} role="button" aria-disabled="true">
         <Clock className="size-5" aria-hidden="true" />

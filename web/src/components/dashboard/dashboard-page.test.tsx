@@ -41,7 +41,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -63,7 +63,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -84,7 +84,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -106,7 +106,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -129,7 +129,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={onSettingsClick}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -139,11 +139,10 @@ describe('DashboardPage', () => {
     expect(onSettingsClick).toHaveBeenCalledOnce()
   })
 
-  it('renders the history trigger only when populated, and calls onHistoryClick when clicked', async () => {
+  it('tapping Trend History in the nav chrome calls onTrendHistoryClick (Story 4.1 — the standalone History trigger it replaces was removed)', async () => {
     const user = userEvent.setup()
-    const onHistoryClick = vi.fn()
-    const status: StatusDto = { status: 'withinRange', paceToDateKwh: 1000, baselineToDateKwh: 1000, isLowConfidence: false }
-    const { rerender } = render(
+    const onTrendHistoryClick = vi.fn()
+    render(
       <DashboardPage
         household={household}
         status={null}
@@ -155,33 +154,14 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={onHistoryClick}
+        onTrendHistoryClick={onTrendHistoryClick}
         onSmartPlugImportClick={noop}
       />,
     )
 
     expect(screen.queryByRole('button', { name: 'View reading history' })).not.toBeInTheDocument()
-
-    rerender(
-      <DashboardPage
-        household={household}
-        status={status}
-        statusLoading={false}
-        playStatusEntranceAnimation={true}
-        logSheetOpen={false}
-        onLogSheetOpenChange={noop}
-        onReadingSaved={noop}
-        openRegressionPrompt={null}
-        onRegressionResolved={noop}
-        onSettingsClick={noop}
-        onHistoryClick={onHistoryClick}
-        onSmartPlugImportClick={noop}
-      />,
-    )
-
-    const trigger = await screen.findByRole('button', { name: 'View reading history' })
-    await user.click(trigger)
-    expect(onHistoryClick).toHaveBeenCalledOnce()
+    await user.click(screen.getByRole('button', { name: 'Trend History' }))
+    expect(onTrendHistoryClick).toHaveBeenCalledOnce()
   })
 
   it('renders the Smart Plug Import entry point in the topbar and calls onSmartPlugImportClick when tapped (Story 3.5)', async () => {
@@ -199,7 +179,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={onSmartPlugImportClick}
       />,
     )
@@ -224,7 +204,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -266,7 +246,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -286,7 +266,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={regressionPrompt()}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -328,7 +308,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -349,7 +329,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -369,7 +349,7 @@ describe('DashboardPage', () => {
         openRegressionPrompt={null}
         onRegressionResolved={noop}
         onSettingsClick={noop}
-        onHistoryClick={noop}
+        onTrendHistoryClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )

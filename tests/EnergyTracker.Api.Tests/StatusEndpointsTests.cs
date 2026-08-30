@@ -241,4 +241,76 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         snapshot.PaceToDateKwh.ShouldBe(1050m);
         snapshot.BaselineToDateKwh.ShouldBe(1000m);
     }
+
+    [Fact]
+    public async Task GET_status_history_returns_an_empty_array_when_no_snapshots_exist()
+    {
+        var (client, _, _) = await CreateHouseholdAsync();
+
+        var response = await client.GetAsync("/api/status/history", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("[]");
+    }
+
+    [Fact]
+    public async Task GET_status_history_returns_entries_ordered_by_ComputedAtUtc_ascending()
+    {
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        var latest = DateTimeOffset.UtcNow;
+
+        // Each additional reading after the first two makes Status definite again and writes
+        // another StatusSnapshot row (AC #8's recompute path) — three readings gives two snapshots
+        // to check the ordering of.
+        await PostReadingAsync(client, 1000m, latest.AddDays(-100));
+        await PostReadingAsync(client, 2000m, latest.AddDays(-50));
+        await PostReadingAsync(client, 3200m, latest);
+
+        var response = await client.GetAsync("/api/status/history", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<StatusHistoryEntryResponse>>(TestContext.Current.CancellationToken);
+        body.ShouldNotBeNull();
+        body.Count.ShouldBe(2);
+        body[0].ComputedAtUtc.ShouldBeLessThan(body[1].ComputedAtUtc);
+        body[0].GapBeforeThisEntry.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_households_status_history_is_never_affected_by_another_households_snapshots()
+    {
+        var (ownerClient, ownerHouseholdId, ownerVersion) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(ownerClient, ownerHouseholdId, 3650m, ownerVersion);
+        var latest = DateTimeOffset.UtcNow;
+        await PostReadingAsync(ownerClient, 1000m, latest.AddDays(-100));
+        await PostReadingAsync(ownerClient, 2050m, latest);
+
+        var (otherClient, otherHouseholdId, otherVersion) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(otherClient, otherHouseholdId, 100m, otherVersion);
+        await PostReadingAsync(otherClient, 1m, latest.AddDays(-100));
+        await PostReadingAsync(otherClient, 5000m, latest);
+
+        var ownerResponse = await ownerClient.GetAsync("/api/status/history", TestContext.Current.CancellationToken);
+        var ownerBody = await ownerResponse.Content.ReadFromJsonAsync<List<StatusHistoryEntryResponse>>(TestContext.Current.CancellationToken);
+        ownerBody.ShouldNotBeNull();
+        ownerBody.Count.ShouldBe(1);
+        ownerBody[0].PaceToDateKwh.ShouldBe(1050m);
+
+        var otherResponse = await otherClient.GetAsync("/api/status/history", TestContext.Current.CancellationToken);
+        var otherBody = await otherResponse.Content.ReadFromJsonAsync<List<StatusHistoryEntryResponse>>(TestContext.Current.CancellationToken);
+        otherBody.ShouldNotBeNull();
+        otherBody.Count.ShouldBe(1);
+        otherBody[0].PaceToDateKwh.ShouldBe(4999m);
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_reading_status_history()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.GetAsync("/api/status/history", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
 }

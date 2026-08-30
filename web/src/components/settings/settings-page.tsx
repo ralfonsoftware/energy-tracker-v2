@@ -8,6 +8,7 @@ import { NavChrome } from '@/components/dashboard/nav-chrome'
 interface SettingsPageProps {
   householdId: string
   onBack: () => void
+  onTrendHistoryClick: () => void
 }
 
 // Not yet the full Settings page EXPERIENCE.md's Information Architecture eventually describes
@@ -17,7 +18,7 @@ interface SettingsPageProps {
 // placeholder shell by a code review of Story 2.5, once this page existed as a real destination).
 // Smart Plug Import moved OFF this page by Story 3.5 (FR-4 amendment, UX-DR20) — it's now a
 // dedicated Dashboard-launched screen, not a Settings-embedded panel.
-export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
+export function SettingsPage({ householdId, onBack, onTrendHistoryClick }: SettingsPageProps) {
   const { t } = useTranslation()
 
   return (
@@ -35,7 +36,7 @@ export function SettingsPage({ householdId, onBack }: SettingsPageProps) {
         <InviteGeneratePanel />
       </div>
 
-      <NavChrome active="settings" onDashboardClick={onBack} onSettingsClick={() => {}} />
+      <NavChrome active="settings" onDashboardClick={onBack} onTrendHistoryClick={onTrendHistoryClick} onSettingsClick={() => {}} />
     </main>
   )
 }

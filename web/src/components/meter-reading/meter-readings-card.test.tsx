@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MeterReadingHistoryPage } from './meter-reading-history-page'
+import { MeterReadingsCard } from './meter-readings-card'
 import type { MeterReadingHistoryItemDto, MeterReadingHistoryPageDto } from '@/lib/meter-reading-history-api'
 
 function jsonResponse(body: object | null, status = 200) {
@@ -31,28 +31,45 @@ function page(overrides: Partial<MeterReadingHistoryPageDto> = {}): MeterReading
   }
 }
 
-describe('MeterReadingHistoryPage', () => {
+async function openDisclosure(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByText(/logged/))
+}
+
+describe('MeterReadingsCard', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('renders a fetched page of readings', async () => {
+  it('shows a live count summary in the collapsed disclosure', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page({ totalCount: 214 })))))
+
+    render(<MeterReadingsCard locale="en-US" />)
+
+    expect(await screen.findByText('Meter Readings — 214 logged')).toBeInTheDocument()
+  })
+
+  it('renders a fetched page of readings once expanded', async () => {
+    const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page()))))
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
     expect(await screen.findByText('4,821.5 kWh')).toBeInTheDocument()
   })
 
   it('renders the empty state when totalCount is 0', async () => {
+    const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page({ items: [], totalCount: 0 })))))
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
     expect(await screen.findByText('No Meter Readings logged yet.')).toBeInTheDocument()
   })
 
   it('renders the Pending badge only for isPendingRegression rows', async () => {
+    const user = userEvent.setup()
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -70,36 +87,15 @@ describe('MeterReadingHistoryPage', () => {
       ),
     )
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
     await screen.findByText('100 kWh')
     expect(screen.getAllByText('Pending')).toHaveLength(1)
   })
 
-  it('renders a correction note only when correctedFromKwhValue is non-null', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve(
-          jsonResponse(
-            page({
-              items: [
-                item({ id: 'r1', kwhValue: 100, correctedFromKwhValue: 90, correctedAtUtc: '2026-08-14T00:00:00+00:00' }),
-                item({ id: 'r2', kwhValue: 200 }),
-              ],
-              totalCount: 2,
-            }),
-          ),
-        ),
-      ),
-    )
-
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
-
-    expect(await screen.findByText('Originally logged as 90 kWh')).toBeInTheDocument()
-  })
-
   it('gives each row a distinct accessible name for its Edit button', async () => {
+    const user = userEvent.setup()
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -117,12 +113,38 @@ describe('MeterReadingHistoryPage', () => {
       ),
     )
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
     await screen.findByText('100 kWh')
     const editButtons = screen.getAllByRole('button', { name: /Edit reading from/ })
     expect(editButtons).toHaveLength(2)
     expect(editButtons[0].getAttribute('aria-label')).not.toBe(editButtons[1].getAttribute('aria-label'))
+  })
+
+  it('renders a correction note only when correctedFromKwhValue is non-null', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            page({
+              items: [
+                item({ id: 'r1', kwhValue: 100, correctedFromKwhValue: 90, correctedAtUtc: '2026-08-14T00:00:00+00:00' }),
+                item({ id: 'r2', kwhValue: 200 }),
+              ],
+              totalCount: 2,
+            }),
+          ),
+        ),
+      ),
+    )
+
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    expect(await screen.findByText('Originally logged as 90 kWh')).toBeInTheDocument()
   })
 
   it('disables Previous on the first page and Next on the last page, and paginates on click', async () => {
@@ -136,7 +158,8 @@ describe('MeterReadingHistoryPage', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
     await screen.findByText('100 kWh')
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
@@ -151,22 +174,37 @@ describe('MeterReadingHistoryPage', () => {
   })
 
   it('renders an error state when the fetch fails', async () => {
+    const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ detail: 'boom' }), { status: 500 }))))
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={() => {}} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
     expect(await screen.findByText("Couldn't load the reading history — try again.")).toBeInTheDocument()
   })
 
-  it('the Back button calls onBack', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page()))))
+  it('re-fetches the current page after a save via the edit dialog', async () => {
     const user = userEvent.setup()
-    const onBack = vi.fn()
+    let saved = false
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.includes('/api/meter-readings/') && !url.includes('page=')) {
+        saved = true
+        return Promise.resolve(jsonResponse(item({ kwhValue: 5000 })))
+      }
+      return Promise.resolve(jsonResponse(page({ items: [item({ kwhValue: saved ? 5000 : 4821.5 })] })))
+    })
+    vi.stubGlobal('fetch', fetchMock)
 
-    render(<MeterReadingHistoryPage locale="en-US" onBack={onBack} />)
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Go to Energy Tracker' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'Go to Energy Tracker' }))
-    expect(onBack).toHaveBeenCalledOnce()
+    await screen.findByText('4,821.5 kWh')
+    await user.click(screen.getByRole('button', { name: /Edit reading from/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('5,000 kWh')
+    const getCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/meter-readings?'))
+    expect(getCalls.length).toBeGreaterThanOrEqual(2)
   })
 })

@@ -62,3 +62,21 @@ export async function fetchStatusDetail(): Promise<StatusDetailDto | null> {
   const text = await response.text()
   return text ? (JSON.parse(text) as StatusDetailDto) : null
 }
+
+export interface StatusHistoryEntryDto {
+  status: StatusValue
+  paceToDateKwh: number
+  baselineToDateKwh: number
+  isLowConfidence: boolean
+  computedAtUtc: string
+  gapBeforeThisEntry: boolean
+}
+
+export async function fetchStatusHistory(): Promise<StatusHistoryEntryDto[]> {
+  const response = await fetch('/api/status/history', { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as StatusHistoryEntryDto[]
+}

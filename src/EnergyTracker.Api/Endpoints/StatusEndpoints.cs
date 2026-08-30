@@ -66,6 +66,25 @@ public static class StatusEndpoints
             return Results.Ok(result is null ? null : ToDetailResponse(result));
         });
 
+        // Second drill-down of the singleton /api/status (AC #4, #5, Story 4.1): the full
+        // StatusSnapshot lifetime for the Trend History chart — always persisted history, never a
+        // live recomputation (AD-7). Unlike /status and /status/detail above, "no history yet" is
+        // legitimately an empty array, not an undefined single value, so this always returns 200
+        // with a (possibly empty) array, never a null body.
+        api.MapGet("/status/history", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            GetStatusHistory getStatusHistory,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            var entries = await getStatusHistory.ExecuteAsync(householdId, cancellationToken);
+            return Results.Ok(entries.Select(ToHistoryEntryResponse).ToList());
+        });
+
         return api;
     }
 
@@ -84,6 +103,14 @@ public static class StatusEndpoints
         IsLowConfidence: result.IsLowConfidence,
         DaysSinceLastReading: result.DaysSinceLastReading,
         LowConfidenceGapDaysThreshold: result.LowConfidenceGapDaysThreshold);
+
+    private static StatusHistoryEntryResponse ToHistoryEntryResponse(StatusHistoryEntry entry) => new(
+        Status: ToStatusString(entry.Status),
+        PaceToDateKwh: entry.PaceToDateKwh,
+        BaselineToDateKwh: entry.BaselineToDateKwh,
+        IsLowConfidence: entry.IsLowConfidence,
+        ComputedAtUtc: entry.ComputedAtUtc,
+        GapBeforeThisEntry: entry.GapBeforeThisEntry);
 
     private static string ToStatusString(Status status) => status switch
     {
@@ -105,3 +132,11 @@ public record StatusDetailResponse(
     bool IsLowConfidence,
     double DaysSinceLastReading,
     int LowConfidenceGapDaysThreshold);
+
+public record StatusHistoryEntryResponse(
+    string Status,
+    decimal PaceToDateKwh,
+    decimal BaselineToDateKwh,
+    bool IsLowConfidence,
+    DateTimeOffset ComputedAtUtc,
+    bool GapBeforeThisEntry);
