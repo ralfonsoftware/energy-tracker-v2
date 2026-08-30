@@ -6,6 +6,7 @@ import { MeterReadingsCard } from '@/components/meter-reading/meter-readings-car
 import { fetchStatusHistory, type StatusHistoryEntryDto } from '@/lib/status-api'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 import { TrendChart } from './trend-chart'
+import { PerPlugDataCard } from './per-plug-data-card'
 
 interface TrendHistoryPageProps {
   locale: string
@@ -17,8 +18,8 @@ interface TrendHistoryPageProps {
 // Shell mirrors SettingsPage — Trend History is a real nav-chrome tab (UX-DR9), unlike the
 // standalone MeterReadingHistoryPage it absorbs (Story 2.8), which deliberately had no tab slot.
 // Card order: chart, then Meter Readings — the two views of the same Main Meter data (FR-8), read
-// as a pair. The Room -> Power Point -> Device tree (Story 4.2) is a structurally different Smart
-// Plug signal and stays last, not added here.
+// as a pair. The Room -> Power Point -> Device tree (PerPlugDataCard) is a structurally different
+// Smart Plug signal and stays last.
 export function TrendHistoryPage({ locale, onBack, onSettingsClick, onSmartPlugImportClick }: TrendHistoryPageProps) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<StatusHistoryEntryDto[]>([])
@@ -71,6 +72,8 @@ export function TrendHistoryPage({ locale, onBack, onSettingsClick, onSmartPlugI
         </GlassCard>
 
         <MeterReadingsCard locale={locale} />
+
+        <PerPlugDataCard locale={locale} />
       </div>
 
       <NavChrome active="trendHistory" onDashboardClick={onBack} onTrendHistoryClick={() => {}} onSettingsClick={onSettingsClick} />

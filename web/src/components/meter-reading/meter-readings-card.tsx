@@ -17,8 +17,7 @@ const PAGE_SIZE = 20
 // all internal state/logic (loading, error, pagination, edit dialog wiring, the Pending badge,
 // the correction note) is copied verbatim, not rewritten. Wrapped in a details/summary
 // disclosure, collapsed by default (NFR15's "says less, on purpose" — most visits are
-// chart-only), matching the Room -> Power Point -> Device tree's identical idiom one card below
-// it (Story 4.2).
+// chart-only), matching PerPlugDataCard's identical idiom one card below it.
 export function MeterReadingsCard({ locale }: MeterReadingsCardProps) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)

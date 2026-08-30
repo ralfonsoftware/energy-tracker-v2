@@ -18,6 +18,9 @@ function mockRoutes(historyEntries: unknown[] = []) {
       if (url.startsWith('/api/meter-readings')) {
         return Promise.resolve(jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }))
       }
+      if (url === '/api/smart-plug-readings') {
+        return Promise.resolve(jsonResponse([]))
+      }
       return Promise.resolve(jsonResponse(null))
     }),
   )
@@ -28,13 +31,16 @@ describe('TrendHistoryPage', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the chart and the Meter Readings card', async () => {
+  it('renders the chart, the Meter Readings card, and the Per-Plug card in that order', async () => {
     mockRoutes([])
 
     render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onSmartPlugImportClick={() => {}} />)
 
     expect(await screen.findByText('Not enough history yet to show a trend.')).toBeInTheDocument()
     expect(await screen.findByText('Meter Readings — 0 logged')).toBeInTheDocument()
+    const perPlugHeading = await screen.findByText('Room → Power Point → Device')
+    const readingsSummary = screen.getByText('Meter Readings — 0 logged')
+    expect(readingsSummary.compareDocumentPosition(perPlugHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('renders the Smart Plug Import icon button and calls onSmartPlugImportClick', async () => {

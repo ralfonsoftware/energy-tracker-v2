@@ -311,6 +311,8 @@ builder.Services.AddScoped<GetMeterReadingHistory>();
 builder.Services.AddScoped<EditMeterReading>();
 builder.Services.AddScoped<IStatusSnapshotRepository, StatusSnapshotRepository>();
 builder.Services.AddScoped<GetStatusHistory>();
+builder.Services.AddScoped<ISmartPlugReadingRepository, SmartPlugReadingRepository>();
+builder.Services.AddScoped<GetPerPlugMeasuredData>();
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
@@ -400,6 +402,7 @@ api.MapTaggingScaffoldEndpoints();
 api.MapMeterReadingEndpoints();
 api.MapMeterRegressionPromptEndpoints();
 api.MapStatusEndpoints();
+api.MapSmartPlugReadingEndpoints();
 api.MapSmartPlugImportEndpoints();
 api.MapJobEndpoints();
 
