@@ -1,5 +1,30 @@
 # generated: 2026-08-09
-# last_updated: 2026-08-30
+# last_updated: 2026-08-31
+# 2026-08-31: story 4-3-correcting-a-meter-reading drafted (create-story) — status set to
+#   ready-for-dev. Scope reality check (verified by reading the live code, not the epic text):
+#   AC #1 (original value preserved, correction note) and AC #2 (409 concurrency conflict) are
+#   already fully shipped — Story 2.8 built the mechanics, Story 4.1 already wired
+#   EditMeterReadingDialog into MeterReadingsCard on Trend History. No frontend work in this
+#   story. The one genuinely net-new piece is AC #3 (recompute Status forward from a corrected
+#   reading through the present). Hit a real conflict during drafting: the epic's literal wording
+#   ("StatusSnapshot rows are updated") collides with StatusSnapshot.cs's own documented
+#   immutable/insert-only invariant and IStatusRecomputeService.RecomputeAsync's "current status
+#   only" scope — exactly the tension deferred-work.md flagged during Story 2.8's review as
+#   needing product judgment. Asked Ralf directly (AskUserQuestion): full literal historical walk
+#   vs. a single pragmatic forward recompute vs. descoping AC #3 entirely. Ralf chose the full
+#   literal walk. Designed as supersede-by-append (never violates immutability): a new
+#   StatusSnapshot.EffectiveAtUtc column (migration, both providers, backfilled = ComputedAtUtc
+#   for existing rows) lets a correction append a fresh row at a historical EffectiveAtUtc that
+#   wins a latest-ComputedAtUtc-per-EffectiveAtUtc read-time tiebreak, instead of mutating a row in
+#   place; GetStatusHistory keeps exposing the field as ComputedAtUtc (zero frontend/DTO change).
+#   Caught and fixed a clock-type bug during design, before it reached the story: MeterReading has
+#   two independent timestamps (ReadingTimestamp = domain read time, user-backdatable;
+#   CreatedAtUtc = wall-clock entry time) and every new "as of a historical point" filter must use
+#   the wall-clock family — using ReadingTimestamp would let a backdated reading leak into (or
+#   drop out of) a historical recompute it was never actually visible to. AC #4 (edit doesn't
+#   bypass an open regression prompt) needs no code change — EditMeterReading has no dependency on
+#   the regression-prompt port today; only a missing test was added. Story: 4-3-correcting-a-
+#   meter-reading.md.
 # 2026-08-30: story 4-2-per-plug-measured-data-view drafted (create-story) — status set to
 #   ready-for-dev. This is the Room -> Power Point -> Device tree Story 4.1 explicitly deferred
 #   (its own trend-history-page.tsx/meter-readings-card.tsx comments name this story and mark the
@@ -657,7 +682,7 @@ development_status:
   epic-4: in-progress
   4-1-trend-history-view: review
   4-2-per-plug-measured-data-view: done
-  4-3-correcting-a-meter-reading: backlog
+  4-3-correcting-a-meter-reading: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog
