@@ -69,7 +69,12 @@ public class StatusRecomputeServiceTests : IAsyncLifetime
         regressionPromptRepository.GetResolvedForMainMeterAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((IReadOnlyList<MeterRegressionPrompt>)[]);
         readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>())
             .Returns(new MainMeter { Id = mainMeterId, HouseholdId = householdId, CreatedAtUtc = DateTimeOffset.UtcNow });
-        readingRepository.GetRecentByMainMeterAsync(Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
+        // Story 4.3: Arg.Any<DateTimeOffset?>() for the 5th (asOfUtc) parameter so this stub
+        // matches both RecomputeAsync's calls (asOfUtc omitted/null) and
+        // RecomputeForwardFromAsync's calls (asOfUtc supplied, non-null) — omitting it here would
+        // only match the null case, silently no-op'ing (falling through to GetCurrentStatus
+        // treating the unmatched call as "no readings") every forward-recompute call in this file.
+        readingRepository.GetRecentByMainMeterAsync(Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>(), Arg.Any<DateTimeOffset?>()).Returns(
         [
             new MeterReading { Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = mainMeterId, KwhValue = 1000m, ReadingTimestamp = DateTimeOffset.UtcNow.AddDays(-10), IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow },
             new MeterReading { Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = mainMeterId, KwhValue = 1100m, ReadingTimestamp = DateTimeOffset.UtcNow, IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow },
@@ -209,5 +214,148 @@ public class StatusRecomputeServiceTests : IAsyncLifetime
             .ToListAsync(TestContext.Current.CancellationToken);
         snapshotHouseholdIds.ShouldContain(householdA);
         snapshotHouseholdIds.ShouldContain(householdB);
+    }
+
+    private static StatusSnapshot NewSnapshot(Guid householdId, DateTimeOffset effectiveAtUtc) => new()
+    {
+        Id = Guid.NewGuid(),
+        HouseholdId = householdId,
+        Status = Status.WithinRange,
+        PaceToDateKwh = 100m,
+        BaselineToDateKwh = 100m,
+        IsLowConfidence = false,
+        ComputedAtUtc = effectiveAtUtc,
+        EffectiveAtUtc = effectiveAtUtc,
+    };
+
+    [Fact]
+    public async Task RecomputeForwardFromAsync_appends_one_superseding_snapshot_per_affected_EffectiveAtUtc_point()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeterId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var fromEffectiveAtUtc = now.AddDays(-20);
+        var before = NewSnapshot(householdId, now.AddDays(-30));
+        var affected1 = NewSnapshot(householdId, fromEffectiveAtUtc);
+        var affected2 = NewSnapshot(householdId, now.AddDays(-5));
+        dbContext.StatusSnapshots.AddRange(before, affected1, affected2);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var (householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal) = NewMockedPorts(householdId, mainMeterId);
+        householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, YearlyBaselineKwh = 3650m });
+
+        var recomputeLock = new HouseholdRecomputeLock();
+        var getCurrentStatus = new GetCurrentStatus(householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal);
+        var sut = new StatusRecomputeService(getCurrentStatus, dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance);
+
+        await sut.RecomputeForwardFromAsync(householdId, fromEffectiveAtUtc, TestContext.Current.CancellationToken);
+
+        var allSnapshots = await dbContext.StatusSnapshots
+            .Where(s => s.HouseholdId == householdId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        // 3 original rows + 2 new superseding rows (one per affected EffectiveAtUtc point).
+        allSnapshots.Count.ShouldBe(5);
+        allSnapshots.Count(s => s.EffectiveAtUtc == fromEffectiveAtUtc).ShouldBe(2);
+        allSnapshots.Count(s => s.EffectiveAtUtc == affected2.EffectiveAtUtc).ShouldBe(2);
+        // The point before fromEffectiveAtUtc is untouched — no superseding row for it.
+        allSnapshots.Count(s => s.EffectiveAtUtc == before.EffectiveAtUtc).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RecomputeForwardFromAsync_leaves_a_snapshot_before_fromEffectiveAtUtc_completely_untouched()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeterId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var before = NewSnapshot(householdId, now.AddDays(-30));
+        dbContext.StatusSnapshots.Add(before);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var (householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal) = NewMockedPorts(householdId, mainMeterId);
+        householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, YearlyBaselineKwh = 3650m });
+
+        var recomputeLock = new HouseholdRecomputeLock();
+        var getCurrentStatus = new GetCurrentStatus(householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal);
+        var sut = new StatusRecomputeService(getCurrentStatus, dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance);
+
+        await sut.RecomputeForwardFromAsync(householdId, now.AddDays(-20), TestContext.Current.CancellationToken);
+
+        var allSnapshots = await dbContext.StatusSnapshots
+            .Where(s => s.HouseholdId == householdId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        allSnapshots.ShouldHaveSingleItem();
+        allSnapshots[0].Id.ShouldBe(before.Id);
+    }
+
+    [Fact]
+    public async Task RecomputeForwardFromAsync_acquires_the_same_recompute_lock_as_RecomputeAsync()
+    {
+        // Mirrors Two_concurrent_RecomputeAsync_calls_for_the_same_household_never_overlap_and_both_writes_land's
+        // proof shape: a RecomputeAsync call blocked mid-flight must still hold off a concurrent
+        // RecomputeForwardFromAsync call for the same household — proving both methods share one lock.
+        var householdId = Guid.NewGuid();
+        var mainMeterId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+
+        var (householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal) = NewMockedPorts(householdId, mainMeterId);
+
+        var events = new List<string>();
+        var eventsGate = new object();
+        void Record(string e)
+        {
+            lock (eventsGate)
+            {
+                events.Add(e);
+            }
+        }
+
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var invocationCount = 0;
+
+        async Task<Household?> RecordAndReturnHouseholdAsync(NSubstitute.Core.CallInfo _)
+        {
+            var invocation = Interlocked.Increment(ref invocationCount);
+            if (invocation == 1)
+            {
+                Record("recompute-entered");
+                firstEntered.SetResult();
+                await releaseFirst.Task;
+                Record("recompute-exited");
+            }
+            else
+            {
+                Record("forward-recompute-entered");
+            }
+
+            return new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, YearlyBaselineKwh = 3650m };
+        }
+
+        householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(RecordAndReturnHouseholdAsync);
+
+        var recomputeLock = new HouseholdRecomputeLock();
+        var getCurrentStatus = new GetCurrentStatus(householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal);
+        var sut = new StatusRecomputeService(getCurrentStatus, dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance);
+
+        var recomputeTask = sut.RecomputeAsync(householdId, TestContext.Current.CancellationToken);
+        await firstEntered.Task;
+
+        var forwardTask = sut.RecomputeForwardFromAsync(householdId, DateTimeOffset.UtcNow.AddDays(-1), TestContext.Current.CancellationToken);
+
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        releaseFirst.SetResult();
+        await Task.WhenAll(recomputeTask, forwardTask);
+
+        events.ShouldBe(["recompute-entered", "recompute-exited", "forward-recompute-entered"]);
     }
 }

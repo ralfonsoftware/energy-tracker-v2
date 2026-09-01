@@ -10,6 +10,7 @@ public class EditMeterReadingTests
     private readonly IMeterReadingRepository _readingRepository = Substitute.For<IMeterReadingRepository>();
     private readonly IAuditCorrectionRecorder _auditCorrectionRecorder = Substitute.For<IAuditCorrectionRecorder>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
 
     private EditMeterReading Sut()
     {
@@ -18,7 +19,7 @@ public class EditMeterReadingTests
         _unitOfWork
             .ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<MeterReading>>>(), Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<Func<CancellationToken, Task<MeterReading>>>()(callInfo.Arg<CancellationToken>()));
-        return new(_readingRepository, _auditCorrectionRecorder, _unitOfWork);
+        return new(_readingRepository, _auditCorrectionRecorder, _unitOfWork, _statusRecomputeService);
     }
 
     private static MeterReading NewReading(Guid householdId, decimal kwhValue, int version = 0, Guid? id = null) => new()
@@ -131,5 +132,38 @@ public class EditMeterReadingTests
             Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
         await _auditCorrectionRecorder.DidNotReceive().RecordAsync(
             Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        // Story 4.3 AC #3: a no-op save is not a correction — nothing changed for a forward
+        // recompute to fix.
+        await _statusRecomputeService.DidNotReceive().RecomputeForwardFromAsync(
+            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_real_change_triggers_a_forward_recompute_from_the_readings_own_CreatedAtUtc()
+    {
+        // Story 4.3 AC #3. Deliberately uses a backdated reading (CreatedAtUtc far after
+        // ReadingTimestamp) to prove the call anchors on the wall-clock CreatedAtUtc, not the
+        // domain ReadingTimestamp — the exact clock-type distinction the story's Dev Notes call out.
+        var householdId = Guid.NewGuid();
+        var createdAtUtc = DateTimeOffset.UtcNow;
+        var reading = new MeterReading
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = Guid.NewGuid(),
+            KwhValue = 100m,
+            ReadingTimestamp = DateTimeOffset.UtcNow.AddDays(-30),
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = createdAtUtc,
+            Version = 3,
+        };
+        var updated = NewReading(householdId, 150m, version: 4, id: reading.Id);
+        _readingRepository.FindByIdAsync(reading.Id, Arg.Any<CancellationToken>()).Returns(reading);
+        _readingRepository.UpdateKwhValueAsync(reading.Id, 150m, 3, Arg.Any<CancellationToken>()).Returns(updated);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, reading.Id, 150m, 3, TestContext.Current.CancellationToken);
+
+        await _statusRecomputeService.Received(1).RecomputeForwardFromAsync(householdId, createdAtUtc, Arg.Any<CancellationToken>());
     }
 }

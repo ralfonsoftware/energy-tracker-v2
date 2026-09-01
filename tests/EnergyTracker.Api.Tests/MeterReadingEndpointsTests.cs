@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -280,4 +281,107 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
             "/api/meter-readings",
             new { kwhValue, readingTimestamp, idempotencyKey = Guid.NewGuid() },
             TestContext.Current.CancellationToken);
+
+    private static Task<HttpResponseMessage> SetYearlyBaselineAsync(HttpClient client, Guid householdId, decimal yearlyBaselineKwh, int version) =>
+        client.PutAsJsonAsync(
+            $"/api/households/{householdId}/yearly-baseline",
+            new { yearlyBaselineKwh, version },
+            TestContext.Current.CancellationToken);
+
+    private async Task<int> CountStatusSnapshotRowsAsync(Guid householdId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.StatusSnapshots.IgnoreQueryFilters()
+            .CountAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
+    }
+
+    private async Task<MeterRegressionPrompt?> GetOpenRegressionPromptAsync(Guid householdId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.MeterRegressionPrompts.IgnoreQueryFilters()
+            .SingleOrDefaultAsync(p => p.HouseholdId == householdId && p.ResolvedAtUtc == null, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_recomputes_Status_forward_and_the_correction_is_visible_via_status_history()
+    {
+        // Story 4.3 AC #3, end-to-end: editing the EARLIEST reading must supersede every existing
+        // StatusSnapshot point (all of them were computed after it), and the corrected pace must
+        // be visible through GET /api/status/history without any frontend/DTO change.
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        var householdResponse = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var household = await householdResponse.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        await SetYearlyBaselineAsync(client, household!.Id, 3650m, household.Version);
+
+        var t0 = DateTimeOffset.UtcNow.AddDays(-20);
+        var firstResponse = await PostReadingAsync(client, 1000m, t0);
+        var first = await firstResponse.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+        // First reading alone is undefined (fewer than two readings) — no snapshot yet. The
+        // second and third readings each make Status definite, producing 2 snapshots pre-edit.
+        await PostReadingAsync(client, 1100m, t0.AddDays(5));
+        await PostReadingAsync(client, 1300m, t0.AddDays(10));
+        (await CountStatusSnapshotRowsAsync(household.Id)).ShouldBe(2);
+
+        var putResponse = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{first!.Id}",
+            new { kwhValue = 500m, version = first.Version },
+            TestContext.Current.CancellationToken);
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Both pre-existing snapshots were computed after the first reading's own CreatedAtUtc, so
+        // both get a superseding row appended — 2 original + 2 superseding = 4 rows on the table,
+        // while GetStatusHistory's dedupe still surfaces exactly 2 (one per EffectiveAtUtc point).
+        (await CountStatusSnapshotRowsAsync(household.Id)).ShouldBe(4);
+
+        var historyResponse = await client.GetAsync("/api/status/history", TestContext.Current.CancellationToken);
+        var history = await historyResponse.Content.ReadFromJsonAsync<List<StatusHistoryEntryResponse>>(TestContext.Current.CancellationToken);
+        history!.Count.ShouldBe(2);
+        // PaceToDateKwh telescopes to (last - first) over the walked window (AC #1 of Story 2.2).
+        // Lowering the FIRST reading's value from 1000 to 500 INCREASES that delta, not decreases
+        // it — point 1 (readings 1+2 only, as of right after reading 2 was saved): 1100-500=600
+        // (was 1100-1000=100). Point 2 (all three readings, as of right after reading 3 was
+        // saved): 1300-500=800 (was 1300-1000=300). Asserted as exact figures, not an inequality,
+        // since both directions are equally easy to get backwards.
+        history[0].PaceToDateKwh.ShouldBe(600m);
+        history[1].PaceToDateKwh.ShouldBe(800m);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_on_a_reading_excluded_by_an_open_regression_prompt_leaves_the_prompt_open_and_the_reading_still_excluded()
+    {
+        // Story 4.3 AC #4. A lower-than-preceding reading opens a MeterRegressionPrompt (Story
+        // 2.3) that excludes it (and everything after it) from Status until classified.
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        var householdResponse = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var household = await householdResponse.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        await SetYearlyBaselineAsync(client, household!.Id, 3650m, household.Version);
+
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
+        await PostReadingAsync(client, 14302m, baseline);
+        var triggeringResponse = await PostReadingAsync(client, 412m, baseline.AddHours(1));
+        var triggering = await triggeringResponse.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        var openPromptBeforeEdit = await GetOpenRegressionPromptAsync(household.Id);
+        openPromptBeforeEdit.ShouldNotBeNull();
+        openPromptBeforeEdit.MeterReadingId.ShouldBe(triggering!.Id);
+
+        var putResponse = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{triggering.Id}",
+            new { kwhValue = 999m, version = triggering.Version },
+            TestContext.Current.CancellationToken);
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var openPromptAfterEdit = await GetOpenRegressionPromptAsync(household.Id);
+        openPromptAfterEdit.ShouldNotBeNull();
+        openPromptAfterEdit.Id.ShouldBe(openPromptBeforeEdit.Id);
+        openPromptAfterEdit.Classification.ShouldBeNull();
+
+        // Still fewer than two *included* readings (the triggering reading stays excluded), so
+        // Status remains undefined — the edit must not have silently resolved/bypassed the prompt.
+        var statusResponse = await client.GetAsync("/api/status", TestContext.Current.CancellationToken);
+        statusResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await statusResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
 }

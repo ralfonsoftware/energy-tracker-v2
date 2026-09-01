@@ -38,7 +38,7 @@ public abstract class MeterReadingRepositoryTestsBase
         return mainMeterId;
     }
 
-    protected static MeterReading NewReading(Guid householdId, Guid mainMeterId, decimal kwhValue, DateTimeOffset readingTimestamp) => new()
+    protected static MeterReading NewReading(Guid householdId, Guid mainMeterId, decimal kwhValue, DateTimeOffset readingTimestamp, DateTimeOffset? createdAtUtc = null) => new()
     {
         Id = Guid.NewGuid(),
         HouseholdId = householdId,
@@ -46,7 +46,7 @@ public abstract class MeterReadingRepositoryTestsBase
         KwhValue = kwhValue,
         ReadingTimestamp = readingTimestamp,
         IdempotencyKey = Guid.NewGuid(),
-        CreatedAtUtc = DateTimeOffset.UtcNow,
+        CreatedAtUtc = createdAtUtc ?? DateTimeOffset.UtcNow,
     };
 
     [Fact]
@@ -210,6 +210,48 @@ public abstract class MeterReadingRepositoryTestsBase
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         result.Select(r => r.Id).ShouldBe([latestReading.Id, withinWindow.Id], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task AsOfUtc_excludes_a_reading_whose_CreatedAtUtc_is_after_it_even_when_its_ReadingTimestamp_is_earlier()
+    {
+        // Story 4.3's exact backdating trap: a reading entered (CreatedAtUtc) after the historical
+        // asOfUtc point being recomputed didn't exist in the system at that point in time, even
+        // though its own domain ReadingTimestamp falls well inside the window. Filtering on
+        // ReadingTimestamp instead of CreatedAtUtc would incorrectly include it.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var asOfUtc = DateTimeOffset.UtcNow.AddDays(-30);
+        var visibleReading = NewReading(householdId, mainMeterId, 100m, asOfUtc.AddDays(-5), createdAtUtc: asOfUtc.AddDays(-5));
+        // Backdated: its ReadingTimestamp is inside the as-of window, but it was only entered
+        // (CreatedAtUtc) after asOfUtc — it must not appear in an as-of-asOfUtc fetch.
+        var backdatedReading = NewReading(householdId, mainMeterId, 999m, asOfUtc.AddDays(-3), createdAtUtc: asOfUtc.AddDays(5));
+        dbContext.MeterReadings.AddRange(visibleReading, backdatedReading);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new MeterReadingRepository(dbContext);
+
+        var result = await repository.GetRecentByMainMeterAsync(
+            mainMeterId, windowDays: 30, mustIncludeReadingId: null, TestContext.Current.CancellationToken, asOfUtc: asOfUtc);
+
+        result.Select(r => r.Id).ShouldBe([visibleReading.Id]);
+    }
+
+    [Fact]
+    public async Task AsOfUtc_null_preserves_the_existing_unbounded_upper_edge_behavior()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var latest = DateTimeOffset.UtcNow;
+        var reading = NewReading(householdId, mainMeterId, 100m, latest);
+        dbContext.MeterReadings.Add(reading);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new MeterReadingRepository(dbContext);
+
+        var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 400, mustIncludeReadingId: null, TestContext.Current.CancellationToken, asOfUtc: null);
+
+        result.Select(r => r.Id).ShouldBe([reading.Id]);
     }
 }
 

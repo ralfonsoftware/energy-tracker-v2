@@ -37,8 +37,16 @@ public interface IMeterReadingRepository
     // margin is subtracted AFTER taking the min of the two anchors, so the widened branch still
     // fetches a full trailing window of real history behind the must-include reading, not just
     // that single reading in isolation.
+    //
+    // asOfUtc (Story 4.3, optional, goes after cancellationToken since it has no default):
+    // bounds eligibility to readings with CreatedAtUtc <= asOfUtc — i.e. readings that actually
+    // existed in the system as of that historical wall-clock moment. Deliberately NOT
+    // ReadingTimestamp <= asOfUtc: ReadingTimestamp is the meter's own read time and is
+    // user-backdatable, so a backdated reading can have an old ReadingTimestamp but a recent
+    // CreatedAtUtc — it wasn't visible to the system at the historical asOfUtc point even though
+    // its domain timestamp predates it. Default null preserves today's unbounded-upper-edge query.
     Task<IReadOnlyList<MeterReading>> GetRecentByMainMeterAsync(
-        Guid mainMeterId, int windowDays, Guid? mustIncludeReadingId, CancellationToken cancellationToken);
+        Guid mainMeterId, int windowDays, Guid? mustIncludeReadingId, CancellationToken cancellationToken, DateTimeOffset? asOfUtc = null);
 
     // One page of a Main Meter's Meter Readings, most-recent-first (ReadingTimestamp descending,
     // then Id descending as the deterministic tiebreak — mirrors FindImmediatelyPrecedingAsync's

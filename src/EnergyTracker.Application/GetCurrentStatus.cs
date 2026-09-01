@@ -30,7 +30,13 @@ public class GetCurrentStatus(
     // AD-7: this is the single place the live computation runs — both the GET /api/status read
     // path and IStatusRecomputeService's snapshot-writing path call this same method, so the two
     // can never disagree on exclusion/threshold logic (Task 6's own requirement).
-    public async Task<CurrentStatusResult?> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
+    //
+    // asOfUtc (Story 4.3): when supplied, computes Status as it would have looked at that
+    // historical wall-clock moment instead of live/now — used by
+    // IStatusRecomputeService.RecomputeForwardFromAsync to regenerate historical StatusSnapshot
+    // points after a Meter Reading correction. Must go after cancellationToken (C# requires
+    // optional parameters after all required ones); every existing 2-arg call site is unaffected.
+    public async Task<CurrentStatusResult?> ExecuteAsync(Guid householdId, CancellationToken cancellationToken, DateTimeOffset? asOfUtc = null)
     {
         var household = await householdRepository.FindByIdAsync(householdId, cancellationToken);
         if (household?.YearlyBaselineKwh is not { } yearlyBaselineKwh)
@@ -62,7 +68,7 @@ public class GetCurrentStatus(
         // anchoring there also keeps the trigger itself in the fetched set (ExcludeFromOpenPrompt
         // would otherwise throw for a trigger that got excluded from the fetch entirely).
         var recentReadings = await readingRepository.GetRecentByMainMeterAsync(
-            mainMeter.Id, RecentReadingWindowDays, openPrompt?.PreviousMeterReadingId, cancellationToken);
+            mainMeter.Id, RecentReadingWindowDays, openPrompt?.PreviousMeterReadingId, cancellationToken, asOfUtc);
         var includedReadings = PatternDetectiveCalculator.ExcludeFromOpenPrompt(recentReadings, openPrompt?.MeterReadingId);
 
         var resolvedPrompts = await regressionPromptRepository.GetResolvedForMainMeterAsync(mainMeter.Id, cancellationToken);
@@ -79,7 +85,9 @@ public class GetCurrentStatus(
 
         // AC #3: "unusually long gap since the last reading" — measured from the most recent
         // *included* reading to now, not a gap between two readings within the walked sequence.
-        var now = DateTimeOffset.UtcNow;
+        // Story 4.3: "now" becomes the historical asOfUtc point when supplied, so a forward
+        // recompute reproduces what this figure would have looked like at that point in time.
+        var now = asOfUtc ?? DateTimeOffset.UtcNow;
         var lastReading = includedReadings[^1];
         var daysSinceLastReading = (now - lastReading.ReadingTimestamp).TotalDays;
         var isLowConfidence = daysSinceLastReading > household.LowConfidenceGapDays;

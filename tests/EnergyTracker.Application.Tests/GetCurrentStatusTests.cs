@@ -300,6 +300,74 @@ public class GetCurrentStatusTests
     }
 
     [Fact]
+    public async Task AsOfUtc_is_threaded_through_to_the_bounded_reading_fetch()
+    {
+        // Story 4.3 AC #3: IStatusRecomputeService.RecomputeForwardFromAsync relies on this call
+        // actually reaching the repository so a historical recompute only ever sees readings that
+        // existed as of that point — the repository-level filtering itself is covered by
+        // MeterReadingRepositoryTests.cs (a real DB is required to prove the CreatedAtUtc bound).
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var asOfUtc = DateTimeOffset.UtcNow.AddDays(-30);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, asOfUtc.AddDays(-10));
+        var last = NewReading(householdId, mainMeter.Id, 1100m, asOfUtc);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>(), asOfUtc).Returns([first, last]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken, asOfUtc: asOfUtc);
+
+        result.ShouldNotBeNull();
+        await _readingRepository.Received(1).GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>(), asOfUtc);
+    }
+
+    [Fact]
+    public async Task AsOfUtc_anchors_DaysSinceLastReading_and_IsLowConfidence_on_the_historical_point_not_the_wall_clock()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var asOfUtc = DateTimeOffset.UtcNow.AddDays(-100);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, asOfUtc.AddDays(-60));
+        // 50 days before asOfUtc, but only 100+50=150 days before the real wall clock — if the
+        // implementation ever regresses back to DateTimeOffset.UtcNow, this would report ~150 days
+        // instead of ~50, and the LowConfidenceGapDays=45 check would still flag it, so this test
+        // pins the exact figure rather than only the boolean to catch that regression.
+        var last = NewReading(householdId, mainMeter.Id, 1100m, asOfUtc.AddDays(-50));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>(), asOfUtc).Returns([first, last]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken, asOfUtc: asOfUtc);
+
+        result.ShouldNotBeNull();
+        result.DaysSinceLastReading.ShouldBe(50, tolerance: 0.1);
+        result.IsLowConfidence.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Omitting_asOfUtc_reproduces_the_existing_live_now_anchored_behavior()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var first = NewReading(householdId, mainMeter.Id, 1000m, DateTimeOffset.UtcNow.AddDays(-10));
+        var last = NewReading(householdId, mainMeter.Id, 1100m, DateTimeOffset.UtcNow.AddDays(-1));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>(), null).Returns([first, last]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.DaysSinceLastReading.ShouldBe(1, tolerance: 0.1);
+        result.IsLowConfidence.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task A_resolved_rollover_regression_is_corrected_using_the_prompts_digit_capacity_instead_of_the_raw_negative_delta()
     {
         var householdId = Guid.NewGuid();

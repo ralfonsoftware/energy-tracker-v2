@@ -1,5 +1,25 @@
 # generated: 2026-08-09
 # last_updated: 2026-08-31
+# 2026-08-31: story 4-3-correcting-a-meter-reading moved to review (dev-story implementation
+#   complete). AC #1 (correction preserved/note) and AC #2 (409 conflict) needed zero frontend
+#   changes — verified during implementation that Story 2.8/4.1 already fully ship them. AC #3 (the
+#   net-new piece): a new StatusSnapshot.EffectiveAtUtc column (migration, both providers, backfilled
+#   from ComputedAtUtc) lets a Meter Reading correction supersede historical trend points by append
+#   rather than in-place update (StatusSnapshot stays immutable/insert-only, AD-7); new
+#   IStatusRecomputeService.RecomputeForwardFromAsync walks every affected EffectiveAtUtc point
+#   forward from the corrected reading and appends a corrected row for each; GetCurrentStatus gained
+#   an optional asOfUtc parameter for the historical recompute, bounding reading eligibility by
+#   CreatedAtUtc (wall-clock) not ReadingTimestamp (user-backdatable domain time) — the exact clock-
+#   type bug the story's own Dev Notes flagged as easy to get backwards. GetStatusHistory's exposed
+#   ComputedAtUtc field is unchanged in name/shape (now sourced from EffectiveAtUtc post-dedupe), so
+#   TrendChart needed zero frontend changes either. AC #4 needed no code change (EditMeterReading has
+#   no regression-prompt dependency); added the missing test coverage. Found and fixed during
+#   implementation: EF Core 10 fails to translate a GroupBy+per-group-First() query against both
+#   real Postgres and SQL Server (confirmed via the new dual-provider StatusSnapshotRepositoryTests
+#   — exactly the risk the story flagged) — moved the dedupe to an in-memory LINQ pass after a plain
+#   DB fetch. Full backend suite green: 458/458 (Application, Infrastructure, Architecture, Api.Tests
+#   via Testcontainers Postgres+SqlServer). 251 frontend tests green (0 new — zero frontend files
+#   touched), tsc/oxlint clean (pre-existing unrelated warnings only).
 # 2026-08-31: story 4-3-correcting-a-meter-reading drafted (create-story) — status set to
 #   ready-for-dev. Scope reality check (verified by reading the live code, not the epic text):
 #   AC #1 (original value preserved, correction note) and AC #2 (409 concurrency conflict) are
@@ -682,7 +702,7 @@ development_status:
   epic-4: in-progress
   4-1-trend-history-view: review
   4-2-per-plug-measured-data-view: done
-  4-3-correcting-a-meter-reading: ready-for-dev
+  4-3-correcting-a-meter-reading: review
   epic-4-retrospective: optional
 
   epic-5: backlog

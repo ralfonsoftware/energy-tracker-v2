@@ -21,7 +21,10 @@ public class GetStatusHistoryTests
         LowConfidenceGapDays = lowConfidenceGapDays,
     };
 
-    private static StatusSnapshot NewSnapshot(Guid householdId, DateTimeOffset computedAtUtc, Status status = Status.WithinRange) => new()
+    // effectiveAtUtc defaults to computedAtUtc — the normal case where a snapshot's write-audit
+    // time and its trend-timeline point are the same instant. Story 4.3's own dedicated test below
+    // is the only one that needs them to diverge.
+    private static StatusSnapshot NewSnapshot(Guid householdId, DateTimeOffset computedAtUtc, Status status = Status.WithinRange, DateTimeOffset? effectiveAtUtc = null) => new()
     {
         Id = Guid.NewGuid(),
         HouseholdId = householdId,
@@ -30,6 +33,7 @@ public class GetStatusHistoryTests
         BaselineToDateKwh = 100m,
         IsLowConfidence = false,
         ComputedAtUtc = computedAtUtc,
+        EffectiveAtUtc = effectiveAtUtc ?? computedAtUtc,
     };
 
     [Fact]
@@ -141,5 +145,26 @@ public class GetStatusHistoryTests
         var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
         result[1].GapBeforeThisEntry.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Exposed_ComputedAtUtc_reflects_the_snapshots_EffectiveAtUtc_not_its_own_ComputedAtUtc()
+    {
+        // Guards Story 4.3's field-remap: StatusHistoryEntry.ComputedAtUtc is the API-facing field
+        // TrendChart already depends on — it must keep exposing the trend-timeline point
+        // (EffectiveAtUtc) even though the underlying entity's own audit-time ComputedAtUtc is a
+        // different value (the case where a correction superseded this point).
+        var householdId = Guid.NewGuid();
+        var effectiveAt = DateTimeOffset.UtcNow.AddDays(-30);
+        var supersedingWriteTime = DateTimeOffset.UtcNow;
+        var snapshot = NewSnapshot(householdId, computedAtUtc: supersedingWriteTime, effectiveAtUtc: effectiveAt);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId));
+        _statusSnapshotRepository.GetForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns([snapshot]);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result[0].ComputedAtUtc.ShouldBe(effectiveAt);
+        result[0].ComputedAtUtc.ShouldNotBe(supersedingWriteTime);
     }
 }

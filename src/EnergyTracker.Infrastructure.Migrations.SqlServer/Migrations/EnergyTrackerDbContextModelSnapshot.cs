@@ -575,6 +575,9 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.Property<DateTimeOffset>("ComputedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset>("EffectiveAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uniqueidentifier");
 

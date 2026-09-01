@@ -20,18 +20,22 @@ public class GetStatusHistory(
 
         var snapshots = await statusSnapshotRepository.GetForHouseholdAsync(householdId, cancellationToken);
 
+        // Story 4.3: sourced from EffectiveAtUtc, not the entity's own ComputedAtUtc — after the
+        // repository's latest-ComputedAtUtc-per-EffectiveAtUtc dedupe, EffectiveAtUtc is the
+        // correct trend-timeline point (and the only one unique per row). The exposed field stays
+        // named ComputedAtUtc so TrendChart/its DTOs need no change.
         var entries = new List<StatusHistoryEntry>(snapshots.Count);
         for (var i = 0; i < snapshots.Count; i++)
         {
             var gapBeforeThisEntry = i > 0 &&
-                (snapshots[i].ComputedAtUtc - snapshots[i - 1].ComputedAtUtc).TotalDays > household.LowConfidenceGapDays;
+                (snapshots[i].EffectiveAtUtc - snapshots[i - 1].EffectiveAtUtc).TotalDays > household.LowConfidenceGapDays;
 
             entries.Add(new StatusHistoryEntry(
                 Status: snapshots[i].Status,
                 PaceToDateKwh: snapshots[i].PaceToDateKwh,
                 BaselineToDateKwh: snapshots[i].BaselineToDateKwh,
                 IsLowConfidence: snapshots[i].IsLowConfidence,
-                ComputedAtUtc: snapshots[i].ComputedAtUtc,
+                ComputedAtUtc: snapshots[i].EffectiveAtUtc,
                 GapBeforeThisEntry: gapBeforeThisEntry));
         }
 

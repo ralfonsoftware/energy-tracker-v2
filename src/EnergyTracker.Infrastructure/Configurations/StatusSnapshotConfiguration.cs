@@ -23,6 +23,9 @@ public class StatusSnapshotConfiguration : IEntityTypeConfiguration<StatusSnapsh
         builder.Property(s => s.ComputedAtUtc)
             .IsRequired();
 
+        builder.Property(s => s.EffectiveAtUtc)
+            .IsRequired();
+
         // Restrict, not Cascade — same AD-10 reasoning as every other FK to Household in this
         // codebase.
         builder.HasOne<Household>()

@@ -91,10 +91,13 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
         dbContext.MainMeters.SingleOrDefaultAsync(m => m.HouseholdId == householdId, cancellationToken);
 
     public async Task<IReadOnlyList<MeterReading>> GetRecentByMainMeterAsync(
-        Guid mainMeterId, int windowDays, Guid? mustIncludeReadingId, CancellationToken cancellationToken)
+        Guid mainMeterId, int windowDays, Guid? mustIncludeReadingId, CancellationToken cancellationToken, DateTimeOffset? asOfUtc = null)
     {
+        // Story 4.3: "latest" means latest as of asOfUtc, not globally latest — a reading created
+        // after asOfUtc didn't exist in the system at that historical moment, so it must not
+        // anchor (or appear in) an "as of" fetch even if its own ReadingTimestamp is earlier.
         var latest = await dbContext.MeterReadings
-            .Where(r => r.MainMeterId == mainMeterId)
+            .Where(r => r.MainMeterId == mainMeterId && (asOfUtc == null || r.CreatedAtUtc <= asOfUtc))
             .OrderByDescending(r => r.ReadingTimestamp)
             .Select(r => new { r.ReadingTimestamp })
             .FirstOrDefaultAsync(cancellationToken);
@@ -129,7 +132,7 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
         var cutoff = anchor - TimeSpan.FromDays(windowDays);
 
         return await dbContext.MeterReadings
-            .Where(r => r.MainMeterId == mainMeterId && r.ReadingTimestamp >= cutoff)
+            .Where(r => r.MainMeterId == mainMeterId && r.ReadingTimestamp >= cutoff && (asOfUtc == null || r.CreatedAtUtc <= asOfUtc))
             .OrderBy(r => r.ReadingTimestamp)
             .ThenBy(r => r.Id)
             .ToListAsync(cancellationToken);
