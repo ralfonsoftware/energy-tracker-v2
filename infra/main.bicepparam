@@ -57,5 +57,10 @@ param containerAppMaxReplicas = 1
 // oidcAuthority/oidcClientId pattern above — left blank because no notification address has
 // been decided yet (an external, not-self-provisionable choice), so main.bicep's
 // monitorAlert module simply doesn't deploy until this is filled in.
-param otelDailyIngestionCapGb = 1
+// Raised from 1 to 2 GB/day (2026-09-01) after a production incident (queue-redelivery storm,
+// see bugfix/queue-visibility-timeout-redelivery) generated ~2.7M log lines in 16 minutes and
+// blew through the 1 GB cap, leaving the workspace OverQuota and Azure Monitor blind for the
+// rest of that day. Still a spike safeguard, not a routine cost-control lever — see
+// log-analytics.bicep's own param doc comment.
+param otelDailyIngestionCapGb = 2
 param otelAlertNotificationEmail = readEnvironmentVariable('AZURE_ALERT_OTEL_CAP_EMAIL', '')

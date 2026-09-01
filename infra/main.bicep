@@ -22,7 +22,7 @@ param resourceToken string = uniqueString(resourceGroup().id)
 param logAnalyticsRetentionInDays int = 30
 
 @description('Daily ingestion cap in GB, shared by the Log Analytics workspace and the workspace-based Application Insights layered on it (AD-19 OTel extension)')
-param otelDailyIngestionCapGb int = 1
+param otelDailyIngestionCapGb int = 2
 
 @description('Email address notified when the daily ingestion cap is reached or nearly reached (90%). Blank disables both alerts — same degrade-gracefully shape as the blank OIDC params below.')
 param otelAlertNotificationEmail string = ''
