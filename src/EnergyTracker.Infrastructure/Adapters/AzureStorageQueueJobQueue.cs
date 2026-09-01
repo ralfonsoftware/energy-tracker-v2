@@ -62,13 +62,26 @@ public class AzureStorageQueueJobProcessingService(
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 
+    // ReceiveMessagesAsync's own visibilityTimeout parameter defaults to 30 seconds when omitted —
+    // far shorter than a large Eve Home import's per-row conflict-tolerant insert loop
+    // (SmartPlugImportRepository.AddAsync) can run. A still-processing message becoming visible
+    // again gets redelivered to this same polling loop (BackgroundJobProcessor reuses an
+    // already-Processing job rather than skipping it, by design, for the genuine crashed-instance
+    // case), so the same import was reprocessed concurrently, compounding without bound — confirmed
+    // live in production 2026-09-01 (~2.7M log lines in 16 minutes before the household's Log
+    // Analytics workspace hit its daily ingestion cap). Set generously long, not tuned to any
+    // measured worst case — the cost of a genuinely crashed instance's message staying invisible
+    // this long is only a delayed retry, while too short reintroduces this exact bug.
+    private static readonly TimeSpan MessageVisibilityTimeout = TimeSpan.FromMinutes(60);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var response = await queueClient.ReceiveMessagesAsync(maxMessages: 8, cancellationToken: stoppingToken);
+            var response = await queueClient.ReceiveMessagesAsync(
+                maxMessages: 8, visibilityTimeout: MessageVisibilityTimeout, cancellationToken: stoppingToken);
             var messages = response.Value;
 
             if (messages.Length == 0)
