@@ -151,6 +151,33 @@ public class MapSmartPlugImportToPowerPointTests
     }
 
     [Fact]
+    public async Task Completes_the_mapping_when_a_dst_fallback_conflict_left_the_first_read_back_reading_unmapped()
+    {
+        // Regression test: UpdateMappingPerRowWithConflictToleranceAsync deliberately leaves a
+        // reading's PowerPointId null in the DB when its local wall-clock IntervalStart collides
+        // with an already-mapped reading (a DST fall-back duplicate, AD-9). ListReadingsByImportIdAsync
+        // has no ORDER BY, so that unmapped reading can come back at index 0 — CompleteSmartPlugImportProcessing
+        // must not treat readings[0] as authoritative for "is this import resolved".
+        var import = MakeImport();
+        var room = MakeRoom();
+        var powerPoint = MakePowerPoint(room.Id);
+        var unmappedDstConflictReading = MakeReading(import.Id); // PowerPointId stays null, as UpdateMappingPerRowWithConflictToleranceAsync leaves it.
+        var mappedReading = MakeReading(import.Id);
+        mappedReading.PowerPointId = powerPoint.Id;
+        var readings = new List<SmartPlugReading> { unmappedDstConflictReading, mappedReading };
+        _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
+        _smartPlugImportRepository.ListReadingsByImportIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(readings);
+        _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
+        _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(import.Id, powerPoint.Id, TestContext.Current.CancellationToken);
+
+        import.Status.ShouldBe(SmartPlugImportStatus.Completed);
+        await _statusRecomputeService.Received(1).RecomputeAsync(_householdId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Throws_not_found_when_the_import_does_not_exist()
     {
         var smartPlugImportId = Guid.NewGuid();
