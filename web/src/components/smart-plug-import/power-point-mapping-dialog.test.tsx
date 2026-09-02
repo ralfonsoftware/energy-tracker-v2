@@ -194,4 +194,30 @@ describe('PowerPointMappingDialog', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create Power Point "Office Desk"' })).toBeDisabled()
   })
+
+  it('caps the existing Power Point list to a scrollable region, with every row still clickable', async () => {
+    // 30 rows is well beyond the ~6-7 that fit in the list's max-h-64 cap, so this exercises the
+    // overflow case the fix targets rather than a list that happens to fit without scrolling.
+    const manyPowerPoints = Array.from({ length: 30 }, (_, index) => ({
+      id: `pp-${index}`,
+      roomId: ROOM.id,
+      name: `Plug ${index}`,
+      archivedAt: null,
+    }))
+    const fetchMock = stubDataFetch({ powerPoints: () => Promise.resolve(jsonResponse(manyPowerPoints)) })
+    render(<PowerPointMappingDialog smartPlugImportId="import-1" deviceTag="Office Desk" onMapped={vi.fn()} onCancel={vi.fn()} />)
+
+    const lastRow = await screen.findByText('Living room → Plug 29')
+    const list = lastRow.closest('div.overflow-y-auto')
+    expect(list).not.toBeNull()
+    expect(list).toHaveClass('max-h-64')
+
+    await userEvent.click(lastRow)
+
+    await waitFor(() => {
+      const mappingCall = fetchMock.mock.calls.find(([url]) => (url as string).includes('/power-point-mapping'))
+      expect(mappingCall).toBeDefined()
+      expect(JSON.parse((mappingCall![1] as RequestInit).body as string)).toEqual({ powerPointId: 'pp-29' })
+    })
+  })
 })

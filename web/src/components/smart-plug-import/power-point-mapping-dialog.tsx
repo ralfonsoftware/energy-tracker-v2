@@ -19,6 +19,8 @@ import {
 // primary "Create Power Point" action, "or map to an existing one" divider, tappable list of
 // existing Power Points. Neutral glass-dialog language (not destructive/red), matching the Meter
 // Regression prompt's modal pattern — an unmatched tag is an expected step, not an error.
+// The mock doesn't show a scroll affordance on that list, but with enough existing Power Points
+// it grows past the dialog with no way to reach the rest — capped and made scrollable below.
 export function PowerPointMappingDialog({
   smartPlugImportId,
   deviceTag,
@@ -179,7 +181,9 @@ export function PowerPointMappingDialog({
               {t('smartPlugImport.mappingModal.orDivider')}
             </div>
 
-            <div className="flex flex-col gap-1">
+            {/* max-h-64: roughly 6-7 rows before scrolling kicks in; overscroll-contain stops a scroll
+                past the top/bottom edge from chaining to the page behind the modal overlay. */}
+            <div className="flex max-h-64 flex-col gap-1 overflow-y-auto overscroll-contain">
               {activePowerPoints.length === 0 && (
                 <p className="text-muted-foreground text-sm">{t('smartPlugImport.mappingModal.noExisting')}</p>
               )}
