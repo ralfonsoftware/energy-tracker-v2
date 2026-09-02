@@ -280,6 +280,48 @@ CI, per this doc's own recommendation to dry-run the first bind manually rather 
 
 ---
 
+## D6 — Azure SQL Entra-only authentication cutover: a from-scratch redeploy reproduces the original lockout risk
+
+**Local/self-host:** no concept of Microsoft Entra ID applies to `docker-compose.sqlserver.yml`'s
+plain containerized SQL Server at all — it's `sa`/password, permanently, unaffected by anything in
+this entry.
+
+**Azure:** per architecture spine AD-21, the Azure SQL server is cut over to Microsoft Entra
+ID-only authentication (`azureADOnlyAuthentication: true`) — once flipped, no SQL login (including
+the original admin login) can connect. Only Microsoft Entra-authenticated principals with a
+provisioned contained database user can reach the database.
+
+**Why it bites:** the flip and the identity provisioning are split across two different
+mechanisms on purpose — Bicep (declarative, reapplied on every `infra-deploy.yml` run) versus a
+manual, out-of-band T-SQL script (`infra/sql/grant-entra-db-users.sql`, deliberately *not*
+pipeline-automated, per AD-21). If `azureADOnlyAuthentication: true` were ever a permanent,
+unconditional part of `database-sqlserver.bicep`, a from-scratch SQL Server (re)creation —
+disaster recovery, a resource-group rebuild, a region move — would come up Entra-only from the
+instant it exists, with **zero contained database users**, locking out the Container App and CI
+immediately. Per AD-6/AD-7's own established scale-to-zero failure shape elsewhere in this spine,
+that lockout can stay silent for minutes to hours (until the next cold start actually needs a new
+connection), long after whoever ran the redeploy has stopped watching. `infra/README.md` already
+documents one closely analogous, previously-*actually-happened* drift risk in this exact file
+("Switching `databaseProvider` leaves the old DB server running — delete it manually") — this is
+the same class of Bicep-incremental-mode gap, not a hypothetical.
+
+**Fix in place:** AD-21 fixes the cutover as three steps that must never collapse into one deploy —
+(A) a Bicep deploy that adds the Entra Admin *without* flipping `azureADOnlyAuthentication` (SQL
+auth keeps working) and rewrites the Container App/CI connection strings to their Entra-mode
+shape; a manual, out-of-band run of `infra/sql/grant-entra-db-users.sql` that provisions and
+verifies both identities can actually connect; then (B) a separate, deliberate Bicep deploy that
+flips `azureADOnlyAuthentication: true`. See `ARCHITECTURE-SPINE/invariants-rules.md#ad-21` for the
+full rule.
+
+**What this means for a story:** on **any** from-scratch SQL Server (re)creation — not just the
+first cutover — `infra/sql/grant-entra-db-users.sql` must be re-run and both identities' Entra
+connectivity re-verified *before* `azureADOnlyAuthentication: true` is (re)deployed against the new
+server. Never bundle the Entra Admin addition and the `azureADOnlyAuthentication` flip in the same
+PR/deploy on a server that doesn't already have both service identities provisioned as contained
+database users.
+
+---
+
 ## Quick-reference table
 
 | # | Delta | Local/self-host behavior | Azure behavior | Governing story |
@@ -288,4 +330,5 @@ CI, per this doc's own recommendation to dry-run the first bind manually rather 
 | D2 | Postgres region restriction | No region concept | Provisioning blocked in some regions (e.g. `germanywestcentral`) regardless of resource group's own region | 1.2 |
 | D3 | ACR credential timing | No registry/identity involved | Fresh-deploy `AcrPull` role assignment race if `registries` is declared too early | 1.2 (bootstrap), 1.3 (re-added) |
 | D4 | Empty-secret ACA validation | Blank env var is fine | ACA rejects a `secrets` entry with an empty value | 1.2 |
+| D6 | Azure SQL Entra-only auth redeploy lockout | No Entra concept; `sa`/password permanently | A from-scratch SQL Server redeploy comes up Entra-only with zero contained DB users unless the manual grant script is re-run first | 1.11 |
 | D5 | Custom domain / managed cert DNS timing | No domain-binding concept | Managed cert issuance requires externally-verified DNS (non-Azure provider) and the hostname pre-registered on the app (two-phase deploy); CNAME must be direct, CAA must allow DigiCert | N/A (caught pre-CI, see below) |

@@ -24,6 +24,8 @@
     - [AD-17 — Session persistence via server-side cookie, not client-stored tokens](./invariants-rules.md#ad-17-session-persistence-via-server-side-cookie-not-client-stored-tokens)
     - [AD-18 — i18n: Locale drives both storage-neutral formatting and additive translation](./invariants-rules.md#ad-18-i18n-locale-drives-both-storage-neutral-formatting-and-additive-translation)
     - [AD-19 — Operational baseline: health, logs, secrets](./invariants-rules.md#ad-19-operational-baseline-health-logs-secrets)
+    - [AD-20 — Duplicate-safe Smart-Plug reading writes](./invariants-rules.md#ad-20-duplicate-safe-smart-plug-reading-writes)
+    - [AD-21 — Azure SQL access via Microsoft Entra ID-only authentication](./invariants-rules.md#ad-21-azure-sql-access-via-microsoft-entra-id-only-authentication-azure-only-local-self-host-keeps-sql-auth)
   - [Consistency Conventions](./consistency-conventions.md)
   - [Stack](./stack.md)
   - [Structural Seed](./structural-seed.md)

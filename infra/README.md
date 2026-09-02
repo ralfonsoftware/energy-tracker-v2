@@ -34,6 +34,27 @@ previous one running and billed. After switching providers, manually delete the 
 one is live. This isn't hypothetical — it happened during this story's own implementation; see the
 story file's Change Log.
 
+### Azure SQL Entra-only auth cutover: never redeploy the flip before the manual grant script has run
+
+Per architecture spine AD-21, `database-sqlserver.bicep` gets a Microsoft Entra Admin and
+(eventually) `azureADOnlyAuthentication: true`. Those two must **never** land in the same Bicep
+deploy on a server that doesn't already have both the Container App's and CI's identities
+provisioned as contained database users — doing so locks both out immediately, with no SQL-auth
+fallback left. The required sequence, every time (first cutover **and** any from-scratch SQL
+Server redeploy — disaster recovery, resource-group rebuild, region move):
+
+1. Deploy the Entra Admin addition with `azureADOnlyAuthentication` omitted/`false` — SQL auth
+   still works.
+2. Run `infra/sql/grant-entra-db-users.sql` by hand (`sqlcmd`/Azure Data Studio, as the Entra
+   Admin) to provision both identities as contained database users, then verify both can actually
+   connect.
+3. Only then deploy `azureADOnlyAuthentication: true`, as its own separate change.
+
+See `docs/local-vs-azure-deltas.md#D6` and `ARCHITECTURE-SPINE/invariants-rules.md#ad-21` for the
+full reasoning — this is the same class of Bicep-incremental-mode gap as the `databaseProvider`
+switch warning above (a step Bicep can't enforce that must be run out of band before/after a
+declarative change), not a hypothetical concern.
+
 ### `infra-deploy.yml` preserves the currently-running Container App image
 
 `container-app.bicep` always declares `image: placeholderImage` in its template, so — before this
