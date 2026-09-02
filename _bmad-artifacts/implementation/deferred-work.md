@@ -193,6 +193,15 @@
 - If the backend ever returns `importStatus: 'awaitingpowerpointmapping'` with a null/empty `smartPlugImportId`, the mapping dialog never renders and, unlike the old panel's global reset button (available during `awaitingMapping` too), the new per-item "Remove from queue" button also excludes `awaitingMapping`. Deferred, pre-existing: this exact null-check gate is copied byte-for-byte from the pre-diff panel, not introduced by this diff. Raised by edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:110-111,158; web/src/components/smart-plug-import/use-smart-plug-import-job.ts:91-94]
 - No upper bound on how many files one selection/drop can enqueue — a household member selecting an entire folder of exports fires that many concurrent uploads and mounts that many permanently-polling hook instances, against a backend that Dev Notes itself confirms processes jobs strictly one at a time; a large batch leaves most items sitting in "Waiting" for a long stretch with no soft cap or warning. Deferred: not required by any AC, worth tracking for a future hardening pass. Raised by adversarial review (Blind Hunter) and edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:33-38]
 
+## Deferred from: code review of spec-power-point-mapping-list-scroll (2026-09-02)
+
+- source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
+  summary: Shared `DialogContent` (`web/src/components/ui/dialog.tsx`) has no viewport-relative height constraint (`max-h-[...vh]`/`overflow-y-auto`) of its own, so a Dialog with enough content in total (header + body copy + inputs + this now-capped list + error text) can still overflow a short viewport even though the "many Power Points" failure mode this diff targets is fixed.
+  evidence: Pre-existing gap in the shared Dialog primitive, affecting every `DialogContent` consumer in the app, not introduced by this diff — fixing it here would mean changing shared UI behavior for every dialog in the codebase, well beyond this one-shot's scope of the Power Point mapping list specifically. Raised by adversarial review (Blind Hunter).
+- source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
+  summary: `overflow-y-auto` on the mapping list can introduce a vertical scrollbar only once the row count crosses the `max-h-64` threshold, narrowing row content width at that exact moment (including the live "just-created Power Point appended to the list" flow) with no `scrollbar-gutter`/reserved padding to prevent the shift.
+  evidence: Minor cosmetic edge case with no established scrollbar-gutter convention anywhere else in the codebase (this is the first scrollable content region inside a `DialogContent` in this repo); not worth introducing new, untested cross-browser CSS for a one-shot bug fix. Raised by adversarial review (Blind Hunter).
+
 ## Deferred from: code review of spec-trend-chart-time-axis (2026-08-30)
 
 - source_spec: `_bmad-artifacts/implementation/spec-trend-chart-time-axis.md`
