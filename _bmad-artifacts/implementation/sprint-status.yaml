@@ -672,7 +672,7 @@ development_status:
   1-8-household-member-invitation: done
   1-9-room-power-point-device-management: done
   1-10-structure-editor-archived-item-visibility-toggle: done
-  1-11-azure-sql-entra-id-only-authentication: ready-for-dev
+  1-11-azure-sql-entra-id-only-authentication: in-progress
   epic-1-retrospective: done
 
   epic-2: done

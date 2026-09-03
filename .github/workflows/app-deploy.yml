@@ -151,20 +151,18 @@ jobs:
 
       # dotnet-ef is a local tool (.config/dotnet-tools.json) — must be restored before `dotnet ef`
       # is callable. Connection string mirrors infra/modules/database-sqlserver.bicep's
-      # `connectionString` output exactly; login `etadmin` must stay in sync with
-      # infra/main.bicepparam's `databaseAdministratorLogin`. Never echoed — only referenced via
-      # the shell variable, never printed to the log. Password is double-quote-escaped per the
-      # documented ADO.NET connection-string syntax (learn.microsoft.com/dotnet/framework/data/
-      # adonet/connection-strings): values containing `;`/whitespace/control chars must be
-      # wrapped in single or double quotes, with any embedded quote-of-that-kind doubled. ADO.NET
-      # does NOT use ODBC's `{}` quoting convention — that's a different, opt-in parser mode
-      # (DbConnectionStringBuilder(useOdbcRules: true)) that plain connection strings don't use.
+      # `connectionString` output exactly (AD-21/Story 1.11): `Authentication=Active Directory
+      # Default` authenticates via DefaultAzureCredential, which falls back to AzureCliCredential —
+      # picking up the `az login` session the "Azure login (OIDC)" step above already established
+      # for `energy-tracker-devops-uami`. No `User Id`/`Password` — DATABASE_ADMIN_PASSWORD stays
+      # defined as a repo secret (break-glass fallback, AC #6) but is deliberately unused by this
+      # step. `energy-tracker-devops-uami` must have a contained database user with
+      # db_datareader/db_datawriter/db_ddladmin (infra/sql/grant-entra-db-users.sql) before this
+      # step can succeed post-cutover — see infra/README.md's Entra-only auth cutover runbook.
       # Retries with backoff: Azure SQL firewall rule changes can take up to 5 minutes to
       # propagate, so the first attempt(s) immediately after rule creation may legitimately fail.
       - name: Apply pending EF Core migrations
         timeout-minutes: 20
-        env:
-          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
         run: |
           dotnet tool restore
 
@@ -177,7 +175,6 @@ jobs:
             exit 1
           fi
 
-          ESCAPED_PASSWORD="${DATABASE_ADMIN_PASSWORD//\"/\"\"}"
           # Command Timeout (query execution) is a separate ADO.NET setting from Connection Timeout
           # (time to connect) above — without it, SqlCommand defaults to 30s. A migration's raw-SQL
           # step (e.g. AddSmartPlugReadingUniqueIndex's dedup DELETE, a ROW_NUMBER()-partitioned
@@ -188,7 +185,7 @@ jobs:
           # CleanupOrphanedUnmappedSmartPlugReadingDuplicates timed out in production at 179k-row
           # scale even at 300s — its Up() now runs as three separate commands (temp index create,
           # delete, temp index drop), each getting this full budget independently.
-          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;User ID=etadmin;Password=\"${ESCAPED_PASSWORD}\";Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=600;"
+          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=600;"
 
           for attempt in 1 2 3 4 5; do
             if dotnet ef database update \

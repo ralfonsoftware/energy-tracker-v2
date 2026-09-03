@@ -24,6 +24,18 @@ param oidcAuthority = readEnvironmentVariable('OIDC_AUTHORITY', '')
 param oidcClientId = readEnvironmentVariable('OIDC_CLIENT_ID', '')
 param oidcClientSecret = readEnvironmentVariable('OIDC_CLIENT_SECRET', '')
 
+// Story 1.11 (AD-21) — the Azure SQL Entra Admin is a human Entra ID account (the project
+// owner's own login/object ID/tenant ID), not a service identity. Like oidcAuthority/oidcClientId
+// above (non-secret, but identity-linked rather than a generic config value like
+// customDomainName below), these are read from environment variables, never checked-in literals.
+// azureADOnlyAuthenticationEnabled (AD-21 "Deploy B") is deliberately NOT set here at all — it
+// stays at main.bicep's `false` default for every routine deploy; flipping it to true is a
+// one-off CLI parameter override on its own, separate deploy (infra/README.md's cutover runbook),
+// the same "deliberately not set in main.bicepparam" treatment as customDomainCertificateReady.
+param entraAdminLogin = readEnvironmentVariable('AZURE_SQL_ENTRA_ADMIN_LOGIN', '')
+param entraAdminObjectId = readEnvironmentVariable('AZURE_SQL_ENTRA_ADMIN_OBJECT_ID', '')
+param entraAdminTenantId = readEnvironmentVariable('AZURE_SQL_ENTRA_ADMIN_TENANT_ID', '')
+
 // Pinned explicitly rather than left at the resource group's own location (germanywestcentral):
 // Postgres Flexible Server provisioning is subscription-restricted in that region at the time of
 // writing ("Provisioning is restricted in this region" — az postgres flexible-server list-skus).
