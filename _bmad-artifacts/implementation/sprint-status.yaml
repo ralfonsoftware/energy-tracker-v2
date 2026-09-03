@@ -1,5 +1,18 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-03
+# 2026-09-03: story 1-11-azure-sql-entra-id-only-authentication implemented (dev-story) — status
+#   set to review. All 5 tasks complete, including Task 4 (the manual cutover), executed live
+#   against production (energy-tracker-rg) with Ralf's explicit confirmation at each
+#   production-affecting step: PR #33 (Entra Admin/connection-string changes, Deploy A) merged and
+#   verified; infra/sql/grant-entra-db-users.sql run against production as the Entra Admin
+#   (corrected mid-execution to use the identities' Entra display names, not their object IDs —
+#   CREATE USER ... FROM EXTERNAL PROVIDER resolves a managed identity by display name, confirmed
+#   empirically); Container App and CI (energy-tracker-devops-uami) connectivity both verified live
+#   via Entra auth; PR #34 (a workflow_dispatch input added to infra-deploy.yml so Deploy B could
+#   run without any human needing DATABASE_ADMIN_PASSWORD, which none of us has post-Deploy-A's
+#   connection-string rewrite) merged; Deploy B triggered and verified — azureAdOnlyAuthentication:
+#   true live on the server, Container App serving real traffic, SQL-password logins now rejected
+#   server-side. See the story file's own Dev Agent Record for full detail and command evidence.
 # 2026-09-03: stories 3-8-smart-plug-bulk-write-throughput-spike and
 #   3-9-watermark-correction-detection-and-bulk-write-adoption drafted (create-story) — both set to
 #   ready-for-dev, flipped from their prior backlog placeholder entries. Implements new architecture
@@ -672,7 +685,7 @@ development_status:
   1-8-household-member-invitation: done
   1-9-room-power-point-device-management: done
   1-10-structure-editor-archived-item-visibility-toggle: done
-  1-11-azure-sql-entra-id-only-authentication: in-progress
+  1-11-azure-sql-entra-id-only-authentication: review
   epic-1-retrospective: done
 
   epic-2: done
