@@ -8,7 +8,20 @@ on:
     paths:
       - 'infra/**'
       - '.github/workflows/infra-deploy.yml'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      # AD-21 "Deploy B" (Story 1.11) — the one-off override that flips Azure SQL to Entra-only
+      # auth. Deliberately not a main.bicepparam value (see its own comment) and never the
+      # default for a push-triggered run: a manual workflow_dispatch with this explicitly set to
+      # true is the only way to flip it, so a routine push-to-main redeploy can never
+      # accidentally re-trigger Deploy B. Routed through this input (rather than requiring
+      # whoever runs Deploy B to know DATABASE_ADMIN_PASSWORD themselves) so the deploy still
+      # goes through this workflow's own existing secrets wiring — no human needs to see or
+      # re-enter that secret just to flip this one unrelated flag.
+      azure_ad_only_auth_enabled:
+        description: 'AD-21 Deploy B: flip Azure SQL to Entra ID-only auth (disables SQL-password auth, incl. etadmin). Only after infra/sql/grant-entra-db-users.sql has been run and both identities verified connected.'
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -88,12 +101,16 @@ jobs:
           AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
           AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
           AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
+          # Only ever non-false on a manual workflow_dispatch with the input explicitly set —
+          # `github.event.inputs` is unset on a push-triggered run, so `|| 'false'` covers that.
+          AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'false' }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)
           if [ -n "$CURRENT_IMAGE" ]; then
             DEPLOY_PARAMS+=(placeholderImage="$CURRENT_IMAGE")
           fi
+          DEPLOY_PARAMS+=(azureADOnlyAuthenticationEnabled="$AZURE_AD_ONLY_AUTH_ENABLED")
           az deployment group what-if \
             --name "infra-deploy-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
@@ -117,12 +134,16 @@ jobs:
           AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
           AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
           AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
+          # Only ever non-false on a manual workflow_dispatch with the input explicitly set —
+          # `github.event.inputs` is unset on a push-triggered run, so `|| 'false'` covers that.
+          AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'false' }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)
           if [ -n "$CURRENT_IMAGE" ]; then
             DEPLOY_PARAMS+=(placeholderImage="$CURRENT_IMAGE")
           fi
+          DEPLOY_PARAMS+=(azureADOnlyAuthenticationEnabled="$AZURE_AD_ONLY_AUTH_ENABLED")
           az deployment group create \
             --name "infra-deploy-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
