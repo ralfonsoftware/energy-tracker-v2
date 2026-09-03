@@ -10,18 +10,18 @@ on:
       - '.github/workflows/infra-deploy.yml'
   workflow_dispatch:
     inputs:
-      # AD-21 "Deploy B" (Story 1.11) — the one-off override that flips Azure SQL to Entra-only
-      # auth. Deliberately not a main.bicepparam value (see its own comment) and never the
-      # default for a push-triggered run: a manual workflow_dispatch with this explicitly set to
-      # true is the only way to flip it, so a routine push-to-main redeploy can never
-      # accidentally re-trigger Deploy B. Routed through this input (rather than requiring
-      # whoever runs Deploy B to know DATABASE_ADMIN_PASSWORD themselves) so the deploy still
-      # goes through this workflow's own existing secrets wiring — no human needs to see or
-      # re-enter that secret just to flip this one unrelated flag.
+      # AD-21 (Story 1.11) — Deploy B has permanently landed for this environment (see
+      # infra/main.bicepparam's own comment), so `true` is now the correct default for every
+      # routine run, manual or push-triggered — main.bicep's admin-credential fields are
+      # conditioned on this same value, and Azure permanently rejects any server write that
+      # includes them once AAD-only auth is truly live, regardless of what a given deploy's own
+      # parameter says. Only override this to `false` for a from-scratch SQL Server (re)creation
+      # in this environment (disaster recovery, region move — docs/local-vs-azure-deltas.md#D6),
+      # for that rebuild's own one-time Deploy A.
       azure_ad_only_auth_enabled:
-        description: 'AD-21 Deploy B: flip Azure SQL to Entra ID-only auth (disables SQL-password auth, incl. etadmin). Only after infra/sql/grant-entra-db-users.sql has been run and both identities verified connected.'
+        description: "AD-21: whether Azure SQL accepts only Entra ID auth. Leave true for a routine run. Only set false for a from-scratch SQL Server rebuild's own one-time Deploy A."
         type: boolean
-        default: false
+        default: true
 
 permissions:
   id-token: write
@@ -53,17 +53,14 @@ jobs:
       AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
       # AD-21/Story 1.11 — non-secret but identity-linked (a human Entra ID account's own
       # login/object ID/tenant ID), so vars.* like OIDC_AUTHORITY/OIDC_CLIENT_ID above, not
-      # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls. Blank
-      # until a repo admin sets these three repository variables (see infra/README.md's
-      # Entra-only auth cutover runbook) — azureADOnlyAuthenticationEnabled stays at its
-      # main.bicep default (false) regardless, so a blank Entra Admin value here does not by
-      # itself risk a lockout, only an incomplete/no-op Deploy A.
+      # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls.
       AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
       AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
       AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
-      # Only ever non-false on a manual workflow_dispatch with the input explicitly set —
-      # `github.event.inputs` is unset on a push-triggered run, so `|| 'false'` covers that.
-      AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'false' }}
+      # Defaults to `true` (matching the input's own default) on a push-triggered run, since
+      # `github.event.inputs` is unset there — see the input's own comment above for why `true`
+      # is correct as the routine default now that Deploy B has permanently landed.
+      AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
