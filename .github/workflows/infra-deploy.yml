@@ -43,6 +43,27 @@ jobs:
     # trigger above, but this guard keeps manual runs from deploying an untested branch to the
     # shared production resource group.
     if: github.ref == 'refs/heads/main'
+    # Job-level so the What-if and Deploy steps below (the only two that need any of this) share
+    # one copy instead of two identical, easily-desyncable per-step blocks.
+    env:
+      DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
+      OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
+      OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
+      OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+      AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
+      # AD-21/Story 1.11 — non-secret but identity-linked (a human Entra ID account's own
+      # login/object ID/tenant ID), so vars.* like OIDC_AUTHORITY/OIDC_CLIENT_ID above, not
+      # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls. Blank
+      # until a repo admin sets these three repository variables (see infra/README.md's
+      # Entra-only auth cutover runbook) — azureADOnlyAuthenticationEnabled stays at its
+      # main.bicep default (false) regardless, so a blank Entra Admin value here does not by
+      # itself risk a lockout, only an incomplete/no-op Deploy A.
+      AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
+      AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
+      AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
+      # Only ever non-false on a manual workflow_dispatch with the input explicitly set —
+      # `github.event.inputs` is unset on a push-triggered run, so `|| 'false'` covers that.
+      AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -85,25 +106,9 @@ jobs:
       # provide idempotency (AC #3).
       - name: What-if (manual runs only)
         if: github.event_name == 'workflow_dispatch'
+        # steps.currentimage.outputs.image is only valid in a step-level context (not job-level
+        # env: above) — must stay defined here and in the Deploy step below.
         env:
-          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
-          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
-          OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
-          OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
-          AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
-          # AD-21/Story 1.11 — non-secret but identity-linked (a human Entra ID account's own
-          # login/object ID/tenant ID), so vars.* like OIDC_AUTHORITY/OIDC_CLIENT_ID above, not
-          # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls. Blank
-          # until a repo admin sets these three repository variables (see infra/README.md's
-          # Entra-only auth cutover runbook) — azureADOnlyAuthenticationEnabled stays at its
-          # main.bicep default (false) regardless, so a blank Entra Admin value here does not by
-          # itself risk a lockout, only an incomplete/no-op Deploy A.
-          AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
-          AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
-          AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
-          # Only ever non-false on a manual workflow_dispatch with the input explicitly set —
-          # `github.event.inputs` is unset on a push-triggered run, so `|| 'false'` covers that.
-          AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'false' }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)
@@ -119,24 +124,6 @@ jobs:
 
       - name: Deploy
         env:
-          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
-          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
-          OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
-          OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
-          AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
-          # AD-21/Story 1.11 — non-secret but identity-linked (a human Entra ID account's own
-          # login/object ID/tenant ID), so vars.* like OIDC_AUTHORITY/OIDC_CLIENT_ID above, not
-          # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls. Blank
-          # until a repo admin sets these three repository variables (see infra/README.md's
-          # Entra-only auth cutover runbook) — azureADOnlyAuthenticationEnabled stays at its
-          # main.bicep default (false) regardless, so a blank Entra Admin value here does not by
-          # itself risk a lockout, only an incomplete/no-op Deploy A.
-          AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
-          AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
-          AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
-          # Only ever non-false on a manual workflow_dispatch with the input explicitly set —
-          # `github.event.inputs` is unset on a push-triggered run, so `|| 'false'` covers that.
-          AZURE_AD_ONLY_AUTH_ENABLED: ${{ github.event.inputs.azure_ad_only_auth_enabled || 'false' }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)
