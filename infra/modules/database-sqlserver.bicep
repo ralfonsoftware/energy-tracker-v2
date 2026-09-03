@@ -38,22 +38,39 @@ param azureADOnlyAuthenticationEnabled bool = false
 resource sqlServer 'Microsoft.Sql/servers@2025-01-01' = {
   name: name
   location: location
-  properties: {
-    administratorLogin: administratorLogin
-    administratorLoginPassword: administratorLoginPassword
-    minimalTlsVersion: '1.2'
-    // AD-21 Deploy A: adds the Entra Admin. azureADOnlyAuthentication is deliberately omitted
-    // here (not set to false) — per Microsoft's own Microsoft.Sql/servers reference, that field
-    // is not reliably settable via this inline block on an update to an already-existing server;
-    // the separate azureADOnlyAuthentications resource below is the supported way to change it.
-    administrators: {
-      administratorType: 'ActiveDirectory'
-      principalType: 'User'
-      login: entraAdminLogin
-      sid: entraAdminObjectId
-      tenantId: entraAdminTenantId
-    }
-  }
+  // AD-21: administratorLogin/administratorLoginPassword are only included in the PUT body while
+  // azureADOnlyAuthenticationEnabled is false. Discovered live (2026-09-03, first infra-deploy.yml
+  // run after Deploy B): once azureADOnlyAuthentication: true is active, Azure SQL rejects *any*
+  // server write that includes these two properties at all — even resending the same unchanged
+  // values — with "AadOnlyAuthenticationIsEnabled". Omitting them post-cutover does not clear the
+  // password Azure SQL already has on file (it's a set-if-provided, write-only credential field);
+  // AC #6's break-glass password stays exactly as it was at the moment Deploy B ran, just no
+  // longer reassertable via IaC unless azureADOnlyAuthenticationEnabled is flipped back to false
+  // first. Without this, every future infra-deploy.yml run — not just ones touching this file —
+  // fails at this resource, since main.bicep redeploys the whole template on every push to
+  // infra/**.
+  properties: union(
+    {
+      minimalTlsVersion: '1.2'
+      // AD-21 Deploy A: adds the Entra Admin. azureADOnlyAuthentication is deliberately omitted
+      // here (not set to false) — per Microsoft's own Microsoft.Sql/servers reference, that field
+      // is not reliably settable via this inline block on an update to an already-existing server;
+      // the separate azureADOnlyAuthentications resource below is the supported way to change it.
+      administrators: {
+        administratorType: 'ActiveDirectory'
+        principalType: 'User'
+        login: entraAdminLogin
+        sid: entraAdminObjectId
+        tenantId: entraAdminTenantId
+      }
+    },
+    azureADOnlyAuthenticationEnabled
+      ? {}
+      : {
+          administratorLogin: administratorLogin
+          administratorLoginPassword: administratorLoginPassword
+        }
+  )
 }
 
 // AD-21 Deploy B mechanism: the same template serves both Deploy A (azureADOnlyAuthenticationEnabled
