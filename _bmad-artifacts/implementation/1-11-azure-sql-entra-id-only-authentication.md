@@ -4,7 +4,7 @@ baseline_commit: e44e13dcfc4b5be82eeec388eb9c9689202e0a28
 
 # Story 1.11: Azure SQL Access via Microsoft Entra ID-Only Authentication
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -102,6 +102,7 @@ claude-sonnet-5
 - **Production execution sequence** (all confirmed step-by-step with Ralf before each irreversible/production-affecting action): (1) set the three `AZURE_SQL_ENTRA_ADMIN_*` GitHub repo variables to Ralf's own Entra identity (the signed-in `az cli` account, matching AD-21's "human account, not a service identity" requirement); (2) PR #33 (Tasks 1-3/5's changes) reviewed by CI, merged → Deploy A applied automatically via `infra-deploy.yml`, verified live; (3) resolved both service identities' object IDs and Entra display names; (4) ran `infra/sql/grant-entra-db-users.sql` (corrected to use display names, not object IDs — see Task 4 notes) against production as the Entra Admin via `sqlcmd`, through a temporary firewall rule removed immediately after; (5) verified Container App connectivity by restarting its revision and inspecting logs directly (a real `DataProtectionKeys` query succeeded via a freshly-acquired Entra token); (6) verified CI connectivity by triggering a full `app-deploy.yml` run, whose migration step succeeded via `Authentication=Active Directory Default`; (7) PR #34 (the `workflow_dispatch` input) reviewed, merged; (8) triggered Deploy B; (9) verified live: `azureAdOnlyAuthentication: true`, the Container App's post-cutover revision serves real traffic, and a SQL-password login attempt is now rejected server-side with the expected Entra-only error.
 - No application code (`src/`, `web/`) touched, matching the story's own Dev Notes — this is a pure infra/CI story.
 - No new NuGet/npm dependencies added, matching the story's own Dev Notes verification.
+- **Post-review fixes, all live in production, story now genuinely done**: code review (PR #35) found `grant-entra-db-users.sql` still instructed the object-ID form that had already failed live (Msg 33130) and deduped a repeated `env:` block in `infra-deploy.yml`. PR #35's own merge then surfaced a real production break: `infra-deploy.yml` redeploys `main.bicep` on every push to `infra/**`, and Azure SQL rejects any server write carrying `administratorLogin`/`administratorLoginPassword` once `azureADOnlyAuthentication: true` is live — breaking every future infra deploy, not just Entra-related ones. Fixed in two steps: PR #36 omitted those two properties when `azureADOnlyAuthenticationEnabled` is true; PR #37 corrected the fix once a routine push-triggered run failed identically, because `infra-deploy.yml` always explicitly overrode that parameter to `false` — the real fix was flipping the default to `true` everywhere (`main.bicepparam` and the workflow), since Deploy B has permanently landed for this environment. Final `az deployment group what-if` after PR #37 showed the `sqlServer` resource as a true `NoChange` — confirmed stable, no further drift.
 
 ### File List
 
