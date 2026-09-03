@@ -78,6 +78,16 @@ jobs:
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
           AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
+          # AD-21/Story 1.11 — non-secret but identity-linked (a human Entra ID account's own
+          # login/object ID/tenant ID), so vars.* like OIDC_AUTHORITY/OIDC_CLIENT_ID above, not
+          # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls. Blank
+          # until a repo admin sets these three repository variables (see infra/README.md's
+          # Entra-only auth cutover runbook) — azureADOnlyAuthenticationEnabled stays at its
+          # main.bicep default (false) regardless, so a blank Entra Admin value here does not by
+          # itself risk a lockout, only an incomplete/no-op Deploy A.
+          AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
+          AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
+          AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)
@@ -97,6 +107,16 @@ jobs:
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
           AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
+          # AD-21/Story 1.11 — non-secret but identity-linked (a human Entra ID account's own
+          # login/object ID/tenant ID), so vars.* like OIDC_AUTHORITY/OIDC_CLIENT_ID above, not
+          # secrets.*. Read by infra/main.bicepparam's readEnvironmentVariable(...) calls. Blank
+          # until a repo admin sets these three repository variables (see infra/README.md's
+          # Entra-only auth cutover runbook) — azureADOnlyAuthenticationEnabled stays at its
+          # main.bicep default (false) regardless, so a blank Entra Admin value here does not by
+          # itself risk a lockout, only an incomplete/no-op Deploy A.
+          AZURE_SQL_ENTRA_ADMIN_LOGIN: ${{ vars.AZURE_SQL_ENTRA_ADMIN_LOGIN }}
+          AZURE_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_OBJECT_ID }}
+          AZURE_SQL_ENTRA_ADMIN_TENANT_ID: ${{ vars.AZURE_SQL_ENTRA_ADMIN_TENANT_ID }}
           CURRENT_IMAGE: ${{ steps.currentimage.outputs.image }}
         run: |
           DEPLOY_PARAMS=(infra/main.bicepparam)

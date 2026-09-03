@@ -43,12 +43,23 @@ provisioned as contained database users — doing so locks both out immediately,
 fallback left. The required sequence, every time (first cutover **and** any from-scratch SQL
 Server redeploy — disaster recovery, resource-group rebuild, region move):
 
-1. Deploy the Entra Admin addition with `azureADOnlyAuthentication` omitted/`false` — SQL auth
-   still works.
+0. One-time (per environment) prerequisite: set the `AZURE_SQL_ENTRA_ADMIN_LOGIN`,
+   `AZURE_SQL_ENTRA_ADMIN_OBJECT_ID`, and `AZURE_SQL_ENTRA_ADMIN_TENANT_ID` GitHub repository
+   variables (a human Entra ID account — the project owner — never a service identity; see
+   `infra/main.bicepparam`'s own comment for the sourcing rationale). `infra-deploy.yml` reads
+   them into its `az deployment` steps' environment, matching `OIDC_AUTHORITY`/`OIDC_CLIENT_ID`'s
+   existing treatment. Left unset, the Entra Admin addition below silently deploys with a blank
+   admin — harmless (`azureADOnlyAuthenticationEnabled` stays `false` regardless, so this alone
+   can't lock anyone out) but incomplete; step 2 below cannot succeed until these are set and a
+   redeploy has actually applied a real Entra Admin.
+1. Deploy the Entra Admin addition with the `azureADOnlyAuthenticationEnabled` Bicep param left at
+   its default (`false`) — SQL auth still works.
 2. Run `infra/sql/grant-entra-db-users.sql` by hand (`sqlcmd`/Azure Data Studio, as the Entra
    Admin) to provision both identities as contained database users, then verify both can actually
    connect.
-3. Only then deploy `azureADOnlyAuthentication: true`, as its own separate change.
+3. Only then redeploy with `azureADOnlyAuthenticationEnabled=true` passed as a one-off CLI
+   parameter override (never committed to `main.bicepparam` — see its own comment), as its own
+   separate change.
 
 See `docs/local-vs-azure-deltas.md#D6` and `ARCHITECTURE-SPINE/invariants-rules.md#ad-21` for the
 full reasoning — this is the same class of Bicep-incremental-mode gap as the `databaseProvider`

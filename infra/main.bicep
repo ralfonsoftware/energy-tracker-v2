@@ -46,6 +46,18 @@ param sqlServerSkuName string = 'Basic'
 @description('Azure SQL max database size in bytes. Basic tier caps at 2 GB (2147483648); raise this if sqlServerSkuName moves to a Standard/Premium tier with more headroom.')
 param sqlServerMaxSizeBytes int = 2147483648
 
+@description('Microsoft Entra ID login (UPN) of the Azure SQL Entra Admin (AD-21) — a human Entra ID account (the project owner), never a service identity. Non-secret but identity-linked (a real email/UPN), so — like oidcAuthority/oidcClientId below — sourced from an environment variable in main.bicepparam rather than a checked-in literal.')
+param entraAdminLogin string = ''
+
+@description('Microsoft Entra ID object ID (GUID) of the Azure SQL Entra Admin principal (AD-21). See entraAdminLogin for the sourcing rationale.')
+param entraAdminObjectId string = ''
+
+@description('Microsoft Entra ID tenant ID (GUID) the Azure SQL Entra Admin principal belongs to (AD-21). See entraAdminLogin for the sourcing rationale.')
+param entraAdminTenantId string = ''
+
+@description('AD-21 "Deploy B": whether Azure SQL accepts only Microsoft Entra ID authentication. Defaults to false (Deploy A behavior). Flipped to true only via a deliberate, standalone deploy-time override — deliberately not set in main.bicepparam, same pattern as customDomainCertificateReady below.')
+param azureADOnlyAuthenticationEnabled bool = false
+
 @description('Container App scale-to-zero minimum replica count (AD-6/AD-7)')
 param containerAppMinReplicas int = 0
 
@@ -170,6 +182,10 @@ module databaseSqlServer 'modules/database-sqlserver.bicep' = if (databaseProvid
     skuName: sqlServerSkuName
     skuTier: sqlServerSkuTier
     maxSizeBytes: sqlServerMaxSizeBytes
+    entraAdminLogin: entraAdminLogin
+    entraAdminObjectId: entraAdminObjectId
+    entraAdminTenantId: entraAdminTenantId
+    azureADOnlyAuthenticationEnabled: azureADOnlyAuthenticationEnabled
   }
 }
 
