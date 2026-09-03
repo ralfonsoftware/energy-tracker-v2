@@ -26,6 +26,8 @@
     - [AD-19 — Operational baseline: health, logs, secrets](./invariants-rules.md#ad-19-operational-baseline-health-logs-secrets)
     - [AD-20 — Duplicate-safe Smart-Plug reading writes](./invariants-rules.md#ad-20-duplicate-safe-smart-plug-reading-writes)
     - [AD-21 — Azure SQL access via Microsoft Entra ID-only authentication](./invariants-rules.md#ad-21-azure-sql-access-via-microsoft-entra-id-only-authentication-azure-only-local-self-host-keeps-sql-auth)
+    - [AD-22 — Watermark corruption detection extends the value into the watermark](./invariants-rules.md#ad-22-watermark-corruption-detection-extends-the-value-into-the-watermark)
+    - [AD-23 — Bulk-write via EFCore.BulkExtensions replaces per-row-conflict-tolerant writes](./invariants-rules.md#ad-23-bulk-write-via-efcorebulkextensions-replaces-per-row-conflict-tolerant-writes)
   - [Consistency Conventions](./consistency-conventions.md)
   - [Stack](./stack.md)
   - [Structural Seed](./structural-seed.md)
