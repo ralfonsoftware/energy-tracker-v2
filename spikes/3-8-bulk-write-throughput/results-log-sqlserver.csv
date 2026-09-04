@@ -1,0 +1,5 @@
+TimestampUtc,Provider,Scenario,RowCount,ElapsedMs,RowsPerSec,Notes
+2026-09-04T05:18:42.2588870+00:00,SqlServer,AC4-EXCEPTION,0,0.0,0.0,"Execution Timeout Expired.  The timeout period elapsed prior to completion of the operation or the server is not responding."
+2026-09-04T05:25:04.6859050+00:00,SqlServer,preload-EXCEPTION,0,0.0,0.0,"Execution Timeout Expired.  The timeout period elapsed prior to completion of the operation or the server is not responding."
+2026-09-04T05:27:04.3700220+00:00,SqlServer,AC5-EXCEPTION,0,0.0,0.0,"Execution Timeout Expired.  The timeout period elapsed prior to completion of the operation or the server is not responding."
+2026-09-04T05:27:04.3723490+00:00,SqlServer,AC6a-EXCEPTION,0,0.0,0.0,"Value cannot be null. (Parameter 'source')"

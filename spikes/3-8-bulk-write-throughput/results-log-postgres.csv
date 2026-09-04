@@ -1,0 +1,11 @@
+TimestampUtc,Provider,Scenario,RowCount,ElapsedMs,RowsPerSec,Notes
+2026-09-04T05:06:57.6704150+00:00,Postgres,AC4-insert-empty-120k,120000,1938.5,61904.2,""
+2026-09-04T05:07:04.9147910+00:00,Postgres,preload-470k-baseline (not itself an AC scenario),470000,6978.1,67353.7,""
+2026-09-04T05:07:06.8800040+00:00,Postgres,AC5-insert-120k-into-470k-preloaded,120000,1893.0,63392.3,""
+2026-09-04T05:07:09.1243790+00:00,Postgres,AC6a-resubmit-full-overlap-120k,120000,2191.1,54767.8,""
+2026-09-04T05:07:09.4221550+00:00,Postgres,AC6b-resubmit-incremental-delta-500,500,289.4,1727.5,""
+2026-09-04T05:07:09.5486750+00:00,Postgres,AC7-insert-5000-null-powerpoint,5000,94.9,52705.6,""
+2026-09-04T05:07:09.5961820+00:00,Postgres,AC7-EXCEPTION,0,0.0,0.0,"23505: could not create unique index 'tempUniqueIndex_Spike_SmartPlugReading_HouseholdId_IntervalStar'
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+2026-09-04T05:07:10.1085760+00:00,Postgres,AC8-cancellation-rollback,120000,387.0,310077.5,"pass=True, observedCancellation=True, survivingRows=0, parentExists=False"
