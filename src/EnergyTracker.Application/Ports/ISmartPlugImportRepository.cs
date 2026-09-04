@@ -2,6 +2,11 @@ using EnergyTracker.Domain;
 
 namespace EnergyTracker.Application.Ports;
 
+// AD-22: carries the stored KwhValue alongside Id/IntervalStart so ProcessSmartPlugImport can
+// detect a vendor-revised value at an already-seen IntervalStart, not just a new-vs-seen boundary
+// — the Id lets the narrow correction update target the exact stored row without a second lookup.
+public sealed record SmartPlugReadingWatermark(Guid Id, DateTimeOffset IntervalStart, decimal KwhValue);
+
 public interface ISmartPlugImportRepository
 {
     // Persists the import and all of its parsed readings (if any) as a single unit — a partially
@@ -54,12 +59,14 @@ public interface ISmartPlugImportRepository
     // no persisted reading at all yet.
     Task<DateOnly?> FindFirstReadingDateByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
 
-    // Story 3.4: the Power Point's latest stored SmartPlugReading.IntervalStart — the watermark
-    // ProcessSmartPlugImport passes into ISmartPlugParser.Parse so a repeat import only reads/
-    // persists genuinely new rows (AC #1, #3). Mirrors FindFirstReadingDateByPowerPointAsync's
-    // exact shape, just OrderByDescending. `null` only when the Power Point has no persisted
-    // reading at all yet (AC #4 — parse the full file).
-    Task<DateTimeOffset?> FindLatestReadingIntervalStartByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
+    // Story 3.4/AD-22: the Power Point's latest stored SmartPlugReading — the watermark
+    // ProcessSmartPlugImport passes (IntervalStart only, never KwhValue) into ISmartPlugParser.Parse
+    // so a repeat import only reads/persists genuinely new-or-boundary rows (AC #1, #3). Also
+    // carries the stored Id/KwhValue so the caller can detect and narrowly correct a vendor-revised
+    // value at the boundary row without a second lookup (AD-22). Mirrors
+    // FindFirstReadingDateByPowerPointAsync's exact shape, just OrderByDescending. `null` only when
+    // the Power Point has no persisted reading at all yet (AC #4 — parse the full file).
+    Task<SmartPlugReadingWatermark?> FindLatestReadingIntervalStartByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
 
     // Single SaveChangesAsync — one transaction, mirroring every other method here. Gaps are
     // insert-only (immutable after creation, AD-7/NFR9's precedent) — never called to update an
@@ -84,6 +91,12 @@ public interface ISmartPlugImportRepository
     // each Completed job's own SmartPlugImport.Status in one query instead of N+1.
     Task<IReadOnlyList<SmartPlugImport>> FindAllByBackgroundJobIdsAsync(
         IReadOnlyList<Guid> backgroundJobIds, CancellationToken cancellationToken);
+
+    // AD-22 (AC #5/#6): a narrow, single-column set-based update against one already-stored row,
+    // identified by its own Id (the watermark's Id, never a re-derived lookup) — touches KwhValue
+    // and only KwhValue, never RoomName/PowerPointName/DeviceName (AD-10's by-value snapshot
+    // fields). Mirrors UpdateMappingAsync's own ExecuteUpdateAsync idiom in this same class.
+    Task UpdateReadingKwhValueAsync(Guid readingId, decimal newKwhValue, CancellationToken cancellationToken);
 
     // Story 3.6/AD-6 extension: deletes every SmartPlugImport (+ its SmartPlugImportGap rows, +
     // its BackgroundJob row) that completed before cutoffUtc AND reached a terminal, resolved

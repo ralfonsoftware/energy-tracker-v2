@@ -1,5 +1,7 @@
+using System.Globalization;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.Extensions.Logging;
 
 namespace EnergyTracker.Application;
 
@@ -8,12 +10,14 @@ namespace EnergyTracker.Application;
 // Queue caps a message at 64 KB and real Eve Home exports run several hundred KB (Task 3).
 public record ProcessSmartPlugImportPayload(Guid SmartPlugImportId, string TempFilePath, string OriginalFileName);
 
-/// <summary>Parses an uploaded Smart Plug export via the matching ISmartPlugParser adapter, attempts a Power Point match by exact name, and persists the SmartPlugImport + its SmartPlugReading rows (AC #3, #4, #5, #6).</summary>
+/// <summary>Parses an uploaded Smart Plug export via the matching ISmartPlugParser adapter, attempts a Power Point match by exact name, detects/corrects a watermark-boundary value revision, and persists the SmartPlugImport + its SmartPlugReading rows (AC #3, #4, #5, #6, AD-22 #4-#8).</summary>
 public class ProcessSmartPlugImport(
     IEnumerable<ISmartPlugParser> parsers,
     ITaggingScaffoldRepository taggingScaffoldRepository,
     ISmartPlugImportRepository smartPlugImportRepository,
-    CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing)
+    CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing,
+    IAuditCorrectionRecorder auditCorrectionRecorder,
+    ILogger<ProcessSmartPlugImport> logger)
 {
     public async Task ExecuteAsync(
         Guid householdId, Guid backgroundJobId, ProcessSmartPlugImportPayload payload, CancellationToken cancellationToken)
@@ -46,7 +50,7 @@ public class ProcessSmartPlugImport(
             // or the matched Power Point has no prior stored reading yet (first-ever import) —
             // either way the parser parses the file in full, exactly as before this story.
             string? matchedRoomName = null;
-            DateTimeOffset? watermark = null;
+            SmartPlugReadingWatermark? watermark = null;
             if (matchedPowerPoint is not null)
             {
                 var room = await taggingScaffoldRepository.FindRoomAsync(matchedPowerPoint.RoomId, cancellationToken);
@@ -57,10 +61,14 @@ public class ProcessSmartPlugImport(
             SmartPlugParseResult parseResult;
             await using (var dataStream = File.OpenRead(payload.TempFilePath))
             {
-                parseResult = parser.Parse(dataStream, payload.OriginalFileName, watermark, cancellationToken);
+                // AC #4: the parser's own signature is unchanged — it only ever sees IntervalStart,
+                // never the stored KwhValue; the boundary-row comparison below belongs entirely to
+                // this orchestration layer.
+                parseResult = parser.Parse(dataStream, payload.OriginalFileName, watermark?.IntervalStart, cancellationToken);
             }
 
-            var readings = parseResult.Readings;
+            var readings = await ResolveWatermarkBoundaryAsync(
+                householdId, payload.SmartPlugImportId, watermark, parseResult.Readings, cancellationToken);
 
             if (readings.Count == 0)
             {
@@ -149,6 +157,64 @@ public class ProcessSmartPlugImport(
                 File.Delete(payload.TempFilePath);
             }
         }
+    }
+
+    // AD-22 (AC #5-#7): the parser now includes (never skips) the row exactly at the watermark's
+    // IntervalStart — this is the only place that row is ever inspected and dropped from the
+    // batch. It must never reach AddAsync's insert-or-upsert path: either it's an exact re-report
+    // (nothing to write) or a narrow, single-column correction against the already-stored row, but
+    // never a "new" row.
+    private async Task<IReadOnlyList<SmartPlugReading>> ResolveWatermarkBoundaryAsync(
+        Guid householdId, Guid smartPlugImportId, SmartPlugReadingWatermark? watermark,
+        IReadOnlyList<SmartPlugReading> parsedReadings, CancellationToken cancellationToken)
+    {
+        if (watermark is null)
+        {
+            return parsedReadings;
+        }
+
+        // AC #7 (DST-fold discipline): matched by IntervalStart, first-encountered in parse order
+        // if more than one row shares the exact watermark IntervalStart.
+        var boundaryRows = parsedReadings.Where(r => r.IntervalStart == watermark.IntervalStart).ToList();
+        if (boundaryRows.Count == 0)
+        {
+            return parsedReadings;
+        }
+
+        var remaining = parsedReadings.Where(r => r.IntervalStart != watermark.IntervalStart).ToList();
+
+        if (boundaryRows.Count > 1)
+        {
+            // Distinct log from an ordinary single-row correction (AC #7) — same DST-fold phrasing
+            // convention SmartPlugImportRepository's own fallback logging already uses.
+            logger.LogWarning(
+                "Import {SmartPlugImportId}: {Count} rows share the watermark boundary IntervalStart={IntervalStart:O} " +
+                "for PowerPointId={PowerPointId} (possibly a DST fall-back duplicate local timestamp) — only the " +
+                "first-encountered row is compared against the stored value; every row sharing this IntervalStart " +
+                "is dropped from the batch, and at most one correction is attempted.",
+                smartPlugImportId, boundaryRows.Count, watermark.IntervalStart, boundaryRows[0].PowerPointId);
+        }
+
+        var boundaryRow = boundaryRows[0];
+        if (boundaryRow.KwhValue != watermark.KwhValue)
+        {
+            // AC #5/#6: narrow, single-column update against the already-stored row — never a
+            // whole-row overwrite, never RoomName/PowerPointName/DeviceName (AD-10).
+            await smartPlugImportRepository.UpdateReadingKwhValueAsync(watermark.Id, boundaryRow.KwhValue, cancellationToken);
+
+            // AD-11: reuse the shared audit-correction mechanism exactly as its existing Meter
+            // Reading/Tariff call sites do — same old/new-value string-formatting convention.
+            await auditCorrectionRecorder.RecordAsync(
+                householdId,
+                "SmartPlugReading",
+                watermark.Id,
+                "KwhValue",
+                watermark.KwhValue.ToString(CultureInfo.InvariantCulture),
+                boundaryRow.KwhValue.ToString(CultureInfo.InvariantCulture),
+                cancellationToken);
+        }
+
+        return remaining;
     }
 
     private async Task PersistFailedImportAsync(

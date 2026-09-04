@@ -131,14 +131,25 @@ public class EveHomeXlsxParser : ISmartPlugParser
                 continue;
             }
 
-            if (watermark is not null && reading.IntervalStart <= watermark)
+            if (watermark is not null && reading.IntervalStart < watermark)
             {
-                // AC #2: rows are confirmed strictly newest-first — stop reading immediately
-                // rather than continuing to filter the remaining (already-imported) rows.
+                // AD-22/AC #2: rows are confirmed strictly newest-first — a row strictly older
+                // than the watermark means the boundary row (if any) has already been emitted
+                // below; stop without adding this one.
                 break;
             }
 
             readings.Add(reading);
+
+            if (watermark is not null && reading.IntervalStart == watermark)
+            {
+                // The row exactly at the watermark's IntervalStart is now included (not skipped)
+                // so the orchestration layer (ProcessSmartPlugImport) can compare its KwhValue
+                // against the stored value and detect a vendor-side correction (AD-22) — but it's
+                // still the last row this incremental parse should ever emit, so stop right here,
+                // one row later than before this story, never two.
+                break;
+            }
         }
 
         return new SmartPlugParseResult(readings, dataRowsSeen);

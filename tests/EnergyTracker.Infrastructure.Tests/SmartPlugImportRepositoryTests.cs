@@ -122,68 +122,55 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugImports.Add(import);
         var older = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var newer = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        var newerReading = MakeReading(householdId, import.Id, powerPointId, newer, kwhValue: 1.25m);
         dbContext.SmartPlugReadings.AddRange(
             MakeReading(householdId, import.Id, powerPointId, older),
-            MakeReading(householdId, import.Id, powerPointId, newer));
+            newerReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
 
         var result = await repository.FindLatestReadingIntervalStartByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
 
-        result.ShouldBe(newer);
+        // AD-22: the watermark now carries Id and KwhValue alongside IntervalStart.
+        result.ShouldNotBeNull();
+        result.Id.ShouldBe(newerReading.Id);
+        result.IntervalStart.ShouldBe(newer);
+        result.KwhValue.ShouldBe(1.25m);
     }
 
     [Fact]
-    public async Task AddAsync_persists_the_import_and_skips_only_the_colliding_reading_on_a_unique_constraint_conflict()
+    public async Task UpdateReadingKwhValueAsync_updates_only_the_KwhValue_column()
     {
-        // Task 3/Dev Notes Open Question #2 (Option A) — the only test that exercises the
-        // conflict-tolerant fallback path at all: seeds one pre-existing SmartPlugReading at a
-        // given (PowerPointId, IntervalStart), then calls AddAsync with a new import whose
-        // reading set includes one row colliding on that exact key plus several non-colliding
-        // rows.
+        // AD-22 AC #6: touches KwhValue and only KwhValue — never RoomName/PowerPointName/
+        // DeviceName (AD-10's by-value snapshot fields).
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var existingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var existingImport = MakeImport(householdId, existingBackgroundJobId);
-        var collidingIntervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
-        dbContext.SmartPlugImports.Add(existingImport);
-        dbContext.SmartPlugReadings.Add(MakeReading(householdId, existingImport.Id, powerPointId, collidingIntervalStart));
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var import = MakeImport(householdId, backgroundJobId);
+        dbContext.SmartPlugImports.Add(import);
+        var reading = MakeReading(householdId, import.Id, powerPointId, DateTimeOffset.UtcNow, kwhValue: 0.5m);
+        dbContext.SmartPlugReadings.Add(reading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        dbContext.ChangeTracker.Clear();
         var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
 
-        var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var newImport = MakeImport(householdId, newBackgroundJobId);
-        var collidingReading = MakeReading(householdId, newImport.Id, powerPointId, collidingIntervalStart);
-        var nonCollidingReadings = new[]
-        {
-            MakeReading(householdId, newImport.Id, powerPointId, collidingIntervalStart.AddDays(1)),
-            MakeReading(householdId, newImport.Id, powerPointId, collidingIntervalStart.AddDays(2)),
-        };
-        IReadOnlyList<SmartPlugReading> newReadings = [collidingReading, .. nonCollidingReadings];
+        await repository.UpdateReadingKwhValueAsync(reading.Id, 0.75m, TestContext.Current.CancellationToken);
 
-        await repository.AddAsync(newImport, newReadings, TestContext.Current.CancellationToken);
-
-        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
-        (await verifyDbContext.SmartPlugImports.SingleOrDefaultAsync(
-            i => i.Id == newImport.Id, TestContext.Current.CancellationToken)).ShouldNotBeNull();
-        var persistedNewImportReadings = await verifyDbContext.SmartPlugReadings
-            .Where(r => r.SmartPlugImportId == newImport.Id)
-            .ToListAsync(TestContext.Current.CancellationToken);
-        persistedNewImportReadings.Count.ShouldBe(2);
-        persistedNewImportReadings.Select(r => r.IntervalStart).ShouldBe(
-            nonCollidingReadings.Select(r => r.IntervalStart), ignoreOrder: true);
+        var updated = await dbContext.SmartPlugReadings.AsNoTracking().SingleAsync(
+            r => r.Id == reading.Id, TestContext.Current.CancellationToken);
+        updated.KwhValue.ShouldBe(0.75m);
+        updated.RoomName.ShouldBe(reading.RoomName);
+        updated.PowerPointName.ShouldBe(reading.PowerPointName);
+        updated.DeviceName.ShouldBe(reading.DeviceName);
     }
 
     [Fact]
     public async Task AddAsync_persists_a_large_incremental_batch_when_the_power_point_already_has_prior_readings()
     {
-        // Review-round-2 patch regression guard: AnyExistingReadingAtSameKeyAsync's own existence
-        // gate is true for essentially every incremental re-import (any Power Point with prior
-        // data), not just rare races — so its intervalStarts.Contains(...) conflict pre-check runs
-        // on this story's own steady-state common case. Proves it holds up for a realistically
-        // large incremental catch-up batch, not just the handful of rows the collision test above
-        // uses.
+        // AD-23 regression guard: a realistically large, entirely-non-colliding incremental batch
+        // (the steady-state common case for any Power Point with prior data) inserts cleanly via
+        // BulkInsertOrUpdateAsync — no row-count threshold or branch, applied uniformly.
         const int BatchSize = 2_000;
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
