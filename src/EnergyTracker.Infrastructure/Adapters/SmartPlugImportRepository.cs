@@ -34,6 +34,11 @@ public class SmartPlugImportRepository(
         SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken,
         SmartPlugReadingCorrection? boundaryCorrection = null)
     {
+        // Snapshot everything already tracked on this shared scoped DbContext before this call adds
+        // anything of its own — the caller (BackgroundJobProcessor) tracks its own BackgroundJob
+        // entity across this same call, and the failure-cleanup below must never touch it.
+        var trackedBeforeCall = new HashSet<object>(dbContext.ChangeTracker.Entries().Select(e => e.Entity));
+
         try
         {
             await AddAsyncCore(import, readings, cancellationToken, boundaryCorrection);
@@ -42,15 +47,39 @@ public class SmartPlugImportRepository(
         {
             // Real end-to-end verification (Story 3.9, dev-story session) surfaced this: on any
             // failure partway through, the transaction rolls back at the DB level (the `await
-            // using` below), but the DbContext's own change tracker still holds `import` (and any
-            // readings SaveChangesAsync already flushed) from earlier in this same call — EF Core
-            // does not untrack entities on transaction rollback. Left uncleared, the caller's own
-            // failure-handling path (ProcessSmartPlugImport.PersistFailedImportAsync, which reuses
-            // this same scoped DbContext to AddAsync a *new* SmartPlugImport with the same Id)
-            // throws a second, unrelated "already being tracked" InvalidOperationException that
-            // masks the real one — confirmed by reproducing this exact failure against a real,
-            // ~118k-row Eve Home export in a live browser walkthrough.
-            dbContext.ChangeTracker.Clear();
+            // using` below), but the DbContext's own change tracker still holds `import` from
+            // earlier in this same call — EF Core does not untrack entities on transaction
+            // rollback. Left tracked, the caller's own failure-handling path
+            // (ProcessSmartPlugImport.PersistFailedImportAsync, which reuses this same scoped
+            // DbContext to AddAsync a *new* SmartPlugImport with the same Id) throws a second,
+            // unrelated "already being tracked" InvalidOperationException that masks the real one —
+            // confirmed by reproducing this exact failure against a real, ~118k-row Eve Home export
+            // in a live browser walkthrough.
+            //
+            // Incident fix (confirmed live in production, 2026-09-05): this used to be a blanket
+            // dbContext.ChangeTracker.Clear(), which also silently detached whatever OTHER entity
+            // the caller had tracked on this same scoped DbContext — specifically
+            // BackgroundJobProcessor's own tracked BackgroundJob row, whose subsequent
+            // Status = Failed mutation then targeted a detached entity and got dropped by a no-op
+            // SaveChangesAsync, permanently orphaning the job at Status = Processing with its queue
+            // message already deleted (reproduced and manually corrected against the live
+            // production row this same day).
+            //
+            // Detach only entities newly tracked by this call — compared against the trackedBeforeCall
+            // snapshot, NOT filtered by current State: `import`'s own AddAsync+SaveChangesAsync above
+            // (and, when boundaryCorrection is set, auditCorrectionRecorder.RecordAsync's internal
+            // AuditCorrection insert — no reference to that entity surfaces back here) already
+            // succeeds and advances to Unchanged *inside this still-open transaction*, well before a
+            // LATER step (the readings bulk-write) fails and rolls the whole transaction back at the
+            // DB level — so a State == Added filter would silently miss both. Comparing against the
+            // snapshot instead catches anything this call newly tracked, regardless of what state it
+            // settled into, and can't be defeated by a future write AddAsyncCore gains being forgotten
+            // in a hand-written list.
+            foreach (var entry in dbContext.ChangeTracker.Entries().Where(e => !trackedBeforeCall.Contains(e.Entity)).ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+
             throw;
         }
     }
@@ -118,6 +147,20 @@ public class SmartPlugImportRepository(
                     // genuinely-new row.
                     PropertiesToExcludeOnUpdate = [nameof(SmartPlugReading.Id)],
                     UpdateByProperties = [nameof(SmartPlugReading.PowerPointId), nameof(SmartPlugReading.IntervalStart)],
+                    // Incident fix (confirmed live in production, 2026-09-05): this bulk copy is
+                    // exactly the operation that hit "Execution Timeout Expired" on Basic-tier Azure
+                    // SQL (100% DTU for ~2 minutes). It runs via SqlBulkCopy/COPY under the hood,
+                    // governed by BulkConfig.BulkCopyTimeout — EFCore.BulkExtensions never reads
+                    // Program.cs's DbContextOptionsBuilder.CommandTimeout as a fallback (verified
+                    // against the installed package's assemblies: no reference to CommandTimeout
+                    // anywhere in EFCore.BulkExtensions.Core/SqlServer). That Program.cs bump alone
+                    // covers ordinary EF-generated commands (the `import` row insert above,
+                    // ExecuteUpdateAsync, UpsertAwaitingMappingReadingsAsync's raw SQL) but does
+                    // nothing for this specific path — this is the setting that actually matters for
+                    // the incident. Kept at the same 120s value as Program.cs's CommandTimeout for
+                    // one consistent headroom number, not because the two settings are otherwise
+                    // related.
+                    BulkCopyTimeout = 120,
                 };
                 if (dbContext.Database.IsNpgsql())
                 {
