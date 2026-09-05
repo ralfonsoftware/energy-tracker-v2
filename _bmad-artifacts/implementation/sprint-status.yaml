@@ -366,7 +366,17 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-03
+last_updated: 2026-09-05
+# 2026-09-05: story 3-9-watermark-correction-detection-and-bulk-write-adoption moved to done
+#   (adversarial code review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 3
+#   decision-needed (2 dismissed by Ralf, 1 converted to patch), 9 patch findings (all applied —
+#   see the story file's Review Findings and Change Log), 0 deferred, 3 dismissed. Highlight:
+#   EveHomeXlsxParser broke immediately after emitting the first row at the watermark boundary,
+#   silently losing a second DST-fold-duplicate row sharing the exact same IntervalStart (AC #7
+#   unreachable for Eve Home) — fixed and covered by a new regression test. Also moved the AD-22
+#   correction + its audit record into AddAsync's own transaction (previously committed
+#   independently before AddAsync ran). Full regression suite re-run against real Postgres AND SQL
+#   Server: 466/466 green (was 456/456; +10 new tests).
 # 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to done (adversarial code
 #   review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 0 decision-needed, 6
 #   patch findings (all applied — see the story file's Review Findings and Change Log), 4 deferred
@@ -757,7 +767,7 @@ development_status:
   3-6-smart-plug-import-job-status-history: done
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   3-8-smart-plug-bulk-write-throughput-spike: review
-  3-9-watermark-correction-detection-and-bulk-write-adoption: review
+  3-9-watermark-correction-detection-and-bulk-write-adoption: done
   epic-3-retrospective: done
 
   epic-4: in-progress

@@ -134,22 +134,20 @@ public class EveHomeXlsxParser : ISmartPlugParser
             if (watermark is not null && reading.IntervalStart < watermark)
             {
                 // AD-22/AC #2: rows are confirmed strictly newest-first — a row strictly older
-                // than the watermark means the boundary row (if any) has already been emitted
-                // below; stop without adding this one.
+                // than the watermark means every row at or above the watermark (including every
+                // row sharing its exact IntervalStart, AC #7's DST-fold case) has already been
+                // emitted above; stop without adding this one.
                 break;
             }
 
+            // The row (or rows — AC #7's DST-fold case, more than one row can share the exact
+            // watermark IntervalStart) at or above the watermark's IntervalStart is included (not
+            // skipped) so the orchestration layer (ProcessSmartPlugImport) can compare against the
+            // stored value and detect a vendor-side correction (AD-22). Do NOT break as soon as
+            // one such row is seen — a second row sharing that exact IntervalStart must also be
+            // read, or AC #7's multi-row DST-fold handling can never fire for this vendor; the loop
+            // only stops above, once a row strictly older than the watermark is reached.
             readings.Add(reading);
-
-            if (watermark is not null && reading.IntervalStart == watermark)
-            {
-                // The row exactly at the watermark's IntervalStart is now included (not skipped)
-                // so the orchestration layer (ProcessSmartPlugImport) can compare its KwhValue
-                // against the stored value and detect a vendor-side correction (AD-22) — but it's
-                // still the last row this incremental parse should ever emit, so stop right here,
-                // one row later than before this story, never two.
-                break;
-            }
         }
 
         return new SmartPlugParseResult(readings, dataRowsSeen);

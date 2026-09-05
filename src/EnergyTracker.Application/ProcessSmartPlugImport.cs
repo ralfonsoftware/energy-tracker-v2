@@ -16,7 +16,6 @@ public class ProcessSmartPlugImport(
     ITaggingScaffoldRepository taggingScaffoldRepository,
     ISmartPlugImportRepository smartPlugImportRepository,
     CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing,
-    IAuditCorrectionRecorder auditCorrectionRecorder,
     ILogger<ProcessSmartPlugImport> logger)
 {
     public async Task ExecuteAsync(
@@ -55,7 +54,7 @@ public class ProcessSmartPlugImport(
             {
                 var room = await taggingScaffoldRepository.FindRoomAsync(matchedPowerPoint.RoomId, cancellationToken);
                 matchedRoomName = room?.Name;
-                watermark = await smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(matchedPowerPoint.Id, cancellationToken);
+                watermark = await smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(matchedPowerPoint.Id, cancellationToken);
             }
 
             SmartPlugParseResult parseResult;
@@ -67,8 +66,8 @@ public class ProcessSmartPlugImport(
                 parseResult = parser.Parse(dataStream, payload.OriginalFileName, watermark?.IntervalStart, cancellationToken);
             }
 
-            var readings = await ResolveWatermarkBoundaryAsync(
-                householdId, payload.SmartPlugImportId, watermark, parseResult.Readings, cancellationToken);
+            var (readings, boundaryCorrection) = ResolveWatermarkBoundary(
+                householdId, payload.SmartPlugImportId, matchedPowerPoint?.Id, watermark, parseResult.Readings);
 
             if (readings.Count == 0)
             {
@@ -92,7 +91,7 @@ public class ProcessSmartPlugImport(
                 // == 0 correctly) and skip CompleteSmartPlugImportProcessing — it requires a
                 // non-empty readings list (Story 3.3), and there is nothing new here to run gap
                 // detection/Status recompute against.
-                await PersistCompletedEmptyImportAsync(householdId, backgroundJobId, payload, parser.Vendor, deviceTag, cancellationToken);
+                await PersistCompletedEmptyImportAsync(householdId, backgroundJobId, payload, parser.Vendor, deviceTag, boundaryCorrection, cancellationToken);
                 return;
             }
 
@@ -124,7 +123,7 @@ public class ProcessSmartPlugImport(
                 CompletedAtUtc = DateTimeOffset.UtcNow,
             };
 
-            await smartPlugImportRepository.AddAsync(import, readings, cancellationToken);
+            await smartPlugImportRepository.AddAsync(import, readings, cancellationToken, boundaryCorrection);
 
             // AD-7/Task 3: gap detection + Status recompute only ever run once a Power Point is
             // resolved (AD-10) — the AwaitingPowerPointMapping branch above is parked without
@@ -163,14 +162,17 @@ public class ProcessSmartPlugImport(
     // IntervalStart — this is the only place that row is ever inspected and dropped from the
     // batch. It must never reach AddAsync's insert-or-upsert path: either it's an exact re-report
     // (nothing to write) or a narrow, single-column correction against the already-stored row, but
-    // never a "new" row.
-    private async Task<IReadOnlyList<SmartPlugReading>> ResolveWatermarkBoundaryAsync(
-        Guid householdId, Guid smartPlugImportId, SmartPlugReadingWatermark? watermark,
-        IReadOnlyList<SmartPlugReading> parsedReadings, CancellationToken cancellationToken)
+    // never a "new" row. Returns the correction (if any) rather than applying it directly — AddAsync
+    // applies and audit-records it inside its own transaction (Story 3.9 review fix), so a later
+    // failure writing the rest of the import rolls the correction back too instead of leaving it
+    // permanently committed against a Failed import.
+    private (IReadOnlyList<SmartPlugReading> Readings, SmartPlugReadingCorrection? Correction) ResolveWatermarkBoundary(
+        Guid householdId, Guid smartPlugImportId, Guid? matchedPowerPointId, SmartPlugReadingWatermark? watermark,
+        IReadOnlyList<SmartPlugReading> parsedReadings)
     {
         if (watermark is null)
         {
-            return parsedReadings;
+            return (parsedReadings, null);
         }
 
         // AC #7 (DST-fold discipline): matched by IntervalStart, first-encountered in parse order
@@ -178,7 +180,7 @@ public class ProcessSmartPlugImport(
         var boundaryRows = parsedReadings.Where(r => r.IntervalStart == watermark.IntervalStart).ToList();
         if (boundaryRows.Count == 0)
         {
-            return parsedReadings;
+            return (parsedReadings, null);
         }
 
         var remaining = parsedReadings.Where(r => r.IntervalStart != watermark.IntervalStart).ToList();
@@ -186,35 +188,36 @@ public class ProcessSmartPlugImport(
         if (boundaryRows.Count > 1)
         {
             // Distinct log from an ordinary single-row correction (AC #7) — same DST-fold phrasing
-            // convention SmartPlugImportRepository's own fallback logging already uses.
+            // convention SmartPlugImportRepository's own fallback logging already uses. Logs the
+            // caller-resolved matchedPowerPointId, not boundaryRows[0].PowerPointId — every parsed
+            // reading's PowerPointId is still null at this point (ExecuteAsync assigns it only
+            // after this method returns), so reading it here would always log null.
             logger.LogWarning(
                 "Import {SmartPlugImportId}: {Count} rows share the watermark boundary IntervalStart={IntervalStart:O} " +
                 "for PowerPointId={PowerPointId} (possibly a DST fall-back duplicate local timestamp) — only the " +
                 "first-encountered row is compared against the stored value; every row sharing this IntervalStart " +
                 "is dropped from the batch, and at most one correction is attempted.",
-                smartPlugImportId, boundaryRows.Count, watermark.IntervalStart, boundaryRows[0].PowerPointId);
+                smartPlugImportId, boundaryRows.Count, watermark.IntervalStart, matchedPowerPointId);
         }
 
         var boundaryRow = boundaryRows[0];
-        if (boundaryRow.KwhValue != watermark.KwhValue)
+        if (boundaryRow.KwhValue == watermark.KwhValue)
         {
-            // AC #5/#6: narrow, single-column update against the already-stored row — never a
-            // whole-row overwrite, never RoomName/PowerPointName/DeviceName (AD-10).
-            await smartPlugImportRepository.UpdateReadingKwhValueAsync(watermark.Id, boundaryRow.KwhValue, cancellationToken);
-
-            // AD-11: reuse the shared audit-correction mechanism exactly as its existing Meter
-            // Reading/Tariff call sites do — same old/new-value string-formatting convention.
-            await auditCorrectionRecorder.RecordAsync(
-                householdId,
-                "SmartPlugReading",
-                watermark.Id,
-                "KwhValue",
-                watermark.KwhValue.ToString(CultureInfo.InvariantCulture),
-                boundaryRow.KwhValue.ToString(CultureInfo.InvariantCulture),
-                cancellationToken);
+            return (remaining, null);
         }
 
-        return remaining;
+        // AC #5/#6: narrow, single-column update against the already-stored row — never a
+        // whole-row overwrite, never RoomName/PowerPointName/DeviceName (AD-10). AD-11: reuses the
+        // shared audit-correction mechanism exactly as its existing Meter Reading/Tariff call
+        // sites do — same old/new-value string-formatting convention.
+        var correction = new SmartPlugReadingCorrection(
+            householdId,
+            watermark.Id,
+            boundaryRow.KwhValue,
+            watermark.KwhValue.ToString(CultureInfo.InvariantCulture),
+            boundaryRow.KwhValue.ToString(CultureInfo.InvariantCulture));
+
+        return (remaining, correction);
     }
 
     private async Task PersistFailedImportAsync(
@@ -247,7 +250,8 @@ public class ProcessSmartPlugImport(
 
     private async Task PersistCompletedEmptyImportAsync(
         Guid householdId, Guid backgroundJobId, ProcessSmartPlugImportPayload payload,
-        SmartPlugVendorFormat vendor, string deviceTag, CancellationToken cancellationToken)
+        SmartPlugVendorFormat vendor, string deviceTag, SmartPlugReadingCorrection? boundaryCorrection,
+        CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
         var import = new SmartPlugImport
@@ -263,7 +267,11 @@ public class ProcessSmartPlugImport(
             CompletedAtUtc = now,
         };
 
-        await smartPlugImportRepository.AddAsync(import, [], cancellationToken);
+        // A "nothing new" empty import still has to carry the boundary-row correction (if any) —
+        // the exact bug the unit tests below caught: the correction was silently dropped whenever
+        // the only parsed row WAS the boundary row itself (readings.Count == 0 after resolution),
+        // since this branch used to call AddAsync without it.
+        await smartPlugImportRepository.AddAsync(import, [], cancellationToken, boundaryCorrection);
     }
 
     private async Task PersistFlaggedForReviewImportAsync(

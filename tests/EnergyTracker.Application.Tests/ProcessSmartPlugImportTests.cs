@@ -20,7 +20,6 @@ public class ProcessSmartPlugImportTests
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
     private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
     private readonly ISmartPlugParser _parser = Substitute.For<ISmartPlugParser>();
-    private readonly IAuditCorrectionRecorder _auditCorrectionRecorder = Substitute.For<IAuditCorrectionRecorder>();
     private readonly Guid _householdId = Guid.NewGuid();
     private readonly string _tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.xlsx");
 
@@ -40,7 +39,7 @@ public class ProcessSmartPlugImportTests
     private ProcessSmartPlugImport Sut() => new(
         [_parser], _taggingScaffoldRepository, _smartPlugImportRepository,
         new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
-        _auditCorrectionRecorder, NullLogger<ProcessSmartPlugImport>.Instance);
+        NullLogger<ProcessSmartPlugImport>.Instance);
 
     private ProcessSmartPlugImportPayload MakePayload(string deviceTag) =>
         new(Guid.NewGuid(), _tempFilePath, $"{deviceTag}.xlsx");
@@ -88,7 +87,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([MakeReading(deviceTag, DateTimeOffset.UtcNow)], RawDataRowsRead: 1));
@@ -114,7 +113,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([], RawDataRowsRead: 3));
@@ -145,7 +144,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([], RawDataRowsRead: 0));
@@ -197,7 +196,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns((SmartPlugReadingWatermark?)null);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([MakeReading(deviceTag, DateTimeOffset.UtcNow)], RawDataRowsRead: 1));
@@ -223,7 +222,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([MakeReading(deviceTag, boundaryIntervalStart, kwhValue: 0.5m)], RawDataRowsRead: 1));
@@ -231,25 +230,26 @@ public class ProcessSmartPlugImportTests
 
         await sut.ExecuteAsync(_householdId, Guid.NewGuid(), payload, TestContext.Current.CancellationToken);
 
-        await _smartPlugImportRepository.DidNotReceive().UpdateReadingKwhValueAsync(
-            Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
-        await _auditCorrectionRecorder.DidNotReceive().RecordAsync(
-            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         // The exact re-report was the only parsed row — it's dropped, so this becomes a "nothing
-        // new" Completed import with zero readings, same as Story 3.4's own disambiguation.
+        // new" Completed import with zero readings and no correction, same as Story 3.4's own
+        // disambiguation. AddAsync's own boundaryCorrection parameter must be null — no narrow
+        // update/audit record for a row whose value didn't actually change.
         await _smartPlugImportRepository.Received(1).AddAsync(
             Arg.Is<SmartPlugImport>(i => i.Status == SmartPlugImportStatus.Completed),
             Arg.Is<IReadOnlyList<SmartPlugReading>>(r => r.Count == 0),
-            Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>(),
+            null);
     }
 
     [Fact]
-    public async Task A_divergent_boundary_row_triggers_a_narrow_KwhValue_correction_and_an_audit_record()
+    public async Task A_divergent_boundary_row_triggers_a_narrow_KwhValue_correction_passed_into_AddAsync()
     {
         // AD-22 AC #5/#6/#11: the boundary row's KwhValue differs from the stored watermark value
-        // — the existing stored row is updated by the watermark's own Id, and the correction is
-        // recorded via IAuditCorrectionRecorder with the correct entityType/entityId/fieldName and
-        // old/new values; the row still never reaches AddAsync as a "new" row.
+        // — AddAsync's boundaryCorrection parameter carries the existing stored row's Id (never a
+        // re-derived lookup) and the old/new values IAuditCorrectionRecorder will be given, so the
+        // narrow update and its audit record apply atomically with the rest of the import (Story
+        // 3.9 review fix — see SmartPlugImportRepository.AddAsync for where this is actually
+        // applied). The row still never reaches AddAsync's own readings list as a "new" row.
         const string deviceTag = "Living Room Lamp";
         var room = MakeRoom();
         var powerPoint = MakePowerPoint(room.Id, deviceTag);
@@ -260,7 +260,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([MakeReading(deviceTag, boundaryIntervalStart, kwhValue: 0.75m)], RawDataRowsRead: 1));
@@ -268,13 +268,13 @@ public class ProcessSmartPlugImportTests
 
         await sut.ExecuteAsync(_householdId, Guid.NewGuid(), payload, TestContext.Current.CancellationToken);
 
-        await _smartPlugImportRepository.Received(1).UpdateReadingKwhValueAsync(watermark.Id, 0.75m, Arg.Any<CancellationToken>());
-        await _auditCorrectionRecorder.Received(1).RecordAsync(
-            _householdId, "SmartPlugReading", watermark.Id, "KwhValue", "0.5", "0.75", Arg.Any<CancellationToken>());
         await _smartPlugImportRepository.Received(1).AddAsync(
             Arg.Is<SmartPlugImport>(i => i.Status == SmartPlugImportStatus.Completed),
             Arg.Is<IReadOnlyList<SmartPlugReading>>(r => r.Count == 0),
-            Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>(),
+            Arg.Is<SmartPlugReadingCorrection?>(c =>
+                c != null && c.HouseholdId == _householdId && c.ReadingId == watermark.Id &&
+                c.NewKwhValue == 0.75m && c.OldValueFormatted == "0.5" && c.NewValueFormatted == "0.75"));
     }
 
     [Fact]
@@ -296,7 +296,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([firstDuplicate, secondDuplicate, otherRow], RawDataRowsRead: 3));
@@ -304,25 +304,23 @@ public class ProcessSmartPlugImportTests
 
         await sut.ExecuteAsync(_householdId, Guid.NewGuid(), payload, TestContext.Current.CancellationToken);
 
-        // Only the first-encountered duplicate's value (0.75) is ever compared/corrected against.
-        await _smartPlugImportRepository.Received(1).UpdateReadingKwhValueAsync(watermark.Id, 0.75m, Arg.Any<CancellationToken>());
-        await _auditCorrectionRecorder.Received(1).RecordAsync(
-            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-        // Both boundary-sharing rows are dropped; only the genuinely new, later-timestamped row
-        // survives into the batch AddAsync eventually persists.
+        // Only the first-encountered duplicate's value (0.75) is ever compared/corrected against,
+        // and both boundary-sharing rows are dropped — only the genuinely new, later-timestamped
+        // row survives into the batch AddAsync eventually persists.
         await _smartPlugImportRepository.Received(1).AddAsync(
             Arg.Any<SmartPlugImport>(),
             Arg.Is<IReadOnlyList<SmartPlugReading>>(r => r.Count == 1 && r[0].IntervalStart == otherRow.IntervalStart),
-            Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>(),
+            Arg.Is<SmartPlugReadingCorrection?>(c => c != null && c.ReadingId == watermark.Id && c.NewKwhValue == 0.75m));
     }
 
     [Fact]
     public async Task A_boundary_correction_never_touches_RoomName_PowerPointName_or_DeviceName()
     {
-        // AD-22 AC #6/AD-10 regression guard: the correction call is a narrow KwhValue-only
-        // update — the repository method it calls takes no RoomName/PowerPointName/DeviceName
-        // argument at all, so this asserts the exact overload/arguments used carry only the
-        // reading Id and the new KwhValue.
+        // AD-22 AC #6/AD-10 regression guard: SmartPlugReadingCorrection's own shape (HouseholdId,
+        // ReadingId, NewKwhValue, OldValueFormatted, NewValueFormatted) structurally cannot carry a
+        // RoomName/PowerPointName/DeviceName — asserting the exact correction AddAsync receives is
+        // the regression guard.
         const string deviceTag = "Living Room Lamp";
         var room = MakeRoom();
         var powerPoint = MakePowerPoint(room.Id, deviceTag);
@@ -333,7 +331,7 @@ public class ProcessSmartPlugImportTests
         _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Returns(deviceTag);
         _taggingScaffoldRepository.ListPowerPointsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<PowerPoint>)[powerPoint]);
         _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        _smartPlugImportRepository.FindLatestReadingIntervalStartByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
+        _smartPlugImportRepository.FindLatestReadingWatermarkByPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>())
             .Returns(watermark);
         _parser.Parse(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
             .Returns(new SmartPlugParseResult([MakeReading(deviceTag, boundaryIntervalStart, kwhValue: 0.75m)], RawDataRowsRead: 1));
@@ -341,9 +339,10 @@ public class ProcessSmartPlugImportTests
 
         await sut.ExecuteAsync(_householdId, Guid.NewGuid(), payload, TestContext.Current.CancellationToken);
 
-        // ISmartPlugImportRepository.UpdateReadingKwhValueAsync's own signature (Guid readingId,
-        // decimal newKwhValue, CancellationToken) structurally cannot carry a RoomName/
-        // PowerPointName/DeviceName argument — receiving exactly this call is the regression guard.
-        await _smartPlugImportRepository.Received(1).UpdateReadingKwhValueAsync(watermark.Id, 0.75m, Arg.Any<CancellationToken>());
+        await _smartPlugImportRepository.Received(1).AddAsync(
+            Arg.Any<SmartPlugImport>(),
+            Arg.Any<IReadOnlyList<SmartPlugReading>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Is<SmartPlugReadingCorrection?>(c => c != null && c.ReadingId == watermark.Id && c.NewKwhValue == 0.75m));
     }
 }

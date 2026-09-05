@@ -10,19 +10,33 @@ using Microsoft.Extensions.Logging;
 namespace EnergyTracker.Infrastructure.Adapters;
 
 public class SmartPlugImportRepository(
-    EnergyTrackerDbContext dbContext, ILogger<SmartPlugImportRepository> logger) : ISmartPlugImportRepository
+    EnergyTrackerDbContext dbContext, IAuditCorrectionRecorder auditCorrectionRecorder,
+    ILogger<SmartPlugImportRepository> logger) : ISmartPlugImportRepository
 {
+    // Ties UpsertAwaitingMappingReadingsAsync's chunk size to BuildAwaitingMappingValuesClause's
+    // own column count and each provider's per-statement parameter ceiling (Story 3.9 review fix)
+    // — previously two independent magic numbers (9 columns, 5000/200-row chunk sizes) with
+    // nothing tying them together, so a future column added to BuildAwaitingMappingValuesClause
+    // could silently reintroduce the exact "blew past the provider's parameter limit" bug this
+    // chunking exists to fix. Postgres's hard per-statement limit; SQL Server's practical ceiling.
+    private const int PostgresMaxStatementParameters = 65_535;
+    private const int SqlServerPracticalMaxStatementParameters = 2_100;
+    private const int AwaitingMappingColumnsPerRow = 9;
+
+
     // AD-23: replaces the old AnyExistingReadingAtSameKeyAsync pre-check / AddRangeAsync fast path
     // / AddWithPerRowConflictToleranceAsync per-row fallback with two set-based write paths, chosen
     // by the same known-vs-unmapped-PowerPoint condition ProcessSmartPlugImport already branches
     // on. Explicit transaction: BulkInsertOrUpdateAsync/ExecuteSqlRawAsync don't participate in
     // SaveChangesAsync's pipeline, so without this, "no partial import observable" would silently
     // disappear (mirrors Story 3.8's own spike-verified cancellation/rollback shape).
-    public async Task AddAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
+    public async Task AddAsync(
+        SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken,
+        SmartPlugReadingCorrection? boundaryCorrection = null)
     {
         try
         {
-            await AddAsyncCore(import, readings, cancellationToken);
+            await AddAsyncCore(import, readings, cancellationToken, boundaryCorrection);
         }
         catch
         {
@@ -41,9 +55,38 @@ public class SmartPlugImportRepository(
         }
     }
 
-    private async Task AddAsyncCore(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
+    private async Task AddAsyncCore(
+        SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken,
+        SmartPlugReadingCorrection? boundaryCorrection)
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        if (boundaryCorrection is not null)
+        {
+            // AD-22/AD-11 (Story 3.9 review fix): the narrow KwhValue correction and its audit
+            // record now commit inside this same transaction as the rest of the import, instead of
+            // independently before AddAsync was ever called — if the write below fails, the
+            // correction and its audit trail roll back with it rather than surviving on an import
+            // that ultimately persists as Failed. Same set-based ExecuteUpdateAsync idiom
+            // UpdateMappingAsync already uses in this class; the affected-row count is checked so a
+            // concurrent deletion of the target row (there is no such path today, but the check is
+            // free) never produces an audit record for a correction that didn't actually happen.
+            var affected = await dbContext.SmartPlugReadings
+                .Where(r => r.Id == boundaryCorrection.ReadingId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.KwhValue, boundaryCorrection.NewKwhValue), cancellationToken);
+
+            if (affected > 0)
+            {
+                await auditCorrectionRecorder.RecordAsync(
+                    boundaryCorrection.HouseholdId,
+                    "SmartPlugReading",
+                    boundaryCorrection.ReadingId,
+                    "KwhValue",
+                    boundaryCorrection.OldValueFormatted,
+                    boundaryCorrection.NewValueFormatted,
+                    cancellationToken);
+            }
+        }
 
         await dbContext.SmartPlugImports.AddAsync(import, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -172,8 +215,20 @@ public class SmartPlugImportRepository(
         // 9 parameters/row. Postgres's hard limit is 65535/statement (headroom to ~7281 rows) —
         // 5000 stays comfortably under it and matches AD-20's own assumed ~5000-row sizing for
         // this path in the ordinary case. SQL Server's practical ceiling is far tighter (~2100),
-        // so it gets its own, much smaller chunk size.
+        // so it gets its own, much smaller chunk size. The guard below fails fast (any provider,
+        // any build configuration — never a no-op Debug.Assert) if these literals are ever changed
+        // out of sync with AwaitingMappingColumnsPerRow.
         var chunkSize = dbContext.Database.IsNpgsql() ? 5_000 : 200;
+        var maxStatementParameters = dbContext.Database.IsNpgsql()
+            ? PostgresMaxStatementParameters
+            : SqlServerPracticalMaxStatementParameters;
+        if (chunkSize * AwaitingMappingColumnsPerRow > maxStatementParameters)
+        {
+            throw new InvalidOperationException(
+                $"AwaitingPowerPointMapping upsert chunk size ({chunkSize} rows x {AwaitingMappingColumnsPerRow} " +
+                $"columns = {chunkSize * AwaitingMappingColumnsPerRow} parameters) exceeds this provider's own " +
+                $"per-statement parameter ceiling ({maxStatementParameters}) — reduce the chunk size above.");
+        }
 
         for (var offset = 0; offset < readings.Count; offset += chunkSize)
         {
@@ -256,15 +311,15 @@ public class SmartPlugImportRepository(
     private static (string ValuesClause, object[] Parameters) BuildAwaitingMappingValuesClause(IReadOnlyList<SmartPlugReading> readings)
     {
         // Column order matches both provider statements' "(Id, HouseholdId, SmartPlugImportId,
-        // RoomName, PowerPointName, DeviceName, IntervalStart, IntervalEnd, KwhValue)" lists above.
-        const int ColumnsPerRow = 9;
-        var parameters = new object[readings.Count * ColumnsPerRow];
+        // RoomName, PowerPointName, DeviceName, IntervalStart, IntervalEnd, KwhValue)" lists above
+        // — AwaitingMappingColumnsPerRow (class-level) must change alongside this column count.
+        var parameters = new object[readings.Count * AwaitingMappingColumnsPerRow];
         var rowClauses = new string[readings.Count];
 
         for (var i = 0; i < readings.Count; i++)
         {
             var reading = readings[i];
-            var baseIndex = i * ColumnsPerRow;
+            var baseIndex = i * AwaitingMappingColumnsPerRow;
             parameters[baseIndex + 0] = reading.Id;
             parameters[baseIndex + 1] = reading.HouseholdId;
             parameters[baseIndex + 2] = (object?)reading.SmartPlugImportId ?? DBNull.Value;
@@ -274,7 +329,7 @@ public class SmartPlugImportRepository(
             parameters[baseIndex + 6] = reading.IntervalStart;
             parameters[baseIndex + 7] = reading.IntervalEnd;
             parameters[baseIndex + 8] = reading.KwhValue;
-            rowClauses[i] = "(" + string.Join(", ", Enumerable.Range(baseIndex, ColumnsPerRow).Select(idx => "{" + idx + "}")) + ")";
+            rowClauses[i] = "(" + string.Join(", ", Enumerable.Range(baseIndex, AwaitingMappingColumnsPerRow).Select(idx => "{" + idx + "}")) + ")";
         }
 
         return (string.Join(", ", rowClauses), parameters);
@@ -475,12 +530,7 @@ public class SmartPlugImportRepository(
         }
     }
 
-    public async Task UpdateReadingKwhValueAsync(Guid readingId, decimal newKwhValue, CancellationToken cancellationToken) =>
-        await dbContext.SmartPlugReadings
-            .Where(r => r.Id == readingId)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.KwhValue, newKwhValue), cancellationToken);
-
-    public async Task<SmartPlugReadingWatermark?> FindLatestReadingIntervalStartByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken) =>
+    public async Task<SmartPlugReadingWatermark?> FindLatestReadingWatermarkByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken) =>
         await dbContext.SmartPlugReadings
             .Where(r => r.PowerPointId == powerPointId)
             .OrderByDescending(r => r.IntervalStart)

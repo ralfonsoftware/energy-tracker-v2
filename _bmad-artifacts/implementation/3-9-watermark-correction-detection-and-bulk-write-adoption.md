@@ -4,7 +4,7 @@ baseline_commit: c4007b8
 
 # Story 3.9: Watermark Correction Detection & Bulk-Write Adoption
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -42,7 +42,7 @@ Both ADs interact at one specific point (AD-22's own text says so explicitly): a
 **AD-23 — bulk-write adoption**
 
 9. **Given** Story 3.8 has returned a "go" recommendation (see the blocking note above — this AC does not apply until it has), **when** `SmartPlugImportRepository.AddAsync` is rewritten, **then** its existing `AnyExistingReadingAtSameKeyAsync` pre-check, plain `AddRangeAsync`/`SaveChangesAsync` fast path, and `AddWithPerRowConflictToleranceAsync`/`DeletePartiallyPersistedImportAsync` per-row-fallback-and-cleanup machinery are all removed, replaced by one `BulkInsertOrUpdateAsync` call against `EnergyTrackerDbContext`, applied uniformly regardless of batch size (no row-count threshold or small/large branch).
-10. **Given** the new `BulkInsertOrUpdateAsync` call, **when** configured, **then** `PropertiesToExclude = [nameof(SmartPlugReading.Id)]` on every call, and `UpdateByProperties` branches on the same condition `ProcessSmartPlugImport` already branches on (whether the batch's Power Point is known): `[PowerPointId, IntervalStart]` when known (matching `IX_SmartPlugReadings_PowerPointId_IntervalStart`), or `[HouseholdId, IntervalStart]` when not (matching the partial `IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull` index, scoped to `PowerPointId IS NULL` rows) — the two real unique indexes named in `SmartPlugReadingConfiguration.cs`.
+10. **[AMENDED 2026-09-04, Story 3.9 review]** **Given** the batch's Power Point is known, **when** written via `BulkInsertOrUpdateAsync`, **then** `PropertiesToExcludeOnUpdate = [nameof(SmartPlugReading.Id)]` (not the originally-specified blanket `PropertiesToExclude` — Story 3.8 spike Finding #1: `Id` is a client-generated Guid, not DB-generated, so excluding it from the INSERT side too throws a NOT NULL violation on a genuinely-new row) and `UpdateByProperties = [PowerPointId, IntervalStart]` (matching `IX_SmartPlugReadings_PowerPointId_IntervalStart`). **Given** the batch's Power Point is NOT known, **when** written, **then** it goes through a hand-written, provider-native raw-SQL upsert instead of `BulkInsertOrUpdateAsync` (AD-2 `[AMENDED]`, Ralf's explicit decision after Story 3.8 spike Finding #2 showed `UpdateByProperties` cannot safely target the partial `IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull` index on either provider) — its own `ON CONFLICT`/`MERGE` predicate matches on `(HouseholdId, IntervalStart) WHERE PowerPointId IS NULL`, the same two real unique indexes named in `SmartPlugReadingConfiguration.cs`, just reached via two different mechanisms depending on which index applies. (Originally specified as one `BulkInsertOrUpdateAsync` call for both branches with a single blanket `PropertiesToExclude` — see Completion Notes for the empirical findings that required this amendment.)
 11. **Given** the parent `SmartPlugImport` row and its readings' `BulkInsertOrUpdateAsync` write, **when** persisted, **then** both are wrapped in one explicit database transaction (`dbContext.Database.BeginTransactionAsync`/commit) — `BulkInsertOrUpdateAsync` does not participate in `SaveChangesAsync`'s pipeline, so without this explicit wrapping, "no partial import observable" silently disappears.
 12. **Given** `UpdateMappingAsync` (Story 3.2/3.4/3.7's existing mapping-resolution machinery), **when** this story ships, **then** it is left completely untouched — a deliberate, explicit carve-out (stated in code comments, not silently omitted) because it operates on a fundamentally different, small/bounded, already-persisted-and-validated re-tagging volume, not a bulk insert-or-upsert-by-content decision over a fresh, potentially huge parsed batch.
 13. **Given** the new NuGet dependency, **when** referenced, **then** `EnergyTracker.Infrastructure.csproj` references `EFCore.BulkExtensions.Core`, `EFCore.BulkExtensions.SqlServer`, and `EFCore.BulkExtensions.PostgreSql` at version `10.0.1` (added to `Directory.Packages.props` per this project's central package management convention) — **never** the umbrella `EFCore.BulkExtensions` package.
@@ -100,6 +100,20 @@ Both ADs interact at one specific point (AD-22's own text says so explicitly): a
   - [x] `tests/EnergyTracker.Application.Tests/ProcessSmartPlugImportTests.cs`: new tests for the boundary-row comparison — exact re-report (dropped, `IAuditCorrectionRecorder.Received(0)`, repository update method never called), divergent value (repository update called with the correct `Id`/new value, `IAuditCorrectionRecorder.RecordAsync` called with the correct `entityType`/`entityId`/`fieldName`/old/new values), and a DST-fold multi-row-at-boundary case (only the first row compared, all sharing rows dropped, distinct log). Added a regression test confirming the correction path never touches `RoomName`/`PowerPointName`/`DeviceName` (AC #6).
   - [x] Confirmed (not just assumed) that `UpdateMappingAsync`'s own existing tests still pass unmodified — the full `EnergyTracker.Infrastructure.Tests` run (88/88 green) includes them unchanged, itself the evidence for AC #12's carve-out.
   - [x] `.NET`: xUnit v3 MTP, Shouldly, NSubstitute against ports, `TestContext.Current.CancellationToken`, Testcontainers (both providers) for anything DB-touching — same conventions as every prior Epic 3 story.
+
+### Review Findings
+
+- [x] [Review][Patch] AD-22's correction (`SmartPlugImportRepository.UpdateReadingKwhValueAsync`) and its audit record (`IAuditCorrectionRecorder.RecordAsync`) commit independently and immediately in `ProcessSmartPlugImport.ResolveWatermarkBoundaryAsync`, before `AddAsync`'s own transaction runs — unlike `EditMeterReading.cs`'s pattern (`ExecuteInTransactionAsync` wrapping both the value update and the audit record), which AD-11 says this story should reuse "exactly as-is". If `AddAsync` then fails, the import is persisted as `Failed` while the correction and its audit trail have already permanently committed. **Ralf's decision: wrap the correction + audit-record call into the same transaction as the rest of the import.** [ProcessSmartPlugImport.cs:198-214]
+- [x] [Review][Patch] `EveHomeXlsxParser.Parse` makes AC #7's DST-fold boundary handling unreachable for Eve Home imports — the loop `break`s immediately after adding the first row whose `IntervalStart == watermark`, so a second row sharing that exact boundary timestamp (the DST-fold-duplicate case AC #7 is written for) is never read at all; `ProcessSmartPlugImport`'s multi-row DST-fold branch can therefore never fire for Eve Home, only for Meross. [EveHomeXlsxParser.cs:134-152]
+- [x] [Review][Patch] `SmartPlugImportRepository.UpdateReadingKwhValueAsync` discards `ExecuteUpdateAsync`'s affected-row count, so `ProcessSmartPlugImport` always calls `RecordAsync` even if zero rows were actually updated — no live call site can trigger this today (no code path deletes a `SmartPlugReading`), but the fix is a cheap, unambiguous one-liner. [SmartPlugImportRepository.cs:478-481]
+- [x] [Review][Patch] `AddAsync_wraps_the_parent_import_and_readings_in_one_transaction_that_rolls_back_on_cancellation` cancels its token *before* calling `AddAsync`, so `BeginTransactionAsync` throws before any row is touched — it does not exercise the mid-bulk-write rollback the Completion Notes describe ("a cancellation-mid-bulk-write test confirming zero partial rows survive"). The rollback mechanism itself (`await using` transaction, no commit before throw) is sound by construction, but nothing in the suite proves it against an in-flight write. [SmartPlugImportRepositoryAddAsyncDualProviderTests.cs:188-210]
+- [x] [Review][Patch] The Postgres 65,535-parameter chunking fix (`UpsertAwaitingMappingReadingsAsync`, 5,000 rows Postgres / 200 rows SQL Server) is a hardcoded literal justified only by a code comment's manual arithmetic against `ColumnsPerRow = 9` — no test exercises a batch spanning more than one chunk, and nothing recomputes the chunk size if a column is ever added to `BuildAwaitingMappingValuesClause`. [SmartPlugImportRepository.cs]
+- [x] [Review][Patch] The `ChangeTracker.Clear()` fix for the masked-exception bug (found during live E2E verification) has no regression test reproducing "`AddAsync` fails, then `PersistFailedImportAsync` reuses the same scoped `DbContext`" to confirm the fix actually prevents the second, masking `InvalidOperationException`. [SmartPlugImportRepository.cs AddAsyncCore catch block]
+- [x] [Review][Patch] `FindLatestReadingIntervalStartByPowerPointAsync`'s name is stale after this story's return-type change — it now returns a full `SmartPlugReadingWatermark` (`Id`, `IntervalStart`, `KwhValue`), not an interval start alone. [SmartPlugImportRepository.cs:483]
+- [x] [Review][Patch] This story's own AC #10 text ("`PropertiesToExclude = [nameof(SmartPlugReading.Id)]` on every call") no longer matches what shipped and was approved via the AD-2/AD-23 `[AMENDED]` bullets in `invariants-rules.md` (`PropertiesToExcludeOnUpdate`, not `PropertiesToExclude`, on the primary path; a hand-written raw-SQL upsert, not `BulkInsertOrUpdateAsync`, on the `AwaitingPowerPointMapping` path). Update AC #10's text so a future reader isn't misled by the AC alone.
+- [x] [Review][Patch] No test confirms the `AwaitingPowerPointMapping` raw-SQL upsert can't cross-match between two different households sharing the same `IntervalStart` — the SQL predicates already include `HouseholdId` on both providers, so this is a coverage gap, not a known bug, but AD-3 tenant isolation for this bypass-the-query-filter path is currently only asserted in a code comment.
+
+**Dismissed as noise (5):** (1) `AddAsyncCore`/`DeduplicateByMatchKey`'s "one household, homogeneous `PowerPointId` per batch" assumption — true today by construction (the sole caller, `ProcessSmartPlugImport`, always assigns one `HouseholdId`/one `PowerPointId`-or-none per call) and already documented in a comment; adding a defensive check for a scenario that structurally cannot occur would go against this codebase's own no-speculative-validation convention. (2) `UnderlyingConnection`/`UnderlyingTransaction` wiring applied identically to both providers — this is `EFCore.BulkExtensions`'s standard ambient-transaction idiom, not a provider-specific risk. (3) The bulk of the two ~800-line EF-generated `Designer.cs` migration files — already flagged to the user as a reviewer caution at the diff-scoping checkpoint, not a defect in this diff. (4) The two mid-session escalations recorded in this file's Completion Notes (Story 3.8's gate override, the AD-2 raw-SQL amendment) — Ralf confirmed both genuinely happened. (5) AC #14's `Microsoft.Data.SqlClient` `6.1.1→6.1.4` re-verification gap — Ralf's call: a low-risk patch bump within the same client line, not worth tracking (Entra ID auth itself is separately live and working per Story 1.11/AD-21, unaffected by this).
 
 ## Dev Notes
 
@@ -362,3 +376,43 @@ fixes above).
   imports cleanly, maps correctly to a real Power Point, and a same-file re-import correctly
   exercises AD-22's watermark/boundary logic (single-row parse, zero new writes). Full regression
   suite re-run clean: 456/456.
+- 2026-09-05: `/bmad-code-review` (Blind Hunter + Edge Case Hunter + Acceptance Auditor, all three
+  in parallel) found one confirmed correctness bug and eight lower-severity gaps; all 9 patches
+  applied, both remaining decision-needed items resolved by Ralf (escalations confirmed genuine;
+  the `Microsoft.Data.SqlClient` 6.1.1→6.1.4 gap accepted as low-risk, not tracked further).
+  **Highest-severity fix:** `EveHomeXlsxParser.Parse` broke immediately after emitting the first
+  row at the watermark boundary, silently losing a second DST-fold row sharing the exact same
+  `IntervalStart` (AC #7 never reachable for Eve Home) — fixed by continuing until a row strictly
+  older than the watermark is seen, matching Meross's own discipline; new regression test added.
+  **Also fixed:** the AD-22 correction (`UpdateReadingKwhValueAsync`) and its
+  `IAuditCorrectionRecorder.RecordAsync` call no longer commit independently before `AddAsync`'s
+  own transaction — both now flow through a new `SmartPlugReadingCorrection` parameter on
+  `AddAsync` and apply inside the same transaction as the rest of the import, matching
+  `EditMeterReading.cs`'s pattern (AD-11); the affected-row count now gates whether an audit
+  record is written at all. `UpdateReadingKwhValueAsync` was removed from the port/repository
+  (folded into `AddAsync`), and `FindLatestReadingIntervalStartByPowerPointAsync` was renamed to
+  `FindLatestReadingWatermarkByPowerPointAsync` (stale name after its Story 3.9 return-type
+  change). Added: a chunk-size/`ColumnsPerRow` mismatch guard plus a genuine multi-chunk upsert
+  test; a genuine mid-write rollback test (a later chunk's primary-key collision after an earlier
+  chunk already wrote); a `ChangeTracker.Clear()` regression test reproducing the exact
+  same-`DbContext`-retry pattern `PersistFailedImportAsync` uses; a cross-household isolation test
+  for the `AwaitingPowerPointMapping` raw-SQL upsert (AD-3); and renamed/reframed the pre-existing
+  cancellation test, which only proved a pre-cancelled token stops `AddAsync` before any row is
+  touched, not genuine mid-write cancellation. AC #10's text amended to match what actually shipped
+  (already AD-approved, just not reflected in the AC itself). One implementation bug was caught by
+  the Application-layer unit tests during this fix pass, not by the review itself: the new
+  boundary-correction parameter was dropped on the "nothing new, Completed with zero readings"
+  early-exit path (`PersistCompletedEmptyImportAsync`) — the single most common case, since a
+  repeat import whose only new row is an exact re-report or correction at the boundary always
+  takes this path. Fixed by threading `boundaryCorrection` through it — the fix was caught and
+  reverified by the Application unit tests, not by any of the three review layers.
+  **Verification: full regression suite re-run green against real Postgres AND real SQL Server
+  (Docker/Testcontainers), not just compiled** — Application 224/224, Infrastructure 98/98 (was
+  88/88; +10 new tests from this fix pass, including all 5 new database-backed regression tests:
+  the multi-chunk upsert, the genuine mid-write PK-collision rollback, the `ChangeTracker.Clear()`
+  masked-exception reproduction, the cross-household isolation check, and the reframed
+  pre-cancellation test), Api 141/141, Architecture 3/3 — 466/466 green. One test bug surfaced and
+  was fixed during this run (`AddAsync_with_a_boundaryCorrection_whose_target_row_no_longer_exists_records_no_audit_correction`
+  was missing its `SeedPowerPointAsync` call, so the FK-parent `Household` row never existed before
+  `SeedBackgroundJobAsync` tried to insert against it — an `Npgsql.PostgresException: 23503` on
+  `FK_BackgroundJobs_Households_HouseholdId`, not a product bug).

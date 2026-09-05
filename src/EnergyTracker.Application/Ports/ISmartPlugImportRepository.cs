@@ -7,12 +7,23 @@ namespace EnergyTracker.Application.Ports;
 // — the Id lets the narrow correction update target the exact stored row without a second lookup.
 public sealed record SmartPlugReadingWatermark(Guid Id, DateTimeOffset IntervalStart, decimal KwhValue);
 
+// AD-22/AD-11 (Story 3.9 review fix): carries everything AddAsync needs to apply the narrow
+// KwhValue correction and its IAuditCorrectionRecorder entry inside the SAME transaction as the
+// rest of the import — previously ProcessSmartPlugImport committed these independently before
+// calling AddAsync, so a later failure in AddAsync left an applied, audited correction on an
+// import that ultimately persisted as Failed.
+public sealed record SmartPlugReadingCorrection(
+    Guid HouseholdId, Guid ReadingId, decimal NewKwhValue, string OldValueFormatted, string NewValueFormatted);
+
 public interface ISmartPlugImportRepository
 {
     // Persists the import and all of its parsed readings (if any) as a single unit — a partially
     // persisted import (row without its readings, or vice versa) is never a valid state to
-    // observe from Story 3.2/3.3's later reads.
-    Task AddAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken);
+    // observe from Story 3.2/3.3's later reads. `boundaryCorrection`, when not null, is applied
+    // and audit-recorded inside this same transaction (AD-22/AD-11) before the readings write.
+    Task AddAsync(
+        SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken,
+        SmartPlugReadingCorrection? boundaryCorrection = null);
 
     // Lets GET /api/jobs/{id} surface the import's own sub-status (e.g. AwaitingPowerPointMapping)
     // alongside the generic BackgroundJob status, since "Completed" alone doesn't tell the client
@@ -66,7 +77,7 @@ public interface ISmartPlugImportRepository
     // value at the boundary row without a second lookup (AD-22). Mirrors
     // FindFirstReadingDateByPowerPointAsync's exact shape, just OrderByDescending. `null` only when
     // the Power Point has no persisted reading at all yet (AC #4 — parse the full file).
-    Task<SmartPlugReadingWatermark?> FindLatestReadingIntervalStartByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
+    Task<SmartPlugReadingWatermark?> FindLatestReadingWatermarkByPowerPointAsync(Guid powerPointId, CancellationToken cancellationToken);
 
     // Single SaveChangesAsync — one transaction, mirroring every other method here. Gaps are
     // insert-only (immutable after creation, AD-7/NFR9's precedent) — never called to update an
@@ -91,12 +102,6 @@ public interface ISmartPlugImportRepository
     // each Completed job's own SmartPlugImport.Status in one query instead of N+1.
     Task<IReadOnlyList<SmartPlugImport>> FindAllByBackgroundJobIdsAsync(
         IReadOnlyList<Guid> backgroundJobIds, CancellationToken cancellationToken);
-
-    // AD-22 (AC #5/#6): a narrow, single-column set-based update against one already-stored row,
-    // identified by its own Id (the watermark's Id, never a re-derived lookup) — touches KwhValue
-    // and only KwhValue, never RoomName/PowerPointName/DeviceName (AD-10's by-value snapshot
-    // fields). Mirrors UpdateMappingAsync's own ExecuteUpdateAsync idiom in this same class.
-    Task UpdateReadingKwhValueAsync(Guid readingId, decimal newKwhValue, CancellationToken cancellationToken);
 
     // Story 3.6/AD-6 extension: deletes every SmartPlugImport (+ its SmartPlugImportGap rows, +
     // its BackgroundJob row) that completed before cutoffUtc AND reached a terminal, resolved
