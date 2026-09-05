@@ -180,6 +180,25 @@ public class SmartPlugImportRepository(
                     // resolution ("dbo") doesn't go through this buggy lookup at all.
                     config.CustomDestinationTableName = "public.SmartPlugReadings";
                 }
+                else if (dbContext.Database.IsSqlServer())
+                {
+                    // Incident fix (production, 2026-09-05, energy-tracker-rg): without this, the
+                    // MERGE below stages through a permanent table it creates itself via
+                    // `SELECT ... INTO [dbo].[SmartPlugReadingsTemp...]` — a DDL operation. AD-21's
+                    // Container App runtime identity is deliberately granted only db_datareader/
+                    // db_datawriter (infra/sql/grant-entra-db-users.sql — "no schema-change
+                    // rights"), so that CREATE TABLE throws "CREATE TABLE permission denied" the
+                    // first time a mapped-PowerPoint import runs in Azure (every existing test
+                    // authenticates as the container's admin login, which is why this never
+                    // surfaced before it hit production). UseTempDB stages through a `#`-prefixed
+                    // genuine SQL Server local temp table instead, which needs no schema-level
+                    // grant on the target database. EFCore.BulkExtensions.Core 10.0.1 requires this
+                    // to run inside an explicit transaction (else it throws) — already satisfied
+                    // here by AddAsyncCore's own ambient BeginTransactionAsync, reused below via
+                    // UnderlyingTransaction. Postgres-only branch above needs no equivalent: its own
+                    // merge strategy never creates a permanent staging table this way.
+                    config.UseTempDB = true;
+                }
                 // Standard EFCore.BulkExtensions idiom for ambient-transaction participation
                 // (mirrors Story 3.8's own spike harness, which verified this exact combination's
                 // cancellation/rollback behavior against real Postgres) — BulkInsertOrUpdateAsync
