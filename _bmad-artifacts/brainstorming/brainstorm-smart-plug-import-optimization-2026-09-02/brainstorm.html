@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Watermark Line — Smart Plug Import Brainstorm</title>
+<style>
+  :root{
+    --bg: #0a0e13;
+    --bg2: #0e141b;
+    --surface: #131b23;
+    --surface2: #182029;
+    --border: #26323d;
+    --text: #e7edf3;
+    --muted: #8ea0b0;
+    --muted2: #64757f;
+    --gold: #e8b458;
+    --gold-dim: #7a6335;
+    --white-hat: #f2f4f6;
+    --red-hat: #e0525f;
+    --yellow-hat: #f0c53f;
+    --black-hat: #2b2f33;
+    --green-hat: #4caf6e;
+    --blue-hat: #4d8fdc;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+  body{
+    margin:0; padding:0;
+    background:
+      radial-gradient(900px 500px at 15% -5%, rgba(77,143,220,0.10), transparent 60%),
+      radial-gradient(900px 600px at 100% 10%, rgba(232,180,88,0.06), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--gold-dim); color: #fff; }
+
+  /* progress bar */
+  #progress{ position:fixed; top:0; left:0; height:3px; width:0%; background: linear-gradient(90deg,var(--blue-hat),var(--gold)); z-index:999; transition: width .08s linear; }
+
+  /* side nav */
+  #sidenav{
+    position:fixed; right:18px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:14px; z-index:900;
+  }
+  #sidenav a{
+    width:11px; height:11px; border-radius:50%;
+    background: var(--surface2); border:1px solid var(--border);
+    display:block; position:relative; text-decoration:none;
+    transition: background .2s, border-color .2s, transform .2s;
+  }
+  #sidenav a:hover, #sidenav a.active{ background: var(--gold); border-color: var(--gold); transform: scale(1.3); }
+  #sidenav a .label{
+    position:absolute; right:22px; top:50%; transform:translateY(-50%);
+    white-space:nowrap; font-size:11px; color:var(--muted); background:var(--surface);
+    border:1px solid var(--border); padding:3px 8px; border-radius:5px;
+    opacity:0; pointer-events:none; transition:opacity .15s;
+  }
+  #sidenav a:hover .label{ opacity:1; }
+  @media (max-width: 860px){ #sidenav{ display:none; } }
+
+  .wrap{ max-width: 980px; margin: 0 auto; padding: 0 28px; }
+
+  /* ===== HERO ===== */
+  header.hero{
+    min-height: 92vh; display:flex; flex-direction:column; justify-content:center;
+    position:relative; overflow:hidden; border-bottom:1px solid var(--border);
+  }
+  .hero-waves{ position:absolute; inset:0; opacity:.5; pointer-events:none; }
+  .hero-inner{ position:relative; z-index:2; }
+  .eyebrow{
+    font-family: var(--mono); font-size:12.5px; letter-spacing:.14em; text-transform:uppercase;
+    color: var(--gold); margin-bottom:18px; display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow .dot{ width:6px;height:6px;border-radius:50%;background:var(--gold); box-shadow:0 0 8px var(--gold); }
+  h1.title{
+    font-size: clamp(2.2rem, 5.4vw, 4.1rem); line-height:1.05; margin:0 0 22px 0;
+    font-weight: 800; letter-spacing:-0.02em;
+    background: linear-gradient(100deg, #fff 10%, var(--gold) 55%, #fff 90%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero p.lede{ font-size: 1.15rem; color: var(--muted); max-width: 640px; }
+  .hero-meta{
+    margin-top:44px; display:flex; flex-wrap:wrap; gap:10px; font-family:var(--mono); font-size:12px;
+  }
+  .hero-meta span{
+    border:1px solid var(--border); background:var(--surface); color:var(--muted);
+    padding:6px 11px; border-radius:20px;
+  }
+  .scroll-cue{ position:absolute; bottom:26px; left:28px; font-family:var(--mono); font-size:11px; color:var(--muted2); }
+  .scroll-cue::after{ content:'↓'; margin-left:6px; animation: bob 1.6s ease-in-out infinite; display:inline-block; }
+  @keyframes bob{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(5px);} }
+
+  /* ===== SECTION shell ===== */
+  section{ padding: 96px 0; position:relative; }
+  section + section{ border-top:1px solid var(--border); }
+  .kicker{
+    font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:10px;
+  }
+  h2.sec-title{ font-size: clamp(1.6rem,3.4vw,2.4rem); margin:0 0 14px 0; font-weight:800; letter-spacing:-0.01em; }
+  .sec-intro{ color:var(--muted); max-width:680px; margin-bottom:52px; font-size:1.02rem; }
+  .reveal{ opacity:0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+
+  /* ===== QUESTION STORMING ===== */
+  .watermark-rail{
+    position:relative; height:64px; margin: 0 0 48px 0; border-bottom:2px dashed var(--gold-dim);
+  }
+  .watermark-rail .wm-label{
+    position:absolute; right:0; bottom:8px; font-family:var(--mono); font-size:11px; color:var(--gold);
+    letter-spacing:.06em;
+  }
+  .watermark-rail svg{ position:absolute; bottom:-2px; left:0; width:100%; height:36px; }
+
+  .qchain{ display:flex; flex-direction:column; gap:0; }
+  .qitem{
+    display:grid; grid-template-columns: 34px 1fr; gap:16px; padding: 16px 0;
+    border-left:1px solid var(--border); margin-left:16px; padding-left:26px; position:relative;
+  }
+  .qitem::before{
+    content:''; position:absolute; left:-6px; top:24px; width:11px; height:11px; border-radius:50%;
+    background: var(--bg); border:2px solid var(--blue-hat);
+  }
+  .qitem .qmark{
+    font-family:var(--mono); color:var(--blue-hat); font-size:20px; font-weight:700; line-height:1;
+    grid-column:1; margin-left:-42px;
+  }
+  .qitem .qtext{ color:var(--text); font-size:1.0rem; }
+  .qitem.insight{ }
+  .qitem.insight::before{ border-color: var(--gold); }
+  .insight-card{
+    grid-column: 1 / -1; margin-top:8px; background:var(--surface); border:1px solid var(--gold-dim);
+    border-left:3px solid var(--gold); border-radius:8px; padding:14px 16px; font-size:0.95rem; color:var(--text);
+  }
+  .insight-card .tag{ font-family:var(--mono); font-size:10.5px; color:var(--gold); text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:6px; }
+  .idea-card{
+    grid-column: 1 / -1; margin-top:8px; background:var(--surface2); border:1px solid var(--border);
+    border-left:3px solid #7fb0e8; border-radius:8px; padding:14px 16px; font-size:0.95rem;
+  }
+  .idea-card .tag{ font-family:var(--mono); font-size:10.5px; color:#7fb0e8; text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:6px; }
+
+  /* mini demo */
+  .demo-box{
+    margin-top:56px; background: var(--surface); border:1px solid var(--border); border-radius:14px; padding:26px 26px 22px;
+  }
+  .demo-box h4{ margin:0 0 4px 0; font-size:1.02rem; }
+  .demo-box p.demo-desc{ color:var(--muted); font-size:.9rem; margin:0 0 20px 0; }
+  .timeline{
+    position:relative; display:flex; align-items:center; gap:7px; padding: 30px 6px 10px; overflow-x:auto;
+  }
+  .timeline .dot{
+    width:26px; height:26px; border-radius:50%; flex:0 0 auto; background:var(--surface2);
+    border:2px solid var(--border); position:relative; transition: all .25s ease;
+  }
+  .timeline .dot.known{ background:#1b2531; border-color:#33465a; }
+  .timeline .dot.new{ background:#241b12; border-color:#5a4726; }
+  .timeline .dot.checked{ background:var(--green-hat); border-color:var(--green-hat); box-shadow:0 0 10px rgba(76,175,110,.6); }
+  .timeline .dot.verified{ background:#2a3d33; border-color:var(--green-hat); }
+  .timeline .dot.cursor{ outline:2px solid var(--gold); outline-offset:2px; }
+  .timeline .wm-divider{
+    position:absolute; top:0; bottom:0; width:0; border-left:2px dashed var(--gold);
+  }
+  .timeline .wm-divider::after{
+    content:'watermark'; position:absolute; top:-22px; left:6px; font-family:var(--mono); font-size:10px; color:var(--gold); white-space:nowrap;
+  }
+  .demo-controls{ display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+  .demo-controls button{
+    font-family:var(--mono); font-size:12px; letter-spacing:.03em; padding:9px 14px; border-radius:7px;
+    background: var(--surface2); border:1px solid var(--border); color:var(--text); cursor:pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .demo-controls button:hover{ border-color:var(--gold); }
+  .demo-controls button.primary{ background: linear-gradient(180deg,#3a4a2f,#2a3a24); border-color:var(--green-hat); }
+  .demo-status{
+    margin-top:14px; font-family:var(--mono); font-size:12px; color:var(--muted); min-height:18px;
+  }
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend i{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+
+  /* ===== SIX HATS ===== */
+  .hats-flow{ display:flex; align-items:center; gap:6px; margin-bottom:52px; flex-wrap:wrap; }
+  .hats-flow .hf-item{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .hats-flow .hf-arrow{ color:var(--muted2); font-size:18px; margin: 0 2px; }
+  .hat-icon{ width:38px; height:30px; position:relative; }
+  .hat-icon .crown{ position:absolute; left:50%; top:0; transform:translateX(-50%); width:20px; height:18px; border-radius:6px 6px 3px 3px; }
+  .hat-icon .brim{ position:absolute; left:50%; bottom:0; transform:translateX(-50%); width:38px; height:7px; border-radius:50%; }
+  .hf-name{ font-family:var(--mono); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+
+  .hat-panel{
+    display:grid; grid-template-columns: 120px 1fr; gap:26px; padding:28px 0; border-top:1px solid var(--border);
+  }
+  .hat-panel:first-of-type{ border-top:none; }
+  .hat-panel .hat-side{ display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
+  .hat-icon.lg{ width:70px; height:56px; }
+  .hat-icon.lg .crown{ width:38px; height:34px; }
+  .hat-icon.lg .brim{ width:70px; height:13px; }
+  .hat-panel h3{ margin:0; font-size:1.15rem; }
+  .hat-panel .hat-role{ font-family:var(--mono); font-size:11px; color:var(--muted); max-width:130px; }
+  .hat-items{ display:flex; flex-direction:column; gap:12px; }
+  .hat-item{
+    background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:13px 16px; font-size:.95rem;
+    border-left-width:3px; border-left-style:solid;
+  }
+  .hat-item .tag{ font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.07em; display:block; margin-bottom:5px; opacity:.85; }
+
+  /* ===== MORPHOLOGICAL ===== */
+  .morph-grid{ position:relative; display:grid; grid-template-columns: repeat(3,1fr); gap:22px; padding-top:26px; }
+  .morph-thread-line{
+    position:absolute; top:20px; left:16.6667%; right:16.6667%; height:2px;
+    background: linear-gradient(90deg, var(--gold), var(--gold)); opacity:.8; z-index:0;
+  }
+  .morph-node{
+    position:absolute; top:20px; width:12px; height:12px; border-radius:50%; background:var(--gold);
+    box-shadow:0 0 12px var(--gold); transform:translate(-50%,-50%); z-index:1;
+  }
+  .morph-col{ display:flex; flex-direction:column; gap:14px; position:relative; z-index:1; }
+  .morph-col > h4{
+    text-align:center; font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); margin:0 0 6px 0;
+  }
+  .morph-option{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; font-size:.88rem;
+  }
+  .morph-option.chosen{ border-color:var(--gold); background: linear-gradient(180deg, rgba(232,180,88,0.08), var(--surface)); }
+  .morph-option.deferred{ opacity:.62; }
+  .morph-option h5{ margin:0 0 6px 0; font-size:.98rem; }
+  .morph-option .tag{
+    display:inline-block; font-family:var(--mono); font-size:9.5px; letter-spacing:.07em; text-transform:uppercase;
+    padding:2px 7px; border-radius:10px; margin-bottom:8px;
+  }
+  .tag-a{ background: rgba(232,180,88,.16); color:var(--gold); border:1px solid var(--gold-dim); }
+  .tag-b{ background: rgba(255,255,255,.04); color:var(--muted); border:1px solid var(--border); }
+
+  .config-badges{ display:flex; flex-wrap:wrap; gap:16px; margin-top:44px; }
+  .config-badge{ flex:1; min-width:260px; border-radius:12px; padding:20px; }
+  .config-badge.a{ background: linear-gradient(135deg, rgba(232,180,88,.14), rgba(232,180,88,.02)); border:1px solid var(--gold); }
+  .config-badge.b{ background: var(--surface); border:1px solid var(--border); opacity:.7; }
+  .config-badge h4{ margin:0 0 8px 0; font-family:var(--mono); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+  .config-badge.a h4{ color:var(--gold); }
+  .config-badge.b h4{ color:var(--muted); }
+  .config-badge p{ margin:0; font-size:.92rem; color:var(--text); }
+  .config-badge.b p{ color:var(--muted); }
+  .config-badge .verdict{ margin-top:10px; font-size:.8rem; font-family:var(--mono); }
+  .config-badge.a .verdict{ color:var(--gold); }
+  .config-badge.b .verdict{ color:var(--muted2); }
+
+  .tension-note{
+    margin-top:28px; font-size:.88rem; color:var(--muted); border-left:3px solid var(--blue-hat);
+    padding:12px 16px; background:var(--surface); border-radius:0 8px 8px 0;
+  }
+  .tension-note b{ color:var(--text); }
+
+  /* ===== SYNTHESIS ===== */
+  .synth-list{ counter-reset: synth; display:flex; flex-direction:column; gap:0; margin-top:10px; }
+  .synth-item{
+    position:relative; padding: 26px 0 26px 62px; border-top:1px solid var(--border);
+  }
+  .synth-item:first-child{ border-top:none; }
+  .synth-item::before{
+    counter-increment: synth; content: counter(synth);
+    position:absolute; left:0; top:26px; width:40px; height:40px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700;
+    background: var(--surface2); border:1px solid var(--gold-dim); color:var(--gold);
+  }
+  .synth-item p{ margin:0; font-size:1.0rem; }
+  .synth-item .synth-sub{ color:var(--muted); font-size:.86rem; margin-top:6px; }
+
+  .decision-plaque{
+    margin-top:64px; text-align:center; padding: 46px 30px; border-radius:18px;
+    background: radial-gradient(600px 300px at 50% 0%, rgba(232,180,88,.16), transparent 70%), var(--surface);
+    border:1px solid var(--gold);
+  }
+  .decision-plaque .dp-kicker{ font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); }
+  .decision-plaque h3{ font-size: clamp(1.4rem,3vw,2rem); margin:14px 0 10px; }
+  .decision-plaque p{ color:var(--muted); max-width:600px; margin: 0 auto; }
+  .decision-plaque .quote{
+    margin-top:22px; font-style:italic; color:var(--text); font-size:.95rem; opacity:.85;
+  }
+
+  .future-row{ display:flex; flex-wrap:wrap; gap:14px; margin-top:34px; justify-content:center; }
+  .future-chip{
+    border:1px dashed var(--border); border-radius:10px; padding:14px 18px; max-width:260px; font-size:.85rem; color:var(--muted);
+    background:var(--surface);
+  }
+  .future-chip b{ display:block; color:var(--text); font-size:.88rem; margin-bottom:4px; }
+
+  footer{
+    padding: 60px 0 90px; text-align:center; color:var(--muted2); font-family:var(--mono); font-size:11.5px;
+  }
+  footer .meta-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:14px; }
+  footer .meta-row span{ border:1px solid var(--border); padding:5px 10px; border-radius:14px; }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<nav id="sidenav">
+  <a href="#hero" data-label="Start"><span class="label">Start</span></a>
+  <a href="#storming" data-label="Question Storming"><span class="label">Question Storming</span></a>
+  <a href="#hats" data-label="Six Thinking Hats"><span class="label">Six Thinking Hats</span></a>
+  <a href="#morph" data-label="Morphological Analysis"><span class="label">Morphological Analysis</span></a>
+  <a href="#synthesis" data-label="Synthesis"><span class="label">Synthesis</span></a>
+</nav>
+
+<header class="hero" id="hero">
+  <svg class="hero-waves" viewBox="0 0 1000 300" preserveAspectRatio="none">
+    <path d="M0,220 C150,180 300,260 450,210 C600,160 750,240 1000,190 L1000,300 L0,300 Z" fill="rgba(77,143,220,0.08)"/>
+    <path d="M0,250 C180,210 320,280 500,240 C680,200 820,260 1000,220 L1000,300 L0,300 Z" fill="rgba(232,180,88,0.06)"/>
+  </svg>
+  <div class="wrap hero-inner">
+    <div class="eyebrow"><span class="dot"></span> BMAD Brainstorming Session · 2026‑09‑02 · Facilitator: Winston</div>
+    <h1 class="title">The Watermark Line</h1>
+    <p class="lede">A smart plug import that used to hold its breath for minutes over a few new rows of data — and a session spent teaching it to remember what it has already seen, so it only ever has to look at what's new.</p>
+    <div class="hero-meta">
+      <span>Topic: Eve Home xlsx / full-history imports</span>
+      <span>Goal: 14–30 day deltas in minutes, Azure SQL Basic DTU</span>
+      <span>Techniques: 3</span>
+      <span>Status: complete</span>
+    </div>
+  </div>
+  <div class="scroll-cue">SCROLL</div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ QUESTION STORMING ============ -->
+<section id="storming">
+  <div class="kicker">Technique 1 · Question Storming (Deep)</div>
+  <h2 class="sec-title">Asking why the clock keeps running</h2>
+  <p class="sec-intro">The session opened not with answers but with a chain of "why" — each question pulling the next one out from underneath it, tracing the import's slowness back to a single missing idea: <em>the system doesn't remember what it already knows.</em></p>
+
+  <div class="watermark-rail reveal">
+    <svg viewBox="0 0 1000 36" preserveAspectRatio="none">
+      <path d="M0,20 C120,10 260,28 400,18 C540,8 680,26 820,16 C900,10 960,18 1000,14" fill="none" stroke="#e8b458" stroke-width="1.5" stroke-dasharray="4 5" opacity="0.7"/>
+    </svg>
+    <div class="wm-label">already imported ⟶ still unknown</div>
+  </div>
+
+  <div class="qchain">
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">Why does it take so long for just a few additional days of new data?</div></div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">Why isn't the import smart about detecting which data is already known / unchanged?</div></div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">What would "remembering the last imported data point" need to look like — a timestamp, a hash, a row id — and where would that memory live?</div></div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">Why does the import not remember the last timestamp <em>and value</em>, to detect what's actually new?</div>
+      <div class="insight-card"><span class="tag">Insight</span>Storing <b>(timestamp, value)</b> pairs as the watermark — not just a timestamp — makes silent corrections to already‑imported rows discoverable: the value differs at a timestamp the system thought it already knew.</div>
+    </div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">Why not read just the first rows / header to extract the recorded Eve device name and match it against known Power Points, before processing everything for nothing?</div>
+      <div class="idea-card"><span class="tag">Idea</span>Upload flow: drop file → system auto‑detects / prefills the target Power Point from the device name → user gives a final confirm to trigger import. No confident prefill? User picks the Power Point (or creates one) before import proceeds.</div>
+      <div class="insight-card"><span class="tag">Insight</span>Power Point mapping itself becomes the guard against name collisions and renames — ambiguous or unknown matches simply fall back to a manual choice, instead of needing separate collision‑detection logic.</div>
+    </div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">How do we write many rows in the fewest round‑trips, as fast as possible?</div></div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">How do we discover a partial / interrupted import, so we know a batch didn't leave data half‑written?</div></div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">How do we handle gaps and pauses in a data period — both ones present in the imported file, and ones already sitting in the database?</div>
+      <div class="insight-card"><span class="tag">Insight</span>DTU throttling on Azure SQL Basic is expected to just <i>slow</i> the import down, not crash it mid‑batch — so "partial write" risk is really about process interruption (timeout, restart, crash), not throttling itself.</div>
+    </div>
+    <div class="qitem reveal"><div class="qmark">?</div><div class="qtext">Where does the time actually go — file parsing, DB work, or Power Point association — and is that distribution even known or measured today?</div></div>
+  </div>
+
+  <div class="demo-box reveal">
+    <h4>Reverse‑parse with early stop, in miniature</h4>
+    <p class="demo-desc">Oldest reading on the left, newest on the right. The dashed line is the watermark — the last (timestamp, value) pair the system already trusts. Run the two strategies the session compared.</p>
+    <div class="timeline" id="timeline"></div>
+    <div class="legend">
+      <span><i style="background:#1b2531;border:1px solid #33465a;"></i> already known</span>
+      <span><i style="background:#241b12;border:1px solid #5a4726;"></i> new in file</span>
+      <span><i style="background:var(--green-hat);"></i> imported</span>
+      <span><i style="background:#2a3d33;border:1px solid var(--green-hat);"></i> re‑verified</span>
+    </div>
+    <div class="demo-controls">
+      <button class="primary" id="btnSmart">▶ Run smart import (reverse, early stop)</button>
+      <button id="btnFull">▶ Run full import (verify everything)</button>
+      <button id="btnResetDemo">↺ Reset</button>
+    </div>
+    <div class="demo-status" id="demoStatus">Idle — pick a strategy above.</div>
+  </div>
+</section>
+
+<!-- ============ SIX THINKING HATS ============ -->
+<section id="hats">
+  <div class="kicker">Technique 2 · Six Thinking Hats (Structured)</div>
+  <h2 class="sec-title">Six hats, one Eve xlsx file</h2>
+  <p class="sec-intro">The same import problem, turned over six times — facts, then feelings, then benefits, then risk, then wild ideas, then the priority call that closed the round.</p>
+
+  <div class="hats-flow reveal">
+    <div class="hf-item"><div class="hat-icon"><div class="brim" style="background:#d8dde1"></div><div class="crown" style="background:var(--white-hat);border:1px solid #cfd6db"></div></div><div class="hf-name">White</div></div>
+    <div class="hf-arrow">→</div>
+    <div class="hf-item"><div class="hat-icon"><div class="brim" style="background:#a83540"></div><div class="crown" style="background:var(--red-hat)"></div></div><div class="hf-name">Red</div></div>
+    <div class="hf-arrow">→</div>
+    <div class="hf-item"><div class="hat-icon"><div class="brim" style="background:#b8952e"></div><div class="crown" style="background:var(--yellow-hat)"></div></div><div class="hf-name">Yellow</div></div>
+    <div class="hf-arrow">→</div>
+    <div class="hf-item"><div class="hat-icon"><div class="brim" style="background:#000"></div><div class="crown" style="background:var(--black-hat);border:1px solid #444"></div></div><div class="hf-name">Black</div></div>
+    <div class="hf-arrow">→</div>
+    <div class="hf-item"><div class="hat-icon"><div class="brim" style="background:#2f7a4c"></div><div class="crown" style="background:var(--green-hat)"></div></div><div class="hf-name">Green</div></div>
+    <div class="hf-arrow">→</div>
+    <div class="hf-item"><div class="hat-icon"><div class="brim" style="background:#325f96"></div><div class="crown" style="background:var(--blue-hat)"></div></div><div class="hf-name">Blue</div></div>
+  </div>
+
+  <!-- WHITE -->
+  <div class="hat-panel reveal">
+    <div class="hat-side">
+      <div class="hat-icon lg"><div class="brim" style="background:#d8dde1"></div><div class="crown" style="background:var(--white-hat);border:1px solid #cfd6db"></div></div>
+      <h3 style="color:var(--white-hat)">White Hat</h3>
+      <div class="hat-role">Facts only — no interpretation</div>
+    </div>
+    <div class="hat-items">
+      <div class="hat-item" style="border-left-color:var(--white-hat)"><span class="tag" style="color:var(--white-hat)">Fact</span>Meross imports complete in a few seconds; Meross data is day‑granularity only.</div>
+      <div class="hat-item" style="border-left-color:var(--white-hat)"><span class="tag" style="color:var(--white-hat)">Fact</span>Eve files take ages by comparison; Eve data is 10‑minute‑interval granularity — significantly more rows.</div>
+      <div class="hat-item" style="border-left-color:var(--white-hat)"><span class="tag" style="color:var(--white-hat)">Fact</span>Normal use is continuous date‑range files with some overlap between successive imports.</div>
+      <div class="hat-item" style="border-left-color:var(--white-hat)"><span class="tag" style="color:var(--white-hat)">Fact</span>Typical Meross file is ~1–5&nbsp;KB; typical Eve file is over 1&nbsp;MB.</div>
+      <div class="hat-item" style="border-left-color:var(--white-hat)"><span class="tag" style="color:var(--white-hat)">Fact</span>User imports every 1–4 weeks, exports fresh data for <em>all</em> Meross and Eve plugs at once, and wants them all queued and imported as soon as possible.</div>
+    </div>
+  </div>
+
+  <!-- RED -->
+  <div class="hat-panel reveal">
+    <div class="hat-side">
+      <div class="hat-icon lg"><div class="brim" style="background:#a83540"></div><div class="crown" style="background:var(--red-hat)"></div></div>
+      <h3 style="color:var(--red-hat)">Red Hat</h3>
+      <div class="hat-role">Feelings — current and desired</div>
+    </div>
+    <div class="hat-items">
+      <div class="hat-item" style="border-left-color:var(--red-hat)"><span class="tag" style="color:var(--red-hat)">Feeling — today</span>Dread and anxiety that the Eve import will fail, hang, or take ages unless babysat. Today it demands supervision.</div>
+      <div class="hat-item" style="border-left-color:var(--red-hat)"><span class="tag" style="color:var(--red-hat)">Feeling — goal</span>Fire‑and‑forget: upload the file, confirm the Power Point, walk away, and check the Trend History page within the hour to see it done. No need for instant confirmation — just trustworthy, eventual completion.</div>
+    </div>
+  </div>
+
+  <!-- YELLOW -->
+  <div class="hat-panel reveal">
+    <div class="hat-side">
+      <div class="hat-icon lg"><div class="brim" style="background:#b8952e"></div><div class="crown" style="background:var(--yellow-hat)"></div></div>
+      <h3 style="color:var(--yellow-hat)">Yellow Hat</h3>
+      <div class="hat-role">Benefits — why it's worth fixing</div>
+    </div>
+    <div class="hat-items">
+      <div class="hat-item" style="border-left-color:var(--yellow-hat)"><span class="tag" style="color:var(--yellow-hat)">Benefit</span>Trust in the software's import correctness — and actually being able to use the Trend History page. Today's slowness and uncertainty quietly make it feel unreliable, even not worth checking.</div>
+      <div class="hat-item" style="border-left-color:var(--yellow-hat)"><span class="tag" style="color:var(--yellow-hat)">Benefit</span>No more manually double‑checking Eve values after import, no more re‑running the same import "just to be sure" — a real, current coping habit that a trustworthy import would finally retire.</div>
+    </div>
+  </div>
+
+  <!-- BLACK -->
+  <div class="hat-panel reveal">
+    <div class="hat-side">
+      <div class="hat-icon lg"><div class="brim" style="background:#000"></div><div class="crown" style="background:var(--black-hat);border:1px solid #444"></div></div>
+      <h3 style="color:#c7cdd2">Black Hat</h3>
+      <div class="hat-role">Risk — what could go wrong</div>
+    </div>
+    <div class="hat-items">
+      <div class="hat-item" style="border-left-color:#888"><span class="tag" style="color:#c7cdd2">Risk</span>A device reset (plug reset, replaced, reconfigured) not correctly identified as such — mangling with existing data instead of being treated as a distinct new segment.</div>
+      <div class="hat-item" style="border-left-color:#888"><span class="tag" style="color:#c7cdd2">Risk detail</span>The failure mode is <b>silent</b>: only noticed much later by comparing totals, unless the corruption is dramatic enough to spot by eye. The worst case is a small, quiet, undetected error — not a loud crash.</div>
+      <div class="hat-item" style="border-left-color:#888"><span class="tag" style="color:#c7cdd2">Risk</span>Confident‑but‑wrong auto‑mapping contaminates the wrong Power Point with foreign readings — hard to untangle. Recovery needs either deleting a data period to undo an import, or a full clear‑and‑re‑import hammer for that Power Point.</div>
+    </div>
+  </div>
+
+  <!-- GREEN -->
+  <div class="hat-panel reveal">
+    <div class="hat-side">
+      <div class="hat-icon lg"><div class="brim" style="background:#2f7a4c"></div><div class="crown" style="background:var(--green-hat)"></div></div>
+      <h3 style="color:var(--green-hat)">Green Hat</h3>
+      <div class="hat-role">Wild ideas — creative leaps</div>
+    </div>
+    <div class="hat-items">
+      <div class="hat-item" style="border-left-color:var(--green-hat)"><span class="tag" style="color:var(--green-hat)">Wild idea</span>Pattern‑plausibility check on import — compare the newly imported usage pattern (e.g. a characteristic morning hike) against existing history for that Power Point. A mismatch signals a wrong mapping or a device swap — flagged, not silently accepted.
+        <div style="margin-top:8px;font-size:.85rem;color:var(--muted)"><b style="color:var(--text)">Decision:</b> a plausibility mismatch is a <em>dismissible warning</em>, not a hard block on the import.</div>
+      </div>
+      <div class="hat-item" style="border-left-color:var(--green-hat)"><span class="tag" style="color:var(--green-hat)">Wild idea</span>Rethink the storage grain itself — do we need one row per reading value, or could higher‑granularity data (Eve's 10‑minute intervals) be batched or packed, e.g. a JSON payload per period, instead of forcing every source's native granularity into identical per‑value rows?</div>
+      <div class="hat-item" style="border-left-color:var(--green-hat)"><span class="tag" style="color:var(--green-hat)">Question raised</span>If sources genuinely differ in native granularity (Meross daily, Eve 10‑minute), should storage and processing grain adapt per source, rather than normalizing everything to one fixed row‑per‑value shape?</div>
+    </div>
+  </div>
+
+  <!-- BLUE -->
+  <div class="hat-panel reveal">
+    <div class="hat-side">
+      <div class="hat-icon lg"><div class="brim" style="background:#325f96"></div><div class="crown" style="background:var(--blue-hat)"></div></div>
+      <h3 style="color:var(--blue-hat)">Blue Hat</h3>
+      <div class="hat-role">Process — priority and control</div>
+    </div>
+    <div class="hat-items">
+      <div class="hat-item" style="border-left-color:var(--blue-hat)"><span class="tag" style="color:var(--blue-hat)">Priority</span>Timestamp+value watermark (delta detection), mapping‑first UX, and bulk‑write speed are the top‑priority items. The dismissible plausibility warning is lowest priority.</div>
+      <div class="hat-item" style="border-left-color:var(--blue-hat)"><span class="tag" style="color:var(--blue-hat)">Decision</span>The storage‑grain rethink is treated as a separate, riskier exploratory track — high design impact, potentially high gain — pursued on its own merits, not bundled into the core bulk‑write work, and allowed to "die" there if it doesn't prove significant enough.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MORPHOLOGICAL ANALYSIS ============ -->
+<section id="morph">
+  <div class="kicker">Technique 3 · Morphological Analysis (facilitator‑chosen)</div>
+  <h2 class="sec-title">Three independent knobs, two full builds</h2>
+  <p class="sec-intro">Winston picked Morphological Analysis because the problem naturally splits into independent parameters: <em>how</em> we detect what's new, <em>how</em> we map a file to a Power Point, and <em>how</em> we write the resulting rows. Combine one option from each column, and a coherent configuration falls out.</p>
+
+  <div class="morph-grid reveal">
+    <div class="morph-thread-line"></div>
+    <div class="morph-node" style="left:16.6667%"></div>
+    <div class="morph-node" style="left:50%"></div>
+    <div class="morph-node" style="left:83.3333%"></div>
+
+    <div class="morph-col">
+      <h4>Delta Detection</h4>
+      <div class="morph-option chosen"><span class="tag tag-a">Configuration A</span><h5>Reverse‑parse, early stop</h5><p>Parse most‑recent → oldest, stop at the first already‑known entry. User‑configurable: "smart import" (early stop) vs "full import" (parse everything — e.g. to catch corrections).</p></div>
+      <div class="morph-option deferred"><span class="tag tag-b">Configuration B</span><h5>Gap / interval inference</h5><p>If a time period sits between two already‑known periods with no gap, infer it's already imported without checking each row individually.</p></div>
+    </div>
+
+    <div class="morph-col">
+      <h4>Mapping</h4>
+      <div class="morph-option chosen"><span class="tag tag-a">Configuration A</span><h5>In‑file device name matching</h5><p>Read the recorded Eve device name from the file itself and match it against known Power Points before processing the rest — the baseline mapping‑first idea from Question Storming.</p></div>
+      <div class="morph-option deferred"><span class="tag tag-b">Configuration B</span><h5>Filename‑pattern‑history matching</h5><p>Filenames are stable except for an embedded export‑date segment — strip the date, match the remaining pattern against previously‑confirmed imports for a cheap same‑room/same‑device signal.</p></div>
+    </div>
+
+    <div class="morph-col">
+      <h4>Bulk‑Write</h4>
+      <div class="morph-option chosen"><span class="tag tag-a">Configuration A</span><h5>Bulk‑library writes</h5><p>A non‑EF‑Core bulk library (EFCore.BulkExtensions‑style) for fast batched writes — EF‑adjacent, mostly inside the existing stack.</p></div>
+      <div class="morph-option deferred"><span class="tag tag-b">Configuration B</span><h5>Provider‑native SQL</h5><p>Go provider‑specific (Postgres COPY, SQL Server native bulk mechanisms) to squeeze maximum throughput per engine, rather than staying in the portable relational subset.</p></div>
+    </div>
+  </div>
+
+  <div class="config-badges reveal">
+    <div class="config-badge a">
+      <h4>★ Configuration A — chosen</h4>
+      <p>Reverse‑parse‑with‑early‑stop + in‑file device name matching + bulk‑library writes — the "fast, mostly‑in‑existing‑stack" combination.</p>
+      <div class="verdict">Session preference: Configuration A wins. The user closed the session with this as the preferred direction.</div>
+    </div>
+    <div class="config-badge b">
+      <h4>Configuration B — not chosen</h4>
+      <p>Gap‑inference + filename‑pattern‑history matching + provider‑native SQL bulk writes — the "aggressive, historically‑informed, higher‑risk/higher‑throughput" combination.</p>
+      <div class="verdict">Kept on record, not pursued for v1.</div>
+    </div>
+  </div>
+
+  <div class="tension-note reveal">
+    <b>Tension noted for later:</b> provider‑native bulk‑write options sit against AD‑2's "one shared DbContext, portable subset only" rule. If ever pursued, it would need isolating behind the existing config‑driven adapter‑selection pattern (the same way the DB provider itself is chosen) rather than branching inline.
+  </div>
+</section>
+
+<!-- ============ SYNTHESIS ============ -->
+<section id="synthesis">
+  <div class="kicker">Synthesis</div>
+  <h2 class="sec-title">Where the threads converge</h2>
+  <p class="sec-intro">Five closing insights tie the three techniques back together — question storming's instincts, the six hats' tensions, and the morphological grid's chosen combination all land on the same conclusion.</p>
+
+  <div class="synth-list">
+    <div class="synth-item reveal">
+      <p>The chosen direction is <b>Configuration A</b> — reverse‑parse‑early‑stop + in‑file device name mapping + bulk‑library writes — as the conservative v1 core.</p>
+      <div class="synth-sub">Provider‑native SQL and the storage‑grain rethink are deliberately deferred as separate, independently‑justified tracks.</div>
+    </div>
+    <div class="synth-item reveal">
+      <p>The smart / full‑import toggle doubles as the audit mechanism for the device‑reset and silent‑corruption risk.</p>
+      <div class="synth-sub">No separate machinery needed — just a deliberate, user‑triggerable "full import" path.</div>
+    </div>
+    <div class="synth-item reveal">
+      <p>Filename‑pattern‑history matching and the pattern‑plausibility warning are the same underlying idea, expressed two ways: <em>does this data actually belong here?</em></p>
+      <div class="synth-sub">Candidates to merge into one confidence‑signal feature in a later pass, rather than building both separately.</div>
+    </div>
+    <div class="synth-item reveal">
+      <p>Idempotent re‑import — today's coping habit — becomes near‑free under reverse‑parse‑early‑stop plus the watermark.</p>
+      <div class="synth-sub">The habit survives, but turns from slow reassurance into fast reassurance.</div>
+    </div>
+    <div class="synth-item reveal">
+      <p>"Few minutes" (Azure SQL Basic DTU / cost headroom) and "check back within the hour" (fire‑and‑forget patience threshold) are two distinct requirements, not one.</p>
+      <div class="synth-sub">Keep them separate in downstream NFR and architecture docs.</div>
+    </div>
+  </div>
+
+  <div class="decision-plaque reveal">
+    <div class="dp-kicker">Decided direction · v1</div>
+    <h3>Configuration A</h3>
+    <p>Reverse‑parse‑with‑early‑stop (delta detection) + in‑file device name matching (mapping) + bulk‑library writes (bulk‑write speed).</p>
+    <div class="quote">"User is wrapping up the session with this as the preferred direction."</div>
+  </div>
+
+  <div class="future-row reveal">
+    <div class="future-chip"><b>Provider‑native SQL bulk writes</b>Deferred — tension with the shared‑DbContext / portable‑subset rule; lives on in Configuration B.</div>
+    <div class="future-chip"><b>Storage‑grain rethink</b>Separate exploratory track — high design impact, potentially high gain, evaluated on its own merits. Allowed to "die" if it doesn't prove out.</div>
+    <div class="future-chip"><b>Pattern‑plausibility warning</b>Lowest priority — dismissible, non‑blocking, and a likely future merge with filename‑pattern‑history matching.</div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>BMad Brainstorming Session · High‑efficient Smart Plug file import redesign</div>
+    <div class="meta-row">
+      <span>Mode: Facilitator (Winston)</span>
+      <span>Question Storming → Six Thinking Hats → Morphological Analysis</span>
+      <span>Status: complete</span>
+      <span>Updated: 2026‑09‑02T23:19</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // progress bar
+  var progress = document.getElementById('progress');
+  function onScroll(){
+    var h = document.documentElement;
+    var scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+    progress.style.width = scrolled + '%';
+  }
+  document.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // reveal on scroll
+  var revealEls = document.querySelectorAll('.reveal');
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    revealEls.forEach(function(el){ io.observe(el); });
+  } else {
+    revealEls.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  // sidenav active state
+  var navLinks = document.querySelectorAll('#sidenav a');
+  var sections = Array.prototype.map.call(navLinks, function(a){ return document.querySelector(a.getAttribute('href')); });
+  function onNavScroll(){
+    var pos = window.scrollY + window.innerHeight/2;
+    var activeIdx = 0;
+    sections.forEach(function(s, i){ if(s && s.offsetTop <= pos) activeIdx = i; });
+    navLinks.forEach(function(a,i){ a.classList.toggle('active', i===activeIdx); });
+  }
+  document.addEventListener('scroll', onNavScroll, { passive:true });
+  onNavScroll();
+
+  // ===== timeline demo =====
+  var TOTAL = 16, KNOWN_COUNT = 9; // indices 0..8 known, 9..15 new
+  var timelineEl = document.getElementById('timeline');
+  var statusEl = document.getElementById('demoStatus');
+  var dots = [];
+  var running = false;
+
+  function buildTimeline(){
+    timelineEl.innerHTML = '';
+    dots = [];
+    for(var i=0;i<TOTAL;i++){
+      var d = document.createElement('div');
+      d.className = 'dot ' + (i < KNOWN_COUNT ? 'known' : 'new');
+      timelineEl.appendChild(d);
+      dots.push(d);
+      if(i === KNOWN_COUNT - 1){
+        var wm = document.createElement('div');
+        wm.className = 'wm-divider';
+        wm.style.left = (d.offsetLeft + d.offsetWidth + 3.5) + 'px';
+        timelineEl.appendChild(wm);
+      }
+    }
+  }
+  buildTimeline();
+  window.addEventListener('resize', function(){
+    // reposition watermark divider only
+    var wm = timelineEl.querySelector('.wm-divider');
+    if(wm && dots[KNOWN_COUNT-1]) wm.style.left = (dots[KNOWN_COUNT-1].offsetLeft + dots[KNOWN_COUNT-1].offsetWidth + 3.5) + 'px';
+  });
+
+  function resetDots(){
+    dots.forEach(function(d,i){
+      d.className = 'dot ' + (i < KNOWN_COUNT ? 'known' : 'new');
+    });
+  }
+
+  function setStatus(msg){ statusEl.textContent = msg; }
+
+  function runSmart(){
+    if(running) return; running = true;
+    resetDots();
+    setStatus('Scanning newest → oldest…');
+    var i = TOTAL - 1;
+    var touched = 0;
+    var timer = setInterval(function(){
+      if(i < 0 || i < KNOWN_COUNT - 1){
+        clearInterval(timer); running = false;
+        setStatus('Stopped at the watermark — ' + touched + ' new row(s) written, ' + (KNOWN_COUNT) + ' already‑known rows never touched.');
+        return;
+      }
+      if(i >= KNOWN_COUNT){
+        dots[i].classList.add('checked');
+        dots[i].classList.remove('new');
+        touched++;
+        setStatus('Row ' + (i+1) + ' of ' + TOTAL + ' — new, importing… (' + touched + ' written so far)');
+      } else {
+        dots[i].classList.add('cursor');
+        setTimeout(function(){ }, 0);
+        clearInterval(timer); running = false;
+        setStatus('Hit an already‑known (timestamp, value) pair — early stop. ' + touched + ' new row(s) written, ' + KNOWN_COUNT + ' old rows never touched.');
+      }
+      i--;
+    }, 220);
+  }
+
+  function runFull(){
+    if(running) return; running = true;
+    resetDots();
+    setStatus('Full import: verifying every row, oldest → newest…');
+    var i = 0;
+    var written = 0, verified = 0;
+    var timer = setInterval(function(){
+      if(i >= TOTAL){
+        clearInterval(timer); running = false;
+        setStatus('Done — ' + verified + ' row(s) re‑verified (no change), ' + written + ' new row(s) written. Useful for catching silent corrections, but touches everything.');
+        return;
+      }
+      if(i < KNOWN_COUNT){
+        dots[i].classList.add('verified');
+        verified++;
+      } else {
+        dots[i].classList.add('checked');
+        dots[i].classList.remove('new');
+        written++;
+      }
+      setStatus('Row ' + (i+1) + ' of ' + TOTAL + ' checked…');
+      i++;
+    }, 130);
+  }
+
+  document.getElementById('btnSmart').addEventListener('click', runSmart);
+  document.getElementById('btnFull').addEventListener('click', runFull);
+  document.getElementById('btnResetDemo').addEventListener('click', function(){
+    running = false; resetDots(); setStatus('Idle — pick a strategy above.');
+  });
+})();
+</script>
+
+</body>
+</html>

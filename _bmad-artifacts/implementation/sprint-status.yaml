@@ -1,5 +1,108 @@
 # generated: 2026-08-09
-# last_updated: 2026-08-30
+# last_updated: 2026-09-04
+# 2026-09-04: story 3-9-watermark-correction-detection-and-bulk-write-adoption implemented
+#   (dev-story) — status set to review. Both AD-22 (watermark correction detection) and AD-23
+#   (bulk-write adoption) fully implemented and tested against real Postgres AND real SQL Server
+#   (Testcontainers, both providers) — 456/456 tests green across the whole solution. Two rounds of
+#   mid-session escalation to Ralf were needed and resolved before proceeding: (1) Story 3.8's spike
+#   returned a split go/no-go verdict rather than this story's own Task 1 gate's required
+#   unambiguous "go" — Ralf chose a hand-written raw-SQL upsert for the AwaitingPowerPointMapping
+#   path Finding #2 blocked; (2) that choice needed provider-specific SQL text, conflicting with
+#   AD-2's "never branched on elsewhere" rule as written — Ralf chose a narrow, explicit AD-2
+#   amendment (documented in invariants-rules.md) over a weaker-atomicity portable alternative.
+#   Implementation then surfaced three further empirical findings beyond Story 3.8's spike coverage
+#   (within-batch match-key collisions throw and needed de-duplication; Postgres's CREATE INDEX
+#   CONCURRENTLY needed a new migration — AddSmartPlugReadingPowerPointIntervalStartUniqueConstraint,
+#   both provider projects — promoting the match-key unique index to a real constraint; a library
+#   schema-resolution quirk needed a CustomDestinationTableName workaround, Postgres-only), all
+#   confirmed via direct reproduction against real databases and resolved without further
+#   escalation. One item remains open for Ralf: AD-21's live Entra-auth connection-string
+#   re-verification against real Azure SQL couldn't run in this sandboxed session (no credentials,
+#   same gap Story 3.8 recorded) — only the Microsoft.Data.SqlClient version-resolution half (6.1.4)
+#   is confirmed. See the story file's own Dev Agent Record for full detail.
+# 2026-09-04: story 3-8-smart-plug-bulk-write-throughput-spike moved to review (dev-story) — real
+#   spike run completed against both the project's real Postgres and the real Azure SQL Basic
+#   instance (energytracker-prod-qvc6vfmtp5-sql). Results doc written at
+#   _bmad-artifacts/implementation/spike-results/3-8-bulk-write-throughput-spike-results.md: go
+#   for AD-23's [PowerPointId, IntervalStart] match-key path (with a PropertiesToExcludeOnUpdate
+#   correction), no-go as specified for the [HouseholdId, IntervalStart] path (fails on both real
+#   providers), recommended NFR1 Tier 3 = 15 minutes (cross-referenced into deferred.md). Story 3.9
+#   is gated on this go/no-go verdict per its own header note.
+# 2026-09-03: story 3-8-smart-plug-bulk-write-throughput-spike started (dev-story) — status set to
+#   in-progress. Harness project (spikes/3-8-bulk-write-throughput/) built and smoke-tested
+#   end-to-end against throwaway local Postgres/SQL Server containers, surfacing two real findings
+#   (see the story's Dev Agent Record / harness README.md). Actual spike run against the real
+#   Azure SQL Basic + project Postgres instances still pending — deferred to Ralf per his own
+#   choice (open DTU-tier-bump/timing question named in the story's Dev Notes).
+# 2026-09-03: story 1-11-azure-sql-entra-id-only-authentication moved to done — post-review fixes
+#   now verified stable in production. Code review (PR #35) fixed the grant script's object-ID
+#   instruction (already known live-broken, Msg 33130) and deduped infra-deploy.yml's env: blocks.
+#   PR #35's own merge then surfaced a real production break: main.bicep redeploys on every push to
+#   infra/**, and Azure SQL rejects any server write carrying administratorLogin/
+#   administratorLoginPassword once azureADOnlyAuthentication: true is live — breaking every future
+#   infra deploy, not just Entra-related ones. Fixed in two follow-up PRs: #36 omitted those
+#   properties when azureADOnlyAuthenticationEnabled is true; #37 corrected the fix once a routine
+#   push-triggered run failed identically (infra-deploy.yml always explicitly overrode that
+#   parameter to false) — the real fix was flipping the default to true everywhere
+#   (main.bicepparam and the workflow), since Deploy B has permanently landed for this environment.
+#   Final az deployment group what-if after PR #37 showed the sqlServer resource as a true
+#   NoChange. epic-1 flipped back to done — all its stories (1.1-1.11) plus its retrospective are
+#   now complete, matching the reset-to-done pattern used after Stories 3.6/3.7/4.1.
+# 2026-09-03: story 1-11-azure-sql-entra-id-only-authentication implemented (dev-story) — status
+#   set to review. All 5 tasks complete, including Task 4 (the manual cutover), executed live
+#   against production (energy-tracker-rg) with Ralf's explicit confirmation at each
+#   production-affecting step: PR #33 (Entra Admin/connection-string changes, Deploy A) merged and
+#   verified; infra/sql/grant-entra-db-users.sql run against production as the Entra Admin
+#   (corrected mid-execution to use the identities' Entra display names, not their object IDs —
+#   CREATE USER ... FROM EXTERNAL PROVIDER resolves a managed identity by display name, confirmed
+#   empirically); Container App and CI (energy-tracker-devops-uami) connectivity both verified live
+#   via Entra auth; PR #34 (a workflow_dispatch input added to infra-deploy.yml so Deploy B could
+#   run without any human needing DATABASE_ADMIN_PASSWORD, which none of us has post-Deploy-A's
+#   connection-string rewrite) merged; Deploy B triggered and verified — azureAdOnlyAuthentication:
+#   true live on the server, Container App serving real traffic, SQL-password logins now rejected
+#   server-side. See the story file's own Dev Agent Record for full detail and command evidence.
+# 2026-09-03: stories 3-8-smart-plug-bulk-write-throughput-spike and
+#   3-9-watermark-correction-detection-and-bulk-write-adoption drafted (create-story) — both set to
+#   ready-for-dev, flipped from their prior backlog placeholder entries. Implements new architecture
+#   spine AD-22 (watermark corruption detection — extends the delta-detection watermark to carry
+#   KwhValue, not just IntervalStart; both parsers now include the exact boundary row instead of
+#   skipping it; the orchestration layer, not the parser, compares values and performs a narrow
+#   KwhValue-only update plus an IAuditCorrectionRecorder call on mismatch) and AD-23 (adopts
+#   EFCore.BulkExtensions — .Core+.SqlServer+.PostgreSql, 10.0.1 — via BulkInsertOrUpdateAsync to
+#   replace SmartPlugImportRepository.AddAsync's existing pre-check/fast-path/per-row-fallback
+#   machinery, branching the match-key between AD-20's two real unique indexes, explicitly carving
+#   out UpdateMappingAsync as untouched, requiring explicit transaction-wrapping for parent-row
+#   atomicity). Both ADs already fully specified and reviewer-gate-corrected in invariants-rules.md
+#   (2026-09-03 brainstorming/architecture session with Ralf) before these stories were drafted.
+#   Story 3.8 is a standalone technical spike (real Azure SQL Basic + real Postgres, dedicated
+#   disposable spike-only tables, never the live SmartPlugReading schema) measuring
+#   BulkInsertOrUpdateAsync throughput/cancellation-rollback at realistic scale (~120k-row
+#   single-device full-history, ~470k-row multi-device household baseline — both derived from real
+#   numbers in Stories 3.4/3.7, not arbitrary) and producing a written go/no-go recommendation plus
+#   a recommended NFR1 Tier-3 time budget, closing that long-deferred deferred.md item. Story 3.9
+#   (the AD-22/AD-23 implementation) is explicitly BLOCKED BY Story 3.8's own written "go"
+#   recommendation for its AD-23 tasks specifically (stated as a header note and restated in Dev
+#   Notes, not left to story-number ordering to imply) — its AD-22 tasks have no such dependency and
+#   may proceed independently. 3.9 deliberately does not fabricate 3.8's unmeasured throughput
+#   numbers or verdict. epic-3-smart-plug-import-baseline-sharpening.md's header Architecture line
+#   updated to add AD-11 (extended — Smart Plug KwhValue boundary corrections), AD-22, AD-23; new
+#   per-story sections appended after Story 3.7's. epic-3 was already in-progress — no epic status
+#   change needed. One genuinely open question left for Ralf (flagged in Story 3.8's own Dev Notes,
+#   not resolved with a recommended default): whether to request a temporary Azure SQL tier bump for
+#   the spike's Azure-SQL-side runs, and a preferred low-usage execution window, since the spike
+#   shares the live Basic-tier (5 DTU) SQL Server with real household traffic.
+# 2026-09-02: story 1-11-azure-sql-entra-id-only-authentication added under Epic 1 (Winston/
+#   bmad-architecture session with Ralf) implementing new architecture spine AD-21 (Azure SQL
+#   access via Microsoft Entra ID-only authentication). Cuts the production Azure SQL server over
+#   from SQL auth to Entra-only in two separate Bicep deploys with a manual, out-of-band DB-user
+#   grant script (infra/sql/grant-entra-db-users.sql, committed but never pipeline-automated, per
+#   Ralf's explicit direction) run in between — never one deploy, to avoid self-locking the server
+#   before the Container App/CI identities have contained database users. DATABASE_ADMIN_PASSWORD
+#   stays live as a break-glass fallback; retiring it is explicitly out of scope, a follow-up.
+#   docs/local-vs-azure-deltas.md gained a new D6 entry and infra/README.md a runbook section, both
+#   cross-referencing this story. epic-1 reopened from done to in-progress, matching the same
+#   reopen pattern already used for epic-3 (Stories 3.5-3.7) and epic-1 itself (Story 1.10) when a
+#   story is added after an epic's initial close-out.
 # 2026-08-30: story 4-2-per-plug-measured-data-view drafted (create-story) — status set to
 #   ready-for-dev. This is the Room -> Power Point -> Device tree Story 4.1 explicitly deferred
 #   (its own trend-history-page.tsx/meter-readings-card.tsx comments name this story and mark the
@@ -263,7 +366,17 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-08-30
+last_updated: 2026-09-05
+# 2026-09-05: story 3-9-watermark-correction-detection-and-bulk-write-adoption moved to done
+#   (adversarial code review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 3
+#   decision-needed (2 dismissed by Ralf, 1 converted to patch), 9 patch findings (all applied —
+#   see the story file's Review Findings and Change Log), 0 deferred, 3 dismissed. Highlight:
+#   EveHomeXlsxParser broke immediately after emitting the first row at the watermark boundary,
+#   silently losing a second DST-fold-duplicate row sharing the exact same IntervalStart (AC #7
+#   unreachable for Eve Home) — fixed and covered by a new regression test. Also moved the AD-22
+#   correction + its audit record into AddAsync's own transaction (previously committed
+#   independently before AddAsync ran). Full regression suite re-run against real Postgres AND SQL
+#   Server: 466/466 green (was 456/456; +10 new tests).
 # 2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to done (adversarial code
 #   review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 0 decision-needed, 6
 #   patch findings (all applied — see the story file's Review Findings and Change Log), 4 deferred
@@ -630,6 +743,7 @@ development_status:
   1-8-household-member-invitation: done
   1-9-room-power-point-device-management: done
   1-10-structure-editor-archived-item-visibility-toggle: done
+  1-11-azure-sql-entra-id-only-authentication: done
   epic-1-retrospective: done
 
   epic-2: done
@@ -644,7 +758,7 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: done
+  epic-3: in-progress
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
@@ -652,6 +766,8 @@ development_status:
   3-5-dual-entry-points-multi-file-import-queuing: done
   3-6-smart-plug-import-job-status-history: done
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
+  3-8-smart-plug-bulk-write-throughput-spike: review
+  3-9-watermark-correction-detection-and-bulk-write-adoption: done
   epic-3-retrospective: done
 
   epic-4: in-progress

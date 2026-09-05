@@ -287,3 +287,39 @@ So that a tree that's accumulated a lot of soft-deleted history doesn't stay clu
 **Given** the toggle
 **When** I leave and return to the management surface
 **Then** the toggle resets to its default (hide archived) — it does not persist across visits (e.g. no per-member or per-Household preference); resolved with Ralf 2026-08-23, during Story 1.10's creation, since no existing mechanism in this codebase persists an arbitrary UI-only preference and building one for a single boolean would be disproportionate
+
+## Story 1.11: Azure SQL Access via Microsoft Entra ID-Only Authentication
+
+As a platform operator,
+I want the production Azure SQL database to accept only Microsoft Entra ID authentication instead of SQL username/password,
+So that the Container App and CI no longer depend on a shared SQL password as a production credential (AD-21).
+
+**Acceptance Criteria:**
+
+**Given** the existing Azure SQL Server (`infra/modules/database-sqlserver.bicep`)
+**When** a Bicep deploy adds a Microsoft Entra Admin (inline `administrators` block) with `azureADOnlyAuthentication` omitted/`false`
+**Then** SQL authentication continues to work unchanged — this deploy is safe to run and re-run any time, on its own, with no other step required first (AD-21 Deploy A)
+
+**Given** that same deploy
+**When** it lands
+**Then** `database-sqlserver.bicep`'s `connectionString` output (Azure environment only) becomes `Authentication=Active Directory Managed Identity` (system-assigned, no `User Id`), and `infra/main.bicep`/`infra/modules/container-app.bicep` carry that string through to the Container App's `db-connection-string` secret / `ConnectionStrings__Default` unchanged
+
+**Given** `.github/workflows/app-deploy.yml`'s "Apply pending EF Core migrations" step
+**When** it builds the migration connection string
+**Then** it uses `Authentication=Active Directory Default;` (no `User Id`/`Password`), authenticating as `energy-tracker-devops-uami` via the `azure/login@v3` OIDC session the same job already establishes earlier (`DefaultAzureCredential`'s `AzureCliCredential` fallback) — the existing runner-IP firewall whitelist/retry/cleanup steps around it are unchanged
+
+**Given** `infra/sql/grant-entra-db-users.sql` (new, committed script, using placeholder tokens for the two identities' object IDs — never literal IDs from a live environment)
+**When** a human runs it by hand (`sqlcmd`/Azure Data Studio, authenticated as the Entra Admin) after Deploy A
+**Then** it creates a contained database user for the Container App's system-assigned identity (`db_datareader` + `db_datawriter`) and for `energy-tracker-devops-uami` (`db_datareader` + `db_datawriter` + `db_ddladmin`) — this step is manual and out of band, never wired into Bicep or a GitHub Actions step
+
+**Given** both database users have been created and verified able to connect (a Container App revision restart; a successful CI migration run or no-op `dotnet ef database update`)
+**When** a separate, deliberate Bicep deploy flips `azureADOnlyAuthentication: true`
+**Then** it ships only after that verification — never bundled into the same deploy/PR as the Entra Admin addition (AD-21 Deploy B); once flipped, SQL logins (including the original admin login) stop working entirely
+
+**Given** `DATABASE_ADMIN_PASSWORD` (GitHub secret) and the SQL admin login
+**When** this story's cutover completes
+**Then** both are left live and unretired, as a break-glass fallback for at least one full deploy cycle — retiring them requires a separate follow-up change to `database-sqlserver.bicep`/`main.bicepparam` (`administratorLoginPassword` is currently a required, non-optional `@secure()` parameter on every `infra-deploy.yml` run) and is explicitly out of scope for this story
+
+**Given** local self-host (`docker-compose.sqlserver.yml`)
+**When** inspected after this story
+**Then** it is unchanged — still a plain containerized SQL Server on `sa`/password, since Entra-only authentication is an Azure SQL Database feature that doesn't apply to it

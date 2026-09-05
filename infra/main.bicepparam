@@ -24,6 +24,30 @@ param oidcAuthority = readEnvironmentVariable('OIDC_AUTHORITY', '')
 param oidcClientId = readEnvironmentVariable('OIDC_CLIENT_ID', '')
 param oidcClientSecret = readEnvironmentVariable('OIDC_CLIENT_SECRET', '')
 
+// Story 1.11 (AD-21) — the Azure SQL Entra Admin is a human Entra ID account (the project
+// owner's own login/object ID/tenant ID), not a service identity. Like oidcAuthority/oidcClientId
+// above (non-secret, but identity-linked rather than a generic config value like
+// customDomainName below), these are read from environment variables, never checked-in literals.
+param entraAdminLogin = readEnvironmentVariable('AZURE_SQL_ENTRA_ADMIN_LOGIN', '')
+param entraAdminObjectId = readEnvironmentVariable('AZURE_SQL_ENTRA_ADMIN_OBJECT_ID', '')
+param entraAdminTenantId = readEnvironmentVariable('AZURE_SQL_ENTRA_ADMIN_TENANT_ID', '')
+
+// AD-21 "Deploy B" is permanently live for this environment as of 2026-09-03 — this is a
+// checked-in fact about energy-tracker-rg's actual state, not a routine config choice. Originally
+// this was deliberately left unset (defaulting to main.bicep's `false`) so Deploy A/B could never
+// accidentally collapse into one deploy; that concern only applied *before* the one-time cutover.
+// Once Deploy B actually lands, Azure SQL permanently rejects any server write that includes
+// administratorLogin/administratorLoginPassword (discovered live: "AadOnlyAuthenticationIsEnabled"
+// on the very next routine deploy) — database-sqlserver.bicep's admin-credential fields are
+// conditioned on this same param, so leaving it at `false` here would make every future deploy to
+// *this* environment fail, not just Entra-related ones. main.bicep's own default stays `false` —
+// that's still the correct bootstrap value for a brand-new environment's first Deploy A. Only a
+// full from-scratch SQL Server (re)creation in *this* environment (disaster recovery, region
+// move — docs/local-vs-azure-deltas.md#D6) needs this temporarily overridden back to `false` via
+// a one-off CLI/workflow_dispatch override, for that rebuild's own Deploy A, before setting it
+// back to `true` here once that rebuild's own Deploy B completes.
+param azureADOnlyAuthenticationEnabled = true
+
 // Pinned explicitly rather than left at the resource group's own location (germanywestcentral):
 // Postgres Flexible Server provisioning is subscription-restricted in that region at the time of
 // writing ("Provisioning is restricted in this region" — az postgres flexible-server list-skus).

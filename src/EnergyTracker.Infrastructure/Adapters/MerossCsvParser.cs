@@ -60,9 +60,12 @@ public partial class MerossCsvParser : ISmartPlugParser
             var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
             var dayEnd = dayStart.AddDays(1).AddTicks(-1);
 
-            // AC #3: filtered, not early-stopped — Meross's CSV row order carries no documented
-            // ordering guarantee (unlike Eve Home's), so every row must still be read.
-            if (watermark is not null && dayStart <= watermark)
+            // AD-22/AC #3: filtered, not early-stopped — Meross's CSV row order carries no
+            // documented ordering guarantee (unlike Eve Home's), so every row must still be read.
+            // The row exactly at the watermark's day is now included (not skipped) so the
+            // orchestration layer (ProcessSmartPlugImport) can compare its KwhValue against the
+            // stored value and detect a vendor-side correction.
+            if (watermark is not null && dayStart < watermark)
             {
                 continue;
             }

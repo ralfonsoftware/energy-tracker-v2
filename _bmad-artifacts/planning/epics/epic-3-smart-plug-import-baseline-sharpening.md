@@ -4,7 +4,7 @@ Adds Smart Plug data (Eve Home `.xlsx`, Meross `.csv`) as an optional, additive 
 
 **FRs covered:** FR-4 (amended 2026-08-26), FR-5, FR-24, FR-32 (added 2026-08-26)
 **NFRs:** NFR1 (Tier 3 async), NFR10 (no-silent-duplication on repeated writes)
-**Architecture:** AD-6 (extended 2026-08-26 — `BackgroundJobStatus.Queued`, lazy read-triggered retention sweep), AD-9, AD-10, AD-20
+**Architecture:** AD-6 (extended 2026-08-26 — `BackgroundJobStatus.Queued`, lazy read-triggered retention sweep), AD-9, AD-10, AD-11 (extended 2026-09-03 — Smart Plug reading `KwhValue` boundary-row corrections), AD-20, AD-22 (added 2026-09-03 — watermark corruption detection), AD-23 (added 2026-09-03 — bulk-write via EFCore.BulkExtensions)
 **UX-DRs:** UX-DR6 (gap-band reuse), UX-DR9 (amended — Smart Plug Import off the nav-adjacent Settings path), UX-DR12 (amended — dual icon entry points, one shared screen), UX-DR14 (extended — six Job Status states + empty state), UX-DR20 (entry icon button + multi-file queue), UX-DR21 (Job Status & History list), UX-DR22 (accessibility follow-up)
 
 ## Story 3.1: Smart Plug File Upload & Async Parsing
@@ -259,3 +259,100 @@ So that my Smart Plug data stays accurate and doesn't waste storage on dead rows
 - Per AD-7, this does not retroactively recompute any `SmartPlugImportGap`/`StatusSnapshot` rows already computed before this story ships — same "immutable history, correct from this point forward" discipline as Story 3.4's cleanup.
 - Out of scope: a second, unconfirmed finding from the same audit — two Power Points both named "Tür" in different Rooms in the audited household. Not folded into this story.
 - Open Question for whoever picks this up: `MapSmartPlugImportToPowerPoint.ExecuteAsync` marks an import `Completed` even when the fallback above still leaves genuinely-divergent rows unmapped (the AC #2 case) — should that surface as something other than a plain `Completed` status? Treated as a non-goal here (a new import-status value is a bigger, UX-touching change than this story's data-hygiene scope) unless Ralf says otherwise during dev-story activation.
+
+## Story 3.8: Smart Plug Bulk-Write Throughput Spike
+
+As the team responsible for shipping AD-23's `BulkInsertOrUpdateAsync` write path safely,
+I want to measure `EFCore.BulkExtensions`' real insert/upsert throughput and cancellation/rollback behavior against the project's own real Azure SQL Basic and Postgres databases, at realistic Smart Plug data scale, using dedicated disposable spike-only tables,
+So that AD-23's write path is adopted at full scale only once real numbers back the "should be faster" assumption, and the NFR1 Tier-3 time budget `deferred.md` is deliberately waiting on gets set from measured data instead of a guess.
+
+**Context (why this is needed):** AD-23 (2026-09-03 brainstorming/architecture session with Ralf) itself names a hard precondition before its `BulkInsertOrUpdateAsync` write path may ship broadly: a technical spike against the project's real Azure SQL Basic and Postgres databases, using dedicated disposable spike-only tables, never the live `SmartPlugReading` schema — verifying write throughput, that cancellation/transactional rollback still holds "no partial row survives cancellation," and that AD-23's required parent-row/reading-write transactional atomicity actually holds under a mid-write failure. Three `deferred.md` items are waiting specifically on this spike's findings: the still-undetermined **NFR1 Tier 3 concrete time budget** (explicitly deferred until this spike produces real numbers), the **device-swap gap** (explicitly out of scope for this spike), and the note that **AD-23's bulk-write contract is coupled to today's one-row-per-reading storage grain** (this spike's numbers are only valid for that grain). Sizing is derived, not arbitrary: Eve Home's single-device full-history export grew from 108,715 rows (2026-06-20) to 117,782 rows (2026-08-22) at ~143 rows/day — projecting to ~120,000 rows by this story's authoring date; the 2026-08-26 production audit behind Story 3.7 measured 467,787 total rows in one real household before its own duplicate cleanup — used here as the pre-existing-table scale a bulk write must still perform well against.
+
+**Acceptance Criteria:**
+
+**Given** this spike's own database objects
+**When** created
+**Then** they are dedicated, disposable, clearly-namespaced spike-only tables created in both the real, already-provisioned Azure SQL Basic database and the real, already-running Postgres database (not Testcontainers-ephemeral instances for either) — and no production code path or the live `SmartPlugReading`/`SmartPlugImport` schema is touched at all
+
+**Given** the spike tables' shape
+**When** designed
+**Then** they reproduce `SmartPlugReading`'s structurally relevant column types/widths and both of AD-23's real match-key unique indexes — `(PowerPointId, IntervalStart)` and the partial `(HouseholdId, IntervalStart) WHERE PowerPointId IS NULL` — plus a spike parent table mirroring `SmartPlugImport`'s FK relationship, so measured numbers reflect the real constraint-checking cost
+
+**Given** the derived sizing above
+**When** synthetic data is generated
+**Then** it includes a ~120,000-row single-device/first-full-import batch, a ~470,000-row pre-load baseline, a ~500-row typical-incremental-delta batch, and a ~5,000-row `PowerPointId IS NULL` batch — all synthetic, never copied from real household data
+
+**Given** insert-heavy scenarios (an empty table, and the ~470,000-row pre-loaded table)
+**When** `BulkInsertOrUpdateAsync` inserts the ~120,000-row batch into each
+**Then** elapsed time and rows/sec are measured and recorded, on both Postgres and SQL Server (Basic tier)
+
+**Given** update-heavy/upsert scenarios matching each of AD-23's two real match-key configurations
+**When** `BulkInsertOrUpdateAsync` re-submits a 100%-overlapping batch and a typical incremental delta via `[PowerPointId, IntervalStart]`, and an insert-then-resubmission via `[HouseholdId, IntervalStart]` scoped to `PowerPointId IS NULL`
+**Then** elapsed time and rows/sec are measured and recorded for each, on both providers, and it is explicitly confirmed the `PowerPointId IS NULL` match key never matches an already-mapped row sharing the same `(HouseholdId, IntervalStart)`
+
+**Given** a parent-row insert and a large `BulkInsertOrUpdateAsync` call wrapped in one explicit transaction
+**When** cancelled via `CancellationToken` partway through the bulk write
+**Then** it is verified, on both providers, that zero reading rows and zero parent rows from that batch survive — confirming both the "no partial row survives cancellation" invariant and the explicit-transaction atomicity claim hold under a real mid-write cancellation
+
+**Given** every scenario has run on both providers
+**When** this story concludes
+**Then** a written result (throughput table, cancellation/rollback finding, explicit go/no-go recommendation, and a recommended concrete NFR1 Tier-3 time budget derived from the measured numbers) is committed to `_bmad-artifacts/implementation/spike-results/3-8-bulk-write-throughput-spike-results.md`
+
+**Given** the spike has concluded
+**When** cleanup runs
+**Then** every spike-only table/object is dropped from both databases, verified via a schema query confirming zero `Spike_*` objects remain
+
+**Dev Notes / Open Questions:**
+- This spike deliberately runs against real databases, not Testcontainers — the whole point is measuring Azure SQL Basic tier's real 5-DTU throttling and real network latency, which an ephemeral local container cannot reproduce. A named, one-time exception to this project's normal Testcontainers-everywhere discipline.
+- A real operational caution: this shares the live Basic-tier (5 DTU) SQL Server with production traffic (only one Azure SQL Server instance exists at this project's scale) — run the Azure-SQL-side scenarios at a low-usage time and drop spike tables promptly between runs.
+- Open question for Ralf: whether to request a temporary Azure SQL tier bump for the duration of this spike's Azure-SQL-side runs, and whether there's a preferred low-usage execution window. Everything else is specified precisely enough to proceed without further confirmation.
+- Story 3.9 (the actual AD-22/AD-23 implementation) is explicitly blocked on this story's own written "go" recommendation — see 3.9's own header note and Dev Notes.
+
+## Story 3.9: Watermark Correction Detection & Bulk-Write Adoption
+
+**BLOCKED BY: Story 3.8.** This story's AD-23 tasks (bulk-write adoption) may not begin until Story 3.8 has been dev-agent-executed and its written result states a "go" recommendation. AD-22's tasks (watermark correction detection) have no such dependency and may proceed independently.
+
+As a Household member whose Smart Plug vendor occasionally revises an already-reported reading, and whose imports are growing large enough that write throughput and reliability now matter,
+I want revised historical values detected and safely corrected with a full audit trail, and new/incremental Smart Plug writes to use a proven, throughput-tested bulk-write path instead of today's per-row-fallback machinery,
+So that my data stays accurate without a silent, undetected correction slipping in, and large or repeated imports stay fast and reliable regardless of how much history has accumulated.
+
+**Context (why this is needed):** AD-22 and AD-23 (2026-09-03 brainstorming/architecture session with Ralf, both reviewed and corrected by a 4-pass reviewer gate before landing in the spine) close two related gaps in Epic 3's existing Smart Plug import machinery. AD-22: today's watermark (Story 3.4/AD-9/AD-20) only compares `IntervalStart` — if a vendor ever revises a `KwhValue` it already reported at an already-stored timestamp, nothing notices; the fix extends the watermark to also carry the stored `KwhValue`, has both parsers include (not skip) the exact boundary row, and moves the comparison/correction decision into the orchestration layer (`SmartPlugImportRepository`/`ProcessSmartPlugImport`) — never the parser, which cannot structurally call `IAuditCorrectionRecorder` (an early draft had the parser doing this; the reviewer gate caught it as structurally impossible). AD-23: `SmartPlugImportRepository.AddAsync`'s existing pre-check/fast-path/per-row-fallback machinery (built incrementally across Stories 3.4/3.7's review rounds) is replaced by one `BulkInsertOrUpdateAsync` call via `EFCore.BulkExtensions`, applied uniformly regardless of batch size, branching its match key between AD-20's two real unique indexes; `UpdateMappingAsync` is an explicit, named carve-out, untouched by this AD. The two ADs interact at one point: a boundary-row correction is excluded from whatever batch AD-23's bulk path handles — never re-inserted through it.
+
+**Acceptance Criteria:**
+
+**Given** `FindLatestReadingIntervalStartByPowerPointAsync`
+**When** its return shape is extended
+**Then** it returns the latest stored reading's `Id`, `IntervalStart`, and `KwhValue` together (a named triple), not `IntervalStart` alone
+
+**Given** `EveHomeXlsxParser`'s early-stop condition and `MerossCsvParser`'s per-row filter condition
+**When** changed
+**Then** each changes from `<= watermark` to `< watermark` — the row exactly at the watermark's `IntervalStart`/day is now read and included in the parsed result instead of excluded, with `ISmartPlugParser.Parse`'s own public signature unchanged
+
+**Given** a parsed result that includes a boundary row
+**When** `ProcessSmartPlugImport` compares its `KwhValue` to the resolved watermark's stored `KwhValue`
+**Then** an exact match drops the row (nothing to write); a divergent value performs a narrow, `KwhValue`-only update of the existing stored row plus an `IAuditCorrectionRecorder.RecordAsync` call — never touching `RoomName`/`PowerPointName`/`DeviceName` (AD-10) — and either way the row is excluded from whatever path handles genuinely new rows
+
+**Given** more than one row shares the exact watermark `IntervalStart` (a DST-fold case)
+**When** resolved
+**Then** the first-encountered row in parse order is treated as the boundary row, every other row sharing that `IntervalStart` is also dropped with a distinguishing log entry, and at most one correction attempt is made
+
+**Given** Story 3.8 has returned a "go" recommendation
+**When** `SmartPlugImportRepository.AddAsync` is rewritten
+**Then** its existing pre-check/fast-path/per-row-fallback machinery is replaced by one `BulkInsertOrUpdateAsync` call, applied uniformly regardless of batch size, with `PropertiesToExclude=[Id]` and `UpdateByProperties` branching between AD-20's two real unique indexes on the same condition `ProcessSmartPlugImport` already branches on
+
+**Given** the parent `SmartPlugImport` row and its readings' bulk write
+**When** persisted
+**Then** both are wrapped in one explicit database transaction, since `BulkInsertOrUpdateAsync` does not participate in `SaveChangesAsync`'s pipeline
+
+**Given** `UpdateMappingAsync`
+**When** this story ships
+**Then** it is left completely untouched, with an explicit code comment stating why (small/bounded re-tagging volume, not a bulk insert-or-upsert-by-content decision)
+
+**Given** the new `EFCore.BulkExtensions.SqlServer` dependency forces `Microsoft.Data.SqlClient` past AD-21's currently-verified version
+**When** the package is added
+**Then** the actual resolved version is re-verified against the build lockfile and AD-21's Entra-auth connection-string modes are confirmed to still work, never assumed
+
+**Dev Notes / Open Questions:**
+- This story is genuinely blocked on Story 3.8's real output. No spike numbers exist yet at the time this story was drafted — its exact throughput figures, go/no-go verdict, and recommended NFR1 Tier-3 budget are deliberately not fabricated here. Whoever picks this up must read Story 3.8's actual written result before writing any AD-23 code.
+- The device-swap gap and the storage-grain dependency (`deferred.md`) are both explicitly out of scope for this story, same as they were for Story 3.8.
+- No settings/UI surface, no retroactive re-detection of gaps/Status against corrected readings (AD-7 discipline, same as every prior Epic 3 cleanup story).

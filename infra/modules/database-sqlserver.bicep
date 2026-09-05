@@ -23,13 +23,66 @@ param skuTier string = 'Basic'
 @description('Max database size in bytes. Basic tier caps at 2 GB (2147483648); raise this if skuName/skuTier move to a Standard/Premium tier with more headroom.')
 param maxSizeBytes int = 2147483648
 
+@description('Microsoft Entra ID login (UPN) of the SQL Server Entra Admin — a human Entra ID account (the project owner), never a service identity (AD-21). Sourced from an environment variable in main.bicepparam, never a committed literal.')
+param entraAdminLogin string
+
+@description('Microsoft Entra ID object ID (GUID) of the SQL Server Entra Admin principal (AD-21).')
+param entraAdminObjectId string
+
+@description('Microsoft Entra ID tenant ID (GUID) the Entra Admin principal belongs to (AD-21).')
+param entraAdminTenantId string
+
+@description('AD-21 "Deploy B": whether Azure SQL accepts only Microsoft Entra ID authentication. Must default to false and only flip to true on its own, separate deploy — never bundled with a deploy that first adds/changes the administrators block below. See infra/README.md\'s Entra-only auth cutover runbook.')
+param azureADOnlyAuthenticationEnabled bool = false
+
 resource sqlServer 'Microsoft.Sql/servers@2025-01-01' = {
   name: name
   location: location
+  // AD-21: administratorLogin/administratorLoginPassword are only included in the PUT body while
+  // azureADOnlyAuthenticationEnabled is false. Discovered live (2026-09-03, first infra-deploy.yml
+  // run after Deploy B): once azureADOnlyAuthentication: true is active, Azure SQL rejects *any*
+  // server write that includes these two properties at all — even resending the same unchanged
+  // values — with "AadOnlyAuthenticationIsEnabled". Omitting them post-cutover does not clear the
+  // password Azure SQL already has on file (it's a set-if-provided, write-only credential field);
+  // AC #6's break-glass password stays exactly as it was at the moment Deploy B ran, just no
+  // longer reassertable via IaC unless azureADOnlyAuthenticationEnabled is flipped back to false
+  // first. Without this, every future infra-deploy.yml run — not just ones touching this file —
+  // fails at this resource, since main.bicep redeploys the whole template on every push to
+  // infra/**.
+  properties: union(
+    {
+      minimalTlsVersion: '1.2'
+      // AD-21 Deploy A: adds the Entra Admin. azureADOnlyAuthentication is deliberately omitted
+      // here (not set to false) — per Microsoft's own Microsoft.Sql/servers reference, that field
+      // is not reliably settable via this inline block on an update to an already-existing server;
+      // the separate azureADOnlyAuthentications resource below is the supported way to change it.
+      administrators: {
+        administratorType: 'ActiveDirectory'
+        principalType: 'User'
+        login: entraAdminLogin
+        sid: entraAdminObjectId
+        tenantId: entraAdminTenantId
+      }
+    },
+    azureADOnlyAuthenticationEnabled
+      ? {}
+      : {
+          administratorLogin: administratorLogin
+          administratorLoginPassword: administratorLoginPassword
+        }
+  )
+}
+
+// AD-21 Deploy B mechanism: the same template serves both Deploy A (azureADOnlyAuthenticationEnabled
+// false, the default) and Deploy B (true, on a later, separate deploy) — no code branch needed,
+// just a param-value change between the two deploys. Never flip this to true until
+// infra/sql/grant-entra-db-users.sql has been run and both identities verified able to connect
+// (docs/local-vs-azure-deltas.md#D6).
+resource azureADOnlyAuthentication 'Microsoft.Sql/servers/azureADOnlyAuthentications@2025-01-01' = {
+  parent: sqlServer
+  name: 'Default'
   properties: {
-    administratorLogin: administratorLogin
-    administratorLoginPassword: administratorLoginPassword
-    minimalTlsVersion: '1.2'
+    azureADOnlyAuthentication: azureADOnlyAuthenticationEnabled
   }
 }
 
@@ -58,9 +111,9 @@ resource allowAzureServices 'Microsoft.Sql/servers/firewallRules@2025-01-01' = {
 }
 
 // Deliberately returned to the caller (main.bicep) to pass into the Container App as a
-// secretRef-backed secret, never a plain env var — see container-app.bicep. A @secure() output
-// decorator would mask this in deployment history too, but requires Bicep CLI >=0.29; this
-// environment's installed CLI (0.24.24) rejects that syntax with a hard BCP129 error, so the
-// lint suppression is kept instead — see the story's Review Findings for the follow-up.
-#disable-next-line outputs-should-not-contain-secrets
-output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};User ID=${administratorLogin};Password=${administratorLoginPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+// secretRef-backed secret, never a plain env var — see container-app.bicep. AD-19 keeps it a
+// secretRef for composition-root uniformity across both DB providers (Postgres stays
+// password-based), even though this string itself no longer carries a password (AD-21) — no
+// outputs-should-not-contain-secrets suppression is needed here anymore, since
+// "Authentication=Active Directory Managed Identity" has no secret-shaped substring to flag.
+output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};Authentication=Active Directory Managed Identity;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'

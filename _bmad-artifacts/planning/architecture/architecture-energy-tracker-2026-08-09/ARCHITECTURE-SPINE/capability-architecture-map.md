@@ -8,6 +8,6 @@
 | Extensible Platform (FR-19–FR-21) | `Application.Ports` (`ISmartPlugParser` today; event-rule and threshold ports Deferred) | AD-9, AD-15, Deferred |
 | Data Export/Import (FR-22–FR-23) | `Application` use case over all repositories | AD-2, AD-3 |
 | Household & Access (FR-26–FR-28) | `Infrastructure` (OIDC handler), `Application.ICurrentHouseholdAccessor` | AD-3, AD-10, AD-15, AD-17, Consistency Conventions (auth) |
-| Smart Plug Import (FR-4, FR-24) | `Infrastructure.Adapters` parsers, `IBackgroundJobQueue` | AD-6, AD-9, AD-7 (StatusSnapshot trigger), AD-3 (job-context isolation) |
+| Smart Plug Import (FR-4, FR-24) | `Infrastructure.Adapters` parsers, `IBackgroundJobQueue` | AD-6, AD-9, AD-7 (StatusSnapshot trigger), AD-3 (job-context isolation), AD-22 (watermark corruption detection), AD-23 (bulk-write) |
 | i18n / Locale (SM-5) | `Household.Locale`, frontend catalogs, backend `IStringLocalizer` | AD-18, AD-15 |
 | Operations (deployment envelope) | `/health` endpoint, structured logging, env-based secrets, OTel traces/metrics (+logs locally), ingestion cap + alerting | AD-19 |
