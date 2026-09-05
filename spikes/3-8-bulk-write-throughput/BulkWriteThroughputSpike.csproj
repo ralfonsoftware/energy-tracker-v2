@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Story 3-8: deliberately NOT part of EnergyTracker.sln and NOT centrally managed via
+    Directory.Packages.props (project-context.md's central-package-management rule binds the
+    shipped solution, not this throwaway harness). Explicit Version= on every reference below is
+    intentional — see Task 1's own note on why.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- This is exploratory, hand-run spike code, not held to the project's normal quality bar. -->
+    <NoWarn>CS1591</NoWarn>
+    <IsPackable>false</IsPackable>
+    <!-- Directory.Packages.props at the repo root would otherwise apply here too (MSBuild
+         discovers it by walking up directories, regardless of solution membership). Opting this
+         project out keeps its explicit Version= attributes below self-contained, per Task 1. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same 10.0.10 line the main solution pins (Directory.Packages.props) so the bulk-write
+         behavior measured here matches what Story 3.9 will actually ship against. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+
+    <!-- AD-23: the three split packages, never the umbrella EFCore.BulkExtensions package. -->
+    <PackageReference Include="EFCore.BulkExtensions.Core" Version="10.0.1" />
+    <PackageReference Include="EFCore.BulkExtensions.SqlServer" Version="10.0.1" />
+    <PackageReference Include="EFCore.BulkExtensions.PostgreSql" Version="10.0.1" />
+  </ItemGroup>
+
+</Project>

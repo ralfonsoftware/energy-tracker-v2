@@ -92,10 +92,12 @@ public class EveHomeXlsxParserTests
     }
 
     [Fact]
-    public void Parse_with_a_watermark_returns_only_rows_newer_than_it_and_stops_early()
+    public void Parse_with_a_watermark_returns_the_boundary_row_plus_newer_rows_and_stops_immediately_after_it()
     {
-        // AC #1/#2: strictly newest-first, so setting the watermark at readings[29] (0-indexed)
-        // of a full parse must yield exactly the 29 newer rows.
+        // AD-22/AC #1/#2: strictly newest-first, so setting the watermark at readings[29]
+        // (0-indexed) of a full parse must now yield the 29 newer rows PLUS the boundary row
+        // itself (row 29) — one row later than before this story, never two — so the
+        // orchestration layer can compare its KwhValue against the stored value.
         var parser = new EveHomeXlsxParser();
         IReadOnlyList<SmartPlugReading> fullParse;
         using (var fullStream = File.OpenRead(SampleFilePath))
@@ -109,13 +111,16 @@ public class EveHomeXlsxParserTests
 
         // SmartPlugReading isn't value-comparable (each Parse call mints a fresh Id) — assert on
         // IntervalStart (the field the watermark filters by) in order, not whole-object equality.
-        readings.Count.ShouldBe(29);
-        readings.Select(r => r.IntervalStart).ShouldBe(fullParse.Take(29).Select(r => r.IntervalStart));
+        readings.Count.ShouldBe(30);
+        readings.Select(r => r.IntervalStart).ShouldBe(fullParse.Take(30).Select(r => r.IntervalStart));
+        readings[^1].IntervalStart.ShouldBe(fullParse[29].IntervalStart);
     }
 
     [Fact]
-    public void Parse_with_a_watermark_at_or_after_the_newest_row_returns_zero_rows()
+    public void Parse_with_a_watermark_at_the_newest_row_returns_only_that_boundary_row()
     {
+        // AD-22: the newest row is exactly the watermark's IntervalStart — it must now be
+        // included (not skipped) as the sole boundary row, with the loop stopping right after it.
         var parser = new EveHomeXlsxParser();
         IReadOnlyList<SmartPlugReading> fullParse;
         using (var fullStream = File.OpenRead(SampleFilePath))
@@ -127,12 +132,37 @@ public class EveHomeXlsxParserTests
         var result = parser.Parse(
             stream, Path.GetFileName(SampleFilePath), watermark: fullParse[0].IntervalStart, TestContext.Current.CancellationToken);
 
-        result.Readings.ShouldBeEmpty();
-        // Story 3.4 review-round-2 patch: rows were genuinely read and filtered out by the
-        // watermark (a legitimate "nothing new" re-import) — distinct from a corrupt/truncated
-        // file that never had any data rows at all (RawDataRowsRead == 0, see the dedicated test
-        // below).
+        result.Readings.Count.ShouldBe(1);
+        result.Readings[0].IntervalStart.ShouldBe(fullParse[0].IntervalStart);
         result.RawDataRowsRead.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Parse_with_a_watermark_includes_every_row_sharing_the_exact_boundary_IntervalStart()
+    {
+        // AC #7 (DST-fold discipline): a DST fall-back can produce two consecutive rows sharing
+        // the exact same local-time IntervalStart. Both must be included in the result — not just
+        // the first-encountered one — so ProcessSmartPlugImport's own multi-row DST-fold handling
+        // (which drops every tied row and attempts at most one correction) has both rows to see.
+        // Regression test for a bug where the parser's early-stop broke immediately after emitting
+        // the first boundary-equal row, silently losing the second one.
+        var boundary = new DateTime(2026, 10, 25, 2, 30, 0);
+        var timestamps = new[]
+        {
+            boundary.AddMinutes(10), // newer than the boundary — always included
+            boundary, // the boundary row itself (first-encountered)
+            boundary, // a second row sharing the exact same IntervalStart (the fold duplicate)
+            boundary.AddMinutes(-10), // strictly older than the boundary — must stop before this
+        };
+        var parser = new EveHomeXlsxParser();
+        using var stream = BuildSyntheticWorkbookWithTimestamps("Steckdose 1", "Zimmer 1", timestamps);
+
+        var readings = parser.Parse(
+            stream, "dst-fold.xlsx", watermark: new DateTimeOffset(boundary, TimeSpan.Zero),
+            TestContext.Current.CancellationToken).Readings;
+
+        readings.Count.ShouldBe(3);
+        readings.Count(r => r.IntervalStart == new DateTimeOffset(boundary, TimeSpan.Zero)).ShouldBe(2);
     }
 
     [Fact]
@@ -215,15 +245,17 @@ public class EveHomeXlsxParserTests
             watermarkStream, "synthetic-large.xlsx", watermark, TestContext.Current.CancellationToken);
         var incremental = incrementalResult.Readings;
 
-        incremental.Count.ShouldBe(RowCount / 2);
-        incremental.Select(r => r.IntervalStart).ShouldBe(fullParse.Take(RowCount / 2).Select(r => r.IntervalStart));
-        // Story 3.4 review-round-2 patch: RawDataRowsRead counts every data-body row the
-        // streaming reader iterated over before the watermark early-stop, including the boundary
-        // row that triggers the stop (it's read/parsed before its IntervalStart is compared
-        // against the watermark) — one more than the count of rows that actually survived the
-        // filter. Proves the "rows actually read" signal used to disambiguate a corrupt file from
-        // a legitimate nothing-new re-import is itself correct at scale.
-        incrementalResult.RawDataRowsRead.ShouldBe(RowCount / 2 + 1);
+        // AD-22: the boundary row (index RowCount/2) is now included in the result, not just the
+        // strictly-newer rows before it — one row later than before this story.
+        incremental.Count.ShouldBe(RowCount / 2 + 1);
+        incremental.Select(r => r.IntervalStart).ShouldBe(fullParse.Take(RowCount / 2 + 1).Select(r => r.IntervalStart));
+        // RawDataRowsRead counts every data-body row the streaming reader iterated over before the
+        // watermark early-stop. Story 3.9 review fix: the early-stop no longer breaks the instant
+        // it emits a row exactly at the watermark (that would silently lose a second DST-fold row
+        // sharing the same IntervalStart, AC #7) — it now keeps reading one row past the boundary
+        // to confirm no further row shares that exact IntervalStart, so RawDataRowsRead is one
+        // higher than the boundary row's own index (RowCount/2 + 2, not +1).
+        incrementalResult.RawDataRowsRead.ShouldBe(RowCount / 2 + 2);
     }
 
     // Builds a minimal but structurally valid Eve Home-layout workbook in memory: row 1 "Gerät:",
@@ -264,6 +296,50 @@ public class EveHomeXlsxParserTests
                 var whValue = 500 + i % 250;
                 sheetData.Append(BuildRow(
                     rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss"), whValue.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
+
+            worksheetPart.Worksheet.Save();
+            workbookPart.Workbook.Save();
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    // Same layout as BuildSyntheticWorkbook, but takes explicit timestamps (in the order given —
+    // caller's responsibility to pass them newest-first, matching real Eve Home export order) so a
+    // test can construct rows sharing an exact IntervalStart (a DST fall-back fold), which the
+    // even-10-minutes-apart generator above cannot produce.
+    private static MemoryStream BuildSyntheticWorkbookWithTimestamps(
+        string deviceName, string roomName, IReadOnlyList<DateTime> timestamps)
+    {
+        var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook, autoSave: false))
+        {
+            var workbookPart = document.AddWorkbookPart();
+            workbookPart.Workbook = new Workbook();
+
+            var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            var sheetData = new SheetData();
+            worksheetPart.Worksheet = new Worksheet(sheetData);
+
+            var sheets = workbookPart.Workbook.AppendChild(new Sheets());
+            sheets.Append(new Sheet
+            {
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Gesamtverbrauch",
+            });
+
+            uint rowIndex = 1;
+            sheetData.Append(BuildRow(rowIndex++, $"Gerät: {deviceName}"));
+            sheetData.Append(BuildRow(rowIndex++, $"Raum: {roomName}"));
+            sheetData.Append(BuildRow(rowIndex++, "Zuhause: Test-Zuhause"));
+            sheetData.Append(BuildRow(rowIndex++, "Zeitstempel", "Wh"));
+
+            foreach (var timestamp in timestamps)
+            {
+                sheetData.Append(BuildRow(rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss"), "500"));
             }
 
             worksheetPart.Worksheet.Save();

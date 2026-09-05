@@ -99,20 +99,20 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     };
 
     [Fact]
-    public async Task FindLatestReadingIntervalStartByPowerPointAsync_returns_null_when_no_readings_exist()
+    public async Task FindLatestReadingWatermarkByPowerPointAsync_returns_null_when_no_readings_exist()
     {
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
-        var result = await repository.FindLatestReadingIntervalStartByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
+        var result = await repository.FindLatestReadingWatermarkByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
     }
 
     [Fact]
-    public async Task FindLatestReadingIntervalStartByPowerPointAsync_returns_the_max_IntervalStart()
+    public async Task FindLatestReadingWatermarkByPowerPointAsync_returns_the_max_IntervalStart()
     {
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
@@ -122,68 +122,93 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugImports.Add(import);
         var older = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var newer = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        var newerReading = MakeReading(householdId, import.Id, powerPointId, newer, kwhValue: 1.25m);
         dbContext.SmartPlugReadings.AddRange(
             MakeReading(householdId, import.Id, powerPointId, older),
-            MakeReading(householdId, import.Id, powerPointId, newer));
+            newerReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
-        var result = await repository.FindLatestReadingIntervalStartByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
+        var result = await repository.FindLatestReadingWatermarkByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
 
-        result.ShouldBe(newer);
+        // AD-22: the watermark now carries Id and KwhValue alongside IntervalStart.
+        result.ShouldNotBeNull();
+        result.Id.ShouldBe(newerReading.Id);
+        result.IntervalStart.ShouldBe(newer);
+        result.KwhValue.ShouldBe(1.25m);
     }
 
     [Fact]
-    public async Task AddAsync_persists_the_import_and_skips_only_the_colliding_reading_on_a_unique_constraint_conflict()
+    public async Task AddAsync_with_a_boundaryCorrection_updates_only_the_KwhValue_column_and_records_one_audit_correction()
     {
-        // Task 3/Dev Notes Open Question #2 (Option A) — the only test that exercises the
-        // conflict-tolerant fallback path at all: seeds one pre-existing SmartPlugReading at a
-        // given (PowerPointId, IntervalStart), then calls AddAsync with a new import whose
-        // reading set includes one row colliding on that exact key plus several non-colliding
-        // rows.
+        // AD-22 AC #6/AD-11 (Story 3.9 review fix): the correction and its audit record now apply
+        // via AddAsync's boundaryCorrection parameter, inside the same transaction as the rest of
+        // the import — touches KwhValue and only KwhValue on the target row (never RoomName/
+        // PowerPointName/DeviceName, AD-10's by-value snapshot fields), and records exactly one
+        // AuditCorrection row via the shared IAuditCorrectionRecorder mechanism.
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var existingBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var existingImport = MakeImport(householdId, existingBackgroundJobId);
-        var collidingIntervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
-        dbContext.SmartPlugImports.Add(existingImport);
-        dbContext.SmartPlugReadings.Add(MakeReading(householdId, existingImport.Id, powerPointId, collidingIntervalStart));
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var import = MakeImport(householdId, backgroundJobId);
+        dbContext.SmartPlugImports.Add(import);
+        var reading = MakeReading(householdId, import.Id, powerPointId, DateTimeOffset.UtcNow, kwhValue: 0.5m);
+        dbContext.SmartPlugReadings.Add(reading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        dbContext.ChangeTracker.Clear();
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var correctionBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var correctionImport = MakeImport(householdId, correctionBackgroundJobId);
+        var correction = new SmartPlugReadingCorrection(householdId, reading.Id, 0.75m, "0.5", "0.75");
 
-        var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var newImport = MakeImport(householdId, newBackgroundJobId);
-        var collidingReading = MakeReading(householdId, newImport.Id, powerPointId, collidingIntervalStart);
-        var nonCollidingReadings = new[]
-        {
-            MakeReading(householdId, newImport.Id, powerPointId, collidingIntervalStart.AddDays(1)),
-            MakeReading(householdId, newImport.Id, powerPointId, collidingIntervalStart.AddDays(2)),
-        };
-        IReadOnlyList<SmartPlugReading> newReadings = [collidingReading, .. nonCollidingReadings];
-
-        await repository.AddAsync(newImport, newReadings, TestContext.Current.CancellationToken);
+        await repository.AddAsync(correctionImport, [], TestContext.Current.CancellationToken, correction);
 
         await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
-        (await verifyDbContext.SmartPlugImports.SingleOrDefaultAsync(
-            i => i.Id == newImport.Id, TestContext.Current.CancellationToken)).ShouldNotBeNull();
-        var persistedNewImportReadings = await verifyDbContext.SmartPlugReadings
-            .Where(r => r.SmartPlugImportId == newImport.Id)
-            .ToListAsync(TestContext.Current.CancellationToken);
-        persistedNewImportReadings.Count.ShouldBe(2);
-        persistedNewImportReadings.Select(r => r.IntervalStart).ShouldBe(
-            nonCollidingReadings.Select(r => r.IntervalStart), ignoreOrder: true);
+        var updated = await verifyDbContext.SmartPlugReadings.AsNoTracking().SingleAsync(
+            r => r.Id == reading.Id, TestContext.Current.CancellationToken);
+        updated.KwhValue.ShouldBe(0.75m);
+        updated.RoomName.ShouldBe(reading.RoomName);
+        updated.PowerPointName.ShouldBe(reading.PowerPointName);
+        updated.DeviceName.ShouldBe(reading.DeviceName);
+
+        var auditCorrections = await verifyDbContext.AuditCorrections.AsNoTracking()
+            .Where(a => a.EntityId == reading.Id).ToListAsync(TestContext.Current.CancellationToken);
+        auditCorrections.ShouldHaveSingleItem();
+        auditCorrections[0].EntityType.ShouldBe("SmartPlugReading");
+        auditCorrections[0].FieldName.ShouldBe("KwhValue");
+        auditCorrections[0].OldValue.ShouldBe("0.5");
+        auditCorrections[0].NewValue.ShouldBe("0.75");
+    }
+
+    [Fact]
+    public async Task AddAsync_with_a_boundaryCorrection_whose_target_row_no_longer_exists_records_no_audit_correction()
+    {
+        // Story 3.9 review fix: ExecuteUpdateAsync's own affected-row count gates the audit
+        // record — if the target row is gone (no code path deletes a SmartPlugReading today, but
+        // the guard is free), zero rows are actually updated and no correction is recorded for a
+        // change that never happened.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var import = MakeImport(householdId, backgroundJobId);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var correction = new SmartPlugReadingCorrection(householdId, Guid.NewGuid(), 0.75m, "0.5", "0.75");
+
+        await repository.AddAsync(import, [], TestContext.Current.CancellationToken, correction);
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var auditCorrections = await verifyDbContext.AuditCorrections.AsNoTracking()
+            .Where(a => a.EntityId == correction.ReadingId).ToListAsync(TestContext.Current.CancellationToken);
+        auditCorrections.ShouldBeEmpty();
     }
 
     [Fact]
     public async Task AddAsync_persists_a_large_incremental_batch_when_the_power_point_already_has_prior_readings()
     {
-        // Review-round-2 patch regression guard: AnyExistingReadingAtSameKeyAsync's own existence
-        // gate is true for essentially every incremental re-import (any Power Point with prior
-        // data), not just rare races — so its intervalStarts.Contains(...) conflict pre-check runs
-        // on this story's own steady-state common case. Proves it holds up for a realistically
-        // large incremental catch-up batch, not just the handful of rows the collision test above
-        // uses.
+        // AD-23 regression guard: a realistically large, entirely-non-colliding incremental batch
+        // (the steady-state common case for any Power Point with prior data) inserts cleanly via
+        // BulkInsertOrUpdateAsync — no row-count threshold or branch, applied uniformly.
         const int BatchSize = 2_000;
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
@@ -196,7 +221,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugReadings.Add(
             MakeReading(householdId, existingImport.Id, powerPointId, new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var newImport = MakeImport(householdId, newBackgroundJobId);
@@ -244,7 +269,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart.AddDays(1)));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -289,7 +314,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, kwhValue: 0.9m));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -331,7 +356,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, intervalEnd: collidingIntervalStart.AddHours(1)));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -371,7 +396,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, deviceName: "New Smart Plug"));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -407,7 +432,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
 
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         // A large Eve Home export's set-based mapping UPDATE reliably exceeded the ADO.NET
         // default 30s command timeout against Basic-tier Azure SQL in production, surfacing as an
@@ -464,7 +489,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             IntervalStart = DateTimeOffset.UtcNow, IntervalEnd = DateTimeOffset.UtcNow, KwhValue = 0.5m,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -491,7 +516,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Failed, SmartPlugImportStatus.Failed,
             jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-31), TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -523,7 +548,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -542,7 +567,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.AwaitingPowerPointMapping,
             jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-31), TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -568,7 +593,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         };
         dbContext.BackgroundJobs.AddRange(queuedJob, processingJob);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -593,7 +618,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -623,7 +648,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         import.CompletedAtUtc = DateTimeOffset.UtcNow;
         dbContext.SmartPlugImports.Add(import);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -641,7 +666,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.Completed,
             jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-1), TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 

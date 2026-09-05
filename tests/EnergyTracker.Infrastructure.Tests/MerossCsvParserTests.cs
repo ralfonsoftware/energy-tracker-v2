@@ -71,10 +71,11 @@ public class MerossCsvParserTests
     }
 
     [Fact]
-    public void Parse_with_a_watermark_filters_rows_at_or_before_it_but_still_reads_every_row()
+    public void Parse_with_a_watermark_includes_the_boundary_row_and_still_reads_every_row()
     {
-        // AC #3: filtered, not early-stopped — every row is still read (there's no early-stop
-        // behavior to verify for Meross, unlike Eve Home), only the returned list is filtered.
+        // AD-22/AC #3: filtered, not early-stopped — every row is still read (there's no
+        // early-stop behavior to verify for Meross, unlike Eve Home), only the returned list is
+        // filtered. The row exactly at the watermark's day is now included (not skipped).
         var parser = new MerossCsvParser();
         IReadOnlyList<SmartPlugReading> fullParse;
         int fullRawRowsRead;
@@ -89,8 +90,8 @@ public class MerossCsvParserTests
         var result = parser.Parse(
             stream, Path.GetFileName(SampleFilePath), watermark: fullParse[9].IntervalStart, TestContext.Current.CancellationToken);
 
-        result.Readings.Count.ShouldBe(fullParse.Count - 10);
-        result.Readings.Select(r => r.IntervalStart).ShouldBe(fullParse.Skip(10).Select(r => r.IntervalStart));
+        result.Readings.Count.ShouldBe(fullParse.Count - 9);
+        result.Readings.Select(r => r.IntervalStart).ShouldBe(fullParse.Skip(9).Select(r => r.IntervalStart));
         // Story 3.4 review-round-2 patch: RawDataRowsRead counts every row Meross's no-early-stop
         // filter still reads, so it's unaffected by the watermark and matches the unfiltered pass.
         result.RawDataRowsRead.ShouldBe(fullRawRowsRead);

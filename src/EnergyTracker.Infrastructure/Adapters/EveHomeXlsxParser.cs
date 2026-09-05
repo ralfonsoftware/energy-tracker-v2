@@ -131,13 +131,22 @@ public class EveHomeXlsxParser : ISmartPlugParser
                 continue;
             }
 
-            if (watermark is not null && reading.IntervalStart <= watermark)
+            if (watermark is not null && reading.IntervalStart < watermark)
             {
-                // AC #2: rows are confirmed strictly newest-first — stop reading immediately
-                // rather than continuing to filter the remaining (already-imported) rows.
+                // AD-22/AC #2: rows are confirmed strictly newest-first — a row strictly older
+                // than the watermark means every row at or above the watermark (including every
+                // row sharing its exact IntervalStart, AC #7's DST-fold case) has already been
+                // emitted above; stop without adding this one.
                 break;
             }
 
+            // The row (or rows — AC #7's DST-fold case, more than one row can share the exact
+            // watermark IntervalStart) at or above the watermark's IntervalStart is included (not
+            // skipped) so the orchestration layer (ProcessSmartPlugImport) can compare against the
+            // stored value and detect a vendor-side correction (AD-22). Do NOT break as soon as
+            // one such row is seen — a second row sharing that exact IntervalStart must also be
+            // read, or AC #7's multi-row DST-fold handling can never fire for this vendor; the loop
+            // only stops above, once a row strictly older than the watermark is reached.
             readings.Add(reading);
         }
 

@@ -1,0 +1,3 @@
+# Runtime scratch files this harness writes to itself — never a durable deliverable.
+results-log.csv
+spike-state.json
