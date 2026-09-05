@@ -202,6 +202,12 @@
   summary: `overflow-y-auto` on the mapping list can introduce a vertical scrollbar only once the row count crosses the `max-h-64` threshold, narrowing row content width at that exact moment (including the live "just-created Power Point appended to the list" flow) with no `scrollbar-gutter`/reserved padding to prevent the shift.
   evidence: Minor cosmetic edge case with no established scrollbar-gutter convention anywhere else in the codebase (this is the first scrollable content region inside a `DialogContent` in this repo); not worth introducing new, untested cross-browser CSS for a one-shot bug fix. Raised by adversarial review (Blind Hunter).
 
+## Deferred from: code review of spec-background-job-changetracker-orphan-fix (2026-09-05)
+
+- source_spec: `_bmad-artifacts/implementation/spec-background-job-changetracker-orphan-fix.md`
+  summary: `Program.cs`'s `ConfigureDbContext` sets `CommandTimeout(120)` globally on the whole `DbContextOptionsBuilder`, applying to every command on every request app-wide, rather than scoping the elevated timeout to just the Smart Plug import write path the way `SmartPlugImportRepository.UpdateMappingAsync` already does via `dbContext.Database.SetCommandTimeout(...)` for its own elevated-timeout need.
+  evidence: An unrelated slow/blocked query elsewhere in the app now waits up to 120s instead of failing fast at 30s. Raised by adversarial review (Blind Hunter) and edge-case review. Not fixed in this pass: the frozen spec explicitly named `Program.cs`'s provider configuration as the target (mirroring how `MaxBatchSize` is already set there), and switching to the narrower per-call pattern is a real design change worth its own scoped decision rather than folding into an incident hotfix. [src/EnergyTracker.Api/Program.cs:124-153]
+
 ## Deferred from: code review of spec-trend-chart-time-axis (2026-08-30)
 
 - source_spec: `_bmad-artifacts/implementation/spec-trend-chart-time-axis.md`

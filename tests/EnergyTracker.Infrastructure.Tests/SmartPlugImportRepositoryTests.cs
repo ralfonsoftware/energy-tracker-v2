@@ -673,4 +673,148 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
         (await dbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
     }
+
+    [Fact]
+    public async Task AddAsync_failure_leaves_the_callers_own_tracked_entity_intact()
+    {
+        // Incident regression guard (2026-09-05 prod): AddAsync's failure handler used to call
+        // dbContext.ChangeTracker.Clear() on ANY AddAsyncCore failure. BackgroundJobProcessor
+        // shares this same scoped DbContext and is tracking its own BackgroundJob entity across
+        // the ProcessSmartPlugImport call — Clear() wiped that tracking too, so
+        // BackgroundJobProcessor's subsequent `job.Status = Failed` mutation targeted a detached
+        // entity and its SaveChangesAsync silently no-opped, permanently orphaning the job at
+        // Status = Processing (the queue message was already deleted by then). The fix narrows the
+        // detach to only the `import` entity AddAsyncCore itself added.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        // Only used for its Household-row side effect here — the returned Power Point is
+        // deliberately NOT the one referenced below; the reading's PowerPointId is a fresh,
+        // unrelated Guid whose only job is to violate the FK.
+        await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        // Mirrors BackgroundJobProcessor.ProcessAsync's own shape: it fetches a BackgroundJob
+        // entity on this same scoped DbContext and only mutates it in its OWN catch block, AFTER
+        // the inner ProcessSmartPlugImport/AddAsync call has already thrown — the mutation must
+        // come after AddAsync, not before, or an unrelated SaveChangesAsync inside AddAsyncCore
+        // would sweep it up and mark it accepted before the transaction that carried it rolls back.
+        var trackedJob = await dbContext.BackgroundJobs.SingleAsync(
+            j => j.Id == backgroundJobId, TestContext.Current.CancellationToken);
+
+        var import = MakeImport(householdId, backgroundJobId);
+        // A reading whose PowerPointId doesn't exist violates SmartPlugReadingConfiguration's FK
+        // (Restrict) during the bulk-insert step below — forces AddAsyncCore to fail *after* the
+        // import row's own AddAsync+SaveChangesAsync already succeeded inside the still-open
+        // transaction, the same shape as the production incident's DB-timeout failure on the
+        // readings bulk insert (import row committed, readings insert failed).
+        var reading = MakeReading(householdId, import.Id, Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        await Should.ThrowAsync<Exception>(
+            () => repository.AddAsync(import, [reading], TestContext.Current.CancellationToken));
+
+        // Mirrors BackgroundJobProcessor.ProcessAsync's own outer catch block, which runs only
+        // after the call above has thrown.
+        trackedJob.Status = BackgroundJobStatus.Failed;
+        trackedJob.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+        // The bug: ChangeTracker.Clear() wiped trackedJob's tracking entry, so this mutation would
+        // land on a detached entity and a subsequent SaveChangesAsync would silently no-op it.
+        dbContext.Entry(trackedJob).State.ShouldNotBe(EntityState.Detached);
+        dbContext.Entry(trackedJob).Property(j => j.Status).IsModified.ShouldBeTrue();
+
+        // Prove the thing that actually matters — the incident was a *silently no-op'd save* — not
+        // just intermediate change-tracker bookkeeping: the mutation must actually reach the DB.
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var persistedJob = await verifyDbContext.BackgroundJobs.AsNoTracking()
+            .SingleAsync(j => j.Id == backgroundJobId, TestContext.Current.CancellationToken);
+        persistedJob.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persistedJob.CompletedAtUtc.ShouldNotBeNull();
+
+        // The original reason ChangeTracker.Clear() was introduced (Story 3.9 review fix) must
+        // still hold: ProcessSmartPlugImport.PersistFailedImportAsync's real-world follow-up —
+        // adding a NEW SmartPlugImport with the SAME Id — must not throw "already being tracked".
+        var retryImport = new SmartPlugImport
+        {
+            Id = import.Id,
+            HouseholdId = householdId,
+            BackgroundJobId = backgroundJobId,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "export.xlsx",
+            Status = SmartPlugImportStatus.Failed,
+            DeviceTag = string.Empty,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow,
+        };
+
+        await Should.NotThrowAsync(() => repository.AddAsync(retryImport, [], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AddAsync_failure_after_a_boundaryCorrection_leaves_no_phantom_AuditCorrection_tracked_or_persisted()
+    {
+        // Review-round finding on the incident fix above: `import` isn't the only entity
+        // AddAsyncCore can add before a later step fails. When boundaryCorrection is set,
+        // auditCorrectionRecorder.RecordAsync (called before the readings write below) adds AND
+        // saves an AuditCorrection row of its own — inside this same still-open transaction, so it
+        // also advances to Unchanged before the later readings-insert failure rolls everything back
+        // at the DB level. A fix that only detaches `import` would leave this AuditCorrection
+        // instance tracked as Unchanged, phantom-representing a correction that never actually
+        // took effect — and vulnerable to being silently re-persisted by any later unrelated
+        // SaveChangesAsync on this same DbContext (e.g. the very next PersistFailedImportAsync
+        // retry insert).
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var existingImport = MakeImport(householdId, backgroundJobId);
+        dbContext.SmartPlugImports.Add(existingImport);
+        var existingReading = MakeReading(householdId, existingImport.Id, powerPointId, DateTimeOffset.UtcNow, kwhValue: 0.5m);
+        dbContext.SmartPlugReadings.Add(existingReading);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        dbContext.ChangeTracker.Clear();
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var newImport = MakeImport(householdId, backgroundJobId);
+        var correction = new SmartPlugReadingCorrection(householdId, existingReading.Id, 0.75m, "0.5", "0.75");
+        // Same FK-violation shape as the sibling test above — forces AddAsyncCore to fail during
+        // the readings bulk-write, after both the boundaryCorrection's ExecuteUpdateAsync+
+        // RecordAsync and the newImport row's own insert have already committed inside the
+        // still-open transaction.
+        var badReading = MakeReading(householdId, newImport.Id, Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        await Should.ThrowAsync<Exception>(
+            () => repository.AddAsync(newImport, [badReading], TestContext.Current.CancellationToken, correction));
+
+        // Entries() never returns Detached entries — an empty result here proves the AuditCorrection
+        // RecordAsync added is no longer tracked, not merely that it's in some other survivable state.
+        dbContext.ChangeTracker.Entries<AuditCorrection>().ShouldBeEmpty();
+
+        // Prove it two ways: no phantom row exists in the DB (the correction never actually took
+        // effect, matching the transaction rollback), and a later unrelated SaveChangesAsync on this
+        // same DbContext — mirroring PersistFailedImportAsync's own retry insert — doesn't
+        // resurrect it by re-persisting a still-tracked stale instance.
+        var retryImport = new SmartPlugImport
+        {
+            Id = newImport.Id,
+            HouseholdId = householdId,
+            BackgroundJobId = backgroundJobId,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "export.xlsx",
+            Status = SmartPlugImportStatus.Failed,
+            DeviceTag = string.Empty,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow,
+        };
+        await repository.AddAsync(retryImport, [], TestContext.Current.CancellationToken);
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var auditCorrections = await verifyDbContext.AuditCorrections.AsNoTracking()
+            .Where(a => a.EntityId == existingReading.Id).ToListAsync(TestContext.Current.CancellationToken);
+        auditCorrections.ShouldBeEmpty();
+        var persistedReading = await verifyDbContext.SmartPlugReadings.AsNoTracking()
+            .SingleAsync(r => r.Id == existingReading.Id, TestContext.Current.CancellationToken);
+        persistedReading.KwhValue.ShouldBe(0.5m);
+    }
 }
