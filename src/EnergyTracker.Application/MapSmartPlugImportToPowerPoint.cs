@@ -7,7 +7,8 @@ namespace EnergyTracker.Application;
 public class MapSmartPlugImportToPowerPoint(
     ISmartPlugImportRepository smartPlugImportRepository,
     ITaggingScaffoldRepository taggingScaffoldRepository,
-    CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing)
+    CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing,
+    IUnitOfWork unitOfWork)
 {
     public async Task ExecuteAsync(Guid smartPlugImportId, Guid powerPointId, CancellationToken cancellationToken)
     {
@@ -34,23 +35,37 @@ public class MapSmartPlugImportToPowerPoint(
 
         var room = await taggingScaffoldRepository.FindRoomAsync(powerPoint.RoomId, cancellationToken);
 
-        import.Status = SmartPlugImportStatus.Completed;
-        import.CompletedAtUtc = DateTimeOffset.UtcNow;
+        // The reading attach + Completed flip + gap detection + Status recompute are one
+        // all-or-nothing unit. UpdateMappingAsync used to commit the reading attach and the
+        // Completed status on its own (via its own SaveChangesAsync) before the steps below ever
+        // ran — a failure past that point (CompleteSmartPlugImportProcessing's zero-readings guard,
+        // a request cancellation on a large Eve Home export, ...) still surfaced as an error to the
+        // caller while the import had already been silently marked Completed/"Erfolgreich" in the
+        // DB. Wrapping the whole sequence in one transaction means a genuine failure now rolls
+        // everything back, leaving the import exactly where it started (AwaitingPowerPointMapping,
+        // readings unattached) so the error the user sees matches the row's actual state and retry
+        // is meaningful.
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            import.Status = SmartPlugImportStatus.Completed;
+            import.CompletedAtUtc = DateTimeOffset.UtcNow;
 
-        // AD-10: this mapping call is "write time" for these previously-unattributed readings —
-        // snapshot the Power Point/Room identity by value now, never a live join later. A
-        // set-based UPDATE (not load-every-row-then-mutate) — see UpdateMappingAsync's doc comment.
-        await smartPlugImportRepository.UpdateMappingAsync(import, powerPoint.Id, powerPoint.Name, room?.Name, cancellationToken);
+            // AD-10: this mapping call is "write time" for these previously-unattributed readings —
+            // snapshot the Power Point/Room identity by value now, never a live join later. A
+            // set-based UPDATE (not load-every-row-then-mutate) — see UpdateMappingAsync's doc comment.
+            await smartPlugImportRepository.UpdateMappingAsync(import, powerPoint.Id, powerPoint.Name, room?.Name, ct);
 
-        // Read back only now, after the UPDATE above already persisted the Power Point/Room
-        // attribution — gap detection needs these readings' own values (kWh, timestamps), not
-        // further mutation, so this is a plain read.
-        var readings = await smartPlugImportRepository.ListReadingsByImportIdAsync(smartPlugImportId, cancellationToken);
+            // Read back only now, after the UPDATE above already applied the Power Point/Room
+            // attribution within this same transaction — gap detection needs these readings' own
+            // values (kWh, timestamps), not further mutation, so this is a plain read.
+            var readings = await smartPlugImportRepository.ListReadingsByImportIdAsync(smartPlugImportId, ct);
 
-        // AD-7's second completion path (Story 3.2's own Dev Notes flagged this for this story) —
-        // gap detection + Status recompute must fire here too, not just from
-        // ProcessSmartPlugImport's direct-match branch.
-        await completeSmartPlugImportProcessing.ExecuteAsync(import, readings, cancellationToken);
+            // AD-7's second completion path (Story 3.2's own Dev Notes flagged this for this story) —
+            // gap detection + Status recompute must fire here too, not just from
+            // ProcessSmartPlugImport's direct-match branch.
+            await completeSmartPlugImportProcessing.ExecuteAsync(import, readings, ct);
+            return true;
+        }, cancellationToken);
     }
 }
 

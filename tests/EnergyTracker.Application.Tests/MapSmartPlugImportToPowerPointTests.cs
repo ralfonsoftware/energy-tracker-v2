@@ -11,6 +11,7 @@ public class MapSmartPlugImportToPowerPointTests
     private readonly ISmartPlugImportRepository _smartPlugImportRepository = Substitute.For<ISmartPlugImportRepository>();
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
     private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
+    private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly Guid _householdId = Guid.NewGuid();
 
     public MapSmartPlugImportToPowerPointTests()
@@ -19,11 +20,17 @@ public class MapSmartPlugImportToPowerPointTests
             .Returns((IReadOnlyList<SmartPlugReading>)[]);
         _smartPlugImportRepository.FindFirstReadingDateByPowerPointAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns((DateOnly?)null);
+        // Pass-through: the real transaction/rollback mechanics live in UnitOfWork itself (already
+        // exercised via EditMeterReading's usage); here we just need the wrapped operation to run.
+        _unitOfWork
+            .ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => callInfo.Arg<Func<CancellationToken, Task<bool>>>()(callInfo.Arg<CancellationToken>()));
     }
 
     private MapSmartPlugImportToPowerPoint Sut() => new(
         _smartPlugImportRepository, _taggingScaffoldRepository,
-        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance));
+        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
+        _unitOfWork);
 
     private SmartPlugImport MakeImport(SmartPlugImportStatus status = SmartPlugImportStatus.AwaitingPowerPointMapping) => new()
     {
@@ -175,6 +182,53 @@ public class MapSmartPlugImportToPowerPointTests
 
         import.Status.ShouldBe(SmartPlugImportStatus.Completed);
         await _statusRecomputeService.Received(1).RecomputeAsync(_householdId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Runs_the_mapping_and_completion_inside_a_single_transaction()
+    {
+        // Regression test: the reading attach, the Completed flip, gap detection, and the Status
+        // recompute must all commit or roll back together — see MapSmartPlugImportToPowerPoint's
+        // own doc comment for the bug this closes (a downstream failure used to surface as an error
+        // while the import had already been silently committed as Completed/"Erfolgreich").
+        var import = MakeImport();
+        var room = MakeRoom();
+        var powerPoint = MakePowerPoint(room.Id);
+        var readings = new List<SmartPlugReading> { MakeReading(import.Id) };
+        readings.ForEach(r => r.PowerPointId = powerPoint.Id);
+        _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
+        _smartPlugImportRepository.ListReadingsByImportIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(readings);
+        _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
+        _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(import.Id, powerPoint.Id, TestContext.Current.CancellationToken);
+
+        await _unitOfWork.Received(1).ExecuteInTransactionAsync(
+            Arg.Any<Func<CancellationToken, Task<bool>>>(), Arg.Any<CancellationToken>());
+        await _smartPlugImportRepository.Received(1).UpdateMappingAsync(
+            Arg.Any<SmartPlugImport>(), powerPoint.Id, powerPoint.Name, room.Name, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_downstream_failure_inside_the_transaction_propagates_instead_of_being_swallowed()
+    {
+        // CompleteSmartPlugImportProcessing's own zero-readings guard is the concrete failure this
+        // story's bug report hit in practice — it must still surface as an exception (so the caller
+        // knows the mapping did not truly complete) rather than being masked by a "success" response,
+        // now that it happens inside the same transaction as the reading attach and status flip.
+        var import = MakeImport();
+        var room = MakeRoom();
+        var powerPoint = MakePowerPoint(room.Id);
+        _smartPlugImportRepository.FindByIdAsync(import.Id, Arg.Any<CancellationToken>()).Returns(import);
+        _smartPlugImportRepository.ListReadingsByImportIdAsync(import.Id, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<SmartPlugReading>)[]);
+        _taggingScaffoldRepository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
+        _taggingScaffoldRepository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
+        var sut = Sut();
+
+        await Should.ThrowAsync<ArgumentException>(
+            () => sut.ExecuteAsync(import.Id, powerPoint.Id, TestContext.Current.CancellationToken));
     }
 
     [Fact]
