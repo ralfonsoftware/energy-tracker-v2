@@ -9,6 +9,10 @@ import { EditMeterReadingDialog } from './edit-meter-reading-dialog'
 
 interface MeterReadingsCardProps {
   locale: string
+  // Called in addition to this card's own re-fetch after a correction is saved — the sibling
+  // TrendChart above this card holds its own StatusHistory fetched once on mount (AC #3), which
+  // this card has no other way to invalidate.
+  onReadingCorrected?: () => void
 }
 
 const PAGE_SIZE = 20
@@ -18,7 +22,7 @@ const PAGE_SIZE = 20
 // the correction note) is copied verbatim, not rewritten. Wrapped in a details/summary
 // disclosure, collapsed by default (NFR15's "says less, on purpose" — most visits are
 // chart-only), matching PerPlugDataCard's identical idiom one card below it.
-export function MeterReadingsCard({ locale }: MeterReadingsCardProps) {
+export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsCardProps) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [data, setData] = useState<MeterReadingHistoryPageDto | null>(null)
@@ -157,12 +161,17 @@ export function MeterReadingsCard({ locale }: MeterReadingsCardProps) {
               setEditing(null)
             }
           }}
-          onSaved={() => {
+          onSaved={(valueChanged) => {
             setEditing(null)
             // Re-fetch the current page, not reset to page 1 — the edited row's Version/
             // correction fields must reflect the save, and the household member shouldn't lose
             // their place.
             load(page)
+            // Skip the sibling TrendChart's re-fetch on a no-op save — the backend skips the
+            // Status recompute in that case too, so there's nothing new for it to pick up.
+            if (valueChanged) {
+              onReadingCorrected?.()
+            }
           }}
         />
       )}

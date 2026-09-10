@@ -4,8 +4,12 @@ using EnergyTracker.Domain;
 
 namespace EnergyTracker.Application;
 
-/// <summary>Edits a Meter Reading's kWh value for the caller's own Household, recording an audit-trail correction note rather than a silent overwrite (AC #3, NFR8).</summary>
-public class EditMeterReading(IMeterReadingRepository readingRepository, IAuditCorrectionRecorder auditCorrectionRecorder, IUnitOfWork unitOfWork)
+/// <summary>Edits a Meter Reading's kWh value for the caller's own Household, recording an audit-trail correction note rather than a silent overwrite, and recomputes Status on a real change (AC #1, #3, NFR8).</summary>
+public class EditMeterReading(
+    IMeterReadingRepository readingRepository,
+    IAuditCorrectionRecorder auditCorrectionRecorder,
+    IUnitOfWork unitOfWork,
+    IStatusRecomputeService statusRecomputeService)
 {
     public async Task<MeterReading> ExecuteAsync(Guid householdId, Guid readingId, decimal kwhValue, int expectedVersion, CancellationToken cancellationToken)
     {
@@ -34,7 +38,7 @@ public class EditMeterReading(IMeterReadingRepository readingRepository, IAuditC
         // value update already succeeded, the whole transaction rolls back rather than leaving a
         // silently-changed value with no correction note (the exact "silent overwrite" AC #3 exists
         // to prevent).
-        return await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        var updatedReading = await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
             var updated = await readingRepository.UpdateKwhValueAsync(readingId, kwhValue, expectedVersion, ct);
 
@@ -49,5 +53,11 @@ public class EditMeterReading(IMeterReadingRepository readingRepository, IAuditC
 
             return updated;
         }, cancellationToken);
+
+        // Mirrors CreateMeterReading's placement: recompute runs as a separate step after the
+        // core write transaction commits, never wrapped inside it (AD-7, AC #3).
+        await statusRecomputeService.RecomputeAsync(householdId, cancellationToken);
+
+        return updatedReading;
     }
 }

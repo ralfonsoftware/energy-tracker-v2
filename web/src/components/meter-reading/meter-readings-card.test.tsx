@@ -207,4 +207,29 @@ describe('MeterReadingsCard', () => {
     const getCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/meter-readings?'))
     expect(getCalls.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('calls onReadingCorrected after a save, so the sibling TrendChart can refresh (AC #3)', async () => {
+    const user = userEvent.setup()
+    let saved = false
+    const onReadingCorrected = vi.fn()
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.includes('/api/meter-readings/') && !url.includes('page=')) {
+        saved = true
+        return Promise.resolve(jsonResponse(item({ kwhValue: 5000 })))
+      }
+      return Promise.resolve(jsonResponse(page({ items: [item({ kwhValue: saved ? 5000 : 4821.5 })] })))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<MeterReadingsCard locale="en-US" onReadingCorrected={onReadingCorrected} />)
+    await openDisclosure(user)
+
+    await screen.findByText('4,821.5 kWh')
+    await user.click(screen.getByRole('button', { name: /Edit reading from/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('5,000 kWh')
+    expect(onReadingCorrected).toHaveBeenCalledOnce()
+  })
 })

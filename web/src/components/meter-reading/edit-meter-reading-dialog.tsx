@@ -11,7 +11,10 @@ interface EditMeterReadingDialogProps {
   reading: MeterReadingHistoryItemDto
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSaved: () => void
+  // valueChanged is false for a no-op save (submitted value equals the original) — the backend's
+  // EditMeterReading skips both the write and the Status recompute for a no-op, so callers can
+  // skip their own re-fetches (e.g. the sibling TrendChart's Status history) in that case too.
+  onSaved: (valueChanged: boolean) => void
 }
 
 // Reuses the Dialog + GLASS_MODAL_CLASSNAME shell (StatusDetailDialog/MeterRegressionPromptDialog
@@ -37,9 +40,11 @@ export function EditMeterReadingDialog({ reading, open, onOpenChange, onSaved }:
     setError(null)
 
     try {
-      await updateMeterReading(reading.id, Number(kwhValue), reading.version)
+      const updated = await updateMeterReading(reading.id, Number(kwhValue), reading.version)
       onOpenChange(false)
-      onSaved()
+      // Compare the server's returned value, not the submitted one — the backend's own no-op
+      // guard (EditMeterReading.cs) is the source of truth for whether anything actually changed.
+      onSaved(updated.kwhValue !== reading.kwhValue)
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // Surface the conflict and let the next fetch (the page's re-fetch-after-save, or the

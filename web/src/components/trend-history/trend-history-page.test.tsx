@@ -79,4 +79,51 @@ describe('TrendHistoryPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Settings' }))
     expect(onSettingsClick).toHaveBeenCalledOnce()
   })
+
+  it('re-fetches Status history after a Meter Reading correction is saved (AC #3)', async () => {
+    const user = userEvent.setup()
+    const readingItem = {
+      id: '11111111-1111-1111-1111-111111111111',
+      kwhValue: 100,
+      readingTimestamp: '2026-08-15T14:32:00+00:00',
+      version: 0,
+      isPendingRegression: false,
+      correctedFromKwhValue: null,
+      correctedAtUtc: null,
+    }
+    let saved = false
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/status/history') {
+        return Promise.resolve(jsonResponse([]))
+      }
+      if (url.includes('/api/meter-readings/') && !url.includes('?')) {
+        saved = true
+        return Promise.resolve(jsonResponse({ ...readingItem, kwhValue: 150, version: 1 }))
+      }
+      if (url.startsWith('/api/meter-readings')) {
+        return Promise.resolve(
+          jsonResponse({ items: [{ ...readingItem, kwhValue: saved ? 150 : 100 }], totalCount: 1, page: 1, pageSize: 20 }),
+        )
+      }
+      if (url === '/api/smart-plug-readings') {
+        return Promise.resolve(jsonResponse([]))
+      }
+      return Promise.resolve(jsonResponse(null))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onSmartPlugImportClick={() => {}} />)
+
+    await screen.findByText('Meter Readings — 1 logged')
+    const historyCallsBeforeEdit = fetchMock.mock.calls.filter(([input]) => String(input) === '/api/status/history').length
+
+    await user.click(screen.getByText('Meter Readings — 1 logged'))
+    await user.click(await screen.findByRole('button', { name: /Edit reading from/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('150 kWh')
+    const historyCallsAfterEdit = fetchMock.mock.calls.filter(([input]) => String(input) === '/api/status/history').length
+    expect(historyCallsAfterEdit).toBeGreaterThan(historyCallsBeforeEdit)
+  })
 })

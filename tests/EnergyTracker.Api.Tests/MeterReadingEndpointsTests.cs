@@ -30,6 +30,12 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
             .CountAsync(r => r.HouseholdId == householdId, TestContext.Current.CancellationToken);
     }
 
+    private static Task<HttpResponseMessage> SetYearlyBaselineAsync(HttpClient client, Guid householdId, decimal yearlyBaselineKwh, int version) =>
+        client.PutAsJsonAsync(
+            $"/api/households/{householdId}/yearly-baseline",
+            new { yearlyBaselineKwh, version },
+            TestContext.Current.CancellationToken);
+
     [Fact]
     public async Task POST_meter_readings_returns_200_on_create()
     {
@@ -193,18 +199,87 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
     }
 
     [Fact]
-    public async Task PUT_meter_readings_id_with_a_stale_Version_returns_409()
+    public async Task PUT_meter_readings_id_correcting_the_value_persists_a_new_StatusSnapshot_row()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        var householdResponse = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var household = await householdResponse.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        await SetYearlyBaselineAsync(client, household!.Id, 3650m, household.Version);
+        var latest = DateTimeOffset.UtcNow;
+        var baseline = latest.AddDays(-100);
+        await PostReadingAsync(client, 1000m, baseline);
+        var second = await PostReadingAsync(client, 2050m, latest);
+        var secondBody = await second.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        // Status is already definite from the two POSTs above (AC #8) — one StatusSnapshot row
+        // exists before the correction, with pace = 2050 - 1000 baseline-to-date = 1050 kWh
+        // (same 100-day/3650-yearly-baseline math as StatusEndpointsTests' equivalent assertion).
+        var snapshotCountBeforeEdit = await factory.CountStatusSnapshotRowsAsync(household.Id);
+
+        await client.PutAsJsonAsync(
+            $"/api/meter-readings/{secondBody!.Id}",
+            new { kwhValue = 2100m, version = secondBody.Version },
+            TestContext.Current.CancellationToken);
+
+        // AC #3: the correction triggers exactly one more RecomputeAsync call, appending a new
+        // immutable StatusSnapshot row rather than rewriting the existing one — and that new row
+        // must actually reflect the corrected 2100m total (pace = 2100 - 1000 = 1100 kWh), not a
+        // stale/cached recompute that still used the pre-correction 2050m value.
+        (await factory.CountStatusSnapshotRowsAsync(household.Id)).ShouldBe(snapshotCountBeforeEdit + 1);
+        (await factory.GetLatestStatusSnapshotAsync(household.Id)).PaceToDateKwh.ShouldBe(1100m);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_for_a_reading_under_an_open_regression_prompt_does_not_resolve_the_prompt()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var baseline = DateTimeOffset.UtcNow.AddDays(-1);
+        await PostReadingAsync(client, 14302m, baseline);
+        var lowerResponse = await PostReadingAsync(client, 412m, baseline.AddHours(1));
+        var lowerReading = await lowerResponse.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+
+        // AC #4: editing the very reading an open MeterRegressionPrompt is tracking must not
+        // bypass or resolve that prompt — it stays open, excluded from baseline computation,
+        // until explicitly classified (Story 2.3).
+        var putResponse = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{lowerReading!.Id}",
+            new { kwhValue = 415m, version = lowerReading.Version },
+            TestContext.Current.CancellationToken);
+        putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var openResponse = await client.GetAsync("/api/meter-regression-prompts/open", TestContext.Current.CancellationToken);
+        openResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var open = await openResponse.Content.ReadFromJsonAsync<MeterRegressionPromptResponse>(TestContext.Current.CancellationToken);
+        open.ShouldNotBeNull();
+        open.MeterReadingId.ShouldBe(lowerReading.Id);
+        open.ReadingKwhValue.ShouldBe(415m);
+    }
+
+    [Fact]
+    public async Task PUT_meter_readings_id_with_a_stale_Version_returns_409_and_never_overwrites_the_first_writers_committed_value()
     {
         var (client, _) = await CreateHouseholdAsync();
         var created = await PostReadingAsync(client, 100m, DateTimeOffset.UtcNow);
         var createdBody = await created.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
 
-        var response = await client.PutAsJsonAsync(
+        // First writer commits successfully, bumping the Version...
+        var firstWriter = await client.PutAsJsonAsync(
             $"/api/meter-readings/{createdBody!.Id}",
-            new { kwhValue = 150m, version = createdBody.Version + 1 },
+            new { kwhValue = 150m, version = createdBody.Version },
+            TestContext.Current.CancellationToken);
+        firstWriter.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // ...then a second writer, still holding the pre-edit Version, submits its own edit and
+        // must be rejected rather than silently overwriting the first writer's committed value.
+        var secondWriter = await client.PutAsJsonAsync(
+            $"/api/meter-readings/{createdBody.Id}",
+            new { kwhValue = 200m, version = createdBody.Version },
             TestContext.Current.CancellationToken);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        secondWriter.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var getResponse = await client.GetAsync("/api/meter-readings?page=1&pageSize=20", TestContext.Current.CancellationToken);
+        var page = await getResponse.Content.ReadFromJsonAsync<MeterReadingHistoryPageResponse>(TestContext.Current.CancellationToken);
+        page!.Items.Single(i => i.Id == createdBody.Id).KwhValue.ShouldBe(150m);
     }
 
     [Fact]

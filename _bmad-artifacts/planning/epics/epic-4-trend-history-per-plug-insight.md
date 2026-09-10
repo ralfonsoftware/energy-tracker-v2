@@ -99,7 +99,7 @@ So that a mistake doesn't leave my trend permanently wrong or silently hidden.
 
 **Given** a corrected Meter Reading
 **When** the correction is saved
-**Then** `IStatusRecomputeService` (Story 2.4) recomputes Status forward from the corrected reading through to the present, and the affected `StatusSnapshot` rows are updated to reflect the corrected value — history before the corrected reading is left untouched (AD-7)
+**Then** `IStatusRecomputeService` (Story 2.4) is called once, the same way it already is after every new Meter Reading, so that a fresh Status snapshot reflecting the corrected value is computed and persisted going forward — existing `StatusSnapshot` rows are never rewritten, per their documented immutable/insert-only design (AD-7, NFR9)
 
 **Given** a Meter Reading that is currently excluded from baseline computation by an unresolved regression prompt (Story 2.3)
 **When** it is edited

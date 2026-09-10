@@ -19,16 +19,6 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         return (client, created!.Id, created.Version);
     }
 
-    // AD-3's query filter needs an HttpContext-bound CurrentHouseholdAccessor, absent in this raw
-    // scope — IgnoreQueryFilters is required to count/read directly against the table.
-    private async Task<int> CountStatusSnapshotRowsAsync(Guid householdId)
-    {
-        using var scope = factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        return await dbContext.StatusSnapshots.IgnoreQueryFilters()
-            .CountAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
-    }
-
     private static Task<HttpResponseMessage> PostReadingAsync(HttpClient client, decimal kwhValue, DateTimeOffset readingTimestamp) =>
         client.PostAsJsonAsync(
             "/api/meter-readings",
@@ -222,7 +212,7 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
 
         // First reading alone leaves Status undefined (AC #6) — no snapshot yet.
         await PostReadingAsync(client, 1000m, baseline);
-        (await CountStatusSnapshotRowsAsync(householdId)).ShouldBe(0);
+        (await factory.CountStatusSnapshotRowsAsync(householdId)).ShouldBe(0);
 
         // Second reading makes Status definite — AC #8: the recompute writes an immutable snapshot.
         // 100 days elapsed -> baseline-to-date = 3650 * 100/365 = 1000 kWh exactly; pace = 1050 kWh,

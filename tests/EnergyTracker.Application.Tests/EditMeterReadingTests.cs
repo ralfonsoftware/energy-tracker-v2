@@ -10,6 +10,7 @@ public class EditMeterReadingTests
     private readonly IMeterReadingRepository _readingRepository = Substitute.For<IMeterReadingRepository>();
     private readonly IAuditCorrectionRecorder _auditCorrectionRecorder = Substitute.For<IAuditCorrectionRecorder>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
 
     private EditMeterReading Sut()
     {
@@ -18,7 +19,7 @@ public class EditMeterReadingTests
         _unitOfWork
             .ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<MeterReading>>>(), Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<Func<CancellationToken, Task<MeterReading>>>()(callInfo.Arg<CancellationToken>()));
-        return new(_readingRepository, _auditCorrectionRecorder, _unitOfWork);
+        return new(_readingRepository, _auditCorrectionRecorder, _unitOfWork, _statusRecomputeService);
     }
 
     private static MeterReading NewReading(Guid householdId, decimal kwhValue, int version = 0, Guid? id = null) => new()
@@ -131,5 +132,33 @@ public class EditMeterReadingTests
             Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
         await _auditCorrectionRecorder.DidNotReceive().RecordAsync(
             Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RecomputeAsync_is_called_exactly_once_on_a_real_change()
+    {
+        var householdId = Guid.NewGuid();
+        var reading = NewReading(householdId, 100m, version: 3);
+        var updated = NewReading(householdId, 150m, version: 4);
+        _readingRepository.FindByIdAsync(reading.Id, Arg.Any<CancellationToken>()).Returns(reading);
+        _readingRepository.UpdateKwhValueAsync(reading.Id, 150m, 3, Arg.Any<CancellationToken>()).Returns(updated);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, reading.Id, 150m, 3, TestContext.Current.CancellationToken);
+
+        await _statusRecomputeService.Received(1).RecomputeAsync(householdId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_no_op_save_of_the_same_value_never_calls_RecomputeAsync()
+    {
+        var householdId = Guid.NewGuid();
+        var reading = NewReading(householdId, 100m, version: 3);
+        _readingRepository.FindByIdAsync(reading.Id, Arg.Any<CancellationToken>()).Returns(reading);
+        var sut = Sut();
+
+        await sut.ExecuteAsync(householdId, reading.Id, 100m, 3, TestContext.Current.CancellationToken);
+
+        await _statusRecomputeService.DidNotReceive().RecomputeAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }
