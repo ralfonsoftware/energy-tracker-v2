@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -28,24 +28,34 @@ export function TrendHistoryPage({ locale, onBack, onSettingsClick, onSmartPlugI
   // (the sibling MeterReadingsCard already makes this distinction for its own fetch).
   const [chartLoadError, setChartLoadError] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  // A ref-based request id, not a per-call `cancelled` closure — loadStatusHistory is now called
+  // from two independent sites (mount, and MeterReadingsCard's onReadingCorrected after a save),
+  // so a stale response from an earlier call must never overwrite state written by a later one,
+  // regardless of which call site triggered which fetch or resolved first.
+  const latestRequestId = useRef(0)
+
+  const loadStatusHistory = useCallback(() => {
+    const requestId = ++latestRequestId.current
     fetchStatusHistory()
       .then((result) => {
-        if (!cancelled) {
+        if (latestRequestId.current === requestId) {
+          setChartLoadError(false)
           setEntries(result)
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (latestRequestId.current === requestId) {
           setChartLoadError(true)
         }
       })
-
-    return () => {
-      cancelled = true
-    }
   }, [])
+
+  useEffect(() => {
+    loadStatusHistory()
+    return () => {
+      latestRequestId.current += 1
+    }
+  }, [loadStatusHistory])
 
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
@@ -71,7 +81,7 @@ export function TrendHistoryPage({ locale, onBack, onSettingsClick, onSmartPlugI
           )}
         </GlassCard>
 
-        <MeterReadingsCard locale={locale} />
+        <MeterReadingsCard locale={locale} onReadingCorrected={loadStatusHistory} />
 
         <PerPlugDataCard locale={locale} />
       </div>

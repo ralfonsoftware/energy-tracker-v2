@@ -1,3 +1,4 @@
+using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -57,5 +58,27 @@ public class EnergyTrackerApiFactory : WebApplicationFactory<Program>, IAsyncLif
         }
 
         return client;
+    }
+
+    // AD-3's query filter needs an HttpContext-bound CurrentHouseholdAccessor, absent in this raw
+    // scope — IgnoreQueryFilters is required to count/read directly against the table. Shared here
+    // (not duplicated per test class) since both StatusEndpointsTests and MeterReadingEndpointsTests
+    // need it.
+    public async Task<int> CountStatusSnapshotRowsAsync(Guid householdId)
+    {
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.StatusSnapshots.IgnoreQueryFilters()
+            .CountAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
+    }
+
+    public async Task<StatusSnapshot> GetLatestStatusSnapshotAsync(Guid householdId)
+    {
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.StatusSnapshots.IgnoreQueryFilters()
+            .Where(s => s.HouseholdId == householdId)
+            .OrderByDescending(s => s.ComputedAtUtc)
+            .FirstAsync(TestContext.Current.CancellationToken);
     }
 }

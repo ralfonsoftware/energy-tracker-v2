@@ -366,7 +366,32 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-05
+last_updated: 2026-09-10
+# 2026-09-10: story 4-3-correcting-a-meter-reading implemented (dev-story) — status set to
+#   review. Wired IStatusRecomputeService.RecomputeAsync into EditMeterReading as AD-7's third
+#   call site (AC #3), placed after the value-update transaction commits, skipped on a no-op
+#   save — mirrors CreateMeterReading's existing placement exactly. Regression-proved AC #1/#2/#4
+#   on the already-shipped Story 2.8 code path: strengthened the concurrency-conflict test to
+#   prove the first writer's committed value survives a second writer's rejected request (not
+#   just a 409 status), and added a new integration test proving an edit never resolves an open
+#   MeterRegressionPrompt it's tracking. Task 4's frontend check found a genuine (small) staleness
+#   gap — TrendHistoryPage's chart fetched StatusHistory once on mount with no way for the sibling
+#   MeterReadingsCard's edit-save flow to trigger a refresh — fixed by wiring one callback
+#   (onReadingCorrected) through, no new cache-invalidation infrastructure. Resolved both related
+#   deferred-work.md entries from the Story 2.8 review. Full regression bar green: backend
+#   475/475, frontend 254/254, tsc -b clean, oxlint clean (only pre-existing unrelated warnings).
+# 2026-09-10: story 4-3-correcting-a-meter-reading created (create-story) — status set to
+#   ready-for-dev. Scope is narrower than the epic text implies: Story 2.8 (absorbed into 4.1)
+#   already built AC #1/#2/#4 (audit trail, 409 concurrency, regression-prompt non-interference);
+#   the only net-new production code is AC #3's IStatusRecomputeService wiring into
+#   EditMeterReading. AC #3's literal wording ("StatusSnapshot rows are updated") conflicts with
+#   StatusSnapshot's documented immutable/insert-only design (AD-7/NFR9) and has no supporting
+#   mechanism (no FK from StatusSnapshot back to MeterReading, no as-of-date recompute capability).
+#   This was already flagged unresolved in deferred-work.md and the Epic 3 Retro. Ralf resolved it
+#   during story creation: reword the AC to the buildable, single-call behavior (one
+#   RecomputeAsync call mirroring CreateMeterReading's existing call site) rather than build new
+#   as-of-date recompute machinery. The epic file's AC #3 text and this story were both updated
+#   to match. See the story file's "Why AC #3 Reads the Way It Does" section for full detail.
 # 2026-09-05: story 3-9-watermark-correction-detection-and-bulk-write-adoption moved to done
 #   (adversarial code review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 3
 #   decision-needed (2 dismissed by Ralf, 1 converted to patch), 9 patch findings (all applied —
@@ -773,7 +798,7 @@ development_status:
   epic-4: in-progress
   4-1-trend-history-view: review
   4-2-per-plug-measured-data-view: done
-  4-3-correcting-a-meter-reading: backlog
+  4-3-correcting-a-meter-reading: done
   epic-4-retrospective: optional
 
   epic-5: backlog
