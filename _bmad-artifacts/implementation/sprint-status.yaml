@@ -366,7 +366,27 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-10
+last_updated: 2026-09-11
+# 2026-09-11: epic-4-retrospective completed — 14 items reviewed: epic-4 (4.1-4.3), plus orphaned
+#   stories 1.11 (epic-1) and 3.5-3.9 (epic-3) done since the 2026-08-23 epic-3 retro, plus 3
+#   spec-*.md one-shots (trend-chart-time-axis, power-point-mapping-list-scroll,
+#   background-job-changetracker-orphan-fix) and 2 previously-undocumented hotfixes (PR #40 SQL
+#   Server bulk-upsert CREATE TABLE permission, PR #41 Power Point mapping status rollback) folded
+#   in at Ralf's explicit request after being surfaced during epic discovery. 1 real production
+#   incident found and already fixed: 2026-09-05 10:56 UTC, Azure SQL Basic tier hit 100% DTU
+#   during a bulk insert, timed out, and a ChangeTracker.Clear() bug silently swallowed the
+#   resulting job-failure status (spec-background-job-changetracker-orphan-fix). 4-1 and 3-8 were
+#   functionally complete but stuck in `review` status (bookkeeping gap, not unfinished work) —
+#   flipped to done as part of this retro, along with epic-3 and epic-4 both resetting to done. 3.8's
+#   spike teardown (disposable Spike_* objects, AC #10) confirmed clean by Ralf. All 6 action items
+#   from the prior epic-3 retro (2026-08-23) were done, including the Epic 4 definition update
+#   being followed exactly as decided. 6 new action items recorded: 3 hard/lightweight process gates
+#   from this epic's own patterns (no undocumented hotfixes — hard PR-merge gate; live Auth0/Chrome
+#   verification required before review->done for OIDC/claim/browser-dependent behavior, blocking if
+#   Chrome unavailable; non-blocking i18n/unmounted-guard checklist reminders) and 3 Epic 5
+#   next-epic-prep items (verify AuditCorrection/AD-4's second real consumer at 5.1 kickoff; verify
+#   BonusDecayNormalizer/AD-5's first real consumer at 5.2 kickoff; verify AD-21 Azure permissions
+#   early for any Epic 5 production-write story). See epic-4-retro-2026-09-11.md.
 # 2026-09-10: story 4-3-correcting-a-meter-reading implemented (dev-story) — status set to
 #   review. Wired IStatusRecomputeService.RecomputeAsync into EditMeterReading as AD-7's third
 #   call site (AC #3), placed after the value-update transaction commits, skipped on a no-op
@@ -783,7 +803,7 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
+  epic-3: done
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
@@ -791,15 +811,15 @@ development_status:
   3-5-dual-entry-points-multi-file-import-queuing: done
   3-6-smart-plug-import-job-status-history: done
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
-  3-8-smart-plug-bulk-write-throughput-spike: review
+  3-8-smart-plug-bulk-write-throughput-spike: done
   3-9-watermark-correction-detection-and-bulk-write-adoption: done
   epic-3-retrospective: done
 
-  epic-4: in-progress
-  4-1-trend-history-view: review
+  epic-4: done
+  4-1-trend-history-view: done
   4-2-per-plug-measured-data-view: done
   4-3-correcting-a-meter-reading: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: backlog
   5-1-tariff-configuration: backlog
@@ -819,6 +839,36 @@ development_status:
   epic-7-retrospective: optional
 
 action_items:
+  - epic: 4
+    action: "No fix to already-shipped code merges without a linked spec/story doc, regardless of size or urgency — hard gate at PR merge, no exceptions"
+    owner: "PR authors/reviewers"
+    status: open
+    note: "2026-09-11 epic-4 retro. PR #40/#41 both fixed real production-surfaced integration gaps with zero spec/story trail beforehand, unlike three sibling one-shots in the same window that used spec-*.md fine. Root cause: timing pressure during/after an incident, not missing machinery."
+  - epic: 4
+    action: "A story with OIDC/claim/browser-dependent behavior cannot move review->done without live Auth0/Chrome verification actually performed during that review session; if Chrome isn't available in that session, the story stays blocked in review — it never ships anyway"
+    owner: "code reviewers"
+    status: open
+    note: "2026-09-11 epic-4 retro. 3.5/3.6/4.1/4.2 all deferred live verification with no follow-up mechanism; the one time it was checked (3.6, during code review) it found a real live-broken bug (ClaimTypes.Name never populates against this app's Auth0 config) that automated tests couldn't catch."
+  - epic: 4
+    action: "Add non-blocking checklist reminders to dev-story/review: verify locale/date/number formatting goes through Intl.* (never hardcoded); verify effect cleanup/unmounted-guards on async operations (uploads, polling, fetches)"
+    owner: "story authors/reviewers"
+    status: open
+    note: "2026-09-11 epic-4 retro. i18n-hardcoding recurred 3x (3.6, 4.1, 4.2) and missing-unmounted-guard bugs recurred 3x (3.5, 3.6, 4.3) — always caught in review, never reached production, so a lightweight non-blocking reminder rather than a hard gate."
+  - epic: 5
+    action: "At Story 5.1 kickoff, verify the AuditCorrection/IAuditCorrectionRecorder + AD-4 concurrency abstraction (built generic in Story 2.8) holds up unmodified for Tariff — its second real consumer after Meter Reading"
+    owner: "story author (create-story)"
+    status: open
+    note: "2026-09-11 epic-4 retro, next-epic prep."
+  - epic: 5
+    action: "At Story 5.2 kickoff, verify Domain.Calculations.BonusDecayNormalizer (AD-5) as its first real consumer — nothing has called it yet"
+    owner: "story author (create-story)"
+    status: open
+    note: "2026-09-11 epic-4 retro, next-epic prep."
+  - epic: 5
+    action: "For any Epic 5 story touching production writes, verify AD-21's actual Azure permission grants against the real operation early, not after deploy"
+    owner: "story author/dev"
+    status: open
+    note: "2026-09-11 epic-4 retro, next-epic prep. Learned from PR #40's CREATE TABLE permission gap between AD-21's least-privilege grants and Story 3.9's EFCore.BulkExtensions adoption."
   - epic: 1
     action: "Add a required, blocking 'verified against the real deployed environment' AC for any story touching auth, ingress, proxy config, or the deploy pipeline"
     owner: "story authors/reviewers"
