@@ -111,4 +111,12 @@ public interface ISmartPlugImportRepository
     // finished, but the import itself is still unresolved. SmartPlugReading rows are never
     // deleted, only detached via the SetNull FK (AD-20).
     Task SweepExpiredAsync(Guid householdId, DateTimeOffset cutoffUtc, CancellationToken cancellationToken);
+
+    // Story 3.10: manual, user-triggered cleanup — unlike SweepExpiredAsync, eligible across ALL
+    // six job/import states (Waiting/Processing/Needs Mapping included), and cutoffUtc is optional:
+    // null means delete every job/audit record regardless of age ("clean up everything"); a value
+    // means delete only records older than that cutoff. Returns the number of jobs deleted. Same
+    // AD-20 guarantee as SweepExpiredAsync — only BackgroundJob/SmartPlugImport/SmartPlugImportGap
+    // audit rows are ever deleted, SmartPlugReading rows are only ever detached via the SetNull FK.
+    Task<int> DeleteJobsAsync(Guid householdId, DateTimeOffset? cutoffUtc, CancellationToken cancellationToken);
 }

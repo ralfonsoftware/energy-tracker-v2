@@ -696,11 +696,59 @@ public class SmartPlugImportRepository(
             return;
         }
 
-        // Set-based, in FK-dependency order (UpdateMappingAsync's own doc comment establishes the
-        // same discipline for this table) — never load-then-remove, these tables can hold
-        // hundreds of thousands of rows.
         var importIds = eligible.Where(x => x.SmartPlugImportId is not null).Select(x => x.SmartPlugImportId!.Value).ToList();
         var jobIds = eligible.Select(x => x.BackgroundJobId).ToList();
+        await DeleteEligibleAsync(jobIds, importIds, cancellationToken);
+    }
+
+    public async Task<int> DeleteJobsAsync(Guid householdId, DateTimeOffset? cutoffUtc, CancellationToken cancellationToken)
+    {
+        // Story 3.10: a manual, user-triggered counterpart to SweepExpiredAsync above — deliberately
+        // NOT restricted to terminal states (Waiting/Processing/Needs Mapping are eligible here,
+        // unlike the automatic sweep) and cutoffUtc is optional ("clean up everything" = null).
+        // Kept as its own eligibility query rather than folding an "include active states" flag
+        // into SweepExpiredAsync itself, so the automatic sweep's Story 3.6 behavior can never
+        // regress via this method's changes.
+        //
+        // effectiveAgeUtc fallback chain: import.CompletedAtUtc (set at initial parse time for
+        // BOTH Completed and AwaitingPowerPointMapping — see ProcessSmartPlugImport.cs:113-124, so
+        // Needs Mapping rows already have a usable value here) -> job.CompletedAtUtc (Failed jobs
+        // with no paired import row) -> job.CreatedAtUtc (the only timestamp a Queued/Processing
+        // job has — both of the prior two are null for those).
+        var eligible = await (
+            from job in dbContext.BackgroundJobs
+            where job.HouseholdId == householdId && job.JobType == JobTypes.ProcessSmartPlugImport
+            join import in dbContext.SmartPlugImports on job.Id equals import.BackgroundJobId into importGroup
+            from import in importGroup.DefaultIfEmpty()
+            let effectiveAgeUtc = (import != null ? import.CompletedAtUtc : null) ?? job.CompletedAtUtc ?? job.CreatedAtUtc
+            where cutoffUtc == null || effectiveAgeUtc < cutoffUtc
+            select new { BackgroundJobId = job.Id, SmartPlugImportId = (Guid?)(import == null ? null : import.Id) }
+        ).ToListAsync(cancellationToken);
+
+        if (eligible.Count == 0)
+        {
+            return 0;
+        }
+
+        var importIds = eligible.Where(x => x.SmartPlugImportId is not null).Select(x => x.SmartPlugImportId!.Value).ToList();
+        var jobIds = eligible.Select(x => x.BackgroundJobId).ToList();
+        await DeleteEligibleAsync(jobIds, importIds, cancellationToken);
+
+        return eligible.Count;
+    }
+
+    // Shared by SweepExpiredAsync (automatic, terminal-states-only) and DeleteJobsAsync (manual,
+    // all-states, Story 3.10) — set-based, in FK-dependency order (UpdateMappingAsync's own doc
+    // comment establishes the same discipline for this table) — never load-then-remove, these
+    // tables can hold hundreds of thousands of rows.
+    //
+    // Code-review fix (2026-09-11): wrapped in one explicit transaction — three independent
+    // ExecuteDeleteAsync calls with no transaction risked a partial delete (gaps/imports gone,
+    // BackgroundJob rows left behind) surviving a cancellation or transient failure between calls,
+    // the same class of bug this codebase already fixed once for Power Point mapping (fa77aef).
+    private async Task DeleteEligibleAsync(IReadOnlyList<Guid> jobIds, IReadOnlyList<Guid> importIds, CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         if (importIds.Count > 0)
         {
@@ -708,8 +756,8 @@ public class SmartPlugImportRepository(
                 .Where(g => importIds.Contains(g.SmartPlugImportId))
                 .ExecuteDeleteAsync(cancellationToken);
 
-            // Task 3's SetNull FK detaches (never deletes) the matching SmartPlugReading rows
-            // automatically at the database level (AD-20).
+            // Task 3's (Story 3.6) SetNull FK detaches (never deletes) the matching
+            // SmartPlugReading rows automatically at the database level (AD-20).
             await dbContext.SmartPlugImports
                 .Where(i => importIds.Contains(i.Id))
                 .ExecuteDeleteAsync(cancellationToken);
@@ -720,5 +768,7 @@ public class SmartPlugImportRepository(
         await dbContext.BackgroundJobs
             .Where(j => jobIds.Contains(j.Id))
             .ExecuteDeleteAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
     }
 }

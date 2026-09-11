@@ -161,6 +161,26 @@ export async function fetchSmartPlugImportJobs(): Promise<SmartPlugImportJobDto[
   return (await response.json()) as SmartPlugImportJobDto[]
 }
 
+export interface SmartPlugImportJobCleanupDto {
+  deletedCount: number
+}
+
+// Story 3.10: manual cleanup — deleteAll=false deletes records older than 30 days, deleteAll=true
+// deletes everything regardless of age. Unlike fetchSmartPlugImportJobs' own lazy sweep, this is
+// eligible across all six states (Waiting/Processing/Needs Mapping included), not just the three
+// terminal ones.
+export async function cleanUpSmartPlugImportJobs(deleteAll: boolean): Promise<SmartPlugImportJobCleanupDto> {
+  const response = await fetch(`/api/smart-plug-import-jobs?deleteAll=${deleteAll}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as SmartPlugImportJobCleanupDto
+}
+
 export async function createPowerPoint(roomId: string, name: string): Promise<PowerPointDto> {
   const response = await fetch('/api/power-points', {
     method: 'POST',

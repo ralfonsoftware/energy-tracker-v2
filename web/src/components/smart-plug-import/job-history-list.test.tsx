@@ -25,10 +25,17 @@ function makeJob(overrides: Partial<SmartPlugImportJobDto>): SmartPlugImportJobD
   return { ...BASE_JOB, jobId: overrides.jobId ?? crypto.randomUUID(), ...overrides }
 }
 
-function stubFetch(jobs: SmartPlugImportJobDto[]) {
-  const fetchMock = vi.fn((url: string) => {
-    if (url === '/api/smart-plug-import-jobs') {
-      return Promise.resolve(jsonResponse(jobs))
+function stubFetch(jobs: SmartPlugImportJobDto[], options: { jobsAfterCleanup?: SmartPlugImportJobDto[] } = {}) {
+  let currentJobs = jobs
+  const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    if (url === '/api/smart-plug-import-jobs' && (!init || init.method === undefined)) {
+      return Promise.resolve(jsonResponse(currentJobs))
+    }
+    if (url.startsWith('/api/smart-plug-import-jobs?deleteAll=') && init?.method === 'DELETE') {
+      if (options.jobsAfterCleanup) {
+        currentJobs = options.jobsAfterCleanup
+      }
+      return Promise.resolve(jsonResponse({ deletedCount: currentJobs.length }))
     }
     if (url === '/api/rooms') {
       return Promise.resolve(jsonResponse([{ id: 'room-1', name: 'Living room', archivedAt: null }]))
@@ -37,7 +44,7 @@ function stubFetch(jobs: SmartPlugImportJobDto[]) {
       return Promise.resolve(jsonResponse([{ id: 'pp-1', roomId: 'room-1', name: 'Office Desk', archivedAt: null }]))
     }
 
-    throw new Error(`Unexpected fetch: ${url}`)
+    throw new Error(`Unexpected fetch: ${url} ${init?.method ?? 'GET'}`)
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
@@ -141,5 +148,128 @@ describe('JobHistoryList', () => {
     render(<JobHistoryList />)
 
     await waitFor(() => expect(screen.getByText(/Queued by a household member/)).toBeInTheDocument())
+  })
+
+  describe('Clean up history (Story 3.10)', () => {
+    it('opens the confirmation dialog on click, never deletes on a bare click', async () => {
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      const fetchMock = stubFetch([job])
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('deleteAll'), expect.anything())
+    })
+
+    it('defaults to the older-than-30-days option', async () => {
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      stubFetch([job])
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      expect(screen.getByRole('radio', { name: /Delete entries older than 30 days/ })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /Delete everything/ })).not.toBeChecked()
+    })
+
+    it('confirming the default option calls cleanUpSmartPlugImportJobs with deleteAll=false and re-fetches the list', async () => {
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      const fetchMock = stubFetch([job], { jobsAfterCleanup: [] })
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith('/api/smart-plug-import-jobs?deleteAll=false', expect.objectContaining({ method: 'DELETE' })),
+      )
+      await waitFor(() => expect(screen.getByText('No imports yet')).toBeInTheDocument())
+    })
+
+    it('confirming the everything option calls cleanUpSmartPlugImportJobs with deleteAll=true', async () => {
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      const fetchMock = stubFetch([job], { jobsAfterCleanup: [] })
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('radio', { name: /Delete everything/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith('/api/smart-plug-import-jobs?deleteAll=true', expect.objectContaining({ method: 'DELETE' })),
+      )
+    })
+
+    it('cancelling closes the dialog with no API call', async () => {
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      const fetchMock = stubFetch([job])
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      await waitFor(() => expect(screen.queryByText('Clean up import history')).not.toBeInTheDocument())
+      expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('deleteAll'), expect.anything())
+    })
+
+    it('resets to the older-than-30-days option when reopened after selecting everything and cancelling', async () => {
+      // Code-review regression guard: the selection used to survive Cancel and persist into the
+      // next open, which could silently pre-select "everything" on a later, unrelated cleanup.
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      stubFetch([job])
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('radio', { name: /Delete everything/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByText('Clean up import history')).not.toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+
+      await waitFor(() => expect(screen.getByRole('radio', { name: /Delete entries older than 30 days/ })).toBeChecked())
+      expect(screen.getByRole('radio', { name: /Delete everything/ })).not.toBeChecked()
+    })
+
+    it('clears a previous error message when the dialog is reopened', async () => {
+      // Code-review regression guard: a stale error from a prior failed attempt used to remain
+      // visible on the next open, before any new request had even been made.
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/smart-plug-import-jobs' && (!init || init.method === undefined)) {
+          return Promise.resolve(jsonResponse([job]))
+        }
+        if (url.startsWith('/api/smart-plug-import-jobs?deleteAll=') && init?.method === 'DELETE') {
+          return Promise.resolve(jsonResponse({ detail: 'Something went wrong' }, 500))
+        }
+        throw new Error(`Unexpected fetch: ${url} ${init?.method ?? 'GET'}`)
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      await waitFor(() => expect(screen.getByText('Something went wrong')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByText('Clean up import history')).not.toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
+    })
   })
 })

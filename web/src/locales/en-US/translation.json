@@ -244,7 +244,17 @@
         "flaggedForReview": "Flagged for Review"
       },
       "emptyTitle": "No imports yet",
-      "emptyBody": "Nothing uploaded in the last 30 days. Import a Smart Plug export to see it appear here."
+      "emptyBody": "Nothing uploaded in the last 30 days. Import a Smart Plug export to see it appear here.",
+      "cleanup": {
+        "trigger": "Clean up history",
+        "title": "Clean up import history",
+        "olderThan30Days": "Delete entries older than 30 days",
+        "everything": "Delete everything",
+        "everythingConsequence": "Includes imports still waiting, in progress, or needing a Power Point mapping — not just old finished ones.",
+        "cancel": "Cancel",
+        "confirm": "Delete",
+        "error": "Something went wrong cleaning up the history. Please try again."
+      }
     }
   }
 }

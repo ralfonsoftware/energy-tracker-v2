@@ -653,4 +653,61 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         job.SmartPlugImportId.ShouldBe(terminalStatus.SmartPlugImportId);
         job.DeviceTag.ShouldBe(terminalStatus.SmartPlugImportDeviceTag);
     }
+
+    [Fact]
+    public async Task DELETE_smart_plug_import_jobs_with_deleteAll_true_deletes_a_NeedsMapping_job_and_clears_the_list()
+    {
+        // Story 3.10 AC #4/#5: unlike the automatic sweep, manual cleanup deletes across all six
+        // states, including an unresolved Needs Mapping import.
+        var (client, _) = await CreateHouseholdAsync();
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        var terminalStatus = await PollJobToTerminalAsync(client, uploadBody!.JobId);
+        terminalStatus.ImportStatus.ShouldBe("awaitingpowerpointmapping");
+
+        var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", TestContext.Current.CancellationToken);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        deleteBody!.DeletedCount.ShouldBe(1);
+        var jobsAfter = await client.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
+            "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
+        jobsAfter.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task DELETE_smart_plug_import_jobs_is_scoped_to_the_callers_own_Household()
+    {
+        var (clientA, _) = await CreateHouseholdAsync();
+        var roomResponse = await clientA.PostAsJsonAsync("/api/rooms", new { name = "Living room" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        await clientA.PostAsJsonAsync("/api/power-points", new { roomId = room!.Id, name = "Steckdose 1" }, TestContext.Current.CancellationToken);
+        using var upload = BuildUpload(EveSampleFilePath);
+        var uploadResponse = await clientA.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<SmartPlugImportUploadResponse>(TestContext.Current.CancellationToken);
+        await PollJobToTerminalAsync(clientA, uploadBody!.JobId);
+
+        var (clientB, _) = await CreateHouseholdAsync();
+        var deleteResponse = await clientB.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", TestContext.Current.CancellationToken);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+
+        deleteBody!.DeletedCount.ShouldBe(0);
+        var jobsForA = await clientA.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
+            "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
+        jobsForA.ShouldNotBeNull();
+        jobsForA.ShouldContain(j => j.JobId == uploadBody.JobId);
+    }
+
+    [Fact]
+    public async Task DELETE_smart_plug_import_jobs_with_no_jobs_returns_deletedCount_zero()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=false", TestContext.Current.CancellationToken);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        deleteBody!.DeletedCount.ShouldBe(0);
+    }
 }

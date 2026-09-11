@@ -244,7 +244,17 @@
         "flaggedForReview": "Zur Prüfung markiert"
       },
       "emptyTitle": "Noch keine Importe",
-      "emptyBody": "In den letzten 30 Tagen wurde nichts hochgeladen. Importiere einen Smart-Plug-Export, damit er hier erscheint."
+      "emptyBody": "In den letzten 30 Tagen wurde nichts hochgeladen. Importiere einen Smart-Plug-Export, damit er hier erscheint.",
+      "cleanup": {
+        "trigger": "Verlauf aufräumen",
+        "title": "Importverlauf aufräumen",
+        "olderThan30Days": "Einträge löschen, die älter als 30 Tage sind",
+        "everything": "Alles löschen",
+        "everythingConsequence": "Schließt Importe ein, die noch warten, gerade verarbeitet werden oder eine Power-Point-Zuordnung brauchen — nicht nur alte, abgeschlossene.",
+        "cancel": "Abbrechen",
+        "confirm": "Löschen",
+        "error": "Beim Aufräumen des Verlaufs ist etwas schiefgelaufen. Bitte versuche es erneut."
+      }
     }
   }
 }

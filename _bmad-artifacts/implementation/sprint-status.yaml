@@ -1,5 +1,30 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-11
+# 2026-09-11: story 3-10-manual-job-history-cleanup code-reviewed (/code-review, forked). 4 patch
+#   findings applied: wrapped SmartPlugImportRepository's 3-step delete (Gaps -> Imports ->
+#   BackgroundJobs) in an explicit transaction (this story's "delete everything" path materially
+#   widened a pre-existing untransacted gap's blast radius); deduplicated the RetentionWindow
+#   constant between ListSmartPlugImportJobs/CleanUpSmartPlugImportJobs; fixed the cleanup dialog's
+#   deleteAll/cleanupError state surviving across close/reopen (violated AC #3's "default on every
+#   open"); added the 2 missing DeleteJobsAsync test states (Failed-no-import, FlaggedForReview).
+#   5 findings deliberately not fixed, reasoning recorded in the story's Review Findings section —
+#   2 are tradeoffs already called out as intentional in the story's own pre-review Dev Notes, 3 are
+#   genuine but low-priority/out-of-scope polish. 6 new tests added. Full backend suite green
+#   (489/489), full frontend suite green (261/261), dotnet build/tsc -b/oxlint/vite build all
+#   clean. Status stays review — no human sign-off gate reached in this pass.
+# 2026-09-11: story 3-10-manual-job-history-cleanup moved to review (dev-story implementation
+#   complete). All 6 tasks done: generalized SweepExpiredAsync's delete mechanics into a shared
+#   private helper without changing its own eligibility query/behavior; added DeleteJobsAsync
+#   (all six states, optional age cutoff, falls back to BackgroundJob.CreatedAtUtc for Queued/
+#   Processing rows which have no CompletedAtUtc); CleanUpSmartPlugImportJobs use case; DELETE
+#   /api/smart-plug-import-jobs?deleteAll=true|false endpoint; frontend Clean Up History button +
+#   confirmation dialog on JobHistoryList (native radios, no alert-dialog primitive installed);
+#   i18n both locales. One test bug caught and fixed (not a product bug): a tenant-isolation test
+#   queried through the wrong household's DbContext, whose own AD-3 filter would have hidden a
+#   false pass — fixed by verifying through a DbContext scoped to the other household. Full backend
+#   suite green (487/487: 230 Application, 108 Infrastructure via Testcontainers, 146 Api.Tests,
+#   3 Architecture), full frontend suite green (259/259), tsc -b/oxlint/vite build all clean.
+# 2026-09-11: story 3-10-manual-job-history-cleanup moved to in-progress (dev-story activation)
 # 2026-09-11: story 3-10-manual-job-history-cleanup created (create-story) — status set to
 #   ready-for-dev. Read SweepExpiredAsync's real current implementation (SmartPlugImportRepository.
 #   cs:660-724) plus ProcessSmartPlugImport.cs/MapSmartPlugImportToPowerPoint.cs directly to verify
@@ -836,7 +861,7 @@ development_status:
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   3-8-smart-plug-bulk-write-throughput-spike: done
   3-9-watermark-correction-detection-and-bulk-write-adoption: done
-  3-10-manual-job-history-cleanup: ready-for-dev
+  3-10-manual-job-history-cleanup: review
   epic-3-retrospective: done
 
   epic-4: done
