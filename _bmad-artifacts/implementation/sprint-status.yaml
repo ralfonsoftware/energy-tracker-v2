@@ -1,5 +1,28 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-04
+# last_updated: 2026-09-11
+# 2026-09-11: story 3-10-manual-job-history-cleanup created (create-story) — status set to
+#   ready-for-dev. Read SweepExpiredAsync's real current implementation (SmartPlugImportRepository.
+#   cs:660-724) plus ProcessSmartPlugImport.cs/MapSmartPlugImportToPowerPoint.cs directly to verify
+#   a subtle point before speccing it: SmartPlugImport.CompletedAtUtc is set at initial parse time
+#   for AwaitingPowerPointMapping too, not only once resolved — so the new all-states delete
+#   method's age fallback to BackgroundJob.CreatedAtUtc is only actually needed for Queued/
+#   Processing rows (no SmartPlugImport row, null BackgroundJob.CompletedAtUtc), not for Needs
+#   Mapping. Design keeps SweepExpiredAsync's own eligibility query completely untouched (extract
+#   the shared 3-step FK-ordered delete into a private helper; do not parameterize the existing
+#   query with an "include active states" flag) so the automatic sweep's Story 3.6 behavior cannot
+#   regress. Confirmed with Ralf and captured as an explicit AC: deleting a Processing job's row
+#   does not cancel the in-flight parse (this product has no cancellation mechanism) — the worker's
+#   existing defensive-fallback path (BackgroundJobProcessor.cs:31-45) already handles a missing
+#   row, so the job silently reappears attribution-less on the next poll rather than erroring.
+# 2026-09-11: story 3-10-manual-job-history-cleanup added to backlog under epic-3 (Ralf's manual
+#   cleanup-button request for the Job Status & History list, taken through bmad-agent-pm ->
+#   bmad-create-epics-and-stories); FR-32 and UX-DR21 extended in requirements-inventory.md, new
+#   Story 3.10 appended to epic-3-smart-plug-import-baseline-sharpening.md. epic-3 reopened from
+#   done to in-progress since not all its stories are done (same reopen pattern as the 2026-08-27
+#   3.5/3.6 addition below). Deliberately generalizes Story 3.6's SweepExpiredAsync (age cutoff +
+#   state restriction both now optional) rather than a second delete path; deliberately carves a
+#   narrow exception into 3.6 AC #7 for this manual, explicitly-confirmed action only — the
+#   automatic sweep's terminal-states-only behavior is unchanged.
 # 2026-09-04: story 3-9-watermark-correction-detection-and-bulk-write-adoption implemented
 #   (dev-story) — status set to review. Both AD-22 (watermark correction detection) and AD-23
 #   (bulk-write adoption) fully implemented and tested against real Postgres AND real SQL Server
@@ -803,7 +826,7 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: done
+  epic-3: in-progress
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
@@ -813,6 +836,7 @@ development_status:
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   3-8-smart-plug-bulk-write-throughput-spike: done
   3-9-watermark-correction-detection-and-bulk-write-adoption: done
+  3-10-manual-job-history-cleanup: ready-for-dev
   epic-3-retrospective: done
 
   epic-4: done

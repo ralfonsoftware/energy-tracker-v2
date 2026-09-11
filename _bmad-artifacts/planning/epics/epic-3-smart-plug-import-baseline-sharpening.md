@@ -2,10 +2,10 @@
 
 Adds Smart Plug data (Eve Home `.xlsx`, Meross `.csv`) as an optional, additive signal that sharpens the Status Epic 2 already delivers — async import with completion notification, gap-tolerant parsing that never fabricates measured data. Builds on Epic 2's Status but never blocks it.
 
-**FRs covered:** FR-4 (amended 2026-08-26), FR-5, FR-24, FR-32 (added 2026-08-26)
+**FRs covered:** FR-4 (amended 2026-08-26), FR-5, FR-24, FR-32 (added 2026-08-26, extended 2026-09-11 — manual job-history cleanup)
 **NFRs:** NFR1 (Tier 3 async), NFR10 (no-silent-duplication on repeated writes)
 **Architecture:** AD-6 (extended 2026-08-26 — `BackgroundJobStatus.Queued`, lazy read-triggered retention sweep), AD-9, AD-10, AD-11 (extended 2026-09-03 — Smart Plug reading `KwhValue` boundary-row corrections), AD-20, AD-22 (added 2026-09-03 — watermark corruption detection), AD-23 (added 2026-09-03 — bulk-write via EFCore.BulkExtensions)
-**UX-DRs:** UX-DR6 (gap-band reuse), UX-DR9 (amended — Smart Plug Import off the nav-adjacent Settings path), UX-DR12 (amended — dual icon entry points, one shared screen), UX-DR14 (extended — six Job Status states + empty state), UX-DR20 (entry icon button + multi-file queue), UX-DR21 (Job Status & History list), UX-DR22 (accessibility follow-up)
+**UX-DRs:** UX-DR6 (gap-band reuse), UX-DR9 (amended — Smart Plug Import off the nav-adjacent Settings path), UX-DR12 (amended — dual icon entry points, one shared screen), UX-DR14 (extended — six Job Status states + empty state), UX-DR20 (entry icon button + multi-file queue), UX-DR21 (Job Status & History list; extended 2026-09-11 — manual cleanup control), UX-DR22 (accessibility follow-up)
 
 ## Story 3.1: Smart Plug File Upload & Async Parsing
 
@@ -356,3 +356,71 @@ So that my data stays accurate without a silent, undetected correction slipping 
 - This story is genuinely blocked on Story 3.8's real output. No spike numbers exist yet at the time this story was drafted — its exact throughput figures, go/no-go verdict, and recommended NFR1 Tier-3 budget are deliberately not fabricated here. Whoever picks this up must read Story 3.8's actual written result before writing any AD-23 code.
 - The device-swap gap and the storage-grain dependency (`deferred.md`) are both explicitly out of scope for this story, same as they were for Story 3.8.
 - No settings/UI surface, no retroactive re-detection of gaps/Status against corrected readings (AD-7 discipline, same as every prior Epic 3 cleanup story).
+
+## Story 3.10: Manual Job History Cleanup
+
+As a Household member,
+I want to manually clear entries from the Smart Plug Import job history on demand,
+So that I can tidy up the list on my own schedule — including jobs the automatic 30-day sweep would never touch on its own — instead of waiting for it.
+
+**Context (why this is needed):** Story 3.6 built an automatic, lazy, read-triggered 30-day sweep (AD-6 extension) that only ever clears the three terminal states (Success, Error, Flagged for Review) and only once they're 30 days past completion — Waiting, Processing, and Needs Mapping are deliberately exempt (AC #7 of that story), since an unresolved or in-flight job must never silently disappear on its own. Ralf asked for a manual escape hatch on top of that: a button that lets a Household member clear the list right now, on two schedules (older-than-30-days, or everything), and — deliberately, this time, because it's a manual and explicitly confirmed action rather than a silent background sweep — across *all six* states, not just the three terminal ones. This is a narrow, explicit exception to Story 3.6's "never auto-remove Waiting/Processing/Needs Mapping" rule: it does not weaken that rule for the automatic sweep, which is unchanged by this story.
+
+**Acceptance Criteria:**
+
+**Given** the Job Status & History list (Story 3.6)
+**When** a Household member views the Smart Plug Import screen
+**Then** a "Clean Up History" action is visible on the same screen (FR-32 extension, UX-DR21 extension)
+
+**Given** the Clean Up History action
+**When** tapped
+**Then** it always opens an explicit confirmation step first — no tap of the action itself deletes anything immediately (FR-32 extension)
+
+**Given** the confirmation step
+**When** presented
+**Then** it offers exactly two mutually exclusive modes — delete every job/audit record older than 30 days (the default/pre-selected choice), or delete every job/audit record regardless of age — and the household member must explicitly confirm before either executes (FR-32 extension)
+
+**Given** either cleanup mode executes
+**When** it deletes records
+**Then** it is eligible to delete a job/import in *any* of the six states — Waiting, Processing, Success, Error, Needs Mapping, Flagged for Review — unlike the automatic sweep, which only ever touches the three terminal states (FR-32 extension; explicit, deliberate exception to Story 3.6 AC #7 for this manual path only — Story 3.6's automatic sweep behavior is unchanged)
+
+**Given** a Needs Mapping job deleted by manual cleanup
+**When** deleted
+**Then** its `SmartPlugImport` row (Story 3.2's unresolved create-or-map decision) is deleted along with it — the household permanently forfeits the ability to resolve that import once deleted, and the confirmation step's copy makes this consequence explicit, especially for the "everything" mode (FR-32 extension)
+
+**Given** a Processing job deleted by manual cleanup while its background worker is still mid-flight
+**When** the worker later looks up that job's row
+**Then** it hits Story 3.6 Task 1's existing "job row missing" defensive-fallback path (insert a fresh `Processing` row rather than throwing) — deleting the row does not cancel or corrupt the in-flight parse, it only removes the prior audit trail; the import itself keeps running to completion with no visible record of having been "cleaned up" (this product has no job-cancellation mechanism anywhere, and this story does not add one)
+
+**Given** any cleanup mode executes
+**When** it deletes rows
+**Then** it deletes only `BackgroundJob`/`SmartPlugImport`/`SmartPlugImportGap` audit rows — `SmartPlugReading` data already written is never deleted, only detached (`SmartPlugImportId` → `NULL`) via the existing `SetNull` FK from Story 3.6 Task 3 (AD-20, same guarantee as the automatic sweep)
+
+**Given** any cleanup mode executes
+**When** scoped
+**Then** it only ever deletes rows belonging to the caller's own Household (AD-3, never cross-Household) and runs synchronously within the triggering request — never as a new `IHostedService`/`Timer`-based schedule (AD-7); this is a second, user-triggered entry point onto the same deletion mechanism Story 3.6 built, not a second background sweep
+
+**Given** the underlying deletion mechanism
+**When** implemented
+**Then** it generalizes Story 3.6's `SweepExpiredAsync` (an optional age cutoff, an optional state restriction) rather than duplicating a second, parallel delete code path — the automatic sweep becomes one specific call shape (cutoff = 30 days, states = terminal-only) of the same generalized method Story 3.10's manual action also calls (cutoff = 30 days or none, states = all six)
+
+**Given** a cleanup mode deletes every job currently in the list
+**When** the list is re-rendered afterward
+**Then** it shows the same onboarding-empty treatment as Story 3.6 AC #8 — never blank space or an error
+
+**Dev Notes / Open Questions:**
+- **No mockup exists yet** for the Clean Up History control, its confirmation dialog, or its copy (see UX-DR21's 2026-09-11 extension) — build directly against this project's existing tokens/components rather than waiting on a dedicated UX pass: reuse `{colors.destructive}` (already established for the Error badge) for the "everything" mode's emphasis, and the `Dialog` primitive already present in `web/components.json`'s shadcn set (`alert-dialog` is not yet installed in this project — evaluate `npx shadcn add alert-dialog` for the confirm step vs. reusing `Dialog`, per this project's "prefer `npx shadcn add` over hand-writing primitives" convention).
+- **Confirmation copy must name the consequence, not just the count** — especially for Needs Mapping rows in the "everything" mode, since deleting one is a one-way loss of an unresolved decision (not just tidying a completed record). Exact wording is an implementation/UX-copy decision, not specified further here.
+- **This is a deliberate, narrow exception to Story 3.6 AC #7**, scoped only to this manual, explicitly-confirmed action — do not read this story as loosening the automatic sweep's own state restriction; that sweep's behavior (terminal states only) is unchanged.
+- Whoever implements `SweepExpiredAsync`'s generalization should re-read Story 3.6 Task 4's exact eligibility-query shape (`SmartPlugImportRepository.SweepExpiredAsync`) before changing its signature — Story 3.6's own Review Findings list several correctness details already fixed there (the `BackgroundJobs`→`SmartPlugImports` inner-join gap for jobs with no paired import row, the FK-order three-step delete) that a broadened version must preserve, not regress.
+
+### Project Structure Notes
+
+- Backend likely touched: `src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs` (generalize `SweepExpiredAsync`), `src/EnergyTracker.Application/` (new use case, e.g. `CleanUpSmartPlugImportJobs`), `src/EnergyTracker.Api/Endpoints/SmartPlugImportEndpoints.cs` (new endpoint).
+- Frontend likely touched: `web/src/components/smart-plug-import/job-history-list.tsx` or a new sibling component for the button + confirm dialog, `web/src/lib/smart-plug-import-api.ts`, both locale files under `web/src/locales/{en-US,de-DE}/translation.json` (AD-18).
+
+### References
+
+- [Source: `_bmad-artifacts/implementation/3-6-smart-plug-import-job-status-history.md`] — the existing list, six-state derivation, and `SweepExpiredAsync` mechanism this story extends; Task 1's defensive-fallback path this story's Processing-deletion AC relies on; AC #7's terminal-states-only rule this story deliberately carves an exception into for the manual path only.
+- [Source: `_bmad-artifacts/planning/epics/requirements-inventory.md`] — FR-32's 2026-09-11 extension (authoritative testable text for this story), UX-DR21's 2026-09-11 extension.
+- [Source: `_bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE/invariants-rules.md`] — AD-3 (tenant isolation), AD-7 (no scheduled background work), AD-20 (Smart Plug data never deleted by any sweep/cleanup mechanism).
+- [Source: `_bmad-artifacts/project-context.md`] — shadcn component convention (`npx shadcn add` over hand-rolled primitives), i18n additive-catalog convention (AD-18).
