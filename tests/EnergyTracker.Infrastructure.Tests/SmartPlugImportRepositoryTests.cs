@@ -674,6 +674,226 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         (await dbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
     }
 
+    // Story 3.10: DeleteJobsAsync is the manual, all-states counterpart to SweepExpiredAsync above.
+    // The SweepExpiredAsync tests above are themselves the regression guard confirming the Task 1
+    // shared-helper extraction left the automatic sweep's own eligibility behavior unchanged.
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_a_Queued_job_regardless_of_age()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobId = Guid.NewGuid();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(1);
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_a_Processing_job_regardless_of_age()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobId = Guid.NewGuid();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Processing, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_a_NeedsMapping_import_regardless_of_age()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var (jobId, importId) = await SeedJobAndImportAsync(
+            dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.AwaitingPowerPointMapping,
+            jobCompletedAtUtc: DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await dbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_a_Success_import_and_detaches_its_readings()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var (jobId, importId) = await SeedJobAndImportAsync(
+            dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.Completed,
+            jobCompletedAtUtc: DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        var readingId = Guid.NewGuid();
+        dbContext.SmartPlugReadings.Add(new SmartPlugReading
+        {
+            Id = readingId, HouseholdId = householdId, SmartPlugImportId = importId, PowerPointId = powerPointId,
+            RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
+            IntervalStart = DateTimeOffset.UtcNow, IntervalEnd = DateTimeOffset.UtcNow, KwhValue = 0.5m,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await verifyDbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        var survivingReading = await verifyDbContext.SmartPlugReadings.SingleAsync(r => r.Id == readingId, TestContext.Current.CancellationToken);
+        survivingReading.SmartPlugImportId.ShouldBeNull();
+        survivingReading.PowerPointId.ShouldBe(powerPointId);
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_a_Failed_job_with_no_paired_SmartPlugImport_row()
+    {
+        // Same class of case SweepExpiredAsync's own left-join regression guard covers above — a
+        // Failed job that never got a paired SmartPlugImport row (unknown JobType, or a
+        // JSON-deserialize failure before ProcessSmartPlugImport ever ran) must still be eligible.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobId = Guid.NewGuid();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Failed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(1);
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_a_FlaggedForReview_import_including_its_gap()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var (jobId, importId) = await SeedJobAndImportAsync(
+            dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.FlaggedForReview,
+            jobCompletedAtUtc: DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        var gapId = Guid.NewGuid();
+        dbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+        {
+            Id = gapId,
+            HouseholdId = householdId,
+            SmartPlugImportId = importId,
+            PowerPointId = null,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+            EstimatedTotalKwh = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await dbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await dbContext.SmartPlugImportGaps.SingleOrDefaultAsync(g => g.Id == gapId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_a_cutoff_deletes_a_Queued_job_older_than_the_cutoff_via_CreatedAtUtc_fallback()
+    {
+        // The one genuinely new piece of logic: a Queued/Processing job has no SmartPlugImport row
+        // and a null BackgroundJob.CompletedAtUtc, so the age cutoff must fall back to CreatedAtUtc.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobId = Guid.NewGuid();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-31), CompletedAtUtc = null,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(1);
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_a_cutoff_does_not_delete_a_Queued_job_younger_than_the_cutoff()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobId = Guid.NewGuid();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1), CompletedAtUtc = null,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(0);
+        (await dbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_never_deletes_another_households_jobs()
+    {
+        var householdId = Guid.NewGuid();
+        var otherHouseholdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        dbContext.Households.Add(new Household { Id = otherHouseholdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var otherHouseholdJobId = Guid.NewGuid();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = otherHouseholdJobId, HouseholdId = otherHouseholdId, JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
+        });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(0);
+        // Verify via a context scoped to the OTHER household — dbContext above is scoped to
+        // householdId, so AD-3's global query filter would hide otherHouseholdJobId from it
+        // regardless of whether DeleteJobsAsync actually deleted anything.
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, otherHouseholdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == otherHouseholdJobId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+    }
+
     [Fact]
     public async Task AddAsync_failure_leaves_the_callers_own_tracked_entity_intact()
     {

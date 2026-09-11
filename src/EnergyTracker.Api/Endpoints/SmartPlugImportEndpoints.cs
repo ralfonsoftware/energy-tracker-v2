@@ -156,6 +156,24 @@ public static class SmartPlugImportEndpoints
             return Results.Ok(jobs.Select(ToJobHistoryResponse).ToList());
         });
 
+        // Story 3.10: manual cleanup — deleteAll=false (default) deletes records older than 30
+        // days, deleteAll=true deletes everything regardless of age. Unlike the GET list's own
+        // lazy sweep, this is eligible across all six states (AC #4), not just the terminal three.
+        api.MapDelete("/smart-plug-import-jobs", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            CleanUpSmartPlugImportJobs cleanUpSmartPlugImportJobs,
+            bool deleteAll,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            var deletedCount = await cleanUpSmartPlugImportJobs.ExecuteAsync(householdId, deleteAll, cancellationToken);
+            return Results.Ok(new SmartPlugImportJobCleanupResponse(deletedCount));
+        });
+
         return api;
     }
 
@@ -200,3 +218,5 @@ public record SmartPlugImportJobHistoryResponse(
     Guid? SmartPlugImportId,
     string? DeviceTag,
     IReadOnlyList<SmartPlugImportGapDto> Gaps);
+
+public record SmartPlugImportJobCleanupResponse(int DeletedCount);

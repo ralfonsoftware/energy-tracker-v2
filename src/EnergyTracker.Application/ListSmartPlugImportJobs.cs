@@ -30,8 +30,10 @@ public record SmartPlugImportJobResult(
 public class ListSmartPlugImportJobs(IBackgroundJobRepository backgroundJobRepository, ISmartPlugImportRepository smartPlugImportRepository)
 {
     // FR-32/AD-6 extension: Success/Error/Flagged for Review records fade out 30 days after
-    // completion; Waiting/Processing/Needs Mapping never auto-clear (AC #6, #7).
-    private static readonly TimeSpan RetentionWindow = TimeSpan.FromDays(30);
+    // completion; Waiting/Processing/Needs Mapping never auto-clear (AC #6, #7). Internal (not
+    // private) so CleanUpSmartPlugImportJobs (Story 3.10) shares this exact value for its own
+    // "older than 30 days" manual mode rather than an independently-declared duplicate.
+    internal static readonly TimeSpan RetentionWindow = TimeSpan.FromDays(30);
 
     public async Task<IReadOnlyList<SmartPlugImportJobResult>> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {

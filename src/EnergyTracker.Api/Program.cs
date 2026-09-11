@@ -342,6 +342,7 @@ builder.Services.AddSingleton<BackgroundJobEnqueueRecorder>();
 builder.Services.AddScoped<IBackgroundJobRepository, BackgroundJobRepository>();
 builder.Services.AddScoped<GetBackgroundJobStatus>();
 builder.Services.AddScoped<ListSmartPlugImportJobs>();
+builder.Services.AddScoped<CleanUpSmartPlugImportJobs>();
 builder.Services.AddScoped<ISmartPlugParser, EveHomeXlsxParser>();
 builder.Services.AddScoped<ISmartPlugParser, MerossCsvParser>();
 builder.Services.AddScoped<ISmartPlugImportRepository, SmartPlugImportRepository>();
