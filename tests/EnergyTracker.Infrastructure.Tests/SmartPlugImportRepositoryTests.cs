@@ -1049,7 +1049,10 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // exceeds 20,000 regardless of what else is already in that chunk) — so the 3 large imports
         // always split into exactly 2 groups, and the 2 negligible small imports never change that.
         // Exactly 2 import-chunks * 2 commands each (gaps delete, imports delete) + exactly 1
-        // jobs-chunk (5 jobs, far under DeleteBatchSize) = exactly 5 commands, every time.
+        // jobs-chunk (5 jobs, far under DeleteBatchSize) = 5 commands from chunking alone, plus
+        // round-4's per-import reading-detach loop: ceil(8000/200)=40 UPDATE commands for each of
+        // the 3 large imports (120) + ceil(10/200)=1 for each of the 2 small imports (2) = 122,
+        // independent of which chunk an import lands in. Total: 5 + 122 = 127, every time.
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1057,7 +1060,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
         deletedCount.ShouldBe(5);
-        interceptor.CompletedCount.ShouldBe(5);
+        interceptor.CompletedCount.ShouldBe(127);
         // Household-scoped query filter (AD-3) means these unfiltered counts already cover exactly
         // this test's rows — avoids a 24,000+ element Contains(...) IN-list in the verification.
         await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
@@ -1066,6 +1069,123 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         (await verifyDbContext.SmartPlugImports.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
         (await verifyDbContext.SmartPlugReadings.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(allReadingIds.Count);
         (await verifyDbContext.SmartPlugReadings.CountAsync(r => r.SmartPlugImportId != null, TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_bounds_a_single_import_whose_own_reading_count_exceeds_the_volume_threshold_into_batched_detach_commands()
+    {
+        // Round-4 incident fix (2026-09-12 20:40 prod): confirmed via Container App logs + Azure
+        // Monitor DTU/Log-IO that isolating one pathologically large import alone in its own chunk
+        // (exactly what ChunkImportIdsByReadingVolume already does once an import's own reading
+        // count exceeds DeleteReadingVolumeThreshold) still isn't safe — deleting that import
+        // relied on the FK's SetNull cascade to detach its readings as one single, unboundable
+        // server-side operation, and a real 122,158-row import blew the 120s SQL CommandTimeout
+        // doing exactly that. This reproduces the same shape (one import alone over the threshold)
+        // and proves DetachReadingsForImportAsync now bounds that cascade into DeleteBatchSize-sized
+        // UPDATE commands instead of one big SetNull.
+        const int readingCount = SmartPlugImportRepository.DeleteReadingVolumeThreshold + 1; // guarantees this import lands alone in its own chunk
+        var householdId = Guid.NewGuid();
+        Guid jobId, importId;
+        var readingIds = new List<Guid>(readingCount);
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+            };
+            seedDbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: "Huge-import");
+            seedDbContext.SmartPlugImports.Add(import);
+            seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            for (var i = 0; i < readingCount; i++)
+            {
+                var reading = MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i));
+                seedDbContext.SmartPlugReadings.Add(reading);
+                readingIds.Add(reading.Id);
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            jobId = job.Id;
+            importId = import.Id;
+        }
+
+        // 1 SmartPlugImportGaps delete + ceil(20001/200)=101 per-import reading-detach UPDATEs
+        // (DetachReadingsForImportAsync) + 1 SmartPlugImports delete + 1 BackgroundJobs delete
+        // (1 job, trivially under DeleteBatchSize) = 104 commands total, none of them a single
+        // unbounded SetNull cascade over all 20,001 rows.
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(1);
+        interceptor.CompletedCount.ShouldBe(104);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(g => g.SmartPlugImportId == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        var survivingReadings = await verifyDbContext.SmartPlugReadings
+            .Where(r => readingIds.Contains(r.Id)).ToListAsync(TestContext.Current.CancellationToken);
+        survivingReadings.Count.ShouldBe(readingCount);
+        survivingReadings.ShouldAllBe(r => r.SmartPlugImportId == null);
+    }
+
+    [Fact]
+    public async Task DetachReadingsForImportAsync_issues_exactly_one_batch_when_reading_count_equals_DeleteBatchSize_exactly()
+    {
+        // Round-4 review finding (Blind Hunter): DetachReadingsForImportAsync's own while(true)
+        // loop had no dedicated boundary coverage, unlike ChunkImportIdsByReadingVolume's own unit
+        // suite — an off-by-one (e.g. always looping one extra time to confirm zero remain) would
+        // still pass the other round-4 tests (which use counts far from this exact boundary) but
+        // waste a redundant round trip on every single-batch-sized import in production. Reading
+        // count exactly equal to DeleteBatchSize must resolve in exactly one detach UPDATE, not two.
+        const int readingCount = SmartPlugImportRepository.DeleteBatchSize;
+        var householdId = Guid.NewGuid();
+        Guid jobId, importId;
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+            };
+            seedDbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: "Exactly-one-batch");
+            seedDbContext.SmartPlugImports.Add(import);
+            for (var i = 0; i < readingCount; i++)
+            {
+                seedDbContext.SmartPlugReadings.Add(MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i)));
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            jobId = job.Id;
+            importId = import.Id;
+        }
+
+        // No gap seeded this time (already covered elsewhere) — SmartPlugImportGaps' own
+        // ExecuteDeleteAsync still fires as a command even with zero matching rows, so the count is
+        // 1 gaps delete (0 rows affected) + 1 detach UPDATE + 1 SmartPlugImports delete + 1
+        // BackgroundJobs delete = 4. Two detach UPDATEs (an off-by-one) would show up as 5.
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(1);
+        interceptor.CompletedCount.ShouldBe(4);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
     }
 
     [Fact]
@@ -1165,11 +1285,15 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // SmartPlugImportGaps; round-2 review finding: it still never seeded SmartPlugReadings, so
         // it could not prove that a SetNull detach performed inside a rolled-back chunk is itself
         // rolled back — every table DeleteEligibleAsync's FK-dependency order touches is exercised
-        // here now). The interceptor lets exactly the first import chunk's 2 commands
-        // (SmartPlugImportGaps delete, then SmartPlugImports delete) actually complete — observed
-        // via NonQueryExecutedAsync, not assumed — before blocking the next command from starting.
-        // This proves the outer transaction rolls back a chunk that already ran, not just the
-        // chunks queued behind the failure.
+        // here now). The interceptor lets exactly the first import chunk's commands actually
+        // complete — observed via NonQueryExecutedAsync, not assumed — before blocking the next
+        // command from starting. This proves the outer transaction rolls back a chunk that already
+        // ran, not just the chunks queued behind the failure.
+        //
+        // Round-4 incident fix: chunk 1 (200 imports, 1 reading each) now runs 1 SmartPlugImportGaps
+        // delete + 200 per-import reading-detach UPDATEs (round-4's DetachReadingsForImportAsync,
+        // one per import since each has exactly one reading) + 1 SmartPlugImports delete = 202
+        // commands, letting the whole first chunk finish before chunk 2's first command is blocked.
         const int seedCount = SmartPlugImportRepository.DeleteBatchSize + 1;
         var householdId = Guid.NewGuid();
         var jobIds = new List<Guid>(seedCount);
@@ -1207,7 +1331,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 2);
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 202);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 
@@ -1273,10 +1397,13 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        // Let the first volume-triggered chunk's 2 commands (gaps delete, imports delete) actually
-        // complete, then block the second chunk's gaps delete — same proof shape as the
-        // count-triggered rollback test above, just with the split forced by volume instead.
-        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 2);
+        // Let the first volume-triggered chunk's commands actually complete, then block the second
+        // chunk's gaps delete — same proof shape as the count-triggered rollback test above, just
+        // with the split forced by volume instead. Round-4 incident fix: chunk 1 (1 import, 12,000
+        // readings) now runs 1 SmartPlugImportGaps delete + ceil(12000/200)=60 per-import
+        // reading-detach UPDATEs (round-4's DetachReadingsForImportAsync) + 1 SmartPlugImports
+        // delete = 62 commands, letting the whole first chunk finish before chunk 2 is blocked.
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 62);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
 

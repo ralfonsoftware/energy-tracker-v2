@@ -157,15 +157,16 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
             // content/name) — anything else is an unexpected internal failure whose raw .Message
             // (file paths, DB errors, etc.) must never be forwarded verbatim to the client that
             // polls GET /api/jobs/{id}.
-            job.ErrorMessage = ex switch
-            {
-                SmartPlugImportValidationException => ex.Message,
-                // Round-3 incident fix: the generic fallback must match the job type — a cleanup
-                // failure surfaced as "...processing this import" would mislead a user who wasn't
-                // importing anything.
-                _ when message.JobType == JobTypes.CleanUpSmartPlugImportJobs => "An unexpected error occurred while cleaning up the history.",
-                _ => "An unexpected error occurred while processing this import.",
-            };
+            //
+            // Round-4 incident fix: a generic (non-validation) failure leaves ErrorMessage null
+            // instead of a hardcoded English sentence. This backend has no concept of the polling
+            // client's locale, so any fixed string it sends is displayed as-is — every caller of
+            // GET /api/jobs/{id} (use-smart-plug-import-job.ts, job-history-list.tsx) already falls
+            // back to its own correctly-localized `t('...')` string via `errorMessage ?? t(...)`;
+            // null lets that existing fallback do its job instead of being pre-empted by unlocalized
+            // backend text. A round-3 attempt at fixing only the cleanup job's *wording* (branching
+            // the hardcoded string on JobType) still shipped raw English to non-English users.
+            job.ErrorMessage = ex is SmartPlugImportValidationException ? ex.Message : null;
         }
 
         job.CompletedAtUtc = DateTimeOffset.UtcNow;

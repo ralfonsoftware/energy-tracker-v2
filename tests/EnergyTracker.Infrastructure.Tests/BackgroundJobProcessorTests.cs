@@ -224,6 +224,35 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ProcessAsync_a_generic_failure_leaves_ErrorMessage_null_rather_than_hardcoded_English_text()
+    {
+        // Round-4 incident fix: a generic (non-validation) failure must not carry a hardcoded
+        // English sentence — this backend has no concept of the polling client's locale, and every
+        // caller of GET /api/jobs/{id} already falls back to its own correctly-localized `t('...')`
+        // string via `errorMessage ?? t(...)`. A user reported the earlier hardcoded fallback
+        // ("An unexpected error occurred while cleaning up the history.") rendering in English
+        // regardless of their browser's locale.
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
+
+        var processor = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
+        var jobId = Guid.NewGuid();
+        // "UnknownJobType" hits the dispatch switch's `default: throw new InvalidOperationException`
+        // — a generic, non-validation failure, same as any unexpected internal error would be.
+        var message = new JobMessage(jobId, householdId, "UnknownJobType", "{}");
+
+        await processor.ProcessAsync(message, TestContext.Current.CancellationToken);
+
+        using var scope = provider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var persisted = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == jobId, TestContext.Current.CancellationToken);
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task ProcessAsync_skips_a_redelivered_message_against_an_already_terminal_row()
     {
         var householdId = Guid.NewGuid();

@@ -205,8 +205,14 @@ export function JobHistoryList() {
           {jobs.map((job) => {
             const Icon = STATE_ICON[job.state]
             const displayName = job.queuedByDisplayName ?? t('smartPlugImport.jobHistory.queuedByFallback')
+            // Round-4 review fix: the backend now leaves ErrorMessage null for a generic (non-
+            // validation) failure (see BackgroundJobProcessor.cs) so it can't pre-empt this
+            // client's own localized fallback — but that means a plain `job.errorMessage` truthy
+            // check here would silently drop the error suffix entirely instead of falling back,
+            // where it previously always showed (unlocalized) text. `errorGeneric` is the same
+            // fallback use-smart-plug-import-job.ts's own live-polling failed state already uses.
             const metaLine = `${t('smartPlugImport.jobHistory.queuedBy', { member: displayName })} · ${formatRelativeTime(job.queuedAtUtc, i18n.language)}${
-              job.state === 'error' && job.errorMessage ? ` · ${job.errorMessage}` : ''
+              job.state === 'error' ? ` · ${job.errorMessage ?? t('smartPlugImport.errorGeneric')}` : ''
             }`
 
             const rowContent = (

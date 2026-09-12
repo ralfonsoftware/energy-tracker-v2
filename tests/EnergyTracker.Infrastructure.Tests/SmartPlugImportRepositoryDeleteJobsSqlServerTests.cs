@@ -213,7 +213,10 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         // Exact expected count proven the same way as the Postgres sibling test: any 2 of the 3
         // "large" (8,000-reading) imports fit in one chunk together, a 3rd never does regardless of
         // what else is already in that chunk — always exactly 2 import-chunks (4 commands) + 1
-        // jobs-chunk (1 command) = 5, regardless of retrieval order.
+        // jobs-chunk (1 command) = 5 from chunking alone, regardless of retrieval order. Round-4
+        // incident fix adds a per-import reading-detach loop: ceil(8000/200)=40 UPDATE commands for
+        // each of the 3 large imports (120) + ceil(10/200)=1 for each of the 2 small imports (2) =
+        // 122, independent of which chunk an import lands in. Total: 5 + 122 = 127.
         var interceptor = new CountingInterceptor();
         await using var dbContext = OpenDbContextWithInterceptor(householdId, interceptor);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
@@ -221,12 +224,77 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
         deletedCount.ShouldBe(5);
-        interceptor.CompletedCount.ShouldBe(5);
+        interceptor.CompletedCount.ShouldBe(127);
         await using var verifyDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         (await verifyDbContext.BackgroundJobs.CountAsync(j => allJobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
         (await verifyDbContext.SmartPlugImportGaps.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
         var survivingReadingCount = await verifyDbContext.SmartPlugReadings
             .CountAsync(r => r.SmartPlugImportId == null, TestContext.Current.CancellationToken);
         survivingReadingCount.ShouldBe(allReadingIds.Count);
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_bounds_a_single_import_whose_own_reading_count_exceeds_the_volume_threshold_into_batched_detach_commands_on_SqlServer()
+    {
+        // Round-4 incident fix (2026-09-12 20:40 prod): the test above only pairs "large" imports
+        // that still fit together in one chunk (8,000 each, 2 fit under the 20,000 threshold). The
+        // actual incident hit a *single* import (122,158 rows) isolated alone in its own chunk —
+        // the case none of round 2's SqlServer coverage exercised, and the one where the FK's
+        // SetNull cascade (not import-count or volume chunking) was the real bottleneck. This is
+        // the SqlServer mirror of the Postgres reproduction — SqlServer is the actual production
+        // provider every round of this incident has hit.
+        const int readingCount = SmartPlugImportRepository.DeleteReadingVolumeThreshold + 1; // guarantees this import lands alone in its own chunk
+        var householdId = Guid.NewGuid();
+        Guid jobId, importId;
+        var readingIds = new List<Guid>(readingCount);
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+            };
+            seedDbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: "Huge-import");
+            seedDbContext.SmartPlugImports.Add(import);
+            seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            for (var i = 0; i < readingCount; i++)
+            {
+                var reading = MakeReading(householdId, import.Id, DateTimeOffset.UtcNow.AddMinutes(-i));
+                seedDbContext.SmartPlugReadings.Add(reading);
+                readingIds.Add(reading.Id);
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            jobId = job.Id;
+            importId = import.Id;
+        }
+
+        // 1 SmartPlugImportGaps delete + ceil(20001/200)=101 per-import reading-detach UPDATEs
+        // (DetachReadingsForImportAsync) + 1 SmartPlugImports delete + 1 BackgroundJobs delete
+        // (1 job, trivially under DeleteBatchSize) = 104 commands total, none of them a single
+        // unbounded SetNull cascade over all 20,001 rows.
+        var interceptor = new CountingInterceptor();
+        await using var dbContext = OpenDbContextWithInterceptor(householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(1);
+        interceptor.CompletedCount.ShouldBe(104);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(g => g.SmartPlugImportId == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        var survivingReadings = await verifyDbContext.SmartPlugReadings
+            .Where(r => readingIds.Contains(r.Id)).ToListAsync(TestContext.Current.CancellationToken);
+        survivingReadings.Count.ShouldBe(readingCount);
+        survivingReadings.ShouldAllBe(r => r.SmartPlugImportId == null);
     }
 }
