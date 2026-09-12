@@ -769,6 +769,61 @@ public class SmartPlugImportRepository(
     // deferred-work.md.
     internal const int DeleteReadingVolumeThreshold = 20_000;
 
+    // Incident fix round 4 (2026-09-12 20:40 prod, confirmed via Container App logs + Azure
+    // Monitor DTU/Log-IO): CAP-4's own round-3 spec accepted "a single import whose own reading
+    // count exceeds DeleteReadingVolumeThreshold still can't be split further" as low-stakes
+    // residual risk, reasoning the household's largest single import (122,158 rows) was "well
+    // within a reasonable chunk threshold on its own." That assumption was never actually load-
+    // tested against a live SetNull cascade and was wrong: isolating that one 122,158-row import
+    // alone in its own chunk (exactly what CAP-4 does) still blew Azure SQL Basic-tier's 120s
+    // CommandTimeout — confirmed by the exact failing command in production logs
+    // (`Failed executing DbCommand (120,205ms) [Parameters=[..., @importIdBatch1=...]`, a single-
+    // import chunk) and matching DTU (94.5%)/Log IO (93%) saturation. Round 3's async move (CAP-5)
+    // only removed the *HTTP*-ingress timeout ceiling; it did nothing about the *SQL* CommandTimeout
+    // a single command's own cascade can still hit. DetachReadingsForImportAsync below closes this
+    // for good: instead of relying on the FK's SetNull cascade to update however many rows a given
+    // import has in one opaque, unboundable server-side operation, every import's own readings are
+    // explicitly detached in DeleteBatchSize-sized batches *before* that import is deleted — so the
+    // DELETE FROM SmartPlugImports that follows always matches zero children and costs nothing
+    // regardless of how large the import was. This makes ChunkImportIdsByReadingVolume's own
+    // reading-volume bound no longer necessary to prevent a timeout (every import's cascade cost is
+    // now always ~0), but it's left in place unchanged — still harmless, and safer to leave working,
+    // already-tested chunking logic alone than to remove it under incident pressure.
+    //
+    // Round-4 review findings (Blind Hunter): this trades one unboundable command for roughly
+    // readingCount/DeleteBatchSize round trips (~1,200 SELECT+UPDATE pairs for a 122,158-row
+    // import) — an unbenchmarked aggregate wall-clock cost, same "starting value from evidence, not
+    // a benchmarked optimum" caveat DeleteBatchSize/DeleteReadingVolumeThreshold's own comments
+    // already carry, not a new gap. Two residual risks this doesn't close, tracked in
+    // deferred-work.md: (1) an import still Processing/AwaitingPowerPointMapping — both eligible for
+    // DeleteJobsAsync by design — can keep receiving new SmartPlugReading rows via AddAsyncCore
+    // concurrently with this loop; a row inserted after this loop already passed its offset is
+    // missed by this detach pass and falls back to the FK's own SetNull cascade at delete time (this
+    // narrows that pre-existing TOCTOU's blast radius to just the race-window rows, it does not
+    // close it); (2) the automatic SweepExpiredAsync path (unlike the manual "clean up everything"
+    // endpoint) was never moved off the synchronous HTTP request by CAP-5, so this loop's aggregate
+    // duration is now also paid synchronously, inline, by whichever GET /api/smart-plug-import-jobs
+    // request happens to trigger the sweep for a large aging import.
+    private async Task DetachReadingsForImportAsync(Guid importId, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var readingIds = await dbContext.SmartPlugReadings
+                .Where(r => r.SmartPlugImportId == importId)
+                .Select(r => r.Id)
+                .Take(DeleteBatchSize)
+                .ToListAsync(cancellationToken);
+            if (readingIds.Count == 0)
+            {
+                return;
+            }
+
+            await dbContext.SmartPlugReadings
+                .Where(r => readingIds.Contains(r.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.SmartPlugImportId, (Guid?)null), cancellationToken);
+        }
+    }
+
     // Greedily packs importIds into chunks bounded by BOTH cumulative reading count and import
     // count, whichever is hit first — pure and DB-free so the packing logic itself gets direct
     // unit coverage (SmartPlugImportRepositoryChunkingTests.cs) without seeding real rows. An id
@@ -871,8 +926,20 @@ public class SmartPlugImportRepository(
                 .Where(g => importIdBatch.Contains(g.SmartPlugImportId))
                 .ExecuteDeleteAsync(cancellationToken);
 
-            // Task 3's (Story 3.6) SetNull FK detaches (never deletes) the matching
-            // SmartPlugReading rows automatically at the database level (AD-20).
+            // Incident fix round 4: explicitly detach each import's own SmartPlugReading rows in
+            // bounded batches (see DetachReadingsForImportAsync above) before deleting the import
+            // itself — for a terminal-state import this leaves nothing for the FK's SetNull
+            // behavior (Task 3/Story 3.6, AD-20) to do at delete time. It can still be the one doing
+            // real work for a still-Processing/AwaitingPowerPointMapping import (both eligible here
+            // by design): a new SmartPlugReading row inserted concurrently via AddAsyncCore, after
+            // this loop's last batch already observed zero remaining, is missed by this pass and
+            // falls back to the FK cascade — same pre-existing TOCTOU already tracked in
+            // deferred-work.md, narrowed to just the race-window rows, not closed by this fix.
+            foreach (var importId in importIdBatch)
+            {
+                await DetachReadingsForImportAsync(importId, cancellationToken);
+            }
+
             await dbContext.SmartPlugImports
                 .Where(i => importIdBatch.Contains(i.Id))
                 .ExecuteDeleteAsync(cancellationToken);

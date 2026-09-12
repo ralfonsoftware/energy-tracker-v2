@@ -112,6 +112,20 @@ describe('JobHistoryList', () => {
     expect(screen.getByText('Flagged for Review')).toBeInTheDocument()
   })
 
+  it('shows the localized generic error inline for an error-state job with no errorMessage', async () => {
+    // Round-4 review fix: the backend now leaves ErrorMessage null for a generic (non-validation)
+    // job failure (BackgroundJobProcessor.cs) instead of a hardcoded English sentence — a plain
+    // `job.errorMessage` truthy check here would silently drop the error detail entirely instead of
+    // falling back to something localized, where it previously always showed (unlocalized) text.
+    const job = makeJob({ jobId: 'error', state: 'error', fileName: 'd.csv', errorMessage: null })
+    stubFetch([job])
+
+    render(<JobHistoryList />)
+
+    await waitFor(() => expect(screen.getByText('d.csv')).toBeInTheDocument())
+    expect(screen.getByText(/Something went wrong uploading this file\. Please try again\./)).toBeInTheDocument()
+  })
+
   it('renders the empty state, not blank space or an error, when the fetched list is empty', async () => {
     stubFetch([])
 
@@ -259,6 +273,25 @@ describe('JobHistoryList', () => {
       await waitFor(() => expect(screen.getByText('An unexpected error occurred while cleaning up the history.')).toBeInTheDocument())
       expect(screen.getByText('Clean up import history')).toBeInTheDocument()
       expect(screen.getByText('a.csv')).toBeInTheDocument()
+    })
+
+    it('falls back to the localized generic error when a failed cleanup job carries no errorMessage', async () => {
+      // Round-4 incident fix: the backend now leaves ErrorMessage null for a generic (non-
+      // validation) job failure instead of a hardcoded, unlocalized English sentence — a user
+      // reported seeing raw English text regardless of their browser's locale. This proves the
+      // component's own `?? t(...)` fallback renders the localized string when the backend sends
+      // no errorMessage at all, distinct from the test above (which covers a non-null message
+      // being shown verbatim).
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      stubFetch([job], { cleanupJobStatus: 'failed' })
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(screen.getByText('Something went wrong cleaning up the history. Please try again.')).toBeInTheDocument())
     })
 
     it('tolerates one transient poll failure and still completes the cleanup', async () => {
