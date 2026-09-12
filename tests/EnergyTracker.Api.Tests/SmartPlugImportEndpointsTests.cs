@@ -4,6 +4,8 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Application;
+using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -655,10 +657,12 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
     }
 
     [Fact]
-    public async Task DELETE_smart_plug_import_jobs_with_deleteAll_true_deletes_a_NeedsMapping_job_and_clears_the_list()
+    public async Task DELETE_smart_plug_import_jobs_returns_202_immediately_and_deletes_a_NeedsMapping_job_via_polling()
     {
         // Story 3.10 AC #4/#5: unlike the automatic sweep, manual cleanup deletes across all six
-        // states, including an unresolved Needs Mapping import.
+        // states, including an unresolved Needs Mapping import. Round-3 incident fix: this now
+        // runs async (AD-6) — the DELETE request itself must return immediately, and completion
+        // is only observable by polling GET /api/jobs/{id}, exactly like an upload.
         var (client, _) = await CreateHouseholdAsync();
         using var upload = BuildUpload(EveSampleFilePath);
         var uploadResponse = await client.PostAsync("/api/smart-plug-imports", upload, TestContext.Current.CancellationToken);
@@ -667,10 +671,15 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         terminalStatus.ImportStatus.ShouldBe("awaitingpowerpointmapping");
 
         var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", TestContext.Current.CancellationToken);
-        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
 
-        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        deleteBody!.DeletedCount.ShouldBe(1);
+        // 202 Accepted, no synchronous deletion — mirrors POST_smart_plug_imports' own AC #1 assertion.
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+        deleteBody!.JobId.ShouldNotBe(Guid.Empty);
+
+        var cleanupTerminalStatus = await PollJobToTerminalAsync(client, deleteBody.JobId);
+        cleanupTerminalStatus.Status.ShouldBe("completed");
+
         var jobsAfter = await client.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
             "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
         jobsAfter.ShouldBeEmpty();
@@ -691,8 +700,8 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var (clientB, _) = await CreateHouseholdAsync();
         var deleteResponse = await clientB.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", TestContext.Current.CancellationToken);
         var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+        await PollJobToTerminalAsync(clientB, deleteBody!.JobId);
 
-        deleteBody!.DeletedCount.ShouldBe(0);
         var jobsForA = await clientA.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
             "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
         jobsForA.ShouldNotBeNull();
@@ -700,14 +709,72 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
     }
 
     [Fact]
-    public async Task DELETE_smart_plug_import_jobs_with_no_jobs_returns_deletedCount_zero()
+    public async Task DELETE_smart_plug_import_jobs_with_no_jobs_completes_with_an_empty_list()
     {
         var (client, _) = await CreateHouseholdAsync();
 
         var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=false", TestContext.Current.CancellationToken);
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
 
-        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        deleteBody!.DeletedCount.ShouldBe(0);
+        var terminalStatus = await PollJobToTerminalAsync(client, deleteBody!.JobId);
+        terminalStatus.Status.ShouldBe("completed");
+    }
+
+    [Fact]
+    public async Task DELETE_smart_plug_import_jobs_does_not_appear_in_its_own_job_history_list()
+    {
+        // Round-3 incident fix: JobTypes.CleanUpSmartPlugImportJobs is a distinct job type from
+        // JobTypes.ProcessSmartPlugImport specifically so a cleanup job's own BackgroundJob row
+        // never pollutes the Smart Plug import history list it's cleaning up, and can never become
+        // eligible for its own future cleanup — both existing queries already filter strictly on
+        // JobType == ProcessSmartPlugImport, so this is a regression guard, not new filtering logic.
+        var (client, _) = await CreateHouseholdAsync();
+
+        var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", TestContext.Current.CancellationToken);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+        await PollJobToTerminalAsync(client, deleteBody!.JobId);
+
+        var jobsAfter = await client.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
+            "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
+        jobsAfter.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task DELETE_smart_plug_import_jobs_while_a_cleanup_job_is_still_active_reuses_it_instead_of_enqueueing_another()
+    {
+        // Round-3 review fix: a double-click, a second tab, or a false-timeout retry must not
+        // enqueue a second concurrent cleanup — that would reintroduce the exact DB contention this
+        // three-round incident has been chasing. Seeds a still-Processing BackgroundJob row directly
+        // (rather than racing the real in-process queue, which would complete it before a second
+        // DELETE could observe it as active) to deterministically exercise the reuse path.
+        var (client, householdId) = await CreateHouseholdAsync();
+
+        var activeJobId = Guid.NewGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+            dbContext.BackgroundJobs.Add(new BackgroundJob
+            {
+                Id = activeJobId,
+                HouseholdId = householdId,
+                JobType = JobTypes.CleanUpSmartPlugImportJobs,
+                Status = BackgroundJobStatus.Processing,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", TestContext.Current.CancellationToken);
+
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+        deleteBody!.JobId.ShouldBe(activeJobId);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var cleanupJobCount = await verifyDbContext.BackgroundJobs.IgnoreQueryFilters()
+            .CountAsync(j => j.HouseholdId == householdId && j.JobType == JobTypes.CleanUpSmartPlugImportJobs, TestContext.Current.CancellationToken);
+        cleanupJobCount.ShouldBe(1);
     }
 }

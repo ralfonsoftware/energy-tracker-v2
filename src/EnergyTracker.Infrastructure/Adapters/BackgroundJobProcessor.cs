@@ -129,6 +129,13 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
                     var useCase = services.GetRequiredService<ProcessSmartPlugImport>();
                     await useCase.ExecuteAsync(message.HouseholdId, message.JobId, payload, cancellationToken);
                     break;
+                case JobTypes.CleanUpSmartPlugImportJobs:
+                    var cleanupPayload = JsonSerializer.Deserialize<CleanUpSmartPlugImportJobsPayload>(message.PayloadJson)
+                        ?? throw new InvalidOperationException($"Job {message.JobId}: payload deserialized to null.");
+                    var cleanUpUseCase = services.GetRequiredService<CleanUpSmartPlugImportJobs>();
+                    var deletedCount = await cleanUpUseCase.ExecuteAsync(message.HouseholdId, cleanupPayload.DeleteAll, cancellationToken);
+                    logger.LogInformation("Cleanup job {JobId} deleted {DeletedCount} row(s)", message.JobId, deletedCount);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unknown JobType '{message.JobType}'.");
             }
@@ -150,9 +157,15 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
             // content/name) — anything else is an unexpected internal failure whose raw .Message
             // (file paths, DB errors, etc.) must never be forwarded verbatim to the client that
             // polls GET /api/jobs/{id}.
-            job.ErrorMessage = ex is SmartPlugImportValidationException
-                ? ex.Message
-                : "An unexpected error occurred while processing this import.";
+            job.ErrorMessage = ex switch
+            {
+                SmartPlugImportValidationException => ex.Message,
+                // Round-3 incident fix: the generic fallback must match the job type — a cleanup
+                // failure surfaced as "...processing this import" would mislead a user who wasn't
+                // importing anything.
+                _ when message.JobType == JobTypes.CleanUpSmartPlugImportJobs => "An unexpected error occurred while cleaning up the history.",
+                _ => "An unexpected error occurred while processing this import.",
+            };
         }
 
         job.CompletedAtUtc = DateTimeOffset.UtcNow;

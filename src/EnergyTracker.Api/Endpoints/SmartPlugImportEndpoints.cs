@@ -159,9 +159,16 @@ public static class SmartPlugImportEndpoints
         // Story 3.10: manual cleanup — deleteAll=false (default) deletes records older than 30
         // days, deleteAll=true deletes everything regardless of age. Unlike the GET list's own
         // lazy sweep, this is eligible across all six states (AC #4), not just the terminal three.
+        //
+        // Story 3.10 incident fix, round 3 (2026-09-12): runs as an async background job (AD-6),
+        // same pattern as the upload endpoint above — a household's total cleanup work can exceed
+        // Azure Container Apps' ~240s HTTP ingress ceiling even with every DB command individually
+        // bounded (CAP-1/CAP-4), so this can no longer execute synchronously inside the request.
+        // The client learns completion by polling GET /api/jobs/{id}, exactly like an upload.
         api.MapDelete("/smart-plug-import-jobs", async (
             ICurrentHouseholdAccessor householdAccessor,
-            CleanUpSmartPlugImportJobs cleanUpSmartPlugImportJobs,
+            IBackgroundJobQueue jobQueue,
+            IBackgroundJobRepository backgroundJobRepository,
             bool deleteAll,
             CancellationToken cancellationToken) =>
         {
@@ -170,8 +177,28 @@ public static class SmartPlugImportEndpoints
                 return forbidden;
             }
 
-            var deletedCount = await cleanUpSmartPlugImportJobs.ExecuteAsync(householdId, deleteAll, cancellationToken);
-            return Results.Ok(new SmartPlugImportJobCleanupResponse(deletedCount));
+            // Round-3 review fix: without this, a double-click, a second tab, or a false-timeout
+            // retry (see the poll-tolerance fix above) would enqueue a second concurrent cleanup —
+            // reintroducing exactly the DB contention this three-round incident has been chasing.
+            // Reusing the still-active job is idempotent from the caller's point of view: it's the
+            // same 202+jobId contract either way, and the client polls the same endpoint.
+            var existingCleanupJobs = await backgroundJobRepository.ListByJobTypeAsync(
+                householdId, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken);
+            var activeCleanupJob = existingCleanupJobs.FirstOrDefault(
+                job => job.Status is BackgroundJobStatus.Queued or BackgroundJobStatus.Processing);
+            if (activeCleanupJob is not null)
+            {
+                return Results.Accepted($"/api/jobs/{activeCleanupJob.Id}", new SmartPlugImportJobCleanupResponse(activeCleanupJob.Id));
+            }
+
+            var jobId = Guid.NewGuid();
+            await jobQueue.EnqueueAsync(
+                new JobEnvelope<CleanUpSmartPlugImportJobsPayload>(
+                    jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, new CleanUpSmartPlugImportJobsPayload(deleteAll),
+                    QueuedByHouseholdMemberId: householdAccessor.HouseholdMemberId),
+                cancellationToken);
+
+            return Results.Accepted($"/api/jobs/{jobId}", new SmartPlugImportJobCleanupResponse(jobId));
         });
 
         return api;
@@ -219,4 +246,4 @@ public record SmartPlugImportJobHistoryResponse(
     string? DeviceTag,
     IReadOnlyList<SmartPlugImportGapDto> Gaps);
 
-public record SmartPlugImportJobCleanupResponse(int DeletedCount);
+public record SmartPlugImportJobCleanupResponse(Guid JobId);

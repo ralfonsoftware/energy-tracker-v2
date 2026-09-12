@@ -161,15 +161,16 @@ export async function fetchSmartPlugImportJobs(): Promise<SmartPlugImportJobDto[
   return (await response.json()) as SmartPlugImportJobDto[]
 }
 
-export interface SmartPlugImportJobCleanupDto {
-  deletedCount: number
-}
-
 // Story 3.10: manual cleanup — deleteAll=false deletes records older than 30 days, deleteAll=true
 // deletes everything regardless of age. Unlike fetchSmartPlugImportJobs' own lazy sweep, this is
 // eligible across all six states (Waiting/Processing/Needs Mapping included), not just the three
 // terminal ones.
-export async function cleanUpSmartPlugImportJobs(deleteAll: boolean): Promise<SmartPlugImportJobCleanupDto> {
+//
+// Round-3 incident fix (2026-09-12): runs as an async background job (AD-6), same shape as
+// uploadSmartPlugFile above — a household's total cleanup work can exceed Azure Container Apps'
+// ~240s HTTP ingress ceiling even with every DB command individually bounded, so this can no
+// longer execute synchronously. Returns the jobId; the caller polls fetchJobStatus for completion.
+export async function cleanUpSmartPlugImportJobs(deleteAll: boolean): Promise<string> {
   const response = await fetch(`/api/smart-plug-import-jobs?deleteAll=${deleteAll}`, {
     method: 'DELETE',
     credentials: 'include',
@@ -178,7 +179,8 @@ export async function cleanUpSmartPlugImportJobs(deleteAll: boolean): Promise<Sm
     throw await toApiError(response)
   }
 
-  return (await response.json()) as SmartPlugImportJobCleanupDto
+  const body = (await response.json()) as { jobId: string }
+  return body.jobId
 }
 
 export async function createPowerPoint(roomId: string, name: string): Promise<PowerPointDto> {
