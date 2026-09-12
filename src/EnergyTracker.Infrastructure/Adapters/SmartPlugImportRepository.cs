@@ -756,6 +756,52 @@ public class SmartPlugImportRepository(
     // wasn't the actual constraint the incident hit (the cascade's row/log volume was).
     internal const int DeleteBatchSize = 200;
 
+    // Incident fix round 2 (2026-09-12 prod, same day): DeleteBatchSize alone didn't fix the
+    // incident it was built for — a household with only 51-60 eligible rows (well under 200)
+    // never triggers count-based chunking at all, yet 5 of its 51 imports individually carried
+    // 57,171/66,238/112,005/114,077/122,158 SmartPlugReading rows (487,380 total), and the single
+    // resulting DELETE FROM SmartPlugImports command still saturated Azure SQL Basic-tier and hit
+    // CommandTimeout. This bounds the importIds loop by cumulative READING count too, not just
+    // import count — see ChunkImportIdsByReadingVolume below. 20,000 is roughly 24x smaller than
+    // the volume that saturated Basic-tier for ~2 minutes in the confirmed incident; a starting
+    // value from that evidence, not a benchmarked optimum. A single import whose own reading count
+    // alone exceeds this still forms its own (unsplittable) chunk — accepted, not solved here; see
+    // deferred-work.md.
+    internal const int DeleteReadingVolumeThreshold = 20_000;
+
+    // Greedily packs importIds into chunks bounded by BOTH cumulative reading count and import
+    // count, whichever is hit first — pure and DB-free so the packing logic itself gets direct
+    // unit coverage (SmartPlugImportRepositoryChunkingTests.cs) without seeding real rows. An id
+    // missing from readingCountByImportId (no readings) is treated as zero. A single id whose own
+    // count already exceeds maxReadingsPerChunk still lands alone in its own chunk — chunks are
+    // never empty and every input id is assigned to exactly one chunk.
+    internal static IEnumerable<Guid[]> ChunkImportIdsByReadingVolume(
+        IReadOnlyList<Guid> importIds, IReadOnlyDictionary<Guid, int> readingCountByImportId,
+        int maxReadingsPerChunk, int maxImportsPerChunk)
+    {
+        var currentChunk = new List<Guid>();
+        var currentReadingCount = 0;
+        foreach (var importId in importIds)
+        {
+            var readingCount = readingCountByImportId.GetValueOrDefault(importId);
+            if (currentChunk.Count > 0 &&
+                (currentChunk.Count >= maxImportsPerChunk || currentReadingCount + readingCount > maxReadingsPerChunk))
+            {
+                yield return currentChunk.ToArray();
+                currentChunk = [];
+                currentReadingCount = 0;
+            }
+
+            currentChunk.Add(importId);
+            currentReadingCount += readingCount;
+        }
+
+        if (currentChunk.Count > 0)
+        {
+            yield return currentChunk.ToArray();
+        }
+    }
+
     // Shared by SweepExpiredAsync (automatic, terminal-states-only) and DeleteJobsAsync (manual,
     // all-states, Story 3.10) — set-based, in FK-dependency order (UpdateMappingAsync's own doc
     // comment establishes the same discipline for this table) — never load-then-remove, these
@@ -784,9 +830,42 @@ public class SmartPlugImportRepository(
     // asymmetric across providers, so one shared constant for both loops is deliberate.
     private async Task DeleteEligibleAsync(IReadOnlyList<Guid> jobIds, IReadOnlyList<Guid> importIds, CancellationToken cancellationToken)
     {
+        // Incident fix round 2: measured once, up front — the cost driver is how many
+        // SmartPlugReading rows each import's SetNull cascade will touch, not how many imports
+        // there are. Missing from this dictionary (queried only for ids in importIds) means zero
+        // readings; ChunkImportIdsByReadingVolume treats it that way.
+        //
+        // Round-2 review finding (Blind Hunter + Edge Case Hunter, independently): a single
+        // GROUP BY against the full, unchunked importIds list reuses the exact Contains(...) shape
+        // DeleteBatchSize's own comment confirmed translates to one SQL parameter per id — for a
+        // household with enough eligible imports, that alone risks SQL Server's ~2100-parameter
+        // ceiling before the (correctly chunked) delete loop even starts. Measuring in
+        // DeleteBatchSize-sized chunks too reuses that already-proven-safe parameter count instead
+        // of introducing a second, unbounded query shape.
+        //
+        // Round-3 review finding (Blind Hunter): DeleteBatchSize's own value was chosen for a
+        // different reason (cascade/log-volume per delete command, see its own comment) than what
+        // this measurement query actually needs (parameter-count safety per read command) — the
+        // two constraints are independent and DeleteBatchSize's value happens to satisfy both, not
+        // because it was derived for this purpose. A deliberate reuse, not an oversight: introducing
+        // a second constant here would add a knob with no evidence it needs to differ in practice.
+        var importReadingCounts = new Dictionary<Guid, int>();
+        foreach (var measurementBatch in importIds.Chunk(DeleteBatchSize))
+        {
+            var batchCounts = await dbContext.SmartPlugReadings
+                .Where(r => r.SmartPlugImportId != null && measurementBatch.Contains(r.SmartPlugImportId!.Value))
+                .GroupBy(r => r.SmartPlugImportId!.Value)
+                .Select(g => new { ImportId = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            foreach (var x in batchCounts)
+            {
+                importReadingCounts[x.ImportId] = x.Count;
+            }
+        }
+
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        foreach (var importIdBatch in importIds.Chunk(DeleteBatchSize))
+        foreach (var importIdBatch in ChunkImportIdsByReadingVolume(importIds, importReadingCounts, DeleteReadingVolumeThreshold, DeleteBatchSize))
         {
             await dbContext.SmartPlugImportGaps
                 .Where(g => importIdBatch.Contains(g.SmartPlugImportId))

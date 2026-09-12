@@ -972,6 +972,103 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_everything_when_a_few_imports_individually_exceed_the_reading_volume_threshold()
+    {
+        // Round-2 incident fix (2026-09-12, same day): the round-1 fix above batches by import
+        // COUNT, but a real household hit HTTP 500 again with only ~51 eligible imports (well
+        // under DeleteBatchSize) because 5 of them individually carried 57k-122k SmartPlugReading
+        // rows each. This test mirrors that shape at a fraction of the scale (three imports whose
+        // combined reading count crosses DeleteReadingVolumeThreshold even though each alone is
+        // under it) to prove the real GROUP BY + ChunkImportIdsByReadingVolume + delete pipeline
+        // works end to end, not just the pure packing algorithm in isolation
+        // (SmartPlugImportRepositoryChunkingTests.cs already covers the algorithm's own logic).
+        const int readingsPerLargeImport = 8_000; // 3 * 8,000 = 24,000 > DeleteReadingVolumeThreshold (20,000)
+        var householdId = Guid.NewGuid();
+        var allImportIds = new List<Guid>();
+        var allJobIds = new List<Guid>();
+        var allReadingIds = new List<Guid>();
+
+        // Seed via a plain migrated context first — same reason as the rollback test below: the
+        // counting interceptor attached to the context that actually runs DeleteJobsAsync must
+        // only ever observe the repository's own commands, never MigrateAsync's DDL or this
+        // seeding's own inserts.
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+
+            void SeedImportWithReadings(int readingCount, string deviceTag)
+            {
+                var job = new BackgroundJob
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                };
+                seedDbContext.BackgroundJobs.Add(job);
+                var import = MakeImport(householdId, job.Id, deviceTag);
+                seedDbContext.SmartPlugImports.Add(import);
+                // Round-3 review finding (Blind Hunter): the spec's own AC says "every
+                // job/import/gap is deleted" for this scenario, but no gap was seeded — trivially
+                // satisfying that AC without exercising the gaps delete under volume-triggered
+                // chunk boundaries at all.
+                seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                });
+                allJobIds.Add(job.Id);
+                allImportIds.Add(import.Id);
+                for (var i = 0; i < readingCount; i++)
+                {
+                    var reading = MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i));
+                    seedDbContext.SmartPlugReadings.Add(reading);
+                    allReadingIds.Add(reading.Id);
+                }
+            }
+
+            for (var i = 0; i < 3; i++)
+            {
+                SeedImportWithReadings(readingsPerLargeImport, $"Large-{i}");
+            }
+            for (var i = 0; i < 2; i++)
+            {
+                SeedImportWithReadings(10, $"Small-{i}");
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Round-2 review finding (Blind Hunter): asserting only final row counts can't distinguish
+        // "chunking wired correctly" from "wired with the volume/count arguments swapped, still
+        // coincidentally correct." Counting commands catches that.
+        //
+        // Round-3 review finding (Blind Hunter): a loose ">=" lower bound would also pass an
+        // over-chunking bug. This scenario's exact chunk count is provable regardless of the
+        // eligibility query's (unordered) retrieval order: any 2 of the 3 "large" (8,000-reading)
+        // imports fit in one chunk together (16,000 <= 20,000, with room for both 10-reading
+        // "small" imports too, 16,020 <= 20,000) but a 3rd large import never does (+8,000 always
+        // exceeds 20,000 regardless of what else is already in that chunk) — so the 3 large imports
+        // always split into exactly 2 groups, and the 2 negligible small imports never change that.
+        // Exactly 2 import-chunks * 2 commands each (gaps delete, imports delete) + exactly 1
+        // jobs-chunk (5 jobs, far under DeleteBatchSize) = exactly 5 commands, every time.
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(5);
+        interceptor.CompletedCount.ShouldBe(5);
+        // Household-scoped query filter (AD-3) means these unfiltered counts already cover exactly
+        // this test's rows — avoids a 24,000+ element Contains(...) IN-list in the verification.
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImports.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugReadings.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(allReadingIds.Count);
+        (await verifyDbContext.SmartPlugReadings.CountAsync(r => r.SmartPlugImportId != null, TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task DeleteJobsAsync_with_no_cutoff_deletes_every_eligible_Failed_job_with_no_paired_import_across_multiple_batches()
     {
         // Round-1 review finding (Edge Case Hunter): the batching test above always pairs one job
@@ -1013,6 +1110,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     private sealed class FailAfterCommandCountInterceptor(int allowedCommandCount) : DbCommandInterceptor
     {
         private int _completed;
+
+        // Round-2 review finding (Blind Hunter): reused as a pure command-count observer too
+        // (pass allowedCommandCount: int.MaxValue so it never throws) — final-row-count assertions
+        // alone can't distinguish "chunking wired correctly" from "wired with the volume/count
+        // arguments swapped, still coincidentally correct." Counting actual commands can.
+        public int CompletedCount => Volatile.Read(ref _completed);
 
         public override InterceptionResult<int> NonQueryExecuting(
             DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
@@ -1120,6 +1223,72 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             .Where(r => readingIds.Contains(r.Id)).ToListAsync(TestContext.Current.CancellationToken);
         survivingReadings.Count.ShouldBe(seedCount);
         survivingReadings.ShouldAllBe(r => importIds.Contains(r.SmartPlugImportId!.Value));
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_rolls_back_every_chunk_when_a_later_chunk_fails_with_the_boundary_triggered_by_reading_volume()
+    {
+        // Round-2 review finding (Blind Hunter): the rollback test above only forces a chunk
+        // boundary via import COUNT (DeleteBatchSize + 1 imports). It never proved atomicity holds
+        // when the boundary is instead forced by the new reading-VOLUME dimension — a bug specific
+        // to that code path could go undetected. Two imports at 12,000 readings each can never
+        // share one chunk (2 x 12,000 = 24,000 > DeleteReadingVolumeThreshold of 20,000), forcing
+        // exactly 2 volume-triggered chunks even though import count (2) is trivially under
+        // DeleteBatchSize (200).
+        const int readingsPerImport = 12_000;
+        var householdId = Guid.NewGuid();
+        var jobIds = new List<Guid>(2);
+        var importIds = new List<Guid>(2);
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            for (var i = 0; i < 2; i++)
+            {
+                var job = new BackgroundJob
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                };
+                seedDbContext.BackgroundJobs.Add(job);
+                var import = MakeImport(householdId, job.Id, deviceTag: $"Large-{i}");
+                seedDbContext.SmartPlugImports.Add(import);
+                // Round-3 review finding (Blind Hunter): none of round-3's new tests seeded a gap,
+                // so a rollback bug specific to SmartPlugImportGaps under a volume-triggered
+                // boundary could go undetected — round-1's count-triggered rollback test is the
+                // only one that ever exercised gap rollback.
+                seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                });
+                for (var r = 0; r < readingsPerImport; r++)
+                {
+                    seedDbContext.SmartPlugReadings.Add(MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-r)));
+                }
+                jobIds.Add(job.Id);
+                importIds.Add(import.Id);
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Let the first volume-triggered chunk's 2 commands (gaps delete, imports delete) actually
+        // complete, then block the second chunk's gaps delete — same proof shape as the
+        // count-triggered rollback test above, just with the split forced by volume instead.
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 2);
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken));
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => jobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(2);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => importIds.Contains(i.Id), TestContext.Current.CancellationToken)).ShouldBe(2);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(g => importIds.Contains(g.SmartPlugImportId), TestContext.Current.CancellationToken)).ShouldBe(2);
+        (await verifyDbContext.SmartPlugReadings.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(2 * readingsPerImport);
+        (await verifyDbContext.SmartPlugReadings.CountAsync(r => r.SmartPlugImportId != null, TestContext.Current.CancellationToken)).ShouldBe(2 * readingsPerImport);
     }
 
     [Fact]
