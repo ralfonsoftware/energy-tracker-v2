@@ -25,8 +25,36 @@ function makeJob(overrides: Partial<SmartPlugImportJobDto>): SmartPlugImportJobD
   return { ...BASE_JOB, jobId: overrides.jobId ?? crypto.randomUUID(), ...overrides }
 }
 
-function stubFetch(jobs: SmartPlugImportJobDto[], options: { jobsAfterCleanup?: SmartPlugImportJobDto[] } = {}) {
+// Round-3 incident fix (2026-09-12): cleanup now enqueues an async job (202 + jobId) and the
+// component polls GET /api/jobs/{jobId} for completion instead of the DELETE response carrying a
+// synchronous deletedCount.
+const CLEANUP_JOB_ID = 'cleanup-job-1'
+
+function jobStatusResponse(overrides: Partial<{ status: string; errorMessage: string | null }> = {}) {
+  return jsonResponse({
+    id: CLEANUP_JOB_ID,
+    status: overrides.status ?? 'completed',
+    importStatus: null,
+    errorMessage: overrides.errorMessage ?? null,
+    createdAtUtc: '2026-08-07T12:00:00Z',
+    completedAtUtc: '2026-08-07T12:00:01Z',
+    smartPlugImportId: null,
+    smartPlugImportDeviceTag: null,
+    gaps: [],
+  })
+}
+
+function stubFetch(
+  jobs: SmartPlugImportJobDto[],
+  options: {
+    jobsAfterCleanup?: SmartPlugImportJobDto[]
+    cleanupJobStatus?: string
+    cleanupErrorMessage?: string
+    cleanupPollFailuresBeforeSuccess?: number
+  } = {},
+) {
   let currentJobs = jobs
+  let cleanupPollAttempts = 0
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === '/api/smart-plug-import-jobs' && (!init || init.method === undefined)) {
       return Promise.resolve(jsonResponse(currentJobs))
@@ -35,7 +63,14 @@ function stubFetch(jobs: SmartPlugImportJobDto[], options: { jobsAfterCleanup?: 
       if (options.jobsAfterCleanup) {
         currentJobs = options.jobsAfterCleanup
       }
-      return Promise.resolve(jsonResponse({ deletedCount: currentJobs.length }))
+      return Promise.resolve(jsonResponse({ jobId: CLEANUP_JOB_ID }, 202))
+    }
+    if (url === `/api/jobs/${CLEANUP_JOB_ID}`) {
+      cleanupPollAttempts += 1
+      if (options.cleanupPollFailuresBeforeSuccess && cleanupPollAttempts <= options.cleanupPollFailuresBeforeSuccess) {
+        return Promise.resolve(new Response(null, { status: 503 }))
+      }
+      return Promise.resolve(jobStatusResponse({ status: options.cleanupJobStatus, errorMessage: options.cleanupErrorMessage }))
     }
     if (url === '/api/rooms') {
       return Promise.resolve(jsonResponse([{ id: 'room-1', name: 'Living room', archivedAt: null }]))
@@ -206,6 +241,48 @@ describe('JobHistoryList', () => {
       await waitFor(() =>
         expect(fetchMock).toHaveBeenCalledWith('/api/smart-plug-import-jobs?deleteAll=true', expect.objectContaining({ method: 'DELETE' })),
       )
+    })
+
+    it('surfaces the error and keeps the dialog open when the accepted cleanup job later fails', async () => {
+      // Round-3 incident fix (2026-09-12): the DELETE call itself can succeed (202 + jobId) while
+      // the background job it enqueued later fails — distinct from the "DELETE request itself
+      // rejected" case the test below this one covers.
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      stubFetch([job], { cleanupJobStatus: 'failed', cleanupErrorMessage: 'An unexpected error occurred while cleaning up the history.' })
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(screen.getByText('An unexpected error occurred while cleaning up the history.')).toBeInTheDocument())
+      expect(screen.getByText('Clean up import history')).toBeInTheDocument()
+      expect(screen.getByText('a.csv')).toBeInTheDocument()
+    })
+
+    it('tolerates one transient poll failure and still completes the cleanup', async () => {
+      // Round-3 review fix: a single dropped fetch (network blip/transient 5xx) while polling for
+      // cleanup completion must not report failure — same MAX_CONSECUTIVE_POLL_FAILURES tolerance
+      // useSmartPlugImportJob.ts already applies to its own polling.
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      try {
+        const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+        stubFetch([job], { jobsAfterCleanup: [], cleanupPollFailuresBeforeSuccess: 1 })
+
+        render(<JobHistoryList />)
+        await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+        await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+        await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+        await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+        await vi.advanceTimersByTimeAsync(2000)
+
+        await waitFor(() => expect(screen.queryByText('Clean up import history')).not.toBeInTheDocument())
+        expect(screen.queryByText('a.csv')).not.toBeInTheDocument()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('cancelling closes the dialog with no API call', async () => {

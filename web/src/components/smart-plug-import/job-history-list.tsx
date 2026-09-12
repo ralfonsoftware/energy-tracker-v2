@@ -12,6 +12,7 @@ import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 import {
   ApiError,
   cleanUpSmartPlugImportJobs,
+  fetchJobStatus,
   fetchSmartPlugImportJobs,
   type SmartPlugImportJobDto,
   type SmartPlugImportJobStateValue,
@@ -20,6 +21,15 @@ import {
 // Distinct from, and slower than, useSmartPlugImportJob's own 2s per-item poll — no story/
 // architecture doc pins an exact number, an implementation default (Task 5's own Dev Notes).
 const POLL_INTERVAL_MS = 8000
+
+// Round-3 incident fix (2026-09-12): "clean up everything" now runs as an async background job
+// (AD-6) instead of a synchronous DELETE — same 2000ms interval useSmartPlugImportJob.ts already
+// uses to poll a single job's own status, not this file's own (slower, list-refresh) POLL_INTERVAL_MS.
+const CLEANUP_POLL_INTERVAL_MS = 2000
+// Same tolerance useSmartPlugImportJob.ts already applies to its own polling — a single dropped
+// fetch (network blip/transient 5xx) must not report cleanup failure while the background job
+// itself may still be running or may already have succeeded.
+const MAX_CONSECUTIVE_CLEANUP_POLL_FAILURES = 3
 
 const STATE_ICON: Record<SmartPlugImportJobStateValue, typeof Clock> = {
   waiting: Clock,
@@ -111,10 +121,46 @@ export function JobHistoryList() {
     setCleaningUp(true)
     setCleanupError(null)
     try {
-      await cleanUpSmartPlugImportJobs(deleteAll)
-      if (mountedRef.current) {
-        setCleanupOpen(false)
-        load()
+      const jobId = await cleanUpSmartPlugImportJobs(deleteAll)
+      // Round-3 incident fix (2026-09-12): cleanup now runs as an async background job — a
+      // household's total cleanup work can exceed the backend's synchronous HTTP request ceiling,
+      // so completion is only observable by polling, same discipline useSmartPlugImportJob.ts
+      // already uses for a single job's own status. cleaningUp already disables/guards the whole
+      // dialog for the duration — no new UI state needed to cover a longer wait.
+      let consecutiveFailures = 0
+      for (;;) {
+        if (!mountedRef.current) {
+          return
+        }
+
+        let status
+        try {
+          status = await fetchJobStatus(jobId)
+          consecutiveFailures = 0
+        } catch (err) {
+          consecutiveFailures += 1
+          if (consecutiveFailures < MAX_CONSECUTIVE_CLEANUP_POLL_FAILURES) {
+            await new Promise((resolve) => window.setTimeout(resolve, CLEANUP_POLL_INTERVAL_MS))
+            continue
+          }
+          throw err
+        }
+
+        if (status.status !== 'queued' && status.status !== 'processing') {
+          if (status.status === 'failed') {
+            if (mountedRef.current) {
+              setCleanupError(status.errorMessage ?? t('smartPlugImport.jobHistory.cleanup.error'))
+            }
+            return
+          }
+          if (mountedRef.current) {
+            setCleanupOpen(false)
+            load()
+          }
+          return
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, CLEANUP_POLL_INTERVAL_MS))
       }
     } catch (err) {
       if (mountedRef.current) {
