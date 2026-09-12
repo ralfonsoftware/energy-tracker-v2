@@ -1,7 +1,9 @@
+using System.Data.Common;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Testcontainers.PostgreSql;
@@ -33,6 +35,19 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var dbContext = new EnergyTrackerDbContext(optionsBuilder.Options, new FixedHouseholdAccessor(householdId));
         await dbContext.Database.MigrateAsync(cancellationToken);
         return dbContext;
+    }
+
+    // No migration call here deliberately — the caller must migrate first via
+    // OpenMigratedDbContextAsync on an already-schema'd container/database, so an interceptor
+    // attached here only ever observes the repository's own commands, never MigrateAsync's DDL.
+    private static EnergyTrackerDbContext OpenDbContextWithInterceptor(
+        PostgreSqlContainer container, Guid householdId, IInterceptor interceptor)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
+        optionsBuilder.UseNpgsql(container.GetConnectionString(),
+            o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres"));
+        optionsBuilder.AddInterceptors(interceptor);
+        return new EnergyTrackerDbContext(optionsBuilder.Options, new FixedHouseholdAccessor(householdId));
     }
 
     private static async Task<Guid> SeedPowerPointAsync(EnergyTrackerDbContext dbContext, Guid householdId, CancellationToken cancellationToken)
@@ -892,6 +907,219 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // regardless of whether DeleteJobsAsync actually deleted anything.
         await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, otherHouseholdId, TestContext.Current.CancellationToken);
         (await verifyDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == otherHouseholdJobId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+    }
+
+    // Incident fix (2026-09-12 prod): DeleteEligibleAsync used to issue one unbatched
+    // ExecuteDeleteAsync per table, and on a household with enough accumulated history that
+    // single command's log-write volume saturated Azure SQL Basic-tier and exceeded the 120s
+    // CommandTimeout. These two tests are the regression guard: batching must still delete every
+    // eligible row across a chunk boundary (below), and a failure partway through a multi-chunk
+    // delete must still roll back everything, not just the chunks that hadn't run yet (below that).
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_every_eligible_row_across_multiple_batches()
+    {
+        // DeleteBatchSize + 1 guarantees exactly two chunks for both the importIds loop and the
+        // jobIds loop (one full batch, one single-row remainder) — the minimal case that actually
+        // exercises the chunk boundary rather than happening to fit in one iteration.
+        const int seedCount = SmartPlugImportRepository.DeleteBatchSize + 1;
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobIds = new List<Guid>(seedCount);
+        var importIds = new List<Guid>(seedCount);
+        var readingIds = new List<Guid>(seedCount);
+        for (var i = 0; i < seedCount; i++)
+        {
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+            };
+            dbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
+            dbContext.SmartPlugImports.Add(import);
+            dbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            // Round-1 review finding: neither original test seeded any SmartPlugReading rows, so
+            // the SetNull cascade this whole fix exists to bound was never actually exercised. One
+            // reading per import (unmapped, PowerPointId null) is enough to prove the cascade still
+            // fires correctly across every chunk, not just the first.
+            var reading = MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i));
+            dbContext.SmartPlugReadings.Add(reading);
+            jobIds.Add(job.Id);
+            importIds.Add(import.Id);
+            readingIds.Add(reading.Id);
+        }
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(seedCount);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => jobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => importIds.Contains(i.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(g => importIds.Contains(g.SmartPlugImportId), TestContext.Current.CancellationToken)).ShouldBe(0);
+        var survivingReadings = await verifyDbContext.SmartPlugReadings
+            .Where(r => readingIds.Contains(r.Id)).ToListAsync(TestContext.Current.CancellationToken);
+        survivingReadings.Count.ShouldBe(seedCount);
+        survivingReadings.ShouldAllBe(r => r.SmartPlugImportId == null);
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_with_no_cutoff_deletes_every_eligible_Failed_job_with_no_paired_import_across_multiple_batches()
+    {
+        // Round-1 review finding (Edge Case Hunter): the batching test above always pairs one job
+        // to one import 1:1, so importIds.Count == jobIds.Count in every case — the jobIds
+        // chunking loop was never exercised independently of the importIds loop. This seeds only
+        // jobs (no paired SmartPlugImport row, mirroring the existing single-item
+        // "Failed job with no paired import" case) at multi-batch scale.
+        const int seedCount = SmartPlugImportRepository.DeleteBatchSize + 1;
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var jobIds = new List<Guid>(seedCount);
+        for (var i = 0; i < seedCount; i++)
+        {
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Failed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+            };
+            dbContext.BackgroundJobs.Add(job);
+            jobIds.Add(job.Id);
+        }
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
+
+        deletedCount.ShouldBe(seedCount);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => jobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    // Round-1 review finding (Blind Hunter): counting in NonQueryExecutingAsync only proves "N
+    // commands were attempted," not "N commands actually completed" — the two happen to coincide
+    // in this sequential-await code path today, but that's an implicit assumption, not an observed
+    // fact. Counting completions in NonQueryExecutedAsync and gating the next attempt in
+    // NonQueryExecutingAsync against that observed count makes "chunk 1 already ran" something the
+    // test genuinely proves rather than assumes.
+    private sealed class FailAfterCommandCountInterceptor(int allowedCommandCount) : DbCommandInterceptor
+    {
+        private int _completed;
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            if (Volatile.Read(ref _completed) >= allowedCommandCount)
+            {
+                throw new InvalidOperationException("Simulated mid-batch failure for atomicity test.");
+            }
+            return base.NonQueryExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref _completed) >= allowedCommandCount)
+            {
+                throw new InvalidOperationException("Simulated mid-batch failure for atomicity test.");
+            }
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override ValueTask<int> NonQueryExecutedAsync(
+            DbCommand command, CommandExecutedEventData eventData, int result, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _completed);
+            return base.NonQueryExecutedAsync(command, eventData, result, cancellationToken);
+        }
+
+        // Round-2 review finding: the sync NonQueryExecuting override above gates on _completed
+        // but nothing incremented it on the sync path — EF Core's ExecuteDeleteAsync never
+        // actually exercises this (it's async-only), but leaving the sync gate wired to a counter
+        // only the async path updates would silently reintroduce "gates on attempts, not
+        // completions" the moment any sync command path is ever exercised. Mirroring the async
+        // pair keeps both paths consistent even though only one is reachable today.
+        public override int NonQueryExecuted(DbCommand command, CommandExecutedEventData eventData, int result)
+        {
+            Interlocked.Increment(ref _completed);
+            return base.NonQueryExecuted(command, eventData, result);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteJobsAsync_rolls_back_every_chunk_when_a_later_chunk_fails()
+    {
+        // Same two-chunk seed as the batching test above, plus a gap AND a reading per import
+        // (round-1 review finding: the original version of this test never seeded or verified
+        // SmartPlugImportGaps; round-2 review finding: it still never seeded SmartPlugReadings, so
+        // it could not prove that a SetNull detach performed inside a rolled-back chunk is itself
+        // rolled back — every table DeleteEligibleAsync's FK-dependency order touches is exercised
+        // here now). The interceptor lets exactly the first import chunk's 2 commands
+        // (SmartPlugImportGaps delete, then SmartPlugImports delete) actually complete — observed
+        // via NonQueryExecutedAsync, not assumed — before blocking the next command from starting.
+        // This proves the outer transaction rolls back a chunk that already ran, not just the
+        // chunks queued behind the failure.
+        const int seedCount = SmartPlugImportRepository.DeleteBatchSize + 1;
+        var householdId = Guid.NewGuid();
+        var jobIds = new List<Guid>(seedCount);
+        var importIds = new List<Guid>(seedCount);
+        var readingIds = new List<Guid>(seedCount);
+
+        // Seed via a plain (non-intercepted) migrated context first — the interceptor attached
+        // below must only ever see the repository's own delete commands, never MigrateAsync's DDL
+        // or this seeding's own inserts.
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            for (var i = 0; i < seedCount; i++)
+            {
+                var job = new BackgroundJob
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                };
+                seedDbContext.BackgroundJobs.Add(job);
+                var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
+                seedDbContext.SmartPlugImports.Add(import);
+                seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                });
+                var reading = MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i));
+                seedDbContext.SmartPlugReadings.Add(reading);
+                jobIds.Add(job.Id);
+                importIds.Add(import.Id);
+                readingIds.Add(reading.Id);
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 2);
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(
+            () => repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken));
+        exception.Message.ShouldBe("Simulated mid-batch failure for atomicity test.");
+
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => jobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(seedCount);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => importIds.Contains(i.Id), TestContext.Current.CancellationToken)).ShouldBe(seedCount);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(g => importIds.Contains(g.SmartPlugImportId), TestContext.Current.CancellationToken)).ShouldBe(seedCount);
+        var survivingReadings = await verifyDbContext.SmartPlugReadings
+            .Where(r => readingIds.Contains(r.Id)).ToListAsync(TestContext.Current.CancellationToken);
+        survivingReadings.Count.ShouldBe(seedCount);
+        survivingReadings.ShouldAllBe(r => importIds.Contains(r.SmartPlugImportId!.Value));
     }
 
     [Fact]

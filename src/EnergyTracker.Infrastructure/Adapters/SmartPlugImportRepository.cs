@@ -737,6 +737,25 @@ public class SmartPlugImportRepository(
         return eligible.Count;
     }
 
+    // Incident fix (2026-09-12 prod): bounds the *typical* per-command row/log volume of each
+    // chunked delete below. This is NOT a hard bound on every possible case: a single import can
+    // itself carry hundreds of thousands of SmartPlugReading rows (a full-history Eve Home export
+    // — see AddAsyncCore's BulkCopyTimeout comment above), and chunking by import COUNT doesn't
+    // bound one pathologically large import's own SetNull cascade — only the number of imports
+    // touched per command. This fix reduces risk for the incident's actual shape (many accumulated
+    // jobs/imports over time saturating Azure SQL Basic-tier's 5-DTU log-write throughput within
+    // the 120s CommandTimeout on "clean up everything" / DeleteJobsAsync with cutoffUtc: null) —
+    // it does not claim to solve the different edge case of one extreme-sized individual import
+    // (accepted residual risk, tracked in deferred-work.md, same as this fix's other known limit:
+    // no bound on total wall-clock time across every chunk). 200 is a starting value from the
+    // incident's own DTU/Log-IO evidence, not a benchmarked optimum. It's also comfortably under
+    // SQL Server's ~2100-parameter ceiling — confirmed to actually matter for this query shape, not
+    // a theoretical concern: the 2026-09-12 incident's own captured DbCommand log shows this exact
+    // `Contains(...)` predicate translating to one named parameter per id (`@importIds1` ...
+    // `@importIds60` observed live), not a single array/JSON parameter — but that ceiling still
+    // wasn't the actual constraint the incident hit (the cascade's row/log volume was).
+    internal const int DeleteBatchSize = 200;
+
     // Shared by SweepExpiredAsync (automatic, terminal-states-only) and DeleteJobsAsync (manual,
     // all-states, Story 3.10) — set-based, in FK-dependency order (UpdateMappingAsync's own doc
     // comment establishes the same discipline for this table) — never load-then-remove, these
@@ -746,28 +765,48 @@ public class SmartPlugImportRepository(
     // ExecuteDeleteAsync calls with no transaction risked a partial delete (gaps/imports gone,
     // BackgroundJob rows left behind) surviving a cancellation or transient failure between calls,
     // the same class of bug this codebase already fixed once for Power Point mapping (fa77aef).
+    //
+    // Incident fix (2026-09-12): each of the three deletes is now chunked into DeleteBatchSize-id
+    // batches, each its own ExecuteDeleteAsync command, still inside this same outer transaction.
+    // CommandTimeout (Program.cs) bounds a single command's execution, not the transaction's total
+    // duration, so chunking removes the per-command timeout risk without weakening the all-or-
+    // nothing guarantee above — a failure on any chunk still rolls back every chunk, including ones
+    // that already ran, because the transaction is never committed. Per-chunk transactions were
+    // considered and rejected: they would weaken that guarantee for no timeout benefit
+    // CommandTimeout doesn't already give per-command. The two loops below chunk for two distinct
+    // reasons sharing one constant: the importIds loop bounds a downstream SetNull cascade (see
+    // DeleteBatchSize's own comment); the jobIds loop has no such cascade to bound at all
+    // (SmartPlugImport.BackgroundJobId's FK is Restrict, and nothing else references
+    // BackgroundJobs) — it's chunked purely to bound that delete statement's own direct row/log
+    // volume. Unlike UpsertAwaitingMappingReadingsAsync's provider-specific chunk sizes (5000
+    // Postgres / 200 SqlServer, driven by each provider's differing per-statement parameter
+    // ceiling), the bottleneck here is cascade/log-volume, not parameter count — not meaningfully
+    // asymmetric across providers, so one shared constant for both loops is deliberate.
     private async Task DeleteEligibleAsync(IReadOnlyList<Guid> jobIds, IReadOnlyList<Guid> importIds, CancellationToken cancellationToken)
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        if (importIds.Count > 0)
+        foreach (var importIdBatch in importIds.Chunk(DeleteBatchSize))
         {
             await dbContext.SmartPlugImportGaps
-                .Where(g => importIds.Contains(g.SmartPlugImportId))
+                .Where(g => importIdBatch.Contains(g.SmartPlugImportId))
                 .ExecuteDeleteAsync(cancellationToken);
 
             // Task 3's (Story 3.6) SetNull FK detaches (never deletes) the matching
             // SmartPlugReading rows automatically at the database level (AD-20).
             await dbContext.SmartPlugImports
-                .Where(i => importIds.Contains(i.Id))
+                .Where(i => importIdBatch.Contains(i.Id))
                 .ExecuteDeleteAsync(cancellationToken);
         }
 
         // BackgroundJobs last — SmartPlugImport.BackgroundJobId's FK is Restrict, so any paired
         // import row must already be gone before this delete can succeed.
-        await dbContext.BackgroundJobs
-            .Where(j => jobIds.Contains(j.Id))
-            .ExecuteDeleteAsync(cancellationToken);
+        foreach (var jobIdBatch in jobIds.Chunk(DeleteBatchSize))
+        {
+            await dbContext.BackgroundJobs
+                .Where(j => jobIdBatch.Contains(j.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
         await transaction.CommitAsync(cancellationToken);
     }
