@@ -34,7 +34,7 @@ describe('TrendHistoryPage', () => {
   it('renders the chart, the Meter Readings card, and the Per-Plug card in that order', async () => {
     mockRoutes([])
 
-    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onSmartPlugImportClick={() => {}} />)
+    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
 
     expect(await screen.findByText('Not enough history yet to show a trend.')).toBeInTheDocument()
     expect(await screen.findByText('Meter Readings — 0 logged')).toBeInTheDocument()
@@ -48,7 +48,7 @@ describe('TrendHistoryPage', () => {
     const user = userEvent.setup()
     const onSmartPlugImportClick = vi.fn()
 
-    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onSmartPlugImportClick={onSmartPlugImportClick} />)
+    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={onSmartPlugImportClick} />)
 
     const trigger = screen.getByRole('button', { name: 'Import Smart Plug data' })
     await user.click(trigger)
@@ -60,7 +60,7 @@ describe('TrendHistoryPage', () => {
     const user = userEvent.setup()
     const onBack = vi.fn()
 
-    render(<TrendHistoryPage locale="en-US" onBack={onBack} onSettingsClick={() => {}} onSmartPlugImportClick={() => {}} />)
+    render(<TrendHistoryPage locale="en-US" onBack={onBack} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
 
     const trendHistoryTab = await screen.findByRole('button', { name: 'Trend History' })
     expect(trendHistoryTab).toHaveAttribute('aria-current', 'page')
@@ -74,7 +74,7 @@ describe('TrendHistoryPage', () => {
     const user = userEvent.setup()
     const onSettingsClick = vi.fn()
 
-    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={onSettingsClick} onSmartPlugImportClick={() => {}} />)
+    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={onSettingsClick} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
 
     await user.click(await screen.findByRole('button', { name: 'Settings' }))
     expect(onSettingsClick).toHaveBeenCalledOnce()
@@ -113,7 +113,7 @@ describe('TrendHistoryPage', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onSmartPlugImportClick={() => {}} />)
+    render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
 
     await screen.findByText('Meter Readings — 1 logged')
     const historyCallsBeforeEdit = fetchMock.mock.calls.filter(([input]) => String(input) === '/api/status/history').length

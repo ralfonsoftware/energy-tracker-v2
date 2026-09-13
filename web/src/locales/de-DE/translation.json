@@ -256,5 +256,58 @@
         "error": "Beim Aufräumen des Verlaufs ist etwas schiefgelaufen. Bitte versuche es erneut."
       }
     }
+  },
+  "tariff": {
+    "form": {
+      "heading": "Tarif hinzufügen",
+      "description": "Gib die aktuellen Vertragsbedingungen deines Haushalts ein. Nur Grundgebühr plus Preis pro kWh — keine Staffel- oder Zeittarife.",
+      "monthlyBaseFeeLabel": "Monatliche Grundgebühr",
+      "pricePerKwhLabel": "Preis pro kWh",
+      "currencyLabel": "Währung",
+      "currencyPlaceholder": "z. B. EUR",
+      "contractStartDateLabel": "Vertragsbeginn",
+      "contractPeriodLabel": "Vertragslaufzeit",
+      "contractPeriodMonths_one": "{{count}} Monat",
+      "contractPeriodMonths_other": "{{count}} Monate",
+      "months": "Monate",
+      "submit": "Tarif speichern",
+      "saving": "Wird gespeichert…",
+      "errorGeneric": "Beim Speichern dieses Tarifs ist etwas schiefgelaufen. Bitte versuche es erneut."
+    },
+    "history": {
+      "heading": "Tarifverlauf",
+      "loading": "Wird geladen…",
+      "loadError": "Der Tarifverlauf konnte nicht geladen werden — versuche es erneut.",
+      "emptyState": "Noch keine Tarifeinträge — füge oben deinen aktuellen Vertrag hinzu.",
+      "periodColumn": "Zeitraum",
+      "baseFeeColumn": "Grundgebühr",
+      "priceColumn": "Preis/kWh",
+      "periodRange": "{{start}} – {{end}}",
+      "ongoing": "laufend",
+      "currentBadge": "Aktuell",
+      "correctedField": "{{field}} ursprünglich {{oldValue}}",
+      "fieldName": {
+        "MonthlyBaseFee": "Grundgebühr",
+        "PricePerKwh": "Preis/kWh",
+        "Currency": "Währung",
+        "ContractStartDate": "Vertragsbeginn",
+        "ContractPeriodMonths": "Vertragslaufzeit"
+      },
+      "editTrigger": "Bearbeiten",
+      "editTriggerFor": "Tarifeintrag ab {{start}} bearbeiten",
+      "previousPage": "Zurück",
+      "nextPage": "Weiter",
+      "pageIndicator": "Seite {{page}} von {{totalPages}}"
+    },
+    "editDialog": {
+      "title": "Tarifeintrag bearbeiten",
+      "lockedNotice": "Der Vertrag dieses Eintrags hat bereits begonnen — das Ändern der Grundgebühr oder des Preises/kWh erfordert die Bestätigung unten.",
+      "overrideConfirmLabel": "Mir ist bewusst, dass dies einen bereits gültigen Preis ändert, und der ursprüngliche Wert bleibt als sichtbarer Korrekturhinweis erhalten.",
+      "save": "Speichern",
+      "saving": "Wird gespeichert…",
+      "cancel": "Abbrechen",
+      "conflictError": "Dieser Tarifeintrag wurde an anderer Stelle geändert — aktualisiere und versuche es erneut.",
+      "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+    }
   }
 }

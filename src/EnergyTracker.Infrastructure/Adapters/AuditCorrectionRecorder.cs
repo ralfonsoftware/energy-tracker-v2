@@ -44,4 +44,24 @@ public class AuditCorrectionRecorder(EnergyTrackerDbContext dbContext) : IAuditC
 
         return latestPerEntity.ToDictionary(a => a.EntityId, a => a);
     }
+
+    public async Task<IReadOnlyDictionary<(Guid EntityId, string FieldName), AuditCorrection>> GetLatestPerFieldForEntitiesAsync(
+        string entityType, IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken)
+    {
+        if (entityIds.Count == 0)
+        {
+            return new Dictionary<(Guid, string), AuditCorrection>();
+        }
+
+        // Same GroupBy-and-take-max-CorrectedAtUtc shape as GetLatestForEntitiesAsync, grouped by
+        // (EntityId, FieldName) instead of EntityId alone — so two fields corrected in the same
+        // submission each keep their own visible correction note (AC #6).
+        var latestPerField = await dbContext.AuditCorrections
+            .Where(a => a.EntityType == entityType && entityIds.Contains(a.EntityId))
+            .GroupBy(a => new { a.EntityId, a.FieldName })
+            .Select(g => g.OrderByDescending(a => a.CorrectedAtUtc).ThenByDescending(a => a.Id).First())
+            .ToListAsync(cancellationToken);
+
+        return latestPerField.ToDictionary(a => (a.EntityId, a.FieldName), a => a);
+    }
 }

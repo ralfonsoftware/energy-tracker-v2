@@ -5,6 +5,7 @@ import { InviteAcceptForm } from '@/components/household-invite/invite-accept-fo
 import { SettingsPage } from '@/components/settings/settings-page'
 import { DashboardPage } from '@/components/dashboard/dashboard-page'
 import { TrendHistoryPage } from '@/components/trend-history/trend-history-page'
+import { TariffRadarPage } from '@/components/tariff/tariff-radar-page'
 import { SmartPlugImportPage } from '@/components/smart-plug-import/smart-plug-import-page'
 import { registerOfflineSync } from '@/lib/meter-reading-sync'
 import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
@@ -37,7 +38,7 @@ function App() {
   // precedent (see invite-accept-form.tsx's /join/{token} handling for the one existing exception,
   // which predates this and stays URL-addressable for its own reason: it must survive a full-page
   // OIDC redirect round trip).
-  const [view, setView] = useState<'dashboard' | 'settings' | 'trendHistory' | 'smartPlugImport'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'settings' | 'trendHistory' | 'tariffRadar' | 'smartPlugImport'>('dashboard')
   // Story 4.1 gave Smart Plug Import a second entry point (Trend History, alongside Dashboard's
   // original one) — both land on the same 'smartPlugImport' view, so its own Back button needs to
   // remember which one launched it rather than always returning to Dashboard.
@@ -251,6 +252,7 @@ function App() {
         householdId={state.household.id}
         onBack={() => setView('dashboard')}
         onTrendHistoryClick={() => setView('trendHistory')}
+        onTariffRadarClick={() => setView('tariffRadar')}
       />
     )
   }
@@ -261,10 +263,23 @@ function App() {
         locale={state.household.locale}
         onBack={() => setView('dashboard')}
         onSettingsClick={() => setView('settings')}
+        onTariffRadarClick={() => setView('tariffRadar')}
         onSmartPlugImportClick={() => {
           setSmartPlugImportReturnView('trendHistory')
           setView('smartPlugImport')
         }}
+      />
+    )
+  }
+
+  if (view === 'tariffRadar') {
+    return (
+      <TariffRadarPage
+        locale={state.household.locale}
+        householdCurrency={state.household.currency}
+        onBack={() => setView('dashboard')}
+        onTrendHistoryClick={() => setView('trendHistory')}
+        onSettingsClick={() => setView('settings')}
       />
     )
   }
@@ -292,6 +307,7 @@ function App() {
       }}
       onSettingsClick={() => setView('settings')}
       onTrendHistoryClick={() => setView('trendHistory')}
+      onTariffRadarClick={() => setView('tariffRadar')}
       onSmartPlugImportClick={() => {
         setSmartPlugImportReturnView('dashboard')
         setView('smartPlugImport')

@@ -42,6 +42,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -64,6 +65,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -85,6 +87,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -107,6 +110,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -130,6 +134,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={onSettingsClick}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -155,6 +160,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={onTrendHistoryClick}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -180,6 +186,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={onSmartPlugImportClick}
       />,
     )
@@ -205,6 +212,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -247,6 +255,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -267,6 +276,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -309,6 +319,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -330,6 +341,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )
@@ -350,6 +362,7 @@ describe('DashboardPage', () => {
         onRegressionResolved={noop}
         onSettingsClick={noop}
         onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
         onSmartPlugImportClick={noop}
       />,
     )

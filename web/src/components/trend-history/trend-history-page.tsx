@@ -12,6 +12,7 @@ interface TrendHistoryPageProps {
   locale: string
   onBack: () => void
   onSettingsClick: () => void
+  onTariffRadarClick: () => void
   onSmartPlugImportClick: () => void
 }
 
@@ -20,7 +21,7 @@ interface TrendHistoryPageProps {
 // Card order: chart, then Meter Readings — the two views of the same Main Meter data (FR-8), read
 // as a pair. The Room -> Power Point -> Device tree (PerPlugDataCard) is a structurally different
 // Smart Plug signal and stays last.
-export function TrendHistoryPage({ locale, onBack, onSettingsClick, onSmartPlugImportClick }: TrendHistoryPageProps) {
+export function TrendHistoryPage({ locale, onBack, onSettingsClick, onTariffRadarClick, onSmartPlugImportClick }: TrendHistoryPageProps) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<StatusHistoryEntryDto[]>([])
   // Distinguishes "genuinely no history yet" from "the fetch failed" — without this a transient
@@ -86,7 +87,13 @@ export function TrendHistoryPage({ locale, onBack, onSettingsClick, onSmartPlugI
         <PerPlugDataCard locale={locale} />
       </div>
 
-      <NavChrome active="trendHistory" onDashboardClick={onBack} onTrendHistoryClick={() => {}} onSettingsClick={onSettingsClick} />
+      <NavChrome
+        active="trendHistory"
+        onDashboardClick={onBack}
+        onTrendHistoryClick={() => {}}
+        onTariffRadarClick={onTariffRadarClick}
+        onSettingsClick={onSettingsClick}
+      />
     </main>
   )
 }

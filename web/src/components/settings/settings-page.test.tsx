@@ -29,7 +29,7 @@ describe('SettingsPage', () => {
       }),
     )
 
-    render(<SettingsPage householdId={householdId} onBack={() => {}} onTrendHistoryClick={() => {}} />)
+    render(<SettingsPage householdId={householdId} onBack={() => {}} onTrendHistoryClick={() => {}} onTariffRadarClick={() => {}} />)
 
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.queryByText('Smart Plug Import')).not.toBeInTheDocument()
@@ -53,7 +53,7 @@ describe('SettingsPage', () => {
       }),
     )
 
-    render(<SettingsPage householdId={householdId} onBack={() => {}} onTrendHistoryClick={onTrendHistoryClick} />)
+    render(<SettingsPage householdId={householdId} onBack={() => {}} onTrendHistoryClick={onTrendHistoryClick} onTariffRadarClick={() => {}} />)
 
     await user.click(await screen.findByRole('button', { name: 'Trend History' }))
     expect(onTrendHistoryClick).toHaveBeenCalledOnce()
