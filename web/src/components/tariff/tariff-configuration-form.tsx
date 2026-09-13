@@ -36,7 +36,9 @@ export function TariffConfigurationForm({ householdCurrency, onCreated }: Tariff
     Number(monthlyBaseFee) >= 0 &&
     pricePerKwh !== '' &&
     Number(pricePerKwh) > 0 &&
-    currency.length === 3 &&
+    // Mirrors the backend's TariffValidation.ValidateCurrency rule exactly — a plain 3-character
+    // length check would let a value like "12E" enable Save and guarantee an avoidable 400.
+    /^[A-Z]{3}$/.test(currency) &&
     contractStartDate !== '' &&
     contractPeriodMonths !== ''
 

@@ -55,17 +55,36 @@ export function TariffHistoryList({ locale, refreshNonce }: TariffHistoryListPro
 
   useEffect(() => load(page), [load, page, refreshNonce])
 
-  const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 4 })
+  // Fixed-decimal, matching each field's own EF Core column precision (AC #5) — never floating-
+  // point, so trailing zeros (e.g. base fee's €12.50) are never dropped.
+  const baseFeeFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const priceFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })
   const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' })
 
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : 1
+
+  // TariffFieldCorrectionResponse's own doc comment promises the frontend parses/formats each
+  // correction's locale-neutral, invariant-culture oldValue per field type and the household's
+  // Locale (AD-18) — this is that parse/format step.
+  const formatCorrectionValue = (fieldName: string, rawValue: string) => {
+    switch (fieldName) {
+      case 'MonthlyBaseFee':
+        return baseFeeFormat.format(Number(rawValue))
+      case 'PricePerKwh':
+        return priceFormat.format(Number(rawValue))
+      case 'ContractStartDate':
+        return dateFormat.format(new Date(rawValue))
+      default:
+        return rawValue
+    }
+  }
 
   const formatCorrection = (item: TariffHistoryItemDto) =>
     item.corrections.map((correction) => (
       <span key={correction.fieldName} className="text-muted-foreground text-xs">
         {t('tariff.history.correctedField', {
           field: t(`tariff.history.fieldName.${correction.fieldName}`),
-          oldValue: correction.oldValue,
+          oldValue: formatCorrectionValue(correction.fieldName, correction.oldValue),
         })}
       </span>
     ))
@@ -111,10 +130,10 @@ export function TariffHistoryList({ locale, refreshNonce }: TariffHistoryListPro
                     </div>
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {numberFormat.format(item.monthlyBaseFee)} {item.currency}
+                    {baseFeeFormat.format(item.monthlyBaseFee)} {item.currency}
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {numberFormat.format(item.pricePerKwh)} {item.currency}/kWh
+                    {priceFormat.format(item.pricePerKwh)} {item.currency}/kWh
                   </TableCell>
                   <TableCell>
                     <Button

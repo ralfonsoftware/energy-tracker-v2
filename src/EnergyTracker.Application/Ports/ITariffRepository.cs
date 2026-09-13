@@ -8,9 +8,14 @@ public interface ITariffRepository
 
     Task<Tariff?> FindByIdAsync(Guid tariffId, CancellationToken cancellationToken);
 
+    // Backs the reject-duplicate-ContractStartDate guard (Create and Edit) — pass
+    // excludingTariffId when checking from an edit so the entry being edited doesn't collide with
+    // itself.
+    Task<bool> ExistsWithContractStartDateAsync(
+        Guid householdId, DateTimeOffset contractStartDate, Guid? excludingTariffId, CancellationToken cancellationToken);
+
     // One page of a Household's Tariff entries, most-recent-first (ContractStartDate descending,
-    // then Id descending as the deterministic tiebreak — mirrors
-    // IMeterReadingRepository.GetPageForMainMeterAsync's tiebreak pattern).
+    // then CreatedAtUtc descending, then Id descending as the final deterministic tiebreak).
     Task<(IReadOnlyList<Tariff> Items, int TotalCount)> GetHistoryForHouseholdAsync(
         Guid householdId, int page, int pageSize, CancellationToken cancellationToken);
 

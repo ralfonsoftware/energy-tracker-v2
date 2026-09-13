@@ -37,6 +37,11 @@ public class EditTariff(
             TariffValidation.ValidateCurrency(currency);
         }
 
+        if (contractStartDate.HasValue)
+        {
+            TariffValidation.ValidateContractStartDate(contractStartDate.Value);
+        }
+
         if (contractPeriodMonths.HasValue)
         {
             TariffValidation.ValidateContractPeriodMonths(contractPeriodMonths.Value);
@@ -62,6 +67,15 @@ public class EditTariff(
 
         var hasAnyChange = changedMonthlyBaseFee || changedPricePerKwh || changedCurrency || changedContractStartDate || changedContractPeriodMonths;
 
+        // Same reasoning as CreateTariff's guard — two entries sharing a ContractStartDate would
+        // make "current"/history ordering depend on creation order alone.
+        if (changedContractStartDate &&
+            await tariffRepository.ExistsWithContractStartDateAsync(householdId, contractStartDate!.Value, tariffId, cancellationToken))
+        {
+            throw new TariffValidationException(
+                $"Another Tariff entry already exists with ContractStartDate '{contractStartDate:O}' for this Household.");
+        }
+
         // A no-op save isn't a correction — skip the write entirely rather than bumping Version
         // for nothing, which would otherwise hand out a spurious 409 to anyone else holding the
         // pre-edit Version for this entry.
@@ -84,13 +98,22 @@ public class EditTariff(
 
         // AC #3: once a Tariff entry's contract has started, its price fields (base fee, price/kWh)
         // are locked behind an explicit override step — enforced server-side, not left to the
-        // frontend's own confirmation UI. Currency/dates/period aren't price fields and are never
-        // gated by this check.
-        var isLocked = tariff.ContractStartDate <= DateTimeOffset.UtcNow;
-        if (isLocked && !overrideConfirmed && (changedMonthlyBaseFee || changedPricePerKwh))
+        // frontend's own confirmation UI. Currency/period aren't price fields and are never gated
+        // by this check.
+        //
+        // ContractStartDate itself IS gated when it changes: checking only the pre-edit date would
+        // let a caller silently defeat the lock by moving the date in one request (unlocking a
+        // locked entry, or locking-then-unlocking across two requests) before touching price
+        // fields. Locked if EITHER the entry's current date or its requested new date is already
+        // <= now — closing both directions of that bypass.
+        var now = DateTimeOffset.UtcNow;
+        var wasLocked = tariff.ContractStartDate <= now;
+        var willBeLocked = changedContractStartDate ? contractStartDate!.Value <= now : wasLocked;
+        var isLocked = wasLocked || willBeLocked;
+        if (isLocked && !overrideConfirmed && (changedMonthlyBaseFee || changedPricePerKwh || changedContractStartDate))
         {
             throw new TariffValidationException(
-                "This Tariff entry's contract has already started — editing its price fields requires an explicit override confirmation.");
+                "This Tariff entry's contract has already started — editing its price fields or contract start date requires an explicit override confirmation.");
         }
 
         var updatedTariff = await unitOfWork.ExecuteInTransactionAsync(async ct =>

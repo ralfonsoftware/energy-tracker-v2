@@ -127,6 +127,47 @@ describe('EditTariffDialog', () => {
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
   })
 
+  it('moving an already-started entrys ContractStartDate forward (unedited price) still requires the override checkbox', async () => {
+    // Closes the bypass where moving a locked entry's date into the future — to make a later
+    // price edit appear unlocked — was never itself gated.
+    const pastTariff = tariff({ contractStartDate: PAST_DATE })
+    const user = userEvent.setup()
+    const newDate = new Date(Date.now() + 60 * ONE_DAY_MS).toISOString().slice(0, 10)
+
+    render(<EditTariffDialog tariff={pastTariff} open={true} onOpenChange={() => {}} onSaved={vi.fn()} />)
+
+    const dateInput = screen.getByLabelText('Contract start date')
+    await user.clear(dateInput)
+    await user.type(dateInput, newDate)
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('checkbox')).toBeInTheDocument()
+  })
+
+  it('changing ContractStartDate sends it, and omits it entirely when left untouched', async () => {
+    const futureTariff = tariff({ contractStartDate: FUTURE_DATE })
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ...futureTariff, version: 4 })))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    const onSaved = vi.fn()
+    const newDate = new Date(Date.now() + 90 * ONE_DAY_MS).toISOString().slice(0, 10)
+
+    render(<EditTariffDialog tariff={futureTariff} open={true} onOpenChange={() => {}} onSaved={onSaved} />)
+
+    const dateInput = screen.getByLabelText('Contract start date')
+    await user.clear(dateInput)
+    await user.type(dateInput, newDate)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/tariffs/${futureTariff.id}`,
+      expect.objectContaining({
+        body: expect.stringContaining(`"contractStartDate":"${new Date(newDate).toISOString()}"`),
+      }),
+    )
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce())
+  })
+
   it('a 409 conflict shows the conflict message and does not call onSaved', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ detail: 'stale' }), { status: 409 }))))
     const user = userEvent.setup()

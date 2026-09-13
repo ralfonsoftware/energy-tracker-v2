@@ -107,4 +107,28 @@ public class CreateTariffTests
         await Should.ThrowAsync<TariffValidationException>(() =>
             sut.ExecuteAsync(Guid.NewGuid(), 12.50m, 10_000_000_000_000m, "EUR", DateTimeOffset.UtcNow, 12, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task Rejects_a_ContractStartDate_that_is_implausibly_far_in_the_past()
+    {
+        var sut = Sut();
+
+        await Should.ThrowAsync<TariffValidationException>(() =>
+            sut.ExecuteAsync(Guid.NewGuid(), 12.50m, 0.32m, "EUR", default, 12, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Rejects_a_ContractStartDate_that_collides_with_an_existing_entry_for_the_same_Household()
+    {
+        var householdId = Guid.NewGuid();
+        var contractStartDate = DateTimeOffset.UtcNow;
+        _repository.ExistsWithContractStartDateAsync(householdId, contractStartDate, null, Arg.Any<CancellationToken>())
+            .Returns(true);
+        var sut = Sut();
+
+        await Should.ThrowAsync<TariffValidationException>(() =>
+            sut.ExecuteAsync(householdId, 12.50m, 0.32m, "EUR", contractStartDate, 12, TestContext.Current.CancellationToken));
+
+        await _repository.DidNotReceive().AddAsync(Arg.Any<Tariff>(), Arg.Any<CancellationToken>());
+    }
 }

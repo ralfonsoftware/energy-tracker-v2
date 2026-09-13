@@ -33,7 +33,9 @@ public abstract class TariffRepositoryTestsBase
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    protected static Tariff NewTariff(Guid householdId, decimal monthlyBaseFee, decimal pricePerKwh, string currency, DateTimeOffset contractStartDate, int contractPeriodMonths = 12) => new()
+    protected static Tariff NewTariff(
+        Guid householdId, decimal monthlyBaseFee, decimal pricePerKwh, string currency, DateTimeOffset contractStartDate,
+        int contractPeriodMonths = 12, DateTimeOffset? createdAtUtc = null) => new()
     {
         Id = Guid.NewGuid(),
         HouseholdId = householdId,
@@ -42,7 +44,7 @@ public abstract class TariffRepositoryTestsBase
         Currency = currency,
         ContractStartDate = contractStartDate,
         ContractPeriodMonths = contractPeriodMonths,
-        CreatedAtUtc = DateTimeOffset.UtcNow,
+        CreatedAtUtc = createdAtUtc ?? DateTimeOffset.UtcNow,
     };
 
     [Fact]
@@ -79,6 +81,24 @@ public abstract class TariffRepositoryTestsBase
 
         totalCount.ShouldBe(3);
         items.Select(t => t.Id).ShouldBe([newest.Id, middle.Id]);
+    }
+
+    [Fact]
+    public async Task GetHistoryForHouseholdAsync_breaks_a_shared_ContractStartDate_tie_by_CreatedAtUtc_not_a_random_Id()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var sharedStartDate = DateTimeOffset.UtcNow;
+        var createdEarlier = NewTariff(householdId, 10m, 0.30m, "EUR", sharedStartDate, createdAtUtc: DateTimeOffset.UtcNow.AddMinutes(-5));
+        var createdLater = NewTariff(householdId, 15m, 0.35m, "EUR", sharedStartDate, createdAtUtc: DateTimeOffset.UtcNow);
+        dbContext.Tariffs.AddRange(createdEarlier, createdLater);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new TariffRepository(dbContext);
+
+        var (items, _) = await repository.GetHistoryForHouseholdAsync(householdId, 1, 2, TestContext.Current.CancellationToken);
+
+        items.Select(t => t.Id).ShouldBe([createdLater.Id, createdEarlier.Id]);
     }
 
     [Fact]
@@ -189,5 +209,26 @@ public class SqlServerTariffRepositoryTests : TariffRepositoryTestsBase, IAsyncL
         var dbContext = NewDbContext(optionsBuilder.Options, householdId);
         await dbContext.Database.MigrateAsync(cancellationToken);
         return dbContext;
+    }
+
+    [Fact]
+    public async Task PricePerKwh_preserves_4_decimal_places_not_truncated_to_2()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new TariffRepository(dbContext);
+        var tariff = NewTariff(householdId, 12.50m, 0.3256m, "EUR", DateTimeOffset.UtcNow);
+
+        await repository.AddAsync(tariff, TestContext.Current.CancellationToken);
+
+        // Fresh DbContext, forcing a real round-trip through the (18,4) column rather than reading
+        // back the tracked in-memory instance — proves AD-2's "both providers" parity for the one
+        // precision choice this story's Dev Notes flag as easy to copy-paste wrong.
+        var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
+        optionsBuilder.UseSqlServer(_container.GetConnectionString());
+        await using var freshDbContext = NewDbContext(optionsBuilder.Options, householdId);
+        var reloaded = await freshDbContext.Tariffs.SingleAsync(t => t.Id == tariff.Id, TestContext.Current.CancellationToken);
+        reloaded.PricePerKwh.ShouldBe(0.3256m);
     }
 }

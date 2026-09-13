@@ -48,8 +48,35 @@ describe('TariffHistoryList', () => {
     render(<TariffHistoryList locale="en-US" refreshNonce={0} />)
 
     expect(await screen.findByText('Current')).toBeInTheDocument()
-    expect(screen.getByText('Base fee originally 10')).toBeInTheDocument()
-    expect(screen.getByText('12.5 EUR')).toBeInTheDocument()
+    expect(screen.getByText('Base fee originally 10.00')).toBeInTheDocument()
+    expect(screen.getByText('12.50 EUR')).toBeInTheDocument()
+  })
+
+  it('formats a ContractStartDate correction note as a localized date, not a raw ISO timestamp', async () => {
+    const item = {
+      id: '55555555-5555-5555-5555-555555555555',
+      monthlyBaseFee: 12.5,
+      pricePerKwh: 0.32,
+      currency: 'EUR',
+      contractStartDate: '2026-02-01T00:00:00+00:00',
+      contractPeriodMonths: 12,
+      version: 1,
+      isCurrent: true,
+      effectiveUntil: null,
+      corrections: [
+        {
+          fieldName: 'ContractStartDate',
+          oldValue: '2026-01-15T00:00:00.0000000+00:00',
+          newValue: '2026-02-01T00:00:00.0000000+00:00',
+          correctedAtUtc: '2026-02-01T00:00:00+00:00',
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ items: [item], totalCount: 1, page: 1, pageSize: 20 }))))
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} />)
+
+    expect(await screen.findByText('Contract start date originally Jan 15, 2026')).toBeInTheDocument()
   })
 
   it('a non-current entry shows its effective period ending at the next entry, no Current badge', async () => {

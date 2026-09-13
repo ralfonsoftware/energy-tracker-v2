@@ -86,11 +86,16 @@ public static class TariffEndpoints
                 return forbidden;
             }
 
+            if (request.Version is null)
+            {
+                return Results.Problem(detail: "Version is required.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
             try
             {
                 var tariff = await editTariff.ExecuteAsync(
                     householdId, id, request.MonthlyBaseFee, request.PricePerKwh, request.Currency,
-                    request.ContractStartDate, request.ContractPeriodMonths, request.Version,
+                    request.ContractStartDate, request.ContractPeriodMonths, request.Version.Value,
                     request.OverrideConfirmed, cancellationToken);
                 return Results.Ok(ToResponse(tariff));
             }
@@ -179,5 +184,5 @@ public record EditTariffRequest(
     string? Currency,
     DateTimeOffset? ContractStartDate,
     int? ContractPeriodMonths,
-    int Version,
+    int? Version,
     bool OverrideConfirmed);

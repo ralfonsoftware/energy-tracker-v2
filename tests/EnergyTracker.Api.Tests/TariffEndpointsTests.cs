@@ -205,6 +205,33 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task POST_tariffs_with_a_ContractStartDate_matching_an_existing_entry_is_rejected()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var contractStartDate = DateTimeOffset.UtcNow;
+        await PostTariffAsync(client, 12.50m, 0.32m, "EUR", contractStartDate);
+
+        var response = await PostTariffAsync(client, 15m, 0.35m, "EUR", contractStartDate);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PUT_tariffs_id_with_a_missing_version_returns_400_not_a_misleading_409()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        var created = await PostTariffAsync(client, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow.AddMonths(1));
+        var createdBody = await created.Content.ReadFromJsonAsync<TariffResponse>(TestContext.Current.CancellationToken);
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/tariffs/{createdBody!.Id}",
+            new { monthlyBaseFee = 15m, overrideConfirmed = false },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task A_households_Tariff_history_is_never_visible_to_another_household()
     {
         var (clientA, householdIdA) = await CreateHouseholdAsync();

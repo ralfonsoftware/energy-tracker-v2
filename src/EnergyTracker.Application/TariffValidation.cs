@@ -14,6 +14,12 @@ internal static class TariffValidation
 
     public const int MaxContractPeriodMonths = 1200; // 100 years — generous upper bound, not a business rule.
 
+    // Generous sanity bounds, not a business rule — mainly guards against a missing/omitted
+    // ContractStartDate silently binding to default(DateTimeOffset) (0001-01-01) and being
+    // accepted as a valid, immediately-"current" Tariff entry.
+    public static readonly DateTimeOffset MinContractStartDate = new(1900, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    public static readonly DateTimeOffset MaxContractStartDate = new(2200, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     public static void ValidateMonthlyBaseFee(decimal monthlyBaseFee)
     {
         if (monthlyBaseFee < 0 || monthlyBaseFee >= MaxMonthlyBaseFee)
@@ -40,6 +46,15 @@ internal static class TariffValidation
         {
             throw new TariffValidationException(
                 $"Invalid currency '{currency}'. Expected a 3-letter ISO 4217-shaped code (e.g. 'EUR').");
+        }
+    }
+
+    public static void ValidateContractStartDate(DateTimeOffset contractStartDate)
+    {
+        if (contractStartDate < MinContractStartDate || contractStartDate > MaxContractStartDate)
+        {
+            throw new TariffValidationException(
+                $"Contract start date must be between {MinContractStartDate:yyyy-MM-dd} and {MaxContractStartDate:yyyy-MM-dd}, got '{contractStartDate:O}'.");
         }
     }
 

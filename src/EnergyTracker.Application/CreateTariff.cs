@@ -18,7 +18,16 @@ public class CreateTariff(ITariffRepository repository)
         TariffValidation.ValidateMonthlyBaseFee(monthlyBaseFee);
         TariffValidation.ValidatePricePerKwh(pricePerKwh);
         TariffValidation.ValidateCurrency(currency);
+        TariffValidation.ValidateContractStartDate(contractStartDate);
         TariffValidation.ValidateContractPeriodMonths(contractPeriodMonths);
+
+        // Two entries sharing a ContractStartDate would make "current"/history ordering depend on
+        // creation order alone — reject outright rather than accept an ambiguous history.
+        if (await repository.ExistsWithContractStartDateAsync(householdId, contractStartDate, excludingTariffId: null, cancellationToken))
+        {
+            throw new TariffValidationException(
+                $"A Tariff entry already exists with ContractStartDate '{contractStartDate:O}' for this Household.");
+        }
 
         // A pure append — never mutates or closes out a prior Tariff entry (AC #2). "Current
         // Tariff" and "effective-until" are computed at read time (GetTariffHistory), not stored.

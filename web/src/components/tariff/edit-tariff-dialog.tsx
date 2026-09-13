@@ -15,6 +15,13 @@ interface EditTariffDialogProps {
   onSaved: () => void
 }
 
+// Date-only input value ("YYYY-MM-DD") from a full ISO date-time string — same date-only
+// granularity tariff-configuration-form.tsx's create form already commits to for
+// ContractStartDate.
+function toDateInputValue(isoDateTime: string) {
+  return isoDateTime.slice(0, 10)
+}
+
 // Mirrors edit-meter-reading-dialog.tsx's Dialog+GLASS_MODAL_CLASSNAME shell and 409-conflict
 // handling exactly (ApiError.status === 409 -> conflict message, no auto-retry). AC #3's
 // locked-field override is enforced server-side (EditTariff's overrideConfirmed parameter) — this
@@ -25,6 +32,7 @@ export function EditTariffDialog({ tariff, open, onOpenChange, onSaved }: EditTa
   const [monthlyBaseFee, setMonthlyBaseFee] = useState(String(tariff.monthlyBaseFee))
   const [pricePerKwh, setPricePerKwh] = useState(String(tariff.pricePerKwh))
   const [currency, setCurrency] = useState(tariff.currency)
+  const [contractStartDate, setContractStartDate] = useState(toDateInputValue(tariff.contractStartDate))
   const [contractPeriodMonths, setContractPeriodMonths] = useState(String(tariff.contractPeriodMonths))
   const [overrideConfirmed, setOverrideConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -35,20 +43,43 @@ export function EditTariffDialog({ tariff, open, onOpenChange, onSaved }: EditTa
       setMonthlyBaseFee(String(tariff.monthlyBaseFee))
       setPricePerKwh(String(tariff.pricePerKwh))
       setCurrency(tariff.currency)
+      setContractStartDate(toDateInputValue(tariff.contractStartDate))
       setContractPeriodMonths(String(tariff.contractPeriodMonths))
       setOverrideConfirmed(false)
       setError(null)
     }
   }, [open, tariff])
 
-  const isLocked = new Date(tariff.contractStartDate).getTime() <= Date.now()
+  const contractStartDateChanged = contractStartDate !== toDateInputValue(tariff.contractStartDate)
   const priceFieldsChanged =
     Number(monthlyBaseFee) !== tariff.monthlyBaseFee || Number(pricePerKwh) !== tariff.pricePerKwh
-  const needsOverrideConfirmation = isLocked && priceFieldsChanged
+  const currencyValid = /^[A-Z]{3}$/.test(currency)
+
+  // Locked if the entry's stored ContractStartDate has already passed, OR the date currently
+  // typed into the field would already be in the past — mirrors EditTariff.ExecuteAsync's own
+  // wasLocked-or-willBeLocked check server-side (AC #3 is enforced there, not here; this just
+  // shows the override step before the server would reject a one-click Save).
+  const computeIsLocked = (now: number) => {
+    const wasLocked = new Date(tariff.contractStartDate).getTime() <= now
+    const willBeLocked = contractStartDateChanged ? new Date(contractStartDate).getTime() <= now : wasLocked
+    return wasLocked || willBeLocked
+  }
+
+  const isLocked = computeIsLocked(Date.now())
+  const needsOverrideConfirmation = isLocked && (priceFieldsChanged || contractStartDateChanged)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (needsOverrideConfirmation && !overrideConfirmed) {
+    if (!currencyValid) {
+      return
+    }
+
+    // Re-checked against the current clock, not the value computed at the last render — closes
+    // the gap where the dialog sits open across the exact moment this entry's ContractStartDate
+    // passes. A failed check here also updates `error`, which forces the re-render that makes the
+    // override checkbox actually appear.
+    if (computeIsLocked(Date.now()) && (priceFieldsChanged || contractStartDateChanged) && !overrideConfirmed) {
+      setError(t('tariff.editDialog.lockedNotice'))
       return
     }
 
@@ -60,6 +91,7 @@ export function EditTariffDialog({ tariff, open, onOpenChange, onSaved }: EditTa
         monthlyBaseFee: Number(monthlyBaseFee),
         pricePerKwh: Number(pricePerKwh),
         currency,
+        ...(contractStartDateChanged ? { contractStartDate: new Date(contractStartDate).toISOString() } : {}),
         contractPeriodMonths: Number(contractPeriodMonths),
         version: tariff.version,
         overrideConfirmed,
@@ -137,6 +169,18 @@ export function EditTariffDialog({ tariff, open, onOpenChange, onSaved }: EditTa
           </div>
 
           <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-tariff-contract-start-date">{t('tariff.form.contractStartDateLabel')}</Label>
+            <Input
+              id="edit-tariff-contract-start-date"
+              type="date"
+              value={contractStartDate}
+              onChange={(event) => setContractStartDate(event.target.value)}
+              disabled={submitting}
+              required
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
             <Label htmlFor="edit-tariff-contract-period">{t('tariff.form.contractPeriodLabel')}</Label>
             <UnitInput
               id="edit-tariff-contract-period"
@@ -176,7 +220,7 @@ export function EditTariffDialog({ tariff, open, onOpenChange, onSaved }: EditTa
             <Button
               type="submit"
               variant="glass-primary"
-              disabled={submitting || (needsOverrideConfirmation && !overrideConfirmed)}
+              disabled={submitting || (needsOverrideConfirmation && !overrideConfirmed) || !currencyValid}
             >
               {submitting ? t('tariff.editDialog.saving') : t('tariff.editDialog.save')}
             </Button>

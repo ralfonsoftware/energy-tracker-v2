@@ -17,6 +17,18 @@ public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffReposit
     public Task<Tariff?> FindByIdAsync(Guid tariffId, CancellationToken cancellationToken) =>
         dbContext.Tariffs.SingleOrDefaultAsync(t => t.Id == tariffId, cancellationToken);
 
+    public Task<bool> ExistsWithContractStartDateAsync(
+        Guid householdId, DateTimeOffset contractStartDate, Guid? excludingTariffId, CancellationToken cancellationToken)
+    {
+        var query = dbContext.Tariffs.Where(t => t.HouseholdId == householdId && t.ContractStartDate == contractStartDate);
+        if (excludingTariffId.HasValue)
+        {
+            query = query.Where(t => t.Id != excludingTariffId.Value);
+        }
+
+        return query.AnyAsync(cancellationToken);
+    }
+
     public async Task<(IReadOnlyList<Tariff> Items, int TotalCount)> GetHistoryForHouseholdAsync(
         Guid householdId, int page, int pageSize, CancellationToken cancellationToken)
     {
@@ -25,6 +37,7 @@ public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffReposit
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(t => t.ContractStartDate)
+            .ThenByDescending(t => t.CreatedAtUtc)
             .ThenByDescending(t => t.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

@@ -301,7 +301,7 @@
     },
     "editDialog": {
       "title": "Edit Tariff entry",
-      "lockedNotice": "This entry's contract has already started — changing its base fee or price/kWh requires confirming the override below.",
+      "lockedNotice": "This entry's contract has already started — changing its base fee, price/kWh, or contract start date requires confirming the override below.",
       "overrideConfirmLabel": "I understand this changes a price that's already in effect, and the original value will be kept as a visible correction note.",
       "save": "Save",
       "saving": "Saving…",

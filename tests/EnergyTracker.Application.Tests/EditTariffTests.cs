@@ -215,4 +215,76 @@ public class EditTariffTests
         await Should.ThrowAsync<TariffValidationException>(() =>
             sut.ExecuteAsync(householdId, tariff.Id, null, pricePerKwh, null, null, null, 0, overrideConfirmed: true, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task Moving_a_future_dated_entrys_ContractStartDate_into_the_past_while_changing_price_without_override_throws()
+    {
+        // Closes the bypass where a single request moves ContractStartDate into the past AND
+        // edits a price field, previously evaluated against the still-future OLD date.
+        var householdId = Guid.NewGuid();
+        var tariff = NewTariff(householdId, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow.AddDays(10), version: 0);
+        _tariffRepository.FindByIdAsync(tariff.Id, Arg.Any<CancellationToken>()).Returns(tariff);
+        var sut = Sut();
+
+        await Should.ThrowAsync<TariffValidationException>(() =>
+            sut.ExecuteAsync(
+                householdId, tariff.Id, 20m, null, null, DateTimeOffset.UtcNow.AddDays(-1), null, 0,
+                overrideConfirmed: false, TestContext.Current.CancellationToken));
+
+        await _tariffRepository.DidNotReceive().UpdateAsync(
+            Arg.Any<Guid>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<string?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<int?>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Moving_an_already_started_entrys_ContractStartDate_forward_without_override_throws()
+    {
+        // Closes the two-call bypass: moving a locked entry's ContractStartDate to the future
+        // (to appear unlocked for a later price edit) itself requires override confirmation.
+        var householdId = Guid.NewGuid();
+        var tariff = NewTariff(householdId, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow.AddDays(-10), version: 0);
+        _tariffRepository.FindByIdAsync(tariff.Id, Arg.Any<CancellationToken>()).Returns(tariff);
+        var sut = Sut();
+
+        await Should.ThrowAsync<TariffValidationException>(() =>
+            sut.ExecuteAsync(
+                householdId, tariff.Id, null, null, null, DateTimeOffset.UtcNow.AddDays(30), null, 0,
+                overrideConfirmed: false, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Moving_ContractStartDate_with_override_confirmation_succeeds()
+    {
+        var householdId = Guid.NewGuid();
+        var tariff = NewTariff(householdId, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow.AddDays(-10), version: 0);
+        var newStartDate = DateTimeOffset.UtcNow.AddDays(30);
+        var updated = NewTariff(householdId, 12.50m, 0.32m, "EUR", newStartDate, version: 1, id: tariff.Id);
+        _tariffRepository.FindByIdAsync(tariff.Id, Arg.Any<CancellationToken>()).Returns(tariff);
+        _tariffRepository.UpdateAsync(tariff.Id, null, null, null, newStartDate, null, 0, Arg.Any<CancellationToken>()).Returns(updated);
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(
+            householdId, tariff.Id, null, null, null, newStartDate, null, 0, overrideConfirmed: true, TestContext.Current.CancellationToken);
+
+        result.ContractStartDate.ShouldBe(newStartDate);
+    }
+
+    [Fact]
+    public async Task Rejects_a_ContractStartDate_edit_that_collides_with_another_entry_for_the_same_Household()
+    {
+        var householdId = Guid.NewGuid();
+        var tariff = NewTariff(householdId, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow.AddDays(10), version: 0);
+        var newStartDate = DateTimeOffset.UtcNow.AddDays(30);
+        _tariffRepository.FindByIdAsync(tariff.Id, Arg.Any<CancellationToken>()).Returns(tariff);
+        _tariffRepository.ExistsWithContractStartDateAsync(householdId, newStartDate, tariff.Id, Arg.Any<CancellationToken>())
+            .Returns(true);
+        var sut = Sut();
+
+        await Should.ThrowAsync<TariffValidationException>(() =>
+            sut.ExecuteAsync(
+                householdId, tariff.Id, null, null, null, newStartDate, null, 0,
+                overrideConfirmed: false, TestContext.Current.CancellationToken));
+
+        await _tariffRepository.DidNotReceive().UpdateAsync(
+            Arg.Any<Guid>(), Arg.Any<decimal?>(), Arg.Any<decimal?>(), Arg.Any<string?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<int?>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
 }

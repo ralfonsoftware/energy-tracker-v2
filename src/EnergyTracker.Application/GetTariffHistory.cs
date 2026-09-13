@@ -46,7 +46,7 @@ public class GetTariffHistory(ITariffRepository tariffRepository, IAuditCorrecti
         var fullHistory = totalCount <= items.Count
             ? items
             : (await tariffRepository.GetHistoryForHouseholdAsync(householdId, 1, totalCount, cancellationToken)).Items;
-        var orderedAscending = fullHistory.OrderBy(t => t.ContractStartDate).ThenBy(t => t.Id).ToList();
+        var orderedAscending = fullHistory.OrderBy(t => t.ContractStartDate).ThenBy(t => t.CreatedAtUtc).ThenBy(t => t.Id).ToList();
 
         var now = DateTimeOffset.UtcNow;
         var currentId = orderedAscending.LastOrDefault(t => t.ContractStartDate <= now)?.Id;

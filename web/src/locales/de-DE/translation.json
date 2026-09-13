@@ -301,7 +301,7 @@
     },
     "editDialog": {
       "title": "Tarifeintrag bearbeiten",
-      "lockedNotice": "Der Vertrag dieses Eintrags hat bereits begonnen — das Ändern der Grundgebühr oder des Preises/kWh erfordert die Bestätigung unten.",
+      "lockedNotice": "Der Vertrag dieses Eintrags hat bereits begonnen — das Ändern der Grundgebühr, des Preises/kWh oder des Vertragsbeginns erfordert die Bestätigung unten.",
       "overrideConfirmLabel": "Mir ist bewusst, dass dies einen bereits gültigen Preis ändert, und der ursprüngliche Wert bleibt als sichtbarer Korrekturhinweis erhalten.",
       "save": "Speichern",
       "saving": "Wird gespeichert…",
