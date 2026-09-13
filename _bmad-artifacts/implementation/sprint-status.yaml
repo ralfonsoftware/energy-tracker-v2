@@ -414,7 +414,49 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-11
+last_updated: 2026-09-13
+# 2026-09-13: story 5-1-tariff-configuration created (create-story) — status set to ready-for-dev.
+#   First story in Epic 5, greenfield: no Tariff entity/repository/use case/endpoint/frontend
+#   surface exists yet, though nav-chrome.tsx already carries a disabled placeholder tab for it and
+#   AuditCorrection.cs already carries a comment anticipating this exact story. Scoped strictly to
+#   FR-10 (configure/edit/history the current Tariff) — explicitly excludes Epic 5's AD-5
+#   (BonusDecayNormalizer, Story 5.2) and AD-7 (Reminder computation, Story 5.4), both bound at the
+#   epic level but out of this story. Resolved one real source tension during analysis: cross-
+#   cutting-nfrs.md's Currency bullet reads as Household-level, but consistency-conventions.md
+#   explicitly says "Currency: ISO 4217 code stored per Tariff entry" and the ERD models Tariff as
+#   its own entity — went with the latter (Tariff gets its own Currency column, separate from the
+#   existing Household.Currency). Also flagged PricePerKwh needing HasPrecision(18,4), not the
+#   (18,2) every other decimal column in this codebase uses — the mockup shows 4-decimal tariff
+#   pricing (€0.3200) that (18,2) would silently truncate. No mockup exists for the Configuration
+#   form itself (key-tariff-radar.html only mocks the read-only comparison summary, Story 5.2/5.3's
+#   UI) — story points the dev agent at yearly-baseline-form.tsx/edit-meter-reading-dialog.tsx as
+#   the closest shipped analogs instead. Left 4 open questions for Ralf in the story file rather
+#   than silently guessing: whether AC #3's locked-field override is frontend-only friction or
+#   needs server-side enforcement too; whether one Tariff edit can correct multiple fields at once
+#   (would need a new additive IAuditCorrectionRecorder port method, since GetLatestForEntitiesAsync
+#   only surfaces one correction row per entity — fine for MeterReading's single field, not
+#   Tariff's five); Contract Period's input shape (free months integer vs. preset list); and
+#   whether Currency should pre-fill from Household.Currency. epic-5 flipped from backlog to
+#   in-progress (first story in the epic).
+# 2026-09-13: story 3-10-manual-job-history-cleanup moved to done — Ralf confirmed live on Azure
+#   ("live tested on azure"). Story had been stuck in `review` since 2026-09-11 while a four-round
+#   production-incident chain played out against its "clean up everything" path, each confirmed via
+#   live Azure Container App logs/Azure Monitor before any fix: round 1 (PR #47) batched the bulk
+#   delete by import count (unbatched single transaction saturated Azure SQL Basic-tier, hit the
+#   120s CommandTimeout); round 2 (PR #48) added chunking by cumulative SmartPlugReading volume per
+#   chunk, since a handful of imports individually carrying 57k-122k reading rows bypassed the
+#   count-only batching entirely; round 3 (PR #49) moved the whole operation onto an async
+#   background job (AD-6), since even correctly-chunked commands could collectively exceed Azure
+#   Container Apps' ~240s HTTP ingress ceiling; round 4 (PR #50) fixed the actual final root cause —
+#   a single import's own FK SetNull cascade (detaching however many reading rows it had, up to
+#   122,158) was itself one unboundable server-side operation that could still blow the 120s SQL
+#   CommandTimeout regardless of sync vs. async, fixed by explicitly pre-detaching each import's
+#   readings in bounded batches before deleting it. Round 4 also fixed a separately-reported i18n
+#   bug (a hardcoded English fallback error message bypassing the frontend's localization). All four
+#   rounds went through adversarial + edge-case review before merge; canonical spec at
+#   _bmad-artifacts/specs/spec-job-cleanup-bulk-delete-timeout/SPEC.md carries full detail (CAP-1
+#   through CAP-6). epic-3 flipped back to done — all its stories (3.1-3.10) plus its retrospective
+#   are now complete, matching the reset-to-done pattern used after prior epic-3 story additions.
 # 2026-09-11: epic-4-retrospective completed — 14 items reviewed: epic-4 (4.1-4.3), plus orphaned
 #   stories 1.11 (epic-1) and 3.5-3.9 (epic-3) done since the 2026-08-23 epic-3 retro, plus 3
 #   spec-*.md one-shots (trend-chart-time-axis, power-point-mapping-list-scroll,
@@ -851,7 +893,7 @@ development_status:
   2-8-meter-reading-history-view: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
+  epic-3: done
   3-1-smart-plug-file-upload-async-parsing: done
   3-2-import-to-power-point-mapping: done
   3-3-smart-plug-import-gap-handling-baseline-sharpening: done
@@ -861,7 +903,7 @@ development_status:
   3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping: done
   3-8-smart-plug-bulk-write-throughput-spike: done
   3-9-watermark-correction-detection-and-bulk-write-adoption: done
-  3-10-manual-job-history-cleanup: review
+  3-10-manual-job-history-cleanup: done
   epic-3-retrospective: done
 
   epic-4: done
@@ -870,8 +912,8 @@ development_status:
   4-3-correcting-a-meter-reading: done
   epic-4-retrospective: done
 
-  epic-5: backlog
-  5-1-tariff-configuration: backlog
+  epic-5: in-progress
+  5-1-tariff-configuration: ready-for-dev
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: backlog
   5-3-two-way-attractiveness-signal: backlog
   5-4-tariff-check-reminder: backlog
