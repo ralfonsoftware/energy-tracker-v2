@@ -332,6 +332,11 @@ builder.Services.AddScoped<GetStatusHistory>();
 builder.Services.AddScoped<ISmartPlugReadingRepository, SmartPlugReadingRepository>();
 builder.Services.AddScoped<GetPerPlugMeasuredData>();
 
+builder.Services.AddScoped<ITariffRepository, TariffRepository>();
+builder.Services.AddScoped<CreateTariff>();
+builder.Services.AddScoped<GetTariffHistory>();
+builder.Services.AddScoped<EditTariff>();
+
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
 builder.Services.AddScoped<JobHouseholdContext>();
@@ -419,6 +424,7 @@ api.MapHouseholdEndpoints();
 api.MapHouseholdInviteEndpoints();
 api.MapTaggingScaffoldEndpoints();
 api.MapMeterReadingEndpoints();
+api.MapTariffEndpoints();
 api.MapMeterRegressionPromptEndpoints();
 api.MapStatusEndpoints();
 api.MapSmartPlugReadingEndpoints();

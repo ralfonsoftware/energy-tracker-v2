@@ -256,5 +256,58 @@
         "error": "Something went wrong cleaning up the history. Please try again."
       }
     }
+  },
+  "tariff": {
+    "form": {
+      "heading": "Add a Tariff",
+      "description": "Enter your Household's current electricity contract terms. Flat base fee plus price per kWh only — no tiered or time-of-use billing.",
+      "monthlyBaseFeeLabel": "Monthly base fee",
+      "pricePerKwhLabel": "Price per kWh",
+      "currencyLabel": "Currency",
+      "currencyPlaceholder": "e.g. EUR",
+      "contractStartDateLabel": "Contract start date",
+      "contractPeriodLabel": "Contract Period",
+      "contractPeriodMonths_one": "{{count}} month",
+      "contractPeriodMonths_other": "{{count}} months",
+      "months": "months",
+      "submit": "Save Tariff",
+      "saving": "Saving…",
+      "errorGeneric": "Something went wrong saving this Tariff. Please try again."
+    },
+    "history": {
+      "heading": "Tariff history",
+      "loading": "Loading…",
+      "loadError": "Couldn't load the Tariff history — try again.",
+      "emptyState": "No Tariff entries yet — add your current contract above.",
+      "periodColumn": "Period",
+      "baseFeeColumn": "Base fee",
+      "priceColumn": "Price/kWh",
+      "periodRange": "{{start}} – {{end}}",
+      "ongoing": "ongoing",
+      "currentBadge": "Current",
+      "correctedField": "{{field}} originally {{oldValue}}",
+      "fieldName": {
+        "MonthlyBaseFee": "Base fee",
+        "PricePerKwh": "Price/kWh",
+        "Currency": "Currency",
+        "ContractStartDate": "Contract start date",
+        "ContractPeriodMonths": "Contract Period"
+      },
+      "editTrigger": "Edit",
+      "editTriggerFor": "Edit Tariff entry starting {{start}}",
+      "previousPage": "Previous",
+      "nextPage": "Next",
+      "pageIndicator": "Page {{page}} of {{totalPages}}"
+    },
+    "editDialog": {
+      "title": "Edit Tariff entry",
+      "lockedNotice": "This entry's contract has already started — changing its base fee, price/kWh, or contract start date requires confirming the override below.",
+      "overrideConfirmLabel": "I understand this changes a price that's already in effect, and the original value will be kept as a visible correction note.",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "conflictError": "This Tariff entry was changed elsewhere — refresh and try again.",
+      "errorGeneric": "Something went wrong. Please try again."
+    }
   }
 }

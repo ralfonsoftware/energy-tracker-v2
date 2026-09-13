@@ -27,6 +27,7 @@ interface DashboardPageProps {
   onRegressionResolved: () => void
   onSettingsClick: () => void
   onTrendHistoryClick: () => void
+  onTariffRadarClick: () => void
   onSmartPlugImportClick: () => void
 }
 
@@ -49,6 +50,7 @@ export function DashboardPage({
   onRegressionResolved,
   onSettingsClick,
   onTrendHistoryClick,
+  onTariffRadarClick,
   onSmartPlugImportClick,
 }: DashboardPageProps) {
   const { t } = useTranslation()
@@ -134,7 +136,13 @@ export function DashboardPage({
 
       {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}
 
-      <NavChrome active="dashboard" onDashboardClick={() => {}} onTrendHistoryClick={onTrendHistoryClick} onSettingsClick={onSettingsClick} />
+      <NavChrome
+        active="dashboard"
+        onDashboardClick={() => {}}
+        onTrendHistoryClick={onTrendHistoryClick}
+        onTariffRadarClick={onTariffRadarClick}
+        onSettingsClick={onSettingsClick}
+      />
 
       <MeterRegressionPromptDialog prompt={openRegressionPrompt} onResolved={onRegressionResolved} />
     </main>

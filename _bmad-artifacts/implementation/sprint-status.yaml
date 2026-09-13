@@ -415,6 +415,44 @@
 
 generated: 2026-08-09
 last_updated: 2026-09-13
+# 2026-09-13: story 5-1-tariff-configuration moved to done (code review). 11 patch findings
+#   applied (most significant: EditTariff's server-side locked-price-field override, AC #3, could
+#   be bypassed by pairing a ContractStartDate change with a price-field change — closed by
+#   gating on both the old and new ContractStartDate), 1 decision resolved with Ralf (reject a
+#   duplicate ContractStartDate outright), 1 low-severity item deferred. Live browser verification
+#   performed against the Auth0 test user this session (create/edit/override/correction-note/
+#   duplicate-rejection flows all confirmed working). See story file's Review Findings and
+#   Completion Notes for detail.
+# 2026-09-13: story 5-1-tariff-configuration moved to review (dev-story implementation complete).
+#   All 7 tasks done: Tariff entity/EF config/migration (both providers), ITariffRepository/
+#   TariffRepository, CreateTariff/GetTariffHistory/EditTariff (server-side locked-price-field
+#   override gate per the resolved Open Question #1, per-field change diffing, one AuditCorrection
+#   row per changed field via the new additive IAuditCorrectionRecorder.
+#   GetLatestPerFieldForEntitiesAsync — MeterReading's existing GetLatestForEntitiesAsync
+#   untouched), TariffEndpoints (POST/GET/PUT), frontend TariffRadarPage/
+#   TariffConfigurationForm/TariffHistoryList/EditTariffDialog, NavChrome's Tariff Radar tab now
+#   real (the last of the four nav tabs to go live), both locales' i18n. Found and fixed one real
+#   bug during Task 7's own Api.Tests round-trip verification (not caught by the mocked
+#   Application-layer tests): EditTariff read a Tariff field's OLD value for its AuditCorrection
+#   note AFTER calling ITariffRepository.UpdateAsync, but EF Core's identity map hands back the
+#   SAME tracked instance from that call (same DbContext, same PK) — so the "old" value it read
+#   had already been mutated to the new one. Fixed by capturing all 5 fields' old values into
+#   locals before the transaction runs, the same discipline EditMeterReading's own
+#   `var oldValue = reading.KwhValue;` precedent already established for its one field. Full
+#   backend suite green (568/568: Application, Infrastructure via Testcontainers Postgres+SqlServer,
+#   Api.Tests, Architecture), full frontend suite green (281/281), dotnet build/tsc -b/oxlint/
+#   vite build all clean. Manual browser verification skipped (no OIDC provider configured in this
+#   sandboxed session, same gap Stories 4.1/1.11 recorded) — covered by the Api.Tests' full HTTP
+#   round-trip instead, including an AD-3 tenant-isolation test verified through the other
+#   household's own DbContext scope per Story 3.9's precedent.
+# 2026-09-13: story 5-1-tariff-configuration moved to in-progress (dev-story activation). Resolved
+#   all 4 Open Questions with Ralf before starting: (1) AC #3's locked-field override is
+#   server-side enforced — EditTariff gains an `overrideConfirmed` bool parameter that throws when
+#   false and the target's ContractStartDate has passed; (2) multi-field edits ARE in scope — Task
+#   4's additive IAuditCorrectionRecorder.GetLatestPerFieldForEntitiesAsync port method will be
+#   built; (3) Contract Period is a fixed preset list (1/6/12/18/24/36 months), not a free-form
+#   integer; (4) Currency pre-fills from Household.Currency on the new-entry form (still editable,
+#   remains its own independent column).
 # 2026-09-13: story 5-1-tariff-configuration created (create-story) — status set to ready-for-dev.
 #   First story in Epic 5, greenfield: no Tariff entity/repository/use case/endpoint/frontend
 #   surface exists yet, though nav-chrome.tsx already carries a disabled placeholder tab for it and
@@ -913,7 +951,7 @@ development_status:
   epic-4-retrospective: done
 
   epic-5: in-progress
-  5-1-tariff-configuration: ready-for-dev
+  5-1-tariff-configuration: done
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: backlog
   5-3-two-way-attractiveness-signal: backlog
   5-4-tariff-check-reminder: backlog

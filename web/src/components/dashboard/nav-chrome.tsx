@@ -8,6 +8,7 @@ interface NavChromeProps {
   active: NavTab
   onDashboardClick: () => void
   onTrendHistoryClick: () => void
+  onTariffRadarClick: () => void
   onSettingsClick: () => void
 }
 
@@ -15,10 +16,9 @@ const ITEM_CLASSNAME =
   'flex min-w-14 flex-col items-center gap-1 rounded-2xl px-2.5 py-1.5 text-muted-foreground'
 const ACTIVE_CLASSNAME = 'bg-nav-chrome-active-bg text-nav-chrome-active-foreground'
 
-// The bottom tab bar shell — all four top-level entries per UX-DR9. Dashboard, Trend History
-// (Story 4.1) and Settings (Story 1.9) are interactive; only Tariff Radar doesn't have a surface
-// yet (Epic 5) and renders as an inert placeholder rather than a tap that goes nowhere.
-export function NavChrome({ active, onDashboardClick, onTrendHistoryClick, onSettingsClick }: NavChromeProps) {
+// The bottom tab bar shell — all four top-level entries per UX-DR9. All four are now interactive
+// (Story 5.1 gives Tariff Radar its real surface, closing out the last inert placeholder tab).
+export function NavChrome({ active, onDashboardClick, onTrendHistoryClick, onTariffRadarClick, onSettingsClick }: NavChromeProps) {
   const { t } = useTranslation()
 
   return (
@@ -43,10 +43,15 @@ export function NavChrome({ active, onDashboardClick, onTrendHistoryClick, onSet
         <span className="text-[9.5px] font-semibold">{t('dashboard.nav.trendHistory')}</span>
       </button>
 
-      <div className={ITEM_CLASSNAME} role="button" aria-disabled="true">
+      <button
+        type="button"
+        className={cn(ITEM_CLASSNAME, active === 'tariffRadar' && ACTIVE_CLASSNAME)}
+        aria-current={active === 'tariffRadar' ? 'page' : undefined}
+        onClick={onTariffRadarClick}
+      >
         <Clock className="size-5" aria-hidden="true" />
         <span className="text-[9.5px] font-semibold">{t('dashboard.nav.tariffRadar')}</span>
-      </div>
+      </button>
 
       <button
         type="button"

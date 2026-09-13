@@ -595,6 +595,50 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.ToTable("StatusSnapshots", (string)null);
                 });
 
+            modelBuilder.Entity("EnergyTracker.Domain.Tariff", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ContractPeriodMonths")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("ContractStartDate")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("MonthlyBaseFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PricePerKwh")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("HouseholdId", "ContractStartDate");
+
+                    b.ToTable("Tariffs", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -793,6 +837,15 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.StatusSnapshot", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.Tariff", b =>
                 {
                     b.HasOne("EnergyTracker.Domain.Household", null)
                         .WithMany()
