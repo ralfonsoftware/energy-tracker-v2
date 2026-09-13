@@ -84,8 +84,14 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         var page = await response.Content.ReadFromJsonAsync<TariffHistoryPageResponse>(TestContext.Current.CancellationToken);
         page!.TotalCount.ShouldBe(2);
         page.Items.Select(i => i.Id).ShouldBe([secondBody!.Id, firstBody!.Id]);
-        page.Items.Single(i => i.Id == secondBody.Id).IsCurrent.ShouldBeTrue();
-        page.Items.Single(i => i.Id == firstBody.Id).EffectiveUntil.ShouldBe(secondBody.ContractStartDate);
+        var secondItem = page.Items.Single(i => i.Id == secondBody.Id);
+        secondItem.IsCurrent.ShouldBeTrue();
+        // Compared against the GET response's own re-queried ContractStartDate, not the raw POST
+        // response's in-memory value — Postgres's timestamptz column truncates to microsecond
+        // precision, so a value round-tripped through the DB (as EffectiveUntil always is, via
+        // GetHistoryForHouseholdAsync) can differ from an un-truncated in-memory DateTimeOffset by
+        // a sub-microsecond amount, causing this assertion to flake intermittently.
+        page.Items.Single(i => i.Id == firstBody.Id).EffectiveUntil.ShouldBe(secondItem.ContractStartDate);
     }
 
     [Fact]
