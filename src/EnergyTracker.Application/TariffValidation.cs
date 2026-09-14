@@ -66,4 +66,15 @@ internal static class TariffValidation
                 $"Contract Period must be between 1 and {MaxContractPeriodMonths} months, got '{contractPeriodMonths}'.");
         }
     }
+
+    // A switching bonus is the same order-of-magnitude currency amount as a base fee (Story 5.2
+    // Task 1) — reuses MaxMonthlyBaseFee as the upper sanity bound rather than a new constant.
+    public static void ValidateSwitchingBonus(decimal switchingBonus)
+    {
+        if (switchingBonus < 0 || switchingBonus >= MaxMonthlyBaseFee)
+        {
+            throw new TariffValidationException(
+                $"Switching bonus must be a non-negative number less than {MaxMonthlyBaseFee}, got '{switchingBonus}'.");
+        }
+    }
 }

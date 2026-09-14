@@ -30,7 +30,11 @@ public class GetCurrentStatus(
     // AD-7: this is the single place the live computation runs — both the GET /api/status read
     // path and IStatusRecomputeService's snapshot-writing path call this same method, so the two
     // can never disagree on exclusion/threshold logic (Task 6's own requirement).
-    public async Task<CurrentStatusResult?> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
+    //
+    // virtual: lets CompareTariff's own tests (Story 5.2) mock this dependency directly with
+    // NSubstitute instead of standing up its four lower-level repositories — CompareTariff never
+    // sees those directly (AD-7's single computation seam).
+    public virtual async Task<CurrentStatusResult?> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {
         var household = await householdRepository.FindByIdAsync(householdId, cancellationToken);
         if (household?.YearlyBaselineKwh is not { } yearlyBaselineKwh)

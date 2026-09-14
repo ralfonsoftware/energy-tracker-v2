@@ -280,3 +280,7 @@
 ## Deferred from: code review of story-5-1-tariff-configuration (2026-09-13)
 
 - `GetTariffHistory`'s second "full-history" fetch reuses the first query's `totalCount` as the second query's page size — a Tariff entry created concurrently between the two queries can be silently excluded from that response's `IsCurrent`/`EffectiveUntil` computation. Narrow race window, no data loss, self-corrects on the next read; the code's own comment already documents the small-history-set assumption behind this shape, just not this race. Raised by edge-case review. [src/EnergyTracker.Application/GetTariffHistory.cs:46-48]
+
+## Deferred from: code review of story-5-2-candidate-tariff-comparison-bonus-decay-normalized-savings (2026-09-14)
+
+- `annualPaceKwh` extrapolation trusts `statusResult.PaceToDateKwh` without a non-negative guard — a negative pace (e.g. from an unusual resolved-rollover edge case) would flow unguarded into the annual cost math. Pre-existing behavior inherited from Pattern Detective's already-shipped `PatternDetectiveCalculator`/`GetCurrentStatus`, not introduced by this story. Raised by edge-case review. [src/EnergyTracker.Application/CompareTariff.cs:47]

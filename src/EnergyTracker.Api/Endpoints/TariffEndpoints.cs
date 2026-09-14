@@ -116,6 +116,36 @@ public static class TariffEndpoints
             }
         });
 
+        // Story 5.2 (FR-11): a candidate Tariff comparison — POST because a 4-decimal-place price
+        // body is cleaner than query-string params (matching CreateTariffRequest's convention),
+        // but this performs NO write: FR-11's "scratch/exploratory, never alters the actual
+        // Tariff" is the reason, unlike every other Tariff POST in this file.
+        api.MapPost("/tariffs/compare", async (
+            CompareTariffRequest request,
+            ICurrentHouseholdAccessor householdAccessor,
+            CompareTariff compareTariff,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                var result = await compareTariff.ExecuteAsync(
+                    householdId, request.CandidateMonthlyBaseFee, request.CandidatePricePerKwh, request.CandidateSwitchingBonus, cancellationToken);
+                // 200 with a null body when undefined — same "is there one?" shape as GET
+                // /api/status (StatusEndpoints.cs's own comment): no pace yet, or no current
+                // Tariff configured yet (AC #3).
+                return Results.Ok(result is null ? null : ToComparisonResponse(result));
+            }
+            catch (TariffValidationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            }
+        });
+
         return api;
     }
 
@@ -151,6 +181,20 @@ public static class TariffEndpoints
 
     private static TariffFieldCorrectionResponse ToCorrectionResponse(KeyValuePair<string, AuditCorrection> correction) =>
         new(correction.Key, correction.Value.OldValue, correction.Value.NewValue, correction.Value.CorrectedAtUtc);
+
+    private static TariffComparisonResponse ToComparisonResponse(TariffComparisonResult result) =>
+        new(
+            CurrentMonthlyBaseFee: result.CurrentMonthlyBaseFee,
+            CurrentPricePerKwh: result.CurrentPricePerKwh,
+            Currency: result.CurrentCurrency,
+            CandidateMonthlyBaseFee: result.CandidateMonthlyBaseFee,
+            CandidatePricePerKwh: result.CandidatePricePerKwh,
+            CandidateSwitchingBonus: result.CandidateSwitchingBonus,
+            AnnualPaceKwh: result.AnnualPaceKwh,
+            CurrentAnnualCost: result.CurrentAnnualCost,
+            CandidateAnnualCostBonusNormalized: result.CandidateAnnualCostBonusNormalized,
+            BonusNormalizedAnnualSavings: result.BonusNormalizedAnnualSavings,
+            IsLowConfidence: result.IsLowConfidence);
 }
 
 public record CreateTariffRequest(decimal MonthlyBaseFee, decimal PricePerKwh, string Currency, DateTimeOffset ContractStartDate, int ContractPeriodMonths);
@@ -186,3 +230,21 @@ public record EditTariffRequest(
     int? ContractPeriodMonths,
     int? Version,
     bool OverrideConfirmed);
+
+// No Currency field — FR-11 lists only price/kWh, base fee, optional switching-bonus terms as the
+// candidate's fields; the candidate is implicitly assumed to be in the current Tariff's currency
+// (no FX conversion anywhere in this product).
+public record CompareTariffRequest(decimal CandidateMonthlyBaseFee, decimal CandidatePricePerKwh, decimal CandidateSwitchingBonus);
+
+public record TariffComparisonResponse(
+    decimal CurrentMonthlyBaseFee,
+    decimal CurrentPricePerKwh,
+    string Currency,
+    decimal CandidateMonthlyBaseFee,
+    decimal CandidatePricePerKwh,
+    decimal CandidateSwitchingBonus,
+    decimal AnnualPaceKwh,
+    decimal CurrentAnnualCost,
+    decimal CandidateAnnualCostBonusNormalized,
+    decimal BonusNormalizedAnnualSavings,
+    bool IsLowConfidence);

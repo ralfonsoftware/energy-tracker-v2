@@ -28,6 +28,26 @@ describe('TariffHistoryList', () => {
     expect(await screen.findByText("Couldn't load the Tariff history — try again.")).toBeInTheDocument()
   })
 
+  it('clicking Retry after a load error re-fetches and reports the result via onLoaded', async () => {
+    const page = { items: [], totalCount: 0, page: 1, pageSize: 20 }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse(page))
+    vi.stubGlobal('fetch', fetchMock)
+    const onLoaded = vi.fn()
+    const user = userEvent.setup()
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} onLoaded={onLoaded} />)
+    await screen.findByText("Couldn't load the Tariff history — try again.")
+    expect(onLoaded).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(await screen.findByText('No Tariff entries yet — add your current contract above.')).toBeInTheDocument()
+    expect(onLoaded).toHaveBeenCalledWith(page)
+  })
+
   it('renders an entry, flags the current one, and shows its correction note', async () => {
     const item = {
       id: '11111111-1111-1111-1111-111111111111',

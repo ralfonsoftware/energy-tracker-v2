@@ -10,6 +10,10 @@ import { EditTariffDialog } from './edit-tariff-dialog'
 interface TariffHistoryListProps {
   locale: string
   refreshNonce: number
+  // Story 5.2's frontend gating recommendation: lets TariffRadarPage know whether any Tariff
+  // entry exists yet, without a second duplicate "get current tariff" HTTP round trip — reuses
+  // this list's own already-fetched page data instead.
+  onLoaded?: (page: TariffHistoryPageDto) => void
 }
 
 const PAGE_SIZE = 20
@@ -17,7 +21,7 @@ const PAGE_SIZE = 20
 // Card-list shape mirrors MeterReadingsCard's table+pagination composition (this repo's
 // established list-of-history-entries pattern) — no mockup exists for this story's Configuration/
 // history surface (Scope Reality Check).
-export function TariffHistoryList({ locale, refreshNonce }: TariffHistoryListProps) {
+export function TariffHistoryList({ locale, refreshNonce, onLoaded }: TariffHistoryListProps) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [data, setData] = useState<TariffHistoryPageDto | null>(null)
@@ -25,33 +29,37 @@ export function TariffHistoryList({ locale, refreshNonce }: TariffHistoryListPro
   const [error, setError] = useState(false)
   const [editing, setEditing] = useState<TariffHistoryItemDto | null>(null)
 
-  const load = useCallback((targetPage: number) => {
-    let cancelled = false
-    setLoading(true)
-    setError(false)
-    fetchTariffHistory(targetPage, PAGE_SIZE)
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        setData(result)
-      })
-      .catch(() => {
-        if (cancelled) {
-          return
-        }
-        setError(true)
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
+  const load = useCallback(
+    (targetPage: number) => {
+      let cancelled = false
+      setLoading(true)
+      setError(false)
+      fetchTariffHistory(targetPage, PAGE_SIZE)
+        .then((result) => {
+          if (cancelled) {
+            return
+          }
+          setData(result)
+          onLoaded?.(result)
+        })
+        .catch(() => {
+          if (cancelled) {
+            return
+          }
+          setError(true)
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoading(false)
+          }
+        })
 
-    return () => {
-      cancelled = true
-    }
-  }, [])
+      return () => {
+        cancelled = true
+      }
+    },
+    [onLoaded],
+  )
 
   useEffect(() => load(page), [load, page, refreshNonce])
 
@@ -96,7 +104,14 @@ export function TariffHistoryList({ locale, refreshNonce }: TariffHistoryListPro
       <div aria-live="polite">
         {loading && <p className="text-muted-foreground text-sm">{t('tariff.history.loading')}</p>}
 
-        {!loading && error && <p className="text-destructive text-sm">{t('tariff.history.loadError')}</p>}
+        {!loading && error && (
+          <div className="flex items-center gap-2">
+            <p className="text-destructive text-sm">{t('tariff.history.loadError')}</p>
+            <Button variant="outline" size="sm" onClick={() => load(page)}>
+              {t('tariff.history.retry')}
+            </Button>
+          </div>
+        )}
 
         {!loading && !error && data && data.totalCount === 0 && (
           <p className="text-muted-foreground text-sm">{t('tariff.history.emptyState')}</p>

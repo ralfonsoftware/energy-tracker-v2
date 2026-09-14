@@ -415,6 +415,38 @@
 
 generated: 2026-08-09
 last_updated: 2026-09-14
+# 2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings moved to done
+#   (code review complete). 3-layer adversarial review found 22 raw findings, triaged to 11 patch
+#   (1 resolved from decision-needed with Ralf: added an IsLowConfidence caveat to the comparison
+#   result/UI) + 1 defer (pre-existing, not introduced by this story) + 3 dismissed (by-design).
+#   All 11 patches applied — most notably, candidate field currency labels now come from the
+#   current Tariff's own Currency instead of Household.Currency (they can independently diverge),
+#   and the comparison-form gate now checks for an actual current Tariff entry, not just any
+#   history entry. Full re-verification green across both backend and frontend suites. See the
+#   story file's Review Findings section for the full list.
+# 2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings moved to review
+#   (dev-story implementation complete). All 5 tasks done: CompareTariff use case (depends only on
+#   GetCurrentStatus + ITariffRepository, per AD-7's single computation seam — never re-queries the
+#   lower-level repositories GetCurrentStatus itself uses); new
+#   ITariffRepository.FindCurrentForHouseholdAsync (its own `<= now` filter, unlike
+#   GetHistoryForHouseholdAsync); POST /api/tariffs/compare (no-write, null-body-when-undefined
+#   matching /api/status's convention); frontend TariffComparisonForm wired into TariffRadarPage
+#   behind a "has at least one Tariff entry" gate reusing TariffHistoryList's own already-fetched
+#   page (new optional onLoaded callback, useCallback'd with empty deps to avoid Story 3.5's
+#   previously-found render-loop class of bug); BonusDecayNormalizer's stale forward-reference doc
+#   comment updated to describe both real callers (Pattern Detective's zero-bonus case, this
+#   story's real case). The mockup's own worked numbers (current €12.50/mo+€0.3200/kWh, candidate
+#   €14.90/mo+€0.3150/kWh+€350 bonus, pace 3,200 kWh/yr -> BonusNormalizedAnnualSavings = -12.80)
+#   are asserted as an exact test case at both the Application layer and the full HTTP round trip.
+#   One small additive change beyond the story's literal text: GetCurrentStatus.ExecuteAsync marked
+#   virtual so CompareTariffTests could mock it directly with NSubstitute, exactly as Task 5's own
+#   test-design note specifies — no interface introduced (would have touched StatusEndpoints/
+#   StatusRecomputeService/Program.cs's DI for no functional benefit). Full backend suite green
+#   (Application 281/281, Architecture 3/3, Infrastructure 140/140 via Testcontainers Postgres+SQL
+#   Server, Api.Tests 169/169), full frontend suite green (289/289), dotnet build/tsc -b/oxlint/
+#   vite build all clean. Manual browser verification skipped (no OIDC provider configured in this
+#   sandboxed session, same gap Stories 4.1/1.11/5.1 recorded) — covered by TariffEndpointsTests'
+#   full HTTP round trip instead, including an AD-3 tenant-isolation test.
 # 2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings created
 #   (create-story) — status set to ready-for-dev. Scoped strictly to FR-11/FR-12/FR-14 + AD-5
 #   (candidate entry, bonus-normalized annual savings projection reusing the shared
@@ -966,7 +998,7 @@ development_status:
 
   epic-5: in-progress
   5-1-tariff-configuration: done
-  5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: ready-for-dev
+  5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: done
   5-3-two-way-attractiveness-signal: backlog
   5-4-tariff-check-reminder: backlog
   epic-5-retrospective: optional
