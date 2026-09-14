@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-11
+# last_updated: 2026-09-14
 # 2026-09-11: story 3-10-manual-job-history-cleanup code-reviewed (/code-review, forked). 4 patch
 #   findings applied: wrapped SmartPlugImportRepository's 3-step delete (Gaps -> Imports ->
 #   BackgroundJobs) in an explicit transaction (this story's "delete everything" path materially
@@ -414,7 +414,21 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-13
+last_updated: 2026-09-14
+# 2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings created
+#   (create-story) — status set to ready-for-dev. Scoped strictly to FR-11/FR-12/FR-14 + AD-5
+#   (candidate entry, bonus-normalized annual savings projection reusing the shared
+#   Domain.Calculations.BonusDecayNormalizer) — explicitly excludes Story 5.3's Two-Way
+#   Attractiveness Signal (dedicated colors/verdict badges, the naive bonus-included figure) and
+#   Story 5.4's Tariff Check Reminder. Design recommends a new CompareTariff use case depending on
+#   the existing GetCurrentStatus (AD-7's single live-computation seam for Pattern Detective pace,
+#   reused rather than re-queried) plus a new ITariffRepository.FindCurrentForHouseholdAsync port
+#   method. The BonusDecayNormalizer call shape (money units, not kWh, at elapsed = 365 days) was
+#   verified line-for-line against mockups/key-tariff-radar.html's own worked numbers (€12.50/
+#   €0.3200 current, €14.90/€0.3150/€350-bonus candidate, 3,200 kWh/yr pace) before being written
+#   into the story — reproduces the mockup's "About €13/yr more, not less" bonus-normalized line
+#   exactly. Also flags a reuse callback to Story 5.1's review-found Intl.NumberFormat
+#   minimumFractionDigits bug for any new currency formatting this story adds.
 # 2026-09-13: story 5-1-tariff-configuration moved to done (code review). 11 patch findings
 #   applied (most significant: EditTariff's server-side locked-price-field override, AC #3, could
 #   be bypassed by pairing a ContractStartDate change with a price-field change — closed by
@@ -952,7 +966,7 @@ development_status:
 
   epic-5: in-progress
   5-1-tariff-configuration: done
-  5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: backlog
+  5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: ready-for-dev
   5-3-two-way-attractiveness-signal: backlog
   5-4-tariff-check-reminder: backlog
   epic-5-retrospective: optional
