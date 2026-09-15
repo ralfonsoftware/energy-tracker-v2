@@ -261,7 +261,14 @@ describe('SmartPlugImportPage', () => {
     await vi.advanceTimersByTimeAsync(2000)
 
     await waitFor(() => expect(screen.getByText('Import complete')).toBeInTheDocument())
-    expect(screen.queryByText(/parsing this in the background/)).not.toBeInTheDocument()
+    // The shared note's visibility is driven by a separate effect in each queue item that
+    // reports its active/inactive status up to the parent (smart-plug-import-page.tsx's
+    // `onActiveChange`) — one render pass after the item's own "Import complete" text commits,
+    // not the same one. Asserting this synchronously right after the `waitFor` above races that
+    // second, effect-driven render pass, which is what made this test flaky under CI's more
+    // contended scheduling (the parent update just hadn't landed yet, not that it never would) —
+    // so this assertion needs its own `waitFor` too, not a synchronous check.
+    await waitFor(() => expect(screen.queryByText(/parsing this in the background/)).not.toBeInTheDocument())
   })
 
   it('shows the failed state when the job reaches a failed status', async () => {
