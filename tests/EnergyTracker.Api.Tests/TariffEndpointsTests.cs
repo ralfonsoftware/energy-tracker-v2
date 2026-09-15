@@ -334,6 +334,10 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         body.CandidateAnnualCostBonusNormalized.ShouldBe(1186.80m);
         body.BonusNormalizedAnnualSavings.ShouldBe(-12.80m);
         body.Currency.ShouldBe("EUR");
+        body.CandidateAnnualCostBonusIncluded.ShouldBe(836.80m);
+        body.BonusIncludedAnnualSavings.ShouldBe(337.20m);
+        body.IsBonusIncludedWorthSwitching.ShouldBeTrue();
+        body.IsBonusNormalizedWorthSwitching.ShouldBeFalse();
     }
 
     [Fact]

@@ -60,6 +60,124 @@ public class CompareTariffTests
         result.CurrentAnnualCost.ShouldBe(1174.00m);
         result.CandidateAnnualCostBonusNormalized.ShouldBe(1186.80m);
         result.BonusNormalizedAnnualSavings.ShouldBe(-12.80m);
+        // Story 5.3, FR-13: the mockup's own dramatization — the same candidate reads as a win
+        // with the bonus and a loss without it. If a test run produces the same verdict for both
+        // rows on this exact input, the bonus-included formula is wrong (most likely accidentally
+        // routed through BonusDecayNormalizer).
+        result.CandidateAnnualCostBonusIncluded.ShouldBe(836.80m);
+        result.BonusIncludedAnnualSavings.ShouldBe(337.20m);
+        result.IsBonusIncludedWorthSwitching.ShouldBeTrue();
+        result.IsBonusNormalizedWorthSwitching.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task An_exact_breakeven_on_the_bonus_included_row_resolves_to_not_worth_switching_independently_of_the_normalized_row()
+    {
+        var householdId = Guid.NewGuid();
+        var current = CurrentTariff(householdId, 12.50m, 0.3200m, "EUR");
+        _tariffRepository.FindCurrentForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(current);
+        _getCurrentStatus.ExecuteAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(StatusAtElapsedDays(3200m, 365));
+        var sut = Sut();
+
+        // currentAnnualCost = 1174.00, candidateAnnualCostNoBonus = 1186.80 -> a 12.80 switching
+        // bonus makes candidateAnnualCostBonusIncluded exactly 1174.00 -> bonusIncludedAnnualSavings
+        // == 0 (breakeven), while the normalized row (bonus fully decayed away at 365 days,
+        // independent of the bonus amount) stays at its own non-zero -12.80.
+        var result = await sut.ExecuteAsync(householdId, 14.90m, 0.3150m, 12.80m, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.BonusIncludedAnnualSavings.ShouldBe(0m);
+        result.IsBonusIncludedWorthSwitching.ShouldBeFalse();
+        result.BonusNormalizedAnnualSavings.ShouldNotBe(0m);
+    }
+
+    [Fact]
+    public async Task An_exact_breakeven_on_the_bonus_normalized_row_resolves_to_not_worth_switching_independently_of_the_included_row()
+    {
+        var householdId = Guid.NewGuid();
+        var current = CurrentTariff(householdId, 12.50m, 0.3200m, "EUR");
+        _tariffRepository.FindCurrentForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(current);
+        _getCurrentStatus.ExecuteAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(StatusAtElapsedDays(3200m, 365));
+        var sut = Sut();
+
+        // Candidate's base fee/price/kWh identical to the current Tariff -> candidateAnnualCostNoBonus
+        // == currentAnnualCost -> bonusNormalizedAnnualSavings == 0 (breakeven, bonus fully decayed
+        // away at 365 days). A non-zero switching bonus keeps the included row a distinct, non-zero
+        // (worth-switching) figure.
+        var result = await sut.ExecuteAsync(householdId, 12.50m, 0.3200m, 100m, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.BonusNormalizedAnnualSavings.ShouldBe(0m);
+        result.IsBonusNormalizedWorthSwitching.ShouldBeFalse();
+        result.BonusIncludedAnnualSavings.ShouldNotBe(0m);
+    }
+
+    [Fact]
+    public async Task A_zero_switching_bonus_makes_the_bonus_included_and_bonus_normalized_costs_identical()
+    {
+        var householdId = Guid.NewGuid();
+        var current = CurrentTariff(householdId, 12.50m, 0.3200m, "EUR");
+        _tariffRepository.FindCurrentForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(current);
+        _getCurrentStatus.ExecuteAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(StatusAtElapsedDays(3200m, 365));
+        var sut = Sut();
+
+        // No bonus -> nothing to normalize away -> both figures are numerically identical.
+        var result = await sut.ExecuteAsync(householdId, 14.90m, 0.3150m, 0m, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.CandidateAnnualCostBonusIncluded.ShouldBe(result.CandidateAnnualCostBonusNormalized);
+        result.BonusIncludedAnnualSavings.ShouldBe(result.BonusNormalizedAnnualSavings);
+        result.IsBonusIncludedWorthSwitching.ShouldBe(result.IsBonusNormalizedWorthSwitching);
+    }
+
+    [Fact]
+    public async Task Both_rows_resolve_to_worth_switching_when_the_candidate_wins_even_after_the_bonus_fully_decays()
+    {
+        // Dev Notes: "a candidate that's a win even after the bonus fully decays away... would show
+        // both rows green" — one of three valid verdict combinations that must render correctly,
+        // not just the mockup's own mixed (one green, one red) worked example.
+        var householdId = Guid.NewGuid();
+        var current = CurrentTariff(householdId, 20.00m, 0.4000m, "EUR");
+        _tariffRepository.FindCurrentForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(current);
+        _getCurrentStatus.ExecuteAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(StatusAtElapsedDays(3000m, 365));
+        var sut = Sut();
+
+        // currentAnnualCost = 1440.00, candidateAnnualCostNoBonus = 720.00 -> the candidate's own
+        // ongoing rate already beats the current tariff, so both the bonus-included (620.00) and
+        // bonus-normalized (720.00, bonus fully decayed) costs are worth switching.
+        var result = await sut.ExecuteAsync(householdId, 10.00m, 0.2000m, 100m, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.IsBonusIncludedWorthSwitching.ShouldBeTrue();
+        result.IsBonusNormalizedWorthSwitching.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_sub_cent_positive_savings_that_displays_as_0_00_resolves_to_not_worth_switching()
+    {
+        // Review round: the verdict is rounded to 2 decimals (matching the frontend's own money
+        // display) before the tie-break, so a razor-thin positive savings can never show a
+        // "Worth switching" badge next to a displayed "0.00" amount.
+        var householdId = Guid.NewGuid();
+        var current = CurrentTariff(householdId, 12.50m, 0.3200m, "EUR");
+        _tariffRepository.FindCurrentForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(current);
+        _getCurrentStatus.ExecuteAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(StatusAtElapsedDays(3200m, 365));
+        var sut = Sut();
+
+        // candidateAnnualCostNoBonus = 12.49975*12 + 0.3200*3200 = 1173.997 -> raw savings against
+        // the 1174.00 current cost is exactly 0.003 (positive, but rounds to 0.00).
+        var result = await sut.ExecuteAsync(householdId, 12.49975m, 0.3200m, 0m, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.BonusNormalizedAnnualSavings.ShouldBe(0.003m);
+        result.IsBonusNormalizedWorthSwitching.ShouldBeFalse();
+        result.BonusIncludedAnnualSavings.ShouldBe(0.003m);
+        result.IsBonusIncludedWorthSwitching.ShouldBeFalse();
     }
 
     [Fact]

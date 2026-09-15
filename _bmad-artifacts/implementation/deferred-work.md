@@ -284,3 +284,9 @@
 ## Deferred from: code review of story-5-2-candidate-tariff-comparison-bonus-decay-normalized-savings (2026-09-14)
 
 - `annualPaceKwh` extrapolation trusts `statusResult.PaceToDateKwh` without a non-negative guard — a negative pace (e.g. from an unusual resolved-rollover edge case) would flow unguarded into the annual cost math. Pre-existing behavior inherited from Pattern Detective's already-shipped `PatternDetectiveCalculator`/`GetCurrentStatus`, not introduced by this story. Raised by edge-case review. [src/EnergyTracker.Application/CompareTariff.cs:47]
+
+## Deferred from: code review of story-5-3-two-way-attractiveness-signal (2026-09-15)
+
+- No automated check enforces the inline WCAG contrast-ratio claims in `index.css` for the new `--attractiveness-*` tokens — deferred, pre-existing gap: the same lack of an automated/enforced contrast check already applies to every other color-token pair in this file (e.g. the Status triad, already tracked in this same log under story-2-2b). Raised by adversarial review (Blind Hunter). [web/src/index.css]
+- `compareTariff`'s response is cast via a bare `JSON.parse(text) as TariffComparisonDto` with no runtime validation — deferred, pre-existing: identical unchecked-cast pattern used by every other function in this file (`createTariff`, `updateTariff`, `fetchTariffHistory`), not introduced by this story. Raised by edge-case review. [web/src/lib/tariff-api.ts:141]
+- No responsive/mobile layout verification for the new three-panel result layout (current-tariff summary, candidate-tariff summary, two-way signal card) — deferred, pre-existing: uses the same established `GlassCard`/flex-col conventions already in use elsewhere in this codebase; no manual/automated responsive check exists for any prior story's UI either. Raised by adversarial review (Blind Hunter). [web/src/components/tariff/tariff-comparison-form.tsx]

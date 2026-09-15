@@ -7,27 +7,36 @@ function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
 }
 
+// mockups/key-tariff-radar.html's own worked example (Story 5.2 Dev Notes, Story 5.3 Dev Notes):
+// current €12.50/mo + €0.3200/kWh, candidate €14.90/mo + €0.3150/kWh + €350 switching bonus,
+// pace 3,200 kWh/yr -> bonus-included: "Save about €337.20 this year" (worth it); bonus-normalized:
+// "About €12.80/yr more" (not worth it) — the same candidate reads as a win with the bonus and a
+// loss without it, dramatizing FR-13's whole point.
+const mockupWorkedExample = {
+  currentMonthlyBaseFee: 12.5,
+  currentPricePerKwh: 0.32,
+  currency: 'EUR',
+  candidateMonthlyBaseFee: 14.9,
+  candidatePricePerKwh: 0.315,
+  candidateSwitchingBonus: 350,
+  annualPaceKwh: 3200,
+  currentAnnualCost: 1174,
+  candidateAnnualCostBonusNormalized: 1186.8,
+  bonusNormalizedAnnualSavings: -12.8,
+  candidateAnnualCostBonusIncluded: 836.8,
+  bonusIncludedAnnualSavings: 337.2,
+  isBonusIncludedWorthSwitching: true,
+  isBonusNormalizedWorthSwitching: false,
+  isLowConfidence: false,
+}
+
 describe('TariffComparisonForm', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('a valid comparison renders the bonus-normalized savings figure with 2 decimal places', async () => {
-    // Guard against Story 5.1's own review-found minimumFractionDigits bug recurring here — a
-    // whole-euro value like 12.80 rendering as "12.8" would violate NFR6's fixed-decimal display.
-    const comparison = {
-      currentMonthlyBaseFee: 12.5,
-      currentPricePerKwh: 0.32,
-      currency: 'EUR',
-      candidateMonthlyBaseFee: 14.9,
-      candidatePricePerKwh: 0.315,
-      candidateSwitchingBonus: 350,
-      annualPaceKwh: 3200,
-      currentAnnualCost: 1174,
-      candidateAnnualCostBonusNormalized: 1186.8,
-      bonusNormalizedAnnualSavings: -12.8,
-    }
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(comparison))))
+  it('renders both signal rows together, always, never toggled (AC #1)', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(mockupWorkedExample))))
     const user = userEvent.setup()
 
     render(<TariffComparisonForm currency="EUR" locale="en-US" />)
@@ -37,8 +46,134 @@ describe('TariffComparisonForm', () => {
     await user.type(screen.getByLabelText('Switching bonus (optional)'), '350')
     await user.click(screen.getByRole('button', { name: 'Compare' }))
 
-    expect(await screen.findByText('This candidate would cost about 12.80 EUR/yr more, bonus-normalized.')).toBeInTheDocument()
+    // Both rows present simultaneously — proving neither is toggled/hidden behind the other.
+    expect(await screen.findByText('Worth switching')).toBeInTheDocument()
+    expect(screen.getByText('Not worth it')).toBeInTheDocument()
+    expect(screen.getByText('Save about 337.20 EUR this year')).toBeInTheDocument()
+    expect(screen.getByText('About 12.80 EUR/yr more once the bonus is gone')).toBeInTheDocument()
     expect(screen.getByText('Based on your actual pace of 3,200 kWh/yr.')).toBeInTheDocument()
+  })
+
+  it('a breakeven (zero) savings row renders "Not worth it", per row, independently of the other row (AC #2)', async () => {
+    const comparison = {
+      ...mockupWorkedExample,
+      bonusNormalizedAnnualSavings: 0,
+      isBonusNormalizedWorthSwitching: false,
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(comparison))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    // Bonus-included row still reads worth-it (unaffected); bonus-normalized reads not-worth-it
+    // at exactly zero — the tie-break rule resolved to "not worth it", not toggled by the sign check.
+    expect(await screen.findByText('Worth switching')).toBeInTheDocument()
+    expect(screen.getByText('Not worth it')).toBeInTheDocument()
+    expect(screen.getByText('About 0.00 EUR/yr more once the bonus is gone')).toBeInTheDocument()
+  })
+
+  it('both rows render "Worth switching" when the candidate wins even after the bonus fully decays', async () => {
+    // Dev Notes: all three verdict combinations (mixed, both green, both red) must render
+    // correctly, not just the mockup's own mixed worked example.
+    const comparison = {
+      ...mockupWorkedExample,
+      candidateAnnualCostBonusNormalized: 720,
+      bonusNormalizedAnnualSavings: 720,
+      candidateAnnualCostBonusIncluded: 620,
+      bonusIncludedAnnualSavings: 820,
+      isBonusIncludedWorthSwitching: true,
+      isBonusNormalizedWorthSwitching: true,
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(comparison))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    expect(await screen.findAllByText('Worth switching')).toHaveLength(2)
+    expect(screen.queryByText('Not worth it')).not.toBeInTheDocument()
+  })
+
+  it('the bonus-normalized row states the candidate\'s ongoing rate at the household\'s actual pace', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(mockupWorkedExample))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.type(screen.getByLabelText('Switching bonus (optional)'), '350')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    expect(await screen.findByText("Based on the candidate's ongoing rate at your actual pace of 3,200 kWh/yr.")).toBeInTheDocument()
+  })
+
+  it('the bonus-included row does not claim "even with the bonus" when no bonus was entered', async () => {
+    const comparison = {
+      ...mockupWorkedExample,
+      candidateSwitchingBonus: 0,
+      candidateAnnualCostBonusIncluded: 1186.8,
+      bonusIncludedAnnualSavings: -12.8,
+      isBonusIncludedWorthSwitching: false,
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(comparison))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    expect(await screen.findByText('About 12.80 EUR more this year')).toBeInTheDocument()
+    expect(screen.queryByText(/even with the bonus/)).not.toBeInTheDocument()
+  })
+
+  it('the current-vs-candidate summary panels render the right label/value pairs with 2-decimal money formatting (AC #4)', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(mockupWorkedExample))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.type(screen.getByLabelText('Switching bonus (optional)'), '350')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    expect(await screen.findByText('Your current tariff')).toBeInTheDocument()
+    expect(screen.getByText('Candidate tariff')).toBeInTheDocument()
+    expect(screen.getByText('12.50 EUR')).toBeInTheDocument()
+    expect(screen.getByText('14.90 EUR')).toBeInTheDocument()
+    // Current (0.3200) and candidate (0.3150) price/kWh both round to the same 2-decimal display
+    // at this precision — the summary panels deliberately reuse moneyFormat (2 decimals), not the
+    // 4-decimal priceFormat used elsewhere (Task 4's own instruction), so both rows read "0.32".
+    expect(screen.getAllByText('0.32 EUR/kWh')).toHaveLength(2)
+    expect(screen.getByText('350.00 EUR')).toBeInTheDocument()
+  })
+
+  it('the switching-bonus summary row is omitted when the bonus is 0 (AC #4)', async () => {
+    const comparison = {
+      ...mockupWorkedExample,
+      candidateSwitchingBonus: 0,
+      candidateAnnualCostBonusIncluded: 1186.8,
+      bonusIncludedAnnualSavings: -12.8,
+      isBonusIncludedWorthSwitching: false,
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(comparison))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    await screen.findByText('Candidate tariff')
+    // The label appears once — as the form field's own <Label>, not duplicated as a summary row.
+    expect(screen.getAllByText('Switching bonus (optional)')).toHaveLength(1)
+    // No bonus-included detail sentence either — nothing to explain when nothing was entered.
+    expect(screen.queryByText(/switching bonus, credited in year one/)).not.toBeInTheDocument()
   })
 
   it('a null result (no pace yet) renders the same onboarding empty state as the Dashboard Status card', async () => {
@@ -77,17 +212,11 @@ describe('TariffComparisonForm', () => {
 
   it('a stale result is cleared when a resubmission fails', async () => {
     const comparison = {
-      currentMonthlyBaseFee: 12.5,
-      currentPricePerKwh: 0.32,
-      currency: 'EUR',
-      candidateMonthlyBaseFee: 14.9,
-      candidatePricePerKwh: 0.315,
+      ...mockupWorkedExample,
       candidateSwitchingBonus: 0,
-      annualPaceKwh: 3200,
-      currentAnnualCost: 1174,
-      candidateAnnualCostBonusNormalized: 1186.8,
-      bonusNormalizedAnnualSavings: -12.8,
-      isLowConfidence: false,
+      candidateAnnualCostBonusIncluded: 1186.8,
+      bonusIncludedAnnualSavings: -12.8,
+      isBonusIncludedWorthSwitching: false,
     }
     const fetchMock = vi
       .fn()
@@ -100,28 +229,16 @@ describe('TariffComparisonForm', () => {
     await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
     await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
     await user.click(screen.getByRole('button', { name: 'Compare' }))
-    expect(await screen.findByText('This candidate would cost about 12.80 EUR/yr more, bonus-normalized.')).toBeInTheDocument()
+    expect(await screen.findByText('About 12.80 EUR/yr more once the bonus is gone')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Compare' }))
 
     expect(await screen.findByText('Invalid candidate')).toBeInTheDocument()
-    expect(screen.queryByText('This candidate would cost about 12.80 EUR/yr more, bonus-normalized.')).not.toBeInTheDocument()
+    expect(screen.queryByText('About 12.80 EUR/yr more once the bonus is gone')).not.toBeInTheDocument()
   })
 
-  it('a low-confidence result shows the stale-pace footnote', async () => {
-    const comparison = {
-      currentMonthlyBaseFee: 12.5,
-      currentPricePerKwh: 0.32,
-      currency: 'EUR',
-      candidateMonthlyBaseFee: 14.9,
-      candidatePricePerKwh: 0.315,
-      candidateSwitchingBonus: 0,
-      annualPaceKwh: 3200,
-      currentAnnualCost: 1174,
-      candidateAnnualCostBonusNormalized: 1186.8,
-      bonusNormalizedAnnualSavings: -12.8,
-      isLowConfidence: true,
-    }
+  it('a low-confidence result shows the stale-pace footnote once, not duplicated per row', async () => {
+    const comparison = { ...mockupWorkedExample, isLowConfidence: true }
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(comparison))))
     const user = userEvent.setup()
 
@@ -131,6 +248,9 @@ describe('TariffComparisonForm', () => {
     await user.click(screen.getByRole('button', { name: 'Compare' }))
 
     expect(await screen.findByText("It's been a while since your last reading, so this pace may be less reliable than usual.")).toBeInTheDocument()
+    expect(
+      screen.getAllByText("It's been a while since your last reading, so this pace may be less reliable than usual.")
+    ).toHaveLength(1)
   })
 
   it('the Compare button stays disabled until the required fields are filled', () => {

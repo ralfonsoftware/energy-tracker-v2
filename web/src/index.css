@@ -57,6 +57,17 @@
     --color-status-trending: var(--status-trending);
     --color-status-trending-badge-bg: var(--status-trending-badge-bg);
     --color-status-trending-badge-text: var(--status-trending-badge-text);
+    /* Dedicated FR-13 two-way attractiveness signal pair (Story 5.3) — a 2-state binary
+       system, never reused from the Status triad, brand-accent, or destructive/error red
+       (see colors.md's rejection reasoning, and the :root/.dark blocks below). */
+    --color-attractiveness-worth-it: var(--attractiveness-worth-it);
+    --color-attractiveness-worth-it-bg: var(--attractiveness-worth-it-bg);
+    --color-attractiveness-worth-it-badge-text: var(--attractiveness-worth-it-badge-text);
+    --color-attractiveness-not-worth-it: var(--attractiveness-not-worth-it);
+    --color-attractiveness-not-worth-it-bg: var(--attractiveness-not-worth-it-bg);
+    --color-attractiveness-not-worth-it-badge-text: var(--attractiveness-not-worth-it-badge-text);
+    --color-attractiveness-not-worth-it-text: var(--attractiveness-not-worth-it-text);
+    --color-attractiveness-signal-supporting-text: var(--attractiveness-signal-supporting-text);
     /* Nav chrome active-tab tokens (Story 2.5) — brand-accent-tinted, never a status color */
     --color-nav-chrome-active-bg: var(--nav-chrome-active-bg);
     --color-nav-chrome-active-foreground: var(--nav-chrome-active-foreground);
@@ -155,6 +166,32 @@
     --status-trending: #B87A1E;
     --status-trending-badge-bg: rgba(184, 122, 30, 0.16);
     --status-trending-badge-text: #8A5A14;
+    /* Dedicated FR-13 two-way attractiveness signal pair (Story 5.3) — mockups/key-tariff-radar.html
+       is dark-mode only (same documented gap colors.md already flags for --destructive's light
+       value), so these light-mode values have no mockup precedent and are independently derived
+       here, following the same darker/more-saturated-on-light-surface approach the Status triad
+       already used for its own light/dark split (e.g. --status-below-baseline: #4FCA72 dark vs.
+       #2F9E52 light). Both -text figure colors and the shared supporting-text color are verified
+       (relative-luminance contrast, not eyeballed) at >=4.5:1 against their composited row -bg tint
+       over the light glass card surface (--surface-glass over --background, ~rgb(252,253,250)):
+         worth-it text #106430 on worth-it-bg tint (~rgb(219,234,223)) -> 5.73:1
+         not-worth-it text #AA2718 on not-worth-it-bg tint (~rgb(239,219,214)) -> 5.22:1
+         supporting-text rgba(30,42,28,0.82) on the darker of the two tints -> 6.88:1
+       Unlike dark mode, light mode's raw --attractiveness-not-worth-it clears AA on its own as
+       figure text (no separate lighter token needed there) — but --attractiveness-not-worth-it-text
+       is still defined per-theme, matching dark mode's token shape, rather than left undefined.
+       The badge fill/text pair does NOT reuse the dark-mode near-black-on-light-pill convention:
+       here the raw tokens are themselves dark (needed for figure-text-on-light-tint AA), so the
+       opaque badge pill is dark and its text token is a near-white, the inverse of dark mode —
+       verified per Task 3's instruction not to assume symmetry, each >=5.2:1 against its own fill. */
+    --attractiveness-worth-it: #106430;
+    --attractiveness-worth-it-bg: rgba(16, 100, 48, 0.14);
+    --attractiveness-worth-it-badge-text: #F0FBF3;
+    --attractiveness-not-worth-it: #AA2718;
+    --attractiveness-not-worth-it-bg: rgba(170, 39, 24, 0.16);
+    --attractiveness-not-worth-it-badge-text: #FBEAE7;
+    --attractiveness-not-worth-it-text: #AA2718;
+    --attractiveness-signal-supporting-text: rgba(30, 42, 28, 0.82);
     /* Status card specular-sweep overlay gradient — Story 2.5, verbatim from
        direction-green-eco.html's light variant */
     --status-card-specular-overlay: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.6) 48%, transparent 60%);
@@ -214,6 +251,20 @@
     --status-trending: #E2A542;
     --status-trending-badge-bg: rgba(226, 165, 66, 0.18);
     --status-trending-badge-text: #F5CE93;
+    /* Dedicated FR-13 two-way attractiveness signal pair (Story 5.3) — verbatim from
+       mockups/key-tariff-radar.html (dark-mode only source; :root's light values below have
+       no mockup precedent and are independently derived/contrast-verified, see that block). */
+    --attractiveness-worth-it: #6FDB93;
+    --attractiveness-worth-it-bg: rgba(111, 219, 147, 0.16);
+    --attractiveness-worth-it-badge-text: #06120D;
+    --attractiveness-not-worth-it: #E2685A;
+    --attractiveness-not-worth-it-bg: rgba(226, 104, 90, 0.16);
+    --attractiveness-not-worth-it-badge-text: #2B0E09;
+    /* The raw --attractiveness-not-worth-it (#E2685A) measures only 3.50:1 as body/figure text
+       against its own -bg tint (mockup's own verification comment) — this dedicated, lighter
+       token is used for the not-worth-it amount figure specifically, never the raw token. */
+    --attractiveness-not-worth-it-text: #EB958C;
+    --attractiveness-signal-supporting-text: rgba(234, 245, 238, 0.7);
     /* Status card specular-sweep overlay gradient — Story 2.5, verbatim from
        direction-green-eco.html's dark variant */
     --status-card-specular-overlay: linear-gradient(115deg, transparent 30%, rgba(220, 245, 230, 0.14) 46%, transparent 62%);

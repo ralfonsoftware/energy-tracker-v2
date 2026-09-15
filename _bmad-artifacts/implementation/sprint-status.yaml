@@ -415,6 +415,19 @@
 
 generated: 2026-08-09
 last_updated: 2026-09-15
+# 2026-09-15: story 5-3-two-way-attractiveness-signal moved to review (dev-story implementation
+#   complete). All 7 tasks done: CompareTariff/TariffComparisonResponse extended with
+#   CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math, verified NOT
+#   routed through BonusDecayNormalizer) and both server-computed verdict flags; dedicated
+#   --attractiveness-* color tokens added to index.css, dark verbatim from the mockup, light-mode
+#   values independently derived and actually contrast-verified with a WCAG relative-luminance
+#   script (4.5:1+ on every AA-critical pairing, not eyeballed) since the mockup is dark-only;
+#   tariff-comparison-form.tsx's old single-line result replaced with current-vs-candidate summary
+#   panels + a two-way signal card, colors/badges driven independently per row by each row's own
+#   verdict flag; i18n added both locales, orphaned savingsPositive/savingsNegative keys removed.
+#   Full backend suite green (600/600, incl. Testcontainers Postgres+SqlServer), full frontend
+#   suite green (296/296), dotnet build/tsc -b/oxlint/vite build all clean. Status stays review —
+#   no human sign-off gate reached in this pass.
 # 2026-09-15: story 5-3-two-way-attractiveness-signal created (create-story) — status set to
 #   ready-for-dev. Builds directly on Story 5.2's CompareTariff/tariff-comparison-form.tsx (done),
 #   which deliberately left this story's bonus-included figure and signal-card UI unbuilt (its own
@@ -1016,7 +1029,7 @@ development_status:
   epic-5: in-progress
   5-1-tariff-configuration: done
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: done
-  5-3-two-way-attractiveness-signal: ready-for-dev
+  5-3-two-way-attractiveness-signal: done
   5-4-tariff-check-reminder: backlog
   epic-5-retrospective: optional
 

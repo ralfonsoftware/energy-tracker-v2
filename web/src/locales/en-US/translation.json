@@ -319,10 +319,26 @@
       "submit": "Compare",
       "comparing": "Comparing…",
       "errorGeneric": "Something went wrong comparing this tariff. Please try again.",
-      "savingsPositive": "You'd save about {{amount}}/yr, bonus-normalized.",
-      "savingsNegative": "This candidate would cost about {{amount}}/yr more, bonus-normalized.",
       "paceFootnote": "Based on your actual pace of {{kwh}} kWh/yr.",
-    "lowConfidenceFootnote": "It's been a while since your last reading, so this pace may be less reliable than usual."
+      "lowConfidenceFootnote": "It's been a while since your last reading, so this pace may be less reliable than usual.",
+      "summary": {
+        "currentHeading": "Your current tariff",
+        "candidateHeading": "Candidate tariff"
+      },
+      "signal": {
+        "heading": "Is it worth switching?",
+        "worthBadge": "Worth switching",
+        "notWorthBadge": "Not worth it",
+        "bonusIncludedFrameLabel": "With the switching bonus",
+        "bonusIncludedPositive": "Save about {{amount}} this year",
+        "bonusIncludedNegative": "About {{amount}} more this year, even with the bonus",
+        "bonusIncludedNegativeNoBonus": "About {{amount}} more this year",
+        "bonusIncludedBonusDetail": "{{amount}} of that is the one-time switching bonus, credited in year one.",
+        "bonusNormalizedFrameLabel": "Without the switching bonus",
+        "bonusNormalizedPositive": "Save about {{amount}}/yr once the bonus is gone",
+        "bonusNormalizedNegative": "About {{amount}}/yr more once the bonus is gone",
+        "bonusNormalizedDetail": "Based on the candidate's ongoing rate at your actual pace of {{kwh}} kWh/yr."
+      }
     }
   }
 }

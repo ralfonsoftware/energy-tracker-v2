@@ -119,6 +119,10 @@ export interface TariffComparisonDto {
   currentAnnualCost: number
   candidateAnnualCostBonusNormalized: number
   bonusNormalizedAnnualSavings: number
+  candidateAnnualCostBonusIncluded: number
+  bonusIncludedAnnualSavings: number
+  isBonusIncludedWorthSwitching: boolean
+  isBonusNormalizedWorthSwitching: boolean
   isLowConfidence: boolean
 }
 
