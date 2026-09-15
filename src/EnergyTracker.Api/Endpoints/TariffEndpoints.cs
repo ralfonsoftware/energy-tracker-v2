@@ -194,6 +194,10 @@ public static class TariffEndpoints
             CurrentAnnualCost: result.CurrentAnnualCost,
             CandidateAnnualCostBonusNormalized: result.CandidateAnnualCostBonusNormalized,
             BonusNormalizedAnnualSavings: result.BonusNormalizedAnnualSavings,
+            CandidateAnnualCostBonusIncluded: result.CandidateAnnualCostBonusIncluded,
+            BonusIncludedAnnualSavings: result.BonusIncludedAnnualSavings,
+            IsBonusIncludedWorthSwitching: result.IsBonusIncludedWorthSwitching,
+            IsBonusNormalizedWorthSwitching: result.IsBonusNormalizedWorthSwitching,
             IsLowConfidence: result.IsLowConfidence);
 }
 
@@ -247,4 +251,8 @@ public record TariffComparisonResponse(
     decimal CurrentAnnualCost,
     decimal CandidateAnnualCostBonusNormalized,
     decimal BonusNormalizedAnnualSavings,
+    decimal CandidateAnnualCostBonusIncluded,
+    decimal BonusIncludedAnnualSavings,
+    bool IsBonusIncludedWorthSwitching,
+    bool IsBonusNormalizedWorthSwitching,
     bool IsLowConfidence);

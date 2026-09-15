@@ -14,6 +14,10 @@ public record TariffComparisonResult(
     decimal CurrentAnnualCost,
     decimal CandidateAnnualCostBonusNormalized,
     decimal BonusNormalizedAnnualSavings,
+    decimal CandidateAnnualCostBonusIncluded,
+    decimal BonusIncludedAnnualSavings,
+    bool IsBonusIncludedWorthSwitching,
+    bool IsBonusNormalizedWorthSwitching,
     bool IsLowConfidence);
 
 /// <summary>Computes a scratch/exploratory candidate Tariff's bonus-decay normalized annual savings against the Household's current Tariff, using actual Pattern Detective pace (FR-11, FR-12, FR-14, AD-5).</summary>
@@ -59,6 +63,22 @@ public class CompareTariff(GetCurrentStatus getCurrentStatus, ITariffRepository 
 
         var bonusNormalizedAnnualSavings = currentAnnualCost - bonusNormalizedCandidateAnnualCost;
 
+        // Naive, undecayed comparison (Story 5.3, FR-13) — deliberately does NOT call
+        // BonusDecayNormalizer. The whole point of the two-way signal is that this figure and the
+        // bonus-normalized one above use two genuinely different formulas: this one applies the full
+        // switching bonus once, in year one, exactly as a household would naively read the offer.
+        var candidateAnnualCostBonusIncluded = candidateAnnualCostNoBonus - candidateSwitchingBonus;
+        var bonusIncludedAnnualSavings = currentAnnualCost - candidateAnnualCostBonusIncluded;
+
+        // FR-13 tie-break: a breakeven (== 0, not just < 0) resolves to "not worth it" — ties favor
+        // staying put. Strictly-greater-than, applied identically to both rows (see Dev Notes on why
+        // this isn't scoped to the normalized row only, despite the epic AC's literal wording).
+        // Rounded to 2 decimals (matching the frontend's own moneyFormat display precision, review
+        // round) before the comparison — otherwise a sub-cent positive savings (e.g. €0.003) would
+        // read "Worth switching" next to a displayed "0.00", visually indistinguishable from a tie.
+        var isBonusIncludedWorthSwitching = decimal.Round(bonusIncludedAnnualSavings, 2, MidpointRounding.AwayFromZero) > 0m;
+        var isBonusNormalizedWorthSwitching = decimal.Round(bonusNormalizedAnnualSavings, 2, MidpointRounding.AwayFromZero) > 0m;
+
         return new TariffComparisonResult(
             CurrentMonthlyBaseFee: currentTariff.MonthlyBaseFee,
             CurrentPricePerKwh: currentTariff.PricePerKwh,
@@ -70,6 +90,10 @@ public class CompareTariff(GetCurrentStatus getCurrentStatus, ITariffRepository 
             CurrentAnnualCost: currentAnnualCost,
             CandidateAnnualCostBonusNormalized: bonusNormalizedCandidateAnnualCost,
             BonusNormalizedAnnualSavings: bonusNormalizedAnnualSavings,
+            CandidateAnnualCostBonusIncluded: candidateAnnualCostBonusIncluded,
+            BonusIncludedAnnualSavings: bonusIncludedAnnualSavings,
+            IsBonusIncludedWorthSwitching: isBonusIncludedWorthSwitching,
+            IsBonusNormalizedWorthSwitching: isBonusNormalizedWorthSwitching,
             IsLowConfidence: statusResult.IsLowConfidence);
     }
 }

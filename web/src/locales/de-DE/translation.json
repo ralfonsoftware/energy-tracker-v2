@@ -319,10 +319,26 @@
       "submit": "Vergleichen",
       "comparing": "Wird verglichen…",
       "errorGeneric": "Beim Vergleichen dieses Tarifs ist etwas schiefgelaufen. Bitte versuche es erneut.",
-      "savingsPositive": "Du würdest etwa {{amount}}/Jahr sparen, bonusnormalisiert.",
-      "savingsNegative": "Dieser Kandidat würde etwa {{amount}}/Jahr mehr kosten, bonusnormalisiert.",
       "paceFootnote": "Basierend auf deinem tatsächlichen Verbrauch von {{kwh}} kWh/Jahr.",
-    "lowConfidenceFootnote": "Dein letzter Zählerstand liegt schon eine Weile zurück, daher ist dieser Verbrauch möglicherweise weniger zuverlässig als sonst."
+      "lowConfidenceFootnote": "Dein letzter Zählerstand liegt schon eine Weile zurück, daher ist dieser Verbrauch möglicherweise weniger zuverlässig als sonst.",
+      "summary": {
+        "currentHeading": "Dein aktueller Tarif",
+        "candidateHeading": "Kandidatentarif"
+      },
+      "signal": {
+        "heading": "Lohnt sich der Wechsel?",
+        "worthBadge": "Lohnt sich",
+        "notWorthBadge": "Lohnt sich nicht",
+        "bonusIncludedFrameLabel": "Mit Wechselbonus",
+        "bonusIncludedPositive": "Spare etwa {{amount}} in diesem Jahr",
+        "bonusIncludedNegative": "Etwa {{amount}} mehr in diesem Jahr, sogar mit Bonus",
+        "bonusIncludedNegativeNoBonus": "Etwa {{amount}} mehr in diesem Jahr",
+        "bonusIncludedBonusDetail": "{{amount}} davon ist der einmalige Wechselbonus, im ersten Jahr gutgeschrieben.",
+        "bonusNormalizedFrameLabel": "Ohne Wechselbonus",
+        "bonusNormalizedPositive": "Spare etwa {{amount}}/Jahr, sobald der Bonus weg ist",
+        "bonusNormalizedNegative": "Etwa {{amount}}/Jahr mehr, sobald der Bonus weg ist",
+        "bonusNormalizedDetail": "Basierend auf dem laufenden Tarif des Kandidaten bei deinem tatsächlichen Verbrauch von {{kwh}} kWh/Jahr."
+      }
     }
   }
 }
