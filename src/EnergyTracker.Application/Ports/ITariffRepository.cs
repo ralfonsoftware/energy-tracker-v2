@@ -19,6 +19,12 @@ public interface ITariffRepository
     Task<(IReadOnlyList<Tariff> Items, int TotalCount)> GetHistoryForHouseholdAsync(
         Guid householdId, int page, int pageSize, CancellationToken cancellationToken);
 
+    // The Household's currently-effective Tariff (ContractStartDate <= now), or null if none
+    // exists yet. Not the same as GetHistoryForHouseholdAsync's first row — that method has no
+    // <= now filter (a future-dated entry can be added ahead of time), so its first row isn't
+    // necessarily "current." Story 5.2 (CompareTariff) is the first caller.
+    Task<Tariff?> FindCurrentForHouseholdAsync(Guid householdId, CancellationToken cancellationToken);
+
     // Optimistic-concurrency-guarded field edit (AD-4). Only the non-null parameters are applied —
     // EditTariff computes the diff and passes null for every field that didn't change, so a
     // single-field correction never touches the other four columns. Throws

@@ -278,6 +278,7 @@
       "heading": "Tariff history",
       "loading": "Loading…",
       "loadError": "Couldn't load the Tariff history — try again.",
+      "retry": "Retry",
       "emptyState": "No Tariff entries yet — add your current contract above.",
       "periodColumn": "Period",
       "baseFeeColumn": "Base fee",
@@ -308,6 +309,20 @@
       "cancel": "Cancel",
       "conflictError": "This Tariff entry was changed elsewhere — refresh and try again.",
       "errorGeneric": "Something went wrong. Please try again."
+    },
+    "compare": {
+      "heading": "Compare a tariff",
+      "description": "Enter a candidate tariff to see an honest, bonus-normalized savings projection against your current one — nothing is saved until you switch.",
+      "candidateMonthlyBaseFeeLabel": "Candidate monthly base fee",
+      "candidatePricePerKwhLabel": "Candidate price per kWh",
+      "candidateSwitchingBonusLabel": "Switching bonus (optional)",
+      "submit": "Compare",
+      "comparing": "Comparing…",
+      "errorGeneric": "Something went wrong comparing this tariff. Please try again.",
+      "savingsPositive": "You'd save about {{amount}}/yr, bonus-normalized.",
+      "savingsNegative": "This candidate would cost about {{amount}}/yr more, bonus-normalized.",
+      "paceFootnote": "Based on your actual pace of {{kwh}} kWh/yr.",
+    "lowConfidenceFootnote": "It's been a while since your last reading, so this pace may be less reliable than usual."
     }
   }
 }

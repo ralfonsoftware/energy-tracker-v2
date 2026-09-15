@@ -24,6 +24,55 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
             new { monthlyBaseFee, pricePerKwh, currency, contractStartDate, contractPeriodMonths },
             TestContext.Current.CancellationToken);
 
+    private static Task<HttpResponseMessage> PostCompareAsync(
+        HttpClient client, decimal candidateMonthlyBaseFee, decimal candidatePricePerKwh, decimal candidateSwitchingBonus = 0m) =>
+        client.PostAsJsonAsync(
+            "/api/tariffs/compare",
+            new { candidateMonthlyBaseFee, candidatePricePerKwh, candidateSwitchingBonus },
+            TestContext.Current.CancellationToken);
+
+    private static Task<HttpResponseMessage> PostReadingAsync(HttpClient client, decimal kwhValue, DateTimeOffset readingTimestamp) =>
+        client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue, readingTimestamp, idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+
+    private static Task<HttpResponseMessage> SetYearlyBaselineAsync(HttpClient client, Guid householdId, decimal yearlyBaselineKwh, int version) =>
+        client.PutAsJsonAsync(
+            $"/api/households/{householdId}/yearly-baseline",
+            new { yearlyBaselineKwh, version },
+            TestContext.Current.CancellationToken);
+
+    // Same shape as CreateHouseholdAsync but also returns the Household's own Version, needed to
+    // set a Yearly Baseline (SetYearlyBaselineAsync) — a distinct helper rather than widening
+    // CreateHouseholdAsync's tuple, which every other test in this file destructures as a 2-tuple.
+    private async Task<(HttpClient Client, Guid HouseholdId, int Version)> CreateHouseholdWithPaceAsync(
+        decimal yearlyBaselineKwh, decimal paceToDateKwh, double elapsedDays)
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        var response = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        (await SetYearlyBaselineAsync(client, created!.Id, yearlyBaselineKwh, created.Version)).EnsureSuccessStatusCode();
+
+        // PaceToDateKwh is the delta between the two readings (StatusEndpointsTests' own
+        // precedent), not the second reading's raw value — kWh values must also be positive
+        // (MeterReadingValidation.ValidateKwhValue), so the first reading can't be a bare 0.
+        // Truncated to whole seconds (not DateTimeOffset.UtcNow's full 100ns-tick precision) so
+        // the elapsed span this test asserts an exact decimal result against can't drift after a
+        // round trip through Postgres's microsecond-precision timestamptz column — the same
+        // in-memory-vs-DB-truncated-timestamp flakiness class already hit and fixed once in this
+        // repo (ee178cc).
+        var now = DateTimeOffset.UtcNow;
+        var latest = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Offset);
+        var baseline = latest.AddDays(-elapsedDays);
+        const decimal startingKwhValue = 1000m;
+        (await PostReadingAsync(client, startingKwhValue, baseline)).EnsureSuccessStatusCode();
+        (await PostReadingAsync(client, startingKwhValue + paceToDateKwh, latest)).EnsureSuccessStatusCode();
+
+        return (client, created.Id, created.Version);
+    }
+
     [Fact]
     public async Task POST_tariffs_returns_200_on_create()
     {
@@ -268,5 +317,121 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         stillOwnedByA.HouseholdId.ShouldBe(householdIdA);
         stillOwnedByA.MonthlyBaseFee.ShouldBe(12.50m);
         householdIdB.ShouldNotBe(householdIdA);
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_returns_200_with_a_computed_result_once_a_current_Tariff_and_pace_exist()
+    {
+        var (client, _, _) = await CreateHouseholdWithPaceAsync(yearlyBaselineKwh: 3650m, paceToDateKwh: 3200m, elapsedDays: 365);
+        await PostTariffAsync(client, 12.50m, 0.3200m, "EUR", DateTimeOffset.UtcNow.AddYears(-1));
+
+        var response = await PostCompareAsync(client, 14.90m, 0.3150m, 350m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<TariffComparisonResponse>(TestContext.Current.CancellationToken);
+        body.ShouldNotBeNull();
+        body.CurrentAnnualCost.ShouldBe(1174.00m);
+        body.CandidateAnnualCostBonusNormalized.ShouldBe(1186.80m);
+        body.BonusNormalizedAnnualSavings.ShouldBe(-12.80m);
+        body.Currency.ShouldBe("EUR");
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_returns_a_null_body_when_no_pace_exists_yet()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        await PostTariffAsync(client, 12.50m, 0.3200m, "EUR", DateTimeOffset.UtcNow.AddYears(-1));
+
+        var response = await PostCompareAsync(client, 14.90m, 0.3150m, 350m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_returns_a_null_body_when_no_current_Tariff_exists()
+    {
+        var (client, _, _) = await CreateHouseholdWithPaceAsync(yearlyBaselineKwh: 3650m, paceToDateKwh: 3200m, elapsedDays: 365);
+
+        var response = await PostCompareAsync(client, 14.90m, 0.3150m, 350m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_with_a_non_positive_candidate_pricePerKwh_returns_400()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await PostCompareAsync(client, 14.90m, 0m, 350m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_with_a_negative_switching_bonus_returns_400()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await PostCompareAsync(client, 14.90m, 0.32m, -1m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_with_a_negative_candidateMonthlyBaseFee_returns_400()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await PostCompareAsync(client, -1m, 0.32m, 0m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task POST_tariffs_compare_returns_a_null_body_with_exactly_one_reading()
+    {
+        // AC #3's literal boundary: fewer than two Meter Readings means no usable pace yet.
+        // CreateHouseholdWithPaceAsync always seeds two readings, so this posts a single reading
+        // directly instead.
+        var (client, householdId) = await CreateHouseholdAsync();
+        var householdResponse = await client.GetAsync($"/api/households/{householdId}", TestContext.Current.CancellationToken);
+        var household = await householdResponse.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        (await SetYearlyBaselineAsync(client, householdId, 3650m, household!.Version)).EnsureSuccessStatusCode();
+        (await PostReadingAsync(client, 1000m, DateTimeOffset.UtcNow)).EnsureSuccessStatusCode();
+        await PostTariffAsync(client, 12.50m, 0.3200m, "EUR", DateTimeOffset.UtcNow.AddYears(-1));
+
+        var response = await PostCompareAsync(client, 14.90m, 0.3150m, 350m);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_households_Tariff_comparison_is_never_affected_by_another_households_Tariff_or_pace()
+    {
+        var (clientA, _, _) = await CreateHouseholdWithPaceAsync(yearlyBaselineKwh: 3650m, paceToDateKwh: 3200m, elapsedDays: 365);
+        await PostTariffAsync(clientA, 12.50m, 0.3200m, "EUR", DateTimeOffset.UtcNow.AddYears(-1));
+
+        var (clientB, _, _) = await CreateHouseholdWithPaceAsync(yearlyBaselineKwh: 100m, paceToDateKwh: 50m, elapsedDays: 365);
+        await PostTariffAsync(clientB, 999m, 9.99m, "USD", DateTimeOffset.UtcNow.AddYears(-1));
+
+        var responseA = await PostCompareAsync(clientA, 14.90m, 0.3150m, 350m);
+
+        responseA.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var bodyA = await responseA.Content.ReadFromJsonAsync<TariffComparisonResponse>(TestContext.Current.CancellationToken);
+        bodyA!.Currency.ShouldBe("EUR");
+        bodyA.CurrentAnnualCost.ShouldBe(1174.00m);
+
+        // Story 3.9's own tenant-isolation precedent: also query/assert through the *other*
+        // household's own client, not just the acting one — proves B's own comparison reflects
+        // only B's data too, not a false pass from only ever checking A's side.
+        var responseB = await PostCompareAsync(clientB, 1000m, 10m, 0m);
+
+        responseB.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var bodyB = await responseB.Content.ReadFromJsonAsync<TariffComparisonResponse>(TestContext.Current.CancellationToken);
+        bodyB!.Currency.ShouldBe("USD");
+        bodyB.CurrentAnnualCost.ShouldBe(12487.50m);
     }
 }

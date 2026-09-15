@@ -29,6 +29,17 @@ public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffReposit
         return query.AnyAsync(cancellationToken);
     }
 
+    public Task<Tariff?> FindCurrentForHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return dbContext.Tariffs
+            .Where(t => t.HouseholdId == householdId && t.ContractStartDate <= now)
+            .OrderByDescending(t => t.ContractStartDate)
+            .ThenByDescending(t => t.CreatedAtUtc)
+            .ThenByDescending(t => t.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<(IReadOnlyList<Tariff> Items, int TotalCount)> GetHistoryForHouseholdAsync(
         Guid householdId, int page, int pageSize, CancellationToken cancellationToken)
     {

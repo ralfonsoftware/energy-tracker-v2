@@ -278,6 +278,7 @@
       "heading": "Tarifverlauf",
       "loading": "Wird geladen…",
       "loadError": "Der Tarifverlauf konnte nicht geladen werden — versuche es erneut.",
+    "retry": "Erneut versuchen",
       "emptyState": "Noch keine Tarifeinträge — füge oben deinen aktuellen Vertrag hinzu.",
       "periodColumn": "Zeitraum",
       "baseFeeColumn": "Grundgebühr",
@@ -308,6 +309,20 @@
       "cancel": "Abbrechen",
       "conflictError": "Dieser Tarifeintrag wurde an anderer Stelle geändert — aktualisiere und versuche es erneut.",
       "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+    },
+    "compare": {
+      "heading": "Tarif vergleichen",
+      "description": "Gib einen Kandidatentarif ein, um eine ehrliche, bonusnormalisierte Ersparnisprognose im Vergleich zu deinem aktuellen Tarif zu sehen — nichts wird gespeichert, bevor du wechselst.",
+      "candidateMonthlyBaseFeeLabel": "Monatliche Grundgebühr des Kandidaten",
+      "candidatePricePerKwhLabel": "Preis pro kWh des Kandidaten",
+      "candidateSwitchingBonusLabel": "Wechselbonus (optional)",
+      "submit": "Vergleichen",
+      "comparing": "Wird verglichen…",
+      "errorGeneric": "Beim Vergleichen dieses Tarifs ist etwas schiefgelaufen. Bitte versuche es erneut.",
+      "savingsPositive": "Du würdest etwa {{amount}}/Jahr sparen, bonusnormalisiert.",
+      "savingsNegative": "Dieser Kandidat würde etwa {{amount}}/Jahr mehr kosten, bonusnormalisiert.",
+      "paceFootnote": "Basierend auf deinem tatsächlichen Verbrauch von {{kwh}} kWh/Jahr.",
+    "lowConfidenceFootnote": "Dein letzter Zählerstand liegt schon eine Weile zurück, daher ist dieser Verbrauch möglicherweise weniger zuverlässig als sonst."
     }
   }
 }

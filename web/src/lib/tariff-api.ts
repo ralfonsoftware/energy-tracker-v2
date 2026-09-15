@@ -101,3 +101,41 @@ export async function updateTariff(id: string, input: EditTariffInput): Promise<
 
   return (await response.json()) as TariffHistoryItemDto
 }
+
+export interface CompareTariffInput {
+  candidateMonthlyBaseFee: number
+  candidatePricePerKwh: number
+  candidateSwitchingBonus: number
+}
+
+export interface TariffComparisonDto {
+  currentMonthlyBaseFee: number
+  currentPricePerKwh: number
+  currency: string
+  candidateMonthlyBaseFee: number
+  candidatePricePerKwh: number
+  candidateSwitchingBonus: number
+  annualPaceKwh: number
+  currentAnnualCost: number
+  candidateAnnualCostBonusNormalized: number
+  bonusNormalizedAnnualSavings: number
+  isLowConfidence: boolean
+}
+
+// POST, not GET — matches the backend's own comment (this call performs no write). Empty-body-is-
+// null parsing mirrors fetchCurrentStatus (status-api.ts), not this file's own createTariff/
+// fetchTariffHistory — this endpoint can legitimately return an empty body (AC #3).
+export async function compareTariff(input: CompareTariffInput): Promise<TariffComparisonDto | null> {
+  const response = await fetch('/api/tariffs/compare', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  const text = await response.text()
+  return text ? (JSON.parse(text) as TariffComparisonDto) : null
+}
