@@ -414,7 +414,24 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-14
+last_updated: 2026-09-15
+# 2026-09-15: story 5-3-two-way-attractiveness-signal created (create-story) — status set to
+#   ready-for-dev. Builds directly on Story 5.2's CompareTariff/tariff-comparison-form.tsx (done),
+#   which deliberately left this story's bonus-included figure and signal-card UI unbuilt (its own
+#   header comment named this story explicitly and pre-verified the target numbers). Adds
+#   CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math — deliberately
+#   does NOT call BonusDecayNormalizer, unlike the existing bonus-normalized figure) plus two
+#   server-computed verdict flags (IsBonusIncludedWorthSwitching/IsBonusNormalizedWorthSwitching,
+#   following the same design instinct as GetCurrentStatus's server-computed Status enum) to
+#   TariffComparisonResult/Response/Dto. New dedicated `--attractiveness-*` color tokens (index.css)
+#   per colors.md's already-specified Mint/Clay pair — mockup (key-tariff-radar.html) is dark-mode
+#   only, so light-mode values have no mockup precedent and are flagged for actual contrast
+#   verification during dev-story, not assumed identical to dark. Resolved one scope ambiguity: the
+#   epic AC's breakeven tie-break text names only "the normalized signal," but EXPERIENCE.md's own
+#   generic phrasing and the lack of any principled reason for asymmetric behavior resolve it to
+#   apply identically to both signal rows. Also adds the "current-vs-candidate tariff summary"
+#   stacked glass panels (UX-DR7) that neither 5.1 nor 5.2 built. epic-5 already in-progress, no
+#   epic status change needed.
 # 2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings moved to done
 #   (code review complete). 3-layer adversarial review found 22 raw findings, triaged to 11 patch
 #   (1 resolved from decision-needed with Ralf: added an IsLowConfidence caveat to the comparison
@@ -999,7 +1016,7 @@ development_status:
   epic-5: in-progress
   5-1-tariff-configuration: done
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: done
-  5-3-two-way-attractiveness-signal: backlog
+  5-3-two-way-attractiveness-signal: ready-for-dev
   5-4-tariff-check-reminder: backlog
   epic-5-retrospective: optional
 
