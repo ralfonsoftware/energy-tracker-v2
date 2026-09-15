@@ -1,5 +1,19 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-14
+# last_updated: 2026-09-15
+# 2026-09-15: story 5-4-tariff-check-reminder created (create-story) -- status set to ready-for-dev.
+#   Epic 5's fourth and final story. Resolved two ambiguities the PRD/epic left open, both confirmed
+#   with Ralf: (1) given AD-7's "zero persisted reminder state" constraint, FR-15's "recurring
+#   cadence" computes as monotonic (once due, stays due forever) rather than a cyclic on/off window --
+#   Household.TariffCheckCadenceMonths is added as a real column (default 3, AD-15 precedent) for
+#   AC #2's structural "editable per household" requirement but is deliberately not read by the
+#   due-ness computation this story ships; (2) the Tariff Check prompt card renders nothing at all
+#   (not neutral copy) when no Tariff is configured yet, confirmed via direct mockup evidence
+#   (key-dashboard.html's empty-state frames never render the .tariff-quiet line). Also flagged: the
+#   mockup's due-state copy ("It's been 3 months since you last compared rates...") asserts a
+#   "last compared" fact this product has no data for and must not fabricate (AD-7, UX-DR5) -- the
+#   story's own copy must state only what the computed gate-open date actually proves. Card renders
+#   on both Dashboard and Tariff Radar (dashboard-page.tsx's own header comment, which currently says
+#   this card is deliberately not built yet, is now stale and gets corrected as part of this story).
 # 2026-09-11: story 3-10-manual-job-history-cleanup code-reviewed (/code-review, forked). 4 patch
 #   findings applied: wrapped SmartPlugImportRepository's 3-step delete (Gaps -> Imports ->
 #   BackgroundJobs) in an explicit transaction (this story's "delete everything" path materially
@@ -1030,7 +1044,7 @@ development_status:
   5-1-tariff-configuration: done
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: done
   5-3-two-way-attractiveness-signal: done
-  5-4-tariff-check-reminder: backlog
+  5-4-tariff-check-reminder: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: backlog
