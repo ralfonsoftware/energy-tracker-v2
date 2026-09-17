@@ -1161,7 +1161,7 @@ action_items:
     action: "Add non-blocking checklist reminders to dev-story/review: verify locale/date/number formatting goes through Intl.* (never hardcoded); verify effect cleanup/unmounted-guards on async operations (uploads, polling, fetches)"
     owner: "story authors/reviewers"
     status: done
-    note: "2026-09-11 epic-4 retro. i18n-hardcoding recurred 3x (3.6, 4.1, 4.2) and missing-unmounted-guard bugs recurred 3x (3.5, 3.6, 4.3) — always caught in review, never reached production, so a lightweight non-blocking reminder rather than a hard gate. Closed 2026-09-17 (epic-5/1.12 retro) — zero recurrence of either pattern across any Epic 5 or Story 1.12 review finding."
+    note: "2026-09-11 epic-4 retro. i18n-hardcoding recurred 3x (3.6, 4.1, 4.2) and missing-unmounted-guard bugs recurred 3x (3.5, 3.6, 4.3) — always caught in review, never reached production, so a lightweight non-blocking reminder rather than a hard gate. Closed 2026-09-17 (epic-5/1.12 retro) — zero recurrence of either pattern across any Epic 5 or Story 1.12 review finding, BUT this action item was itself never actually materialized anywhere durable (no project-context.md entry, no customize.toml override) — it held on attentiveness, not a mechanism. Corrected going forward: the two new epic-5 checklist-reminder action items below were added to project-context.md's Critical Don't-Miss Rules directly, since that file is already an auto-loaded persistent_fact for both bmad-dev-story and bmad-code-review — don't repeat this item's gap of leaving a 'reminder' unwritten."
   - epic: 5
     action: "At Story 5.1 kickoff, verify the AuditCorrection/IAuditCorrectionRecorder + AD-4 concurrency abstraction (built generic in Story 2.8) holds up unmodified for Tariff — its second real consumer after Meter Reading"
     owner: "story author (create-story)"
@@ -1263,13 +1263,13 @@ action_items:
   - epic: 5
     action: "Add a non-blocking checklist reminder for multi-field edit use cases: capture every 'old' field value into a local before any repository write call, not just the first one touched"
     owner: "story authors/reviewers"
-    status: open
-    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's EditTariff read 'old' values after the repository update call — EF Core's identity map returned the same tracked instance, so audit-correction rows briefly recorded old == new. Only caught by a real-DbContext API test, not the mocked unit test."
+    status: done
+    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's EditTariff read 'old' values after the repository update call — EF Core's identity map returned the same tracked instance, so audit-correction rows briefly recorded old == new. Only caught by a real-DbContext API test, not the mocked unit test. Closed 2026-09-17 same session — added to project-context.md's Critical Don't-Miss Rules > Edge cases agents should handle, auto-loaded by both bmad-dev-story and bmad-code-review via their persistent_facts glob."
   - epic: 5
     action: "Add a non-blocking checklist reminder for any 'lock field X unless condition Y' gate: explicitly test bypass via a different field's edit in the same or a sequential request"
     owner: "story authors/reviewers"
-    status: open
-    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's locked-price-field override could be bypassed by pairing a ContractStartDate change with a price edit in the same request, evaluated against the stale pre-edit date."
+    status: done
+    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's locked-price-field override could be bypassed by pairing a ContractStartDate change with a price edit in the same request, evaluated against the stale pre-edit date. Closed 2026-09-17 same session — added to project-context.md's Critical Don't-Miss Rules > Edge cases agents should handle, auto-loaded by both bmad-dev-story and bmad-code-review via their persistent_facts glob."
   - epic: 5
     action: "Build an automated WCAG contrast-ratio check (unit test or lint step) covering every existing --color-* token pair (Status triad, --attractiveness-*, --tariff-check-card-*)"
     owner: "Winston/Murat"

@@ -145,6 +145,8 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **Edge cases agents should handle:**
 - An open `MeterRegressionPrompt` excludes its triggering reading (and everything chronologically after it) from baseline computation until resolved.
 - Job envelopes must be plain JSON-serializable records — a delegate/closure payload works against `InProcessChannelJobQueue` but silently fails to serialize on `AzureStorageQueueJobQueue`.
+- **Multi-field edits:** capture every "old" field value into a local *before* calling the repository's write/update method, not just the first field touched. EF Core's identity map can return the same tracked entity instance across a `FindByIdAsync`-then-`UpdateAsync` call pair, so reading a field's "old" value after the write already reflects the new value (silently records `OldValue == NewValue` in an `AuditCorrection` row). Only a real-`DbContext` test (not an NSubstitute-mocked one) can catch this — found in Story 5.1's `EditTariff`.
+- **"Lock field X unless condition Y" gates:** explicitly test whether the gate can be bypassed by editing a *different* field in the same or a sequential request, not just the field the lock is nominally about. Found in Story 5.1: pairing a `ContractStartDate` change with a price-field edit in one request let the override gate evaluate against the stale pre-edit date.
 
 **Security:**
 - Every route requires authentication except the OIDC callback — don't add an unauthenticated endpoint without an explicit, reviewed reason.
@@ -174,4 +176,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-08-15
+Last Updated: 2026-09-17
