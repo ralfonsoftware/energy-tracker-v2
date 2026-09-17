@@ -1,5 +1,41 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-15
+# last_updated: 2026-09-17
+# 2026-09-17: story 5-4-tariff-check-reminder moved to done (code review, /bmad-code-review). Blind
+#   Hunter + Acceptance Auditor ran (Edge Case Hunter stalled twice on infra issues -- a rate limit
+#   then two 600s stream-watchdog timeouts -- and was skipped per the workflow's failure-handling
+#   rule). Acceptance Auditor found zero AC violations: all 7 ACs and both resolved ambiguities
+#   (monotonic due-ness ignoring TariffCheckCadenceMonths; card renders nothing with no Tariff
+#   configured) verified correct against the actual code. 5 patch findings applied, mostly test-
+#   quality gaps rather than production bugs: a "boundary" test that didn't test the boundary
+#   (its own algebra reduced to a duplicate of the already-well-in-the-past case); two tests that
+#   recomputed the same formula as the production code instead of asserting a hardcoded expected
+#   value; the Dev Notes' "monotonic, once true stays true" framing overstated the mechanism (a
+#   live recompute, correctly per AC #5, can flip IsDue back to false on a Tariff edit -- comment
+#   corrected, a regression test added for that direction); TariffCheckCard's clickable variant had
+#   no hover/focus-visible state and its button's accessible name was the entire sentence (both
+#   fixed). One finding was initially triaged as a patch (no automated WCAG-contrast check for the
+#   new --tariff-check-card-* tokens) but reclassified to defer mid-implementation on discovering
+#   Story 5.3's own review had already deferred the identical class of finding as a pre-existing,
+#   file-wide gap (tracing back to Story 2.2b, 2026-08-16) rather than something to patch per-story.
+#   3 further findings deferred as pre-existing patterns elsewhere in the codebase (refreshTariffCheck's
+#   silent error/no-data collapse mirrors refreshStatus; TariffCheckCard's locale prop driving only
+#   date formatting mirrors status-card.tsx; the new endpoint's missing OpenAPI metadata matches every
+#   other route in the file). 6 findings dismissed as noise (mostly spec-compliant-by-design behavior
+#   misread as bugs, or already-discussed tradeoffs from the story's own Dev Notes). Full backend
+#   suite green (296 Application + 174 Api.Tests, re-verified after patches), full frontend suite
+#   green (310/310), dotnet build/tsc -b/oxlint all clean.
+# 2026-09-15: story 5-4-tariff-check-reminder moved to review (dev-story implementation complete).
+#   All 9 tasks done, all 7 ACs satisfied. Household.TariffCheckCadenceMonths added (default 3, a
+#   real column but deliberately not read by the monotonic due-ness computation, per the
+#   resolved-ambiguity discussion in story creation). GetTariffCheckReminder use case (pure,
+#   synchronous, no persisted schedule, AD-7) + GET /api/tariff-check singleton endpoint +
+#   TariffCheckCard rendered on both Dashboard and Tariff Radar. One unplanned fix: 4 pre-existing
+#   Infrastructure.Tests migration-checkpoint tests broke from the new Household column (EF
+#   tracked-insert-at-a-historical-checkpoint issue, same class already documented for BackgroundJob's
+#   Story 3.6 columns) -- fixed with an analogous raw-SQL Household insert helper. Full backend suite
+#   green (609/609), full frontend suite green (310/310), dotnet build/tsc -b/oxlint/vite build all
+#   clean.
+# 2026-09-15: story 5-4-tariff-check-reminder moved to in-progress (dev-story activation)
 # 2026-09-15: story 5-4-tariff-check-reminder created (create-story) -- status set to ready-for-dev.
 #   Epic 5's fourth and final story. Resolved two ambiguities the PRD/epic left open, both confirmed
 #   with Ralf: (1) given AD-7's "zero persisted reminder state" constraint, FR-15's "recurring
@@ -428,7 +464,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-15
+last_updated: 2026-09-17
 # 2026-09-15: story 5-3-two-way-attractiveness-signal moved to review (dev-story implementation
 #   complete). All 7 tasks done: CompareTariff/TariffComparisonResponse extended with
 #   CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math, verified NOT
@@ -1044,7 +1080,7 @@ development_status:
   5-1-tariff-configuration: done
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: done
   5-3-two-way-attractiveness-signal: done
-  5-4-tariff-check-reminder: ready-for-dev
+  5-4-tariff-check-reminder: done
   epic-5-retrospective: optional
 
   epic-6: backlog

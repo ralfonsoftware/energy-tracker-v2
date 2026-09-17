@@ -28,6 +28,13 @@ public class Household
     // Completion Notes.
     public int LowConfidenceGapDays { get; set; } = 45;
 
+    // Story 5.4 AC #2 — satisfies "editable per household" structurally (a real column with a
+    // default), same pattern as the two Story 2.4 columns above. Deliberately NOT read by
+    // GetTariffCheckReminder's due-ness computation — the reminder gate is monotonic (once due,
+    // stays due forever), not a cyclic cadence, per AD-7's zero-persisted-reminder-state
+    // constraint (confirmed with Ralf during story creation; see story 5.4 Dev Notes).
+    public int TariffCheckCadenceMonths { get; set; } = 3;
+
     // Portable EF Core concurrency token (AD-4) — guards two concurrent Yearly Baseline edits
     // from both succeeding. Household's first Version column; see HouseholdInvite.cs for the
     // established precedent this copies. Also covers the two Story 2.4 columns above — no new

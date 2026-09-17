@@ -10,6 +10,7 @@ import { SmartPlugImportPage } from '@/components/smart-plug-import/smart-plug-i
 import { registerOfflineSync } from '@/lib/meter-reading-sync'
 import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import { fetchCurrentStatus, type StatusDto } from '@/lib/status-api'
+import { fetchTariffCheckReminder, type TariffCheckReminderDto } from '@/lib/tariff-check-api'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -48,6 +49,7 @@ function App() {
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [status, setStatus] = useState<StatusDto | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
+  const [tariffCheck, setTariffCheck] = useState<TariffCheckReminderDto | null>(null)
 
   // Tracks the last Status value the entrance/specular-sweep animation already played for, in a
   // ref that lives here (App never unmounts) rather than inside StatusCard/DashboardPage (which
@@ -79,6 +81,18 @@ function App() {
       setStatus(null)
     } finally {
       setStatusLoading(false)
+    }
+  }, [])
+
+  // Story 5.4 (FR-15, AD-7): the reminder is a pure live computation, no separate loading flag —
+  // TariffCheckCard already renders nothing for null, whether that means "loading" or "no Tariff
+  // configured yet" (AC #3), so no extra skeleton state is needed here, unlike StatusCard.
+  const refreshTariffCheck = useCallback(async () => {
+    try {
+      const result = await fetchTariffCheckReminder()
+      setTariffCheck(result)
+    } catch {
+      setTariffCheck(null)
     }
   }, [])
 
@@ -182,7 +196,8 @@ function App() {
     }
     void refreshOpenRegressionPrompt()
     void refreshStatus()
-  }, [state.status, refreshOpenRegressionPrompt, refreshStatus])
+    void refreshTariffCheck()
+  }, [state.status, refreshOpenRegressionPrompt, refreshStatus, refreshTariffCheck])
 
   useEffect(() => {
     if (state.status === 'unauthenticated') {
@@ -277,6 +292,8 @@ function App() {
       <TariffRadarPage
         locale={state.household.locale}
         householdCurrency={state.household.currency}
+        tariffCheck={tariffCheck}
+        onTariffCheckChanged={refreshTariffCheck}
         onBack={() => setView('dashboard')}
         onTrendHistoryClick={() => setView('trendHistory')}
         onSettingsClick={() => setView('settings')}
@@ -293,6 +310,7 @@ function App() {
       household={state.household}
       status={status}
       statusLoading={statusLoading}
+      tariffCheck={tariffCheck}
       playStatusEntranceAnimation={playStatusEntranceAnimation}
       logSheetOpen={logSheetOpen}
       onLogSheetOpenChange={handleLogSheetOpenChange}

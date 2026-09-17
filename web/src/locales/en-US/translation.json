@@ -340,5 +340,10 @@
         "bonusNormalizedDetail": "Based on the candidate's ongoing rate at your actual pace of {{kwh}} kWh/yr."
       }
     }
+  },
+  "tariffCheck": {
+    "due": "Tariff check — worth a look. Your contract's minimum term has ended or is ending soon, so it may be worth comparing rates again.",
+    "notDue": "Tariff check — nothing due right now. Next check around {{date}}.",
+    "openLabel": "Tariff check, open Tariff Radar"
   }
 }

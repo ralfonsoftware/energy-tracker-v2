@@ -14,6 +14,9 @@ interface TariffHistoryListProps {
   // entry exists yet, without a second duplicate "get current tariff" HTTP round trip — reuses
   // this list's own already-fetched page data instead.
   onLoaded?: (page: TariffHistoryPageDto) => void
+  // Story 5.4 (AC #5): editing ContractStartDate/ContractPeriodMonths on the current Tariff can
+  // change the Tariff Check reminder's due-ness, so a save here must also refresh it.
+  onTariffMutated?: () => void
 }
 
 const PAGE_SIZE = 20
@@ -21,7 +24,7 @@ const PAGE_SIZE = 20
 // Card-list shape mirrors MeterReadingsCard's table+pagination composition (this repo's
 // established list-of-history-entries pattern) — no mockup exists for this story's Configuration/
 // history surface (Scope Reality Check).
-export function TariffHistoryList({ locale, refreshNonce, onLoaded }: TariffHistoryListProps) {
+export function TariffHistoryList({ locale, refreshNonce, onLoaded, onTariffMutated }: TariffHistoryListProps) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [data, setData] = useState<TariffHistoryPageDto | null>(null)
@@ -193,6 +196,7 @@ export function TariffHistoryList({ locale, refreshNonce, onLoaded }: TariffHist
           onSaved={() => {
             setEditing(null)
             load(page)
+            onTariffMutated?.()
           }}
         />
       )}

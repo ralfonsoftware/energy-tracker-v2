@@ -337,6 +337,7 @@ builder.Services.AddScoped<CreateTariff>();
 builder.Services.AddScoped<GetTariffHistory>();
 builder.Services.AddScoped<EditTariff>();
 builder.Services.AddScoped<CompareTariff>();
+builder.Services.AddScoped<GetTariffCheckReminder>();
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.

@@ -34,6 +34,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -57,6 +58,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -79,6 +81,7 @@ describe('DashboardPage', () => {
         household={household}
         status={null}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -102,6 +105,7 @@ describe('DashboardPage', () => {
         household={household}
         status={null}
         statusLoading={true}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -126,6 +130,7 @@ describe('DashboardPage', () => {
         household={household}
         status={null}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -152,6 +157,7 @@ describe('DashboardPage', () => {
         household={household}
         status={null}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -178,6 +184,7 @@ describe('DashboardPage', () => {
         household={household}
         status={null}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -204,6 +211,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -247,6 +255,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -268,6 +277,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -311,6 +321,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -333,6 +344,7 @@ describe('DashboardPage', () => {
         household={household}
         status={null}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -354,6 +366,7 @@ describe('DashboardPage', () => {
         household={household}
         status={status}
         statusLoading={false}
+        tariffCheck={null}
         playStatusEntranceAnimation={true}
         logSheetOpen={false}
         onLogSheetOpenChange={noop}
@@ -368,5 +381,54 @@ describe('DashboardPage', () => {
     )
 
     expect(screen.queryByText('Status calculation')).not.toBeInTheDocument()
+  })
+
+  it('renders the Tariff Check card after the Status card when a reminder is due, and not at all when tariffCheck is null', async () => {
+    const status: StatusDto = { status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }
+    const { rerender } = render(
+      <DashboardPage
+        household={household}
+        status={status}
+        statusLoading={false}
+        tariffCheck={{ isDue: true, gateOpensAtUtc: '2026-06-01T00:00:00+00:00' }}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
+        onSmartPlugImportClick={noop}
+      />,
+    )
+
+    const statusHeadline = await screen.findByText('Quiet week.')
+    const tariffCheckButton = screen.getByText(/worth a look/i)
+    expect(
+      statusHeadline.compareDocumentPosition(tariffCheckButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    rerender(
+      <DashboardPage
+        household={household}
+        status={status}
+        statusLoading={false}
+        tariffCheck={null}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
+        onSmartPlugImportClick={noop}
+      />,
+    )
+
+    expect(screen.queryByText(/worth a look/i)).not.toBeInTheDocument()
   })
 })

@@ -146,6 +146,23 @@ public static class TariffEndpoints
             }
         });
 
+        // Singleton resource, not a collection (consistent with /api/status, /api/session — Consistency
+        // Conventions). 200 with a null body when no current Tariff exists (AC #3) — same "is there
+        // one?" shape as GET /api/status and POST /api/tariffs/compare.
+        api.MapGet("/tariff-check", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            GetTariffCheckReminder getTariffCheckReminder,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            var result = await getTariffCheckReminder.ExecuteAsync(householdId, cancellationToken);
+            return Results.Ok(result is null ? null : ToTariffCheckResponse(result));
+        });
+
         return api;
     }
 
@@ -199,6 +216,9 @@ public static class TariffEndpoints
             IsBonusIncludedWorthSwitching: result.IsBonusIncludedWorthSwitching,
             IsBonusNormalizedWorthSwitching: result.IsBonusNormalizedWorthSwitching,
             IsLowConfidence: result.IsLowConfidence);
+
+    private static TariffCheckResponse ToTariffCheckResponse(TariffCheckReminderResult result) =>
+        new(result.IsDue, result.GateOpensAtUtc);
 }
 
 public record CreateTariffRequest(decimal MonthlyBaseFee, decimal PricePerKwh, string Currency, DateTimeOffset ContractStartDate, int ContractPeriodMonths);
@@ -256,3 +276,5 @@ public record TariffComparisonResponse(
     bool IsBonusIncludedWorthSwitching,
     bool IsBonusNormalizedWorthSwitching,
     bool IsLowConfidence);
+
+public record TariffCheckResponse(bool IsDue, DateTimeOffset GateOpensAtUtc);

@@ -6,6 +6,8 @@ import { LogReadingSheet } from '@/components/meter-reading/log-reading-sheet'
 import { MeterRegressionPromptDialog } from '@/components/meter-reading/meter-regression-prompt-dialog'
 import type { MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import type { StatusDto } from '@/lib/status-api'
+import type { TariffCheckReminderDto } from '@/lib/tariff-check-api'
+import { TariffCheckCard } from '@/components/tariff/tariff-check-card'
 import { StatusCard } from './status-card'
 import { StatusDetailDialog } from './status-detail-dialog'
 import { NavChrome } from './nav-chrome'
@@ -19,6 +21,7 @@ interface DashboardPageProps {
   household: DashboardHousehold
   status: StatusDto | null
   statusLoading: boolean
+  tariffCheck: TariffCheckReminderDto | null
   playStatusEntranceAnimation: boolean
   logSheetOpen: boolean
   onLogSheetOpenChange: (open: boolean) => void
@@ -32,9 +35,8 @@ interface DashboardPageProps {
 }
 
 // The composed real Dashboard (mockups/key-dashboard.html): Status card as the first,
-// highest-visual-weight element (AC #1, #10), the primary Log Reading action, and the bottom nav
-// chrome. Deliberately does NOT render a Tariff Check prompt card — its due-date gating (FR-15)
-// is Epic 5, not built yet; confirmed with Ralf during dev-story activation. InviteGeneratePanel
+// highest-visual-weight element (AC #1, #10), then the quiet Tariff Check prompt card (FR-15,
+// Story 5.4), the primary Log Reading action, and the bottom nav chrome. InviteGeneratePanel
 // (Story 1.8) is intentionally NOT rendered here either — it lived on this surface only because
 // it predated a real Settings page; a code review of this story relocated it to SettingsPage so
 // it stops competing with the Status card for visual weight (AC #10).
@@ -42,6 +44,7 @@ export function DashboardPage({
   household,
   status,
   statusLoading,
+  tariffCheck,
   playStatusEntranceAnimation,
   logSheetOpen,
   onLogSheetOpenChange,
@@ -133,6 +136,8 @@ export function DashboardPage({
         emptyStateAction={showEmptyState ? logReadingSheet : undefined}
         detailTrigger={detailTrigger}
       />
+
+      <TariffCheckCard reminder={tariffCheck} locale={household.locale} onClick={onTariffRadarClick} />
 
       {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}
 
