@@ -143,6 +143,44 @@ describe('TariffHistoryList', () => {
     expect(screen.getByRole('heading', { name: 'Edit Tariff entry' })).toBeInTheDocument()
   })
 
+  it('saving an edit reloads the list and fires onTariffMutated (Story 5.4 AC #5)', async () => {
+    const item = {
+      id: '66666666-6666-6666-6666-666666666666',
+      monthlyBaseFee: 12.5,
+      pricePerKwh: 0.32,
+      currency: 'EUR',
+      contractStartDate: '2099-01-01T00:00:00+00:00',
+      contractPeriodMonths: 12,
+      version: 1,
+      isCurrent: true,
+      effectiveUntil: null,
+      corrections: [],
+    }
+    const page = { items: [item], totalCount: 1, page: 1, pageSize: 20 }
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'PUT') {
+        return Promise.resolve(jsonResponse({ ...item, version: 2 }))
+      }
+      if (url.startsWith('/api/tariffs')) {
+        return Promise.resolve(jsonResponse(page))
+      }
+      return Promise.resolve(new Response(null, { status: 200 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const onTariffMutated = vi.fn()
+    const user = userEvent.setup()
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} onTariffMutated={onTariffMutated} />)
+
+    await user.click(await screen.findByRole('button', { name: /Edit Tariff entry starting/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await vi.waitFor(() => expect(onTariffMutated).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/tariffs\?/), expect.anything())
+  })
+
   it('pagination buttons are disabled appropriately for a single page', async () => {
     const item = {
       id: '44444444-4444-4444-4444-444444444444',

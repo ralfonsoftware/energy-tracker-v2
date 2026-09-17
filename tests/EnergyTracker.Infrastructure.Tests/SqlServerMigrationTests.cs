@@ -37,6 +37,18 @@ public class SqlServerMigrationTests : IAsyncLifetime
             VALUES ({job.Id}, {job.HouseholdId}, {job.JobType}, {(int)job.Status}, {job.CreatedAtUtc}, {job.CompletedAtUtc})
             """, cancellationToken);
 
+    // Story 5.4 added TariffCheckCadenceMonths to Household. Same reasoning as
+    // InsertBackgroundJobPreStory36Async above: tests seeding a Household at a migration
+    // checkpoint before this column existed can't use EF's current-model tracked insert (it would
+    // reference a column absent from the physical schema at that point in history) — every other
+    // column here has a DB-level default (or is nullable), so this raw INSERT only needs to supply
+    // the four that don't.
+    private static async Task InsertHouseholdPreStory54Async(EnergyTrackerDbContext dbContext, Guid id, string locale, string currency, DateTimeOffset createdAtUtc, CancellationToken cancellationToken) =>
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [Households] ([Id], [Locale], [Currency], [CreatedAtUtc])
+            VALUES ({id}, {locale}, {currency}, {createdAtUtc})
+            """, cancellationToken);
+
     [Fact]
     public async Task SqlServer_migrations_apply_cleanly_to_a_real_database()
     {
@@ -73,10 +85,10 @@ public class SqlServerMigrationTests : IAsyncLifetime
         await migrator.MigrateAsync("20260820102449_AddSmartPlugImportGaps", TestContext.Current.CancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = now });
+        // Raw insert (not tracked EF Add) — see InsertHouseholdPreStory54Async's own comment.
         // Committed alone, ahead of the raw BackgroundJob inserts below, whose HouseholdId FK
         // requires the row to already exist (not merely tracked).
-        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await InsertHouseholdPreStory54Async(dbContext, householdId, "en-US", "USD", now, TestContext.Current.CancellationToken);
         var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = now };
         dbContext.Rooms.Add(room);
         var powerPoint = new PowerPoint { Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Fridge", CreatedAtUtc = now };
@@ -228,10 +240,10 @@ public class SqlServerMigrationTests : IAsyncLifetime
         await migrator.MigrateAsync("20260824100241_AddMeterReadingMainMeterReadingTimestampIndex", TestContext.Current.CancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = now });
+        // Raw insert (not tracked EF Add) — see InsertHouseholdPreStory54Async's own comment.
         // Committed alone, ahead of the raw BackgroundJob inserts below, whose HouseholdId FK
         // requires the row to already exist (not merely tracked).
-        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await InsertHouseholdPreStory54Async(dbContext, householdId, "en-US", "USD", now, TestContext.Current.CancellationToken);
         var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = now };
         dbContext.Rooms.Add(room);
         var powerPoint = new PowerPoint { Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Fridge", CreatedAtUtc = now };

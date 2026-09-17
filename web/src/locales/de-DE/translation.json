@@ -340,5 +340,10 @@
         "bonusNormalizedDetail": "Basierend auf dem laufenden Tarif des Kandidaten bei deinem tatsächlichen Verbrauch von {{kwh}} kWh/Jahr."
       }
     }
+  },
+  "tariffCheck": {
+    "due": "Tarifcheck — ein Blick lohnt sich. Die Mindestvertragslaufzeit ist beendet oder endet bald, daher könnte ein neuer Tarifvergleich sinnvoll sein.",
+    "notDue": "Tarifcheck — aktuell nichts fällig. Nächster Check etwa am {{date}}.",
+    "openLabel": "Tarifcheck, Tarifradar öffnen"
   }
 }

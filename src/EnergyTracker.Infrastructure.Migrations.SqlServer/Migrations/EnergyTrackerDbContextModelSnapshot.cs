@@ -165,6 +165,11 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                         .HasColumnType("int")
                         .HasDefaultValue(45);
 
+                    b.Property<int>("TariffCheckCadenceMonths")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
+
                     b.Property<decimal>("TrendingThresholdKwh")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(18, 2)

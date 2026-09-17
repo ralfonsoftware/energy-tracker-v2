@@ -438,4 +438,45 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         bodyB!.Currency.ShouldBe("USD");
         bodyB.CurrentAnnualCost.ShouldBe(12487.50m);
     }
+
+    [Fact]
+    public async Task GET_tariff_check_returns_a_null_body_when_no_current_Tariff_exists()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await client.GetAsync("/api/tariff-check", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GET_tariff_check_returns_200_with_a_computed_result_once_a_current_Tariff_exists()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+        // Fixed date and a hardcoded expected GateOpensAtUtc (not the production formula
+        // recomputed), so a wrong constant or flipped sign would actually fail this test:
+        // 2020-01-15 + 12 months = 2021-01-15 (minimum term end), minus 3 months = 2020-10-15.
+        var contractStartDate = new DateTimeOffset(2020, 1, 15, 0, 0, 0, TimeSpan.Zero);
+        await PostTariffAsync(client, 12.50m, 0.3200m, "EUR", contractStartDate, contractPeriodMonths: 12);
+
+        var response = await client.GetAsync("/api/tariff-check", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<TariffCheckResponse>(TestContext.Current.CancellationToken);
+        body.ShouldNotBeNull();
+        // Minimum term ended years ago -> monotonic gate stays open (AC #4).
+        body.IsDue.ShouldBeTrue();
+        body.GateOpensAtUtc.ShouldBe(new DateTimeOffset(2020, 10, 15, 0, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_reading_the_Tariff_check_reminder()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.GetAsync("/api/tariff-check", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
 }

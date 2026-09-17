@@ -39,6 +39,9 @@ public class HouseholdConfiguration : IEntityTypeConfiguration<Household>
         builder.Property(h => h.LowConfidenceGapDays)
             .HasDefaultValue(45);
 
+        builder.Property(h => h.TariffCheckCadenceMonths)
+            .HasDefaultValue(3);
+
         builder.Property(h => h.Version)
             .IsConcurrencyToken();
 

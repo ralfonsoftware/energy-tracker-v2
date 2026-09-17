@@ -235,6 +235,7 @@ describe('App', () => {
       mockFetchRoutes([
         { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
         { method: 'GET', url: '/api/status', respond: () => jsonResponse({ status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }) },
+        { method: 'GET', url: '/api/tariff-check', respond: () => jsonResponse(null) },
         { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
         { method: 'GET', url: '/api/status/history', respond: () => jsonResponse([]) },
         { method: 'GET', url: '/api/meter-readings?page=1&pageSize=20', respond: () => jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }) },
@@ -257,6 +258,7 @@ describe('App', () => {
       mockFetchRoutes([
         { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
         { method: 'GET', url: '/api/status', respond: () => jsonResponse({ status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }) },
+        { method: 'GET', url: '/api/tariff-check', respond: () => jsonResponse(null) },
         { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
         { method: 'GET', url: '/api/status/history', respond: () => jsonResponse([]) },
         { method: 'GET', url: '/api/meter-readings?page=1&pageSize=20', respond: () => jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }) },
@@ -461,6 +463,21 @@ describe('App', () => {
       await user.click(screen.getByRole('button', { name: 'Save reading' }))
 
       await vi.waitFor(() => expect(statusCallCount).toBe(2))
+    })
+  })
+
+  describe('Tariff Check reminder (Story 5.4)', () => {
+    it('renders the Dashboard TariffCheckCard when GET /api/tariff-check returns a due reminder', async () => {
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD' }) },
+        { method: 'GET', url: '/api/status', respond: () => jsonResponse(null) },
+        { method: 'GET', url: '/api/tariff-check', respond: () => jsonResponse({ isDue: true, gateOpensAtUtc: '2026-06-01T00:00:00+00:00' }) },
+        { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
+      ])
+
+      render(<App />)
+
+      expect(await screen.findByText(/worth a look/i)).toBeInTheDocument()
     })
   })
 })
