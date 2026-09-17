@@ -461,6 +461,26 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.Database.GetCommandTimeout().ShouldBe(180);
     }
 
+    [Fact]
+    public async Task AddAsync_raises_the_command_timeout_past_the_30s_ADO_NET_default()
+    {
+        // spec-db-command-timeout-scope: the incident fix's 120s headroom used to be set globally
+        // in Program.cs's ConfigureDbContext; it now lives only on the DbContext scope used by the
+        // Smart Plug import write path, set inside AddAsyncCore before its own SaveChangesAsync.
+        // Same reasoning/pattern as UpdateMappingAsync's own 180s assertion above — this asserts the
+        // timeout the repository configures, not query duration itself.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var import = MakeImport(householdId, backgroundJobId);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.AddAsync(import, [], TestContext.Current.CancellationToken);
+
+        dbContext.Database.GetCommandTimeout().ShouldBe(120);
+    }
+
     private static async Task<(Guid JobId, Guid ImportId)> SeedJobAndImportAsync(
         EnergyTrackerDbContext dbContext, Guid householdId, BackgroundJobStatus jobStatus, SmartPlugImportStatus importStatus,
         DateTimeOffset? jobCompletedAtUtc, CancellationToken cancellationToken)

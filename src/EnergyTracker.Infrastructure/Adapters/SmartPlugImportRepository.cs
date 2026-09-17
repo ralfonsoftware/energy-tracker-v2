@@ -88,6 +88,20 @@ public class SmartPlugImportRepository(
         SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken,
         SmartPlugReadingCorrection? boundaryCorrection)
     {
+        // spec-db-command-timeout-scope: the app-wide 30s->120s CommandTimeout bump this incident
+        // fix originally lived in Program.cs's ConfigureDbContext (SqlServer branch — confirmed live
+        // in production 2026-09-05 against Basic-tier Azure SQL hitting 100% DTU during a large
+        // SmartPlugReadings import; the Postgres branch never had its own incident, it just mirrored
+        // the same number precautionarily) has been narrowed to here, the one path that actually
+        // needed the headroom. Set first, before anything else in this method runs, so every
+        // EF-generated command this job's scoped dbContext issues from here on — the boundary
+        // correction's ExecuteUpdateAsync/RecordAsync below, this method's own SaveChangesAsync, and
+        // (AD-6: one job, one DI scope, one worker) CompleteSmartPlugImportProcessing's later
+        // AddGapsAsync/RecomputeAsync calls on this same instance — gets the full 120s. Same
+        // per-call pattern UpdateMappingAsync already uses above (that path keeps its own separate
+        // 180s; it is not affected by or a source of this 120s).
+        dbContext.Database.SetCommandTimeout(TimeSpan.FromSeconds(120));
+
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         if (boundaryCorrection is not null)

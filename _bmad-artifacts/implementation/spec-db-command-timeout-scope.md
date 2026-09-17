@@ -2,9 +2,10 @@
 title: 'Scope elevated SQL CommandTimeout to the Smart Plug import write path, not the whole DbContext'
 type: 'bugfix'
 created: '2026-09-17'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
 context: []
+baseline_commit: 'b52170686bfd35c23475a4fa26d5cdb7cc0419ed'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
@@ -44,9 +45,9 @@ context: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/EnergyTracker.Api/Program.cs` -- Remove `.CommandTimeout(120)` from both provider branches in `ConfigureDbContext`, restoring the ADO.NET/Npgsql default -- closes the "every query app-wide gets 120s" exposure.
-- [ ] `src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs` -- Add `dbContext.Database.SetCommandTimeout(TimeSpan.FromSeconds(120))` at the top of `AddAsyncCore`, before its `SaveChangesAsync` -- restores the headroom for exactly the path the 2026-09-05 incident needed it for.
-- [ ] `tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs` -- Add a test asserting `dbContext.Database.GetCommandTimeout()` is `120` after `AddAsyncCore` runs, and (new) a test on a non-import repository (e.g. `MeterReadingRepositoryTests`) asserting the DbContext's command timeout is *not* elevated -- proves both halves of the scoping.
+- [x] `src/EnergyTracker.Api/Program.cs` -- Remove `.CommandTimeout(120)` from both provider branches in `ConfigureDbContext`, restoring the ADO.NET/Npgsql default -- closes the "every query app-wide gets 120s" exposure.
+- [x] `src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs` -- Add `dbContext.Database.SetCommandTimeout(TimeSpan.FromSeconds(120))` at the top of `AddAsyncCore`, before its `SaveChangesAsync` -- restores the headroom for exactly the path the 2026-09-05 incident needed it for.
+- [x] `tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs` -- Add a test asserting `dbContext.Database.GetCommandTimeout()` is `120` after `AddAsyncCore` runs, and (new) a test on a non-import repository (e.g. `MeterReadingRepositoryTests`) asserting the DbContext's command timeout is *not* elevated -- proves both halves of the scoping.
 
 **Acceptance Criteria:**
 - Given the `sqlserver` or `postgres` provider branch in `Program.cs`, when `ConfigureDbContext` runs, then the resulting `DbContextOptions` no longer sets an explicit `CommandTimeout` (defaults apply).
@@ -59,3 +60,29 @@ context: []
 - `dotnet test tests/EnergyTracker.Infrastructure.Tests --filter "FullyQualifiedName~SmartPlugImportRepositoryTests"` -- expected: all pass, including the new `AddAsyncCore` timeout assertion.
 - `dotnet test tests/EnergyTracker.Infrastructure.Tests --filter "FullyQualifiedName~MeterReadingRepositoryTests"` -- expected: passes, including the new non-elevated-timeout assertion.
 - `dotnet build` -- expected: no warnings/errors.
+
+## Suggested Review Order
+
+**Scoping the elevated timeout to `AddAsyncCore`**
+
+- Entry point: the 120s timeout now set at the top of the method, before anything else this job's scoped DbContext does — including the boundary-correction commands review round 1 caught it missing.
+  [`SmartPlugImportRepository.cs:103`](../../src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs#L103)
+
+- `UpdateMappingAsync`'s existing 180s call — the reference pattern this change mirrors, unchanged.
+  [`SmartPlugImportRepository.cs:443`](../../src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs#L443)
+
+**Removing the app-wide default**
+
+- SqlServer branch: `.CommandTimeout(120)` removed, comment rewritten to point at the new scoped call site and disclaim `UpdateMappingAsync`'s separate 180s.
+  [`Program.cs:132`](../../src/EnergyTracker.Api/Program.cs#L132)
+
+- Postgres branch: `.CommandTimeout(120)` and its "precautionary, not incident-evidenced" caveat removed — that caveat now lives at the scoped call site instead.
+  [`Program.cs:128`](../../src/EnergyTracker.Api/Program.cs#L128)
+
+**Tests proving the scoping boundary**
+
+- Proves `AddAsyncCore` still gets 120s after the removal.
+  [`SmartPlugImportRepositoryTests.cs:465`](../../tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs#L465)
+
+- Proves an ordinary repository's DbContext no longer inherits 120s from the removed global setting.
+  [`MeterReadingRepositoryTests.cs:216`](../../tests/EnergyTracker.Infrastructure.Tests/MeterReadingRepositoryTests.cs#L216)
