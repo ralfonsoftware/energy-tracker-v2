@@ -333,3 +333,13 @@ A Household member can create, edit, and delete Rooms, Power Points, and Devices
 **Consequences (testable):**
 - The toggle controls whether archived Rooms/Power Points/Devices render in the tree at all, versus the current always-visible-with-badge behavior.
 - Toggling hide-archived is a view filter only — it never changes the underlying soft-delete/reassignment behavior FR-28 already defines.
+
+### FR-33: Logoff / Account Switching
+
+A Household member can log off from a dedicated, always-reachable control. Logoff performs full federated sign-out: it ends the local app session and, via RP-initiated logout, the session at the configured OIDC provider, then returns the member to the login step — so the next login can pick a different account instead of silently re-authenticating the same one.
+
+**Consequences (testable):**
+- Logoff ends both the app's session cookie and the OIDC provider's session (RP-initiated logout / `end_session_endpoint`); a subsequent login is not silently completed by an still-active provider session.
+- If the configured OIDC provider does not support RP-initiated logout, logoff falls back to local-session-only — the member is warned this may not fully sign them out of the identity provider.
+- Any unsynced offline-queued Meter Readings (AD-16 IndexedDB queue) are flushed or explicitly surfaced before logoff completes — they never silently carry over and get attributed to whichever Household the next logged-in account belongs to.
+- The control is reachable from every authenticated screen (not buried in a rarely visited settings sub-page), consistent with this being a routine action for shared/multi-account devices, not an edge case.

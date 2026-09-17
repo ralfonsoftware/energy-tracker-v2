@@ -6,7 +6,7 @@
   - [title: Energy Tracker v2 PRD
 status: final
 created: 2026-08-08
-updated: 2026-08-26](#title-energy-tracker-v2-prd-status-final-created-2026-08-08-updated-2026-08-26)
+updated: 2026-09-17](#title-energy-tracker-v2-prd-status-final-created-2026-08-08-updated-2026-09-17)
   - [0. Document Purpose](./0-document-purpose.md)
   - [1. Vision](./1-vision.md)
   - [2. Target User](./2-target-user.md)
@@ -53,6 +53,7 @@ updated: 2026-08-26](#title-energy-tracker-v2-prd-status-final-created-2026-08-0
       - [FR-27: Household Member Invitation](./4-features.md#fr-27-household-member-invitation)
       - [FR-28: Room / Power Point / Device Management](./4-features.md#fr-28-room-power-point-device-management)
       - [FR-29: Structure Editor Archived-Item Visibility Toggle](./4-features.md#fr-29-structure-editor-archived-item-visibility-toggle)
+      - [FR-33: Logoff / Account Switching](./4-features.md#fr-33-logoff-account-switching)
   - [Cross-Cutting NFRs](./cross-cutting-nfrs.md)
   - [Constraints and Guardrails](./constraints-and-guardrails.md)
   - [5. Non-Goals (Explicit)](./5-non-goals-explicit.md)

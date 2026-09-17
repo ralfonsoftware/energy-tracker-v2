@@ -2,9 +2,9 @@
 
 Establishes the buildable/deployable skeleton (the architecture's Structural Seed) and lets the first Household come into existence: a fresh deployment routes an authenticated visitor into Household creation, existing members can invite others, and the Room → Power Point → Device tagging scaffold used by later epics is manageable. Every subsequent epic depends on this one; it depends on nothing.
 
-**FRs covered:** FR-26, FR-27, FR-28, FR-29
+**FRs covered:** FR-26, FR-27, FR-28, FR-29, FR-33 (added 2026-09-17)
 **NFRs:** NFR2 (hosting cost-efficiency), NFR3 (auth), NFR4 (tenant isolation), NFR5 (i18n), NFR11 (docs as onboarding path), NFR12 (privacy), NFR14 (cost)
-**Architecture:** Structural Seed, AD-1, AD-2, AD-3, AD-10, AD-13, AD-15, AD-17, AD-18, AD-19, Consistency Conventions, Stack
+**Architecture:** Structural Seed, AD-1, AD-2, AD-3, AD-10, AD-13, AD-15, AD-16 (offline queue drain on logoff), AD-17, AD-18, AD-19, Consistency Conventions, Stack
 **UX-DRs:** UX-DR1 (token foundation), UX-DR12 (Onboarding/Settings surfaces), UX-DR16 (accessibility baseline)
 
 ## Story 1.1: Deployable Application Skeleton (Local Dev & Self-Host)
@@ -323,3 +323,35 @@ So that the Container App and CI no longer depend on a shared SQL password as a 
 **Given** local self-host (`docker-compose.sqlserver.yml`)
 **When** inspected after this story
 **Then** it is unchanged — still a plain containerized SQL Server on `sa`/password, since Entra-only authentication is an Azure SQL Database feature that doesn't apply to it
+
+## Story 1.12: Logoff / Account Switching
+
+*(added 2026-09-17, new FR-33)* As a Household member,
+I want a dedicated, always-reachable logoff control that fully signs me out — including at the identity provider,
+So that I can switch accounts on a shared device without the OIDC provider silently re-authenticating whoever was logged in before.
+
+**Acceptance Criteria:**
+
+**Given** an authenticated Household member on any screen of the app
+**When** they look for a way to log off
+**Then** the control is reachable directly, not buried behind multiple navigation steps — consistent with logoff being a routine action on shared/multi-account devices, not a rare edge case (FR-33)
+
+**Given** a Household member triggers logoff
+**When** the configured OIDC provider supports RP-initiated logout (`end_session_endpoint`)
+**Then** the app clears its own server-side session cookie *and* redirects through the provider's `end_session_endpoint`, ending the provider's session too, before returning the member to the login step — a subsequent login is not silently completed by a still-active provider session (FR-33, AD-17)
+
+**Given** a Household member triggers logoff
+**When** the configured OIDC provider does not advertise/support RP-initiated logout
+**Then** the app falls back to clearing only its own local session cookie, and the member is shown a clear warning that they may still be signed in at the identity provider (FR-33)
+
+**Given** unsynced Meter Readings queued locally in IndexedDB (AD-16's offline queue) at the moment logoff is triggered
+**When** logoff proceeds
+**Then** the app either flushes them to the server first (if connectivity allows) or explicitly surfaces them to the member before completing logoff — they are never silently discarded or carried over to attribute against whichever Household the next logged-in account belongs to (FR-33)
+
+**Given** the session cookie itself
+**When** logoff completes
+**Then** no token or session artifact readable by the SPA is ever exposed in the process — the browser only ever held the httpOnly session cookie, consistent with AD-17's existing guarantee, and it is cleared via the framework's `SignOutAsync` (not a bespoke client-side-only delete) — correct and complete for this app's stateless, self-contained cookie design, which has no separate server-side session-revocation store (confirmed with Winston, AD-17 architecture consult, 2026-09-17)
+
+**Given** a member who has just logged off
+**When** the redirect completes
+**Then** they land on the login step ready to authenticate again (as the same or a different account), never a broken or blank page
