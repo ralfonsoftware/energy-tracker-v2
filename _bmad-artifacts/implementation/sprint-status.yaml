@@ -1,5 +1,16 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-17
+# 2026-09-17: epic-5 retrospective run (/bmad-retrospective), scope = Epic 5 (4/4 stories) + Story
+#   1.12 (late Epic-1 addition, never separately retro'd). epic-5-retrospective -> done; epic-1 flipped
+#   back to done (1.12 was its only open item). 3 epic-4-retro action items for epic 5 (AuditCorrection/
+#   AD-4 2nd-consumer check, BonusDecayNormalizer/AD-5 1st-consumer check, AD-21 permission check) closed
+#   done -- all held or were not applicable. Epic-4's i18n/unmounted-guard checklist item also closed done
+#   -- zero recurrence across epic 5/1.12. 4 new action items added: verify IAiPlausibilityClient/AD-8 at
+#   Story 6.2 kickoff (its first real consumer); 2 non-blocking checklist reminders (capture all old field
+#   values before a repository write in multi-field edits; test lock-gate bypass via a different field) --
+#   both drawn from real bugs found in Story 5.1's code review; and the WCAG-contrast-automation gap
+#   escalated from a 3-cycle defer streak (2.2b, 5.3, 5.4) to a real owned action item, per Ralf's decision.
+#   Full retro doc: epic-5-retro-2026-09-17.md.
 # 2026-09-17: story 1-12-logoff-account-switching moved to done (code review). Resolved the AC #4
 #   decision-needed finding by household-tagging the offline queue (offline-queue.ts/meter-reading-
 #   sync.ts/logoff.ts) so flushQueue refuses to post an entry under a different Household's session --
@@ -1072,7 +1083,7 @@ tracking_system: file-system
 story_location: "{project-root}/_bmad-artifacts/implementation"
 
 development_status:
-  epic-1: in-progress
+  epic-1: done
   1-1-deployable-application-skeleton-local-dev-self-host: done
   1-2-azure-infrastructure-as-code-resource-deployment-pipeline: done
   1-3-ci-build-test-cd-deploy-pipeline-app-to-azure: done
@@ -1123,7 +1134,7 @@ development_status:
   5-2-candidate-tariff-comparison-bonus-decay-normalized-savings: done
   5-3-two-way-attractiveness-signal: done
   5-4-tariff-check-reminder: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-6: backlog
   6-1-event-logging: backlog
@@ -1149,23 +1160,23 @@ action_items:
   - epic: 4
     action: "Add non-blocking checklist reminders to dev-story/review: verify locale/date/number formatting goes through Intl.* (never hardcoded); verify effect cleanup/unmounted-guards on async operations (uploads, polling, fetches)"
     owner: "story authors/reviewers"
-    status: open
-    note: "2026-09-11 epic-4 retro. i18n-hardcoding recurred 3x (3.6, 4.1, 4.2) and missing-unmounted-guard bugs recurred 3x (3.5, 3.6, 4.3) — always caught in review, never reached production, so a lightweight non-blocking reminder rather than a hard gate."
+    status: done
+    note: "2026-09-11 epic-4 retro. i18n-hardcoding recurred 3x (3.6, 4.1, 4.2) and missing-unmounted-guard bugs recurred 3x (3.5, 3.6, 4.3) — always caught in review, never reached production, so a lightweight non-blocking reminder rather than a hard gate. Closed 2026-09-17 (epic-5/1.12 retro) — zero recurrence of either pattern across any Epic 5 or Story 1.12 review finding."
   - epic: 5
     action: "At Story 5.1 kickoff, verify the AuditCorrection/IAuditCorrectionRecorder + AD-4 concurrency abstraction (built generic in Story 2.8) holds up unmodified for Tariff — its second real consumer after Meter Reading"
     owner: "story author (create-story)"
-    status: open
-    note: "2026-09-11 epic-4 retro, next-epic prep."
+    status: done
+    note: "2026-09-11 epic-4 retro, next-epic prep. Closed 2026-09-17 (epic-5 retro) — held, needed one additive IAuditCorrectionRecorder port method (GetLatestPerFieldForEntitiesAsync) for Tariff's 5 independently-correctable fields; MeterReading's existing single-field usage untouched."
   - epic: 5
     action: "At Story 5.2 kickoff, verify Domain.Calculations.BonusDecayNormalizer (AD-5) as its first real consumer — nothing has called it yet"
     owner: "story author (create-story)"
-    status: open
-    note: "2026-09-11 epic-4 retro, next-epic prep."
+    status: done
+    note: "2026-09-11 epic-4 retro, next-epic prep. Closed 2026-09-17 (epic-5 retro) — verified line-for-line against mockups/key-tariff-radar.html's own worked numbers before being trusted."
   - epic: 5
     action: "For any Epic 5 story touching production writes, verify AD-21's actual Azure permission grants against the real operation early, not after deploy"
     owner: "story author/dev"
-    status: open
-    note: "2026-09-11 epic-4 retro, next-epic prep. Learned from PR #40's CREATE TABLE permission gap between AD-21's least-privilege grants and Story 3.9's EFCore.BulkExtensions adoption."
+    status: done
+    note: "2026-09-11 epic-4 retro, next-epic prep. Closed 2026-09-17 (epic-5 retro) as not-applicable — no Epic 5 story added new bulk-write or infra surface; Tariff CRUD used the existing, already-provisioned EF Core write path."
   - epic: 1
     action: "Add a required, blocking 'verified against the real deployed environment' AC for any story touching auth, ingress, proxy config, or the deploy pipeline"
     owner: "story authors/reviewers"
@@ -1244,3 +1255,23 @@ action_items:
     owner: "John (epic definition)/Sally (UX placement)"
     status: done
     note: "John's half done 2026-08-23 — epic-4-trend-history-per-plug-insight.md updated (Stories 4.1/4.3 + header), cross-referenced from epic-2's Story 2.8 section, epic-list.md, and 2-8's own review-findings entry. Sally's half done 2026-08-23 — new mockups/key-trend-history.html (Dark+Light) places the absorbed Meter Readings list as a third card between the Trend chart and the Room->Power Point->Device tree, collapsed by default, reusing 2.8's row content/edit dialog unmodified; EXPERIENCE.md (IA row, new Component Patterns row, State Patterns row) and DESIGN/components.md (new component section) updated and cross-linked; .memlog.md entry added. Unblocks Story 4.1 drafting on the UX side — action item #1/#2 (recompute-race fix) is the remaining gate."
+  - epic: 5
+    action: "At Story 6.2 kickoff, explicitly verify IAiPlausibilityClient's no-op-when-unconfigured degradation (AD-8) — its first real consumer, mirroring how 5.1/5.2 kickoff-verified AuditCorrection/BonusDecayNormalizer"
+    owner: "story author (create-story)"
+    status: open
+    note: "2026-09-17 epic-5/1.12 retro, next-epic prep."
+  - epic: 5
+    action: "Add a non-blocking checklist reminder for multi-field edit use cases: capture every 'old' field value into a local before any repository write call, not just the first one touched"
+    owner: "story authors/reviewers"
+    status: open
+    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's EditTariff read 'old' values after the repository update call — EF Core's identity map returned the same tracked instance, so audit-correction rows briefly recorded old == new. Only caught by a real-DbContext API test, not the mocked unit test."
+  - epic: 5
+    action: "Add a non-blocking checklist reminder for any 'lock field X unless condition Y' gate: explicitly test bypass via a different field's edit in the same or a sequential request"
+    owner: "story authors/reviewers"
+    status: open
+    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's locked-price-field override could be bypassed by pairing a ContractStartDate change with a price edit in the same request, evaluated against the stale pre-edit date."
+  - epic: 5
+    action: "Build an automated WCAG contrast-ratio check (unit test or lint step) covering every existing --color-* token pair (Status triad, --attractiveness-*, --tariff-check-card-*)"
+    owner: "Winston/Murat"
+    status: open
+    note: "2026-09-17 epic-5/1.12 retro. Escalated from defer to a real, owned action item after three consecutive retro cycles (Story 2.2b 2026-08-16, Story 5.3 2026-09-15, Story 5.4 2026-09-17) deferred the identical gap as 'pre-existing.' No further deferring — Ralf's decision."
