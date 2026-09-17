@@ -4,7 +4,9 @@ import { IDBFactory } from 'fake-indexeddb'
 import { enqueue, listPending } from './offline-queue'
 import { checkPendingReadingsBeforeLogoff } from './logoff'
 
-const reading = { kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' }
+const householdId = '11111111-1111-1111-1111-111111111111'
+const otherHouseholdId = '22222222-2222-2222-2222-222222222222'
+const reading = { householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' }
 
 function jsonResponse(body: object, status = 200) {
   return new Response(JSON.stringify(body), { status })
@@ -32,7 +34,7 @@ describe('checkPendingReadingsBeforeLogoff', () => {
     const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ id: 'r1', kwhValue: reading.kwhValue, readingTimestamp: reading.readingTimestamp })))
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await checkPendingReadingsBeforeLogoff()
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
 
     expect(result.pendingCount).toBe(0)
     expect(await listPending()).toEqual([])
@@ -45,7 +47,7 @@ describe('checkPendingReadingsBeforeLogoff', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await checkPendingReadingsBeforeLogoff()
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
 
     expect(result.pendingCount).toBe(1)
     expect(fetchMock).not.toHaveBeenCalled()
@@ -56,7 +58,7 @@ describe('checkPendingReadingsBeforeLogoff', () => {
     stubOnline(true)
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))))
 
-    const result = await checkPendingReadingsBeforeLogoff()
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
 
     expect(result.pendingCount).toBe(1)
     expect(await listPending()).toEqual([reading])
@@ -66,8 +68,22 @@ describe('checkPendingReadingsBeforeLogoff', () => {
     stubOnline(true)
     vi.stubGlobal('fetch', vi.fn())
 
-    const result = await checkPendingReadingsBeforeLogoff()
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
 
     expect(result.pendingCount).toBe(0)
+  })
+
+  it('AC #4: never flushes or counts a reading queued by a different Household — leaves it queued untouched', async () => {
+    const otherHouseholdReading = { ...reading, householdId: otherHouseholdId, idempotencyKey: 'key-2' }
+    await enqueue(otherHouseholdReading)
+    stubOnline(true)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
+
+    expect(result.pendingCount).toBe(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(await listPending()).toEqual([otherHouseholdReading])
   })
 })

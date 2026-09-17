@@ -73,6 +73,7 @@ export function DashboardPage({
   // populated card), so the sheet/trigger is never duplicated.
   const logReadingSheet = (
     <LogReadingSheet
+      householdId={household.id}
       trigger={
         <Button variant="glass-primary">
           <Plus className="size-4" aria-hidden="true" />

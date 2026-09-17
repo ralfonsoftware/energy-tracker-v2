@@ -49,9 +49,47 @@ public class SessionEndpointsTests
         result.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task Reports_no_federated_logout_support_when_the_end_session_endpoint_is_whitespace_only()
+    {
+        var options = new OpenIdConnectOptions
+        {
+            ConfigurationManager = new FakeConfigurationManager(new OpenIdConnectConfiguration { EndSessionEndpoint = "   " }),
+        };
+
+        var result = await SessionEndpoints.ResolveSupportsFederatedLogoutAsync(options, TestContext.Current.CancellationToken);
+
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Reports_no_federated_logout_support_instead_of_throwing_when_the_discovery_fetch_fails()
+    {
+        // A transient IdP-unreachable failure (e.g. cold start before the cache is first populated)
+        // must degrade this one signal to "unsupported," not fail the whole /api/session request.
+        var options = new OpenIdConnectOptions
+        {
+            ConfigurationManager = new FakeThrowingConfigurationManager(),
+        };
+
+        var result = await SessionEndpoints.ResolveSupportsFederatedLogoutAsync(options, TestContext.Current.CancellationToken);
+
+        result.ShouldBeFalse();
+    }
+
     private sealed class FakeConfigurationManager(OpenIdConnectConfiguration configuration) : IConfigurationManager<OpenIdConnectConfiguration>
     {
         public Task<OpenIdConnectConfiguration> GetConfigurationAsync(CancellationToken cancel) => Task.FromResult(configuration);
+
+        public void RequestRefresh()
+        {
+        }
+    }
+
+    private sealed class FakeThrowingConfigurationManager : IConfigurationManager<OpenIdConnectConfiguration>
+    {
+        public Task<OpenIdConnectConfiguration> GetConfigurationAsync(CancellationToken cancel) =>
+            throw new InvalidOperationException("IDX20803: Unable to obtain configuration from: 'https://issuer.example/.well-known/openid-configuration'.");
 
         public void RequestRefresh()
         {

@@ -156,7 +156,7 @@ describe('SettingsPage', () => {
       // The flush attempt fails (simulating offline/transient failure) — the queued reading
       // survives, which is exactly what AC #4 requires to be surfaced explicitly.
       stubFetch(() => jsonResponse({ detail: 'unreachable' }, 503))
-      await enqueue({ kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
+      await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
       const restoreLocation = stubLocation()
       renderSettingsPage(true)
 

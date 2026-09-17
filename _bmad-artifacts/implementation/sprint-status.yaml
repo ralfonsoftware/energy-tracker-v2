@@ -1,5 +1,18 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-17
+# 2026-09-17: story 1-12-logoff-account-switching moved to done (code review). Resolved the AC #4
+#   decision-needed finding by household-tagging the offline queue (offline-queue.ts/meter-reading-
+#   sync.ts/logoff.ts) so flushQueue refuses to post an entry under a different Household's session --
+#   closes the cross-Household misattribution mechanism the original design only disclosed via a
+#   confirm dialog. Applied 5 more patches: an unhandled-rejection fix so an IndexedDB failure can't
+#   permanently strand a member in the logoff dialog, a try/catch around SessionEndpoints.cs's OIDC
+#   discovery fetch (was 500ing the whole /api/session request on a transient IdP failure), an
+#   IsNullOrWhiteSpace fix for EndSessionEndpoint, a stale comment fix, and a loading affordance on the
+#   confirm button. Full backend (619/619) and frontend (321/321) suites pass; tsc -b/oxlint clean. Per
+#   this project's live-verification gate (any OIDC-touching change), re-ran the live logoff/re-auth
+#   round trip against the real dev identity provider after the SessionEndpoints.cs patch -- confirmed
+#   supportsFederatedLogout still resolves true and the full round trip still completes cleanly. 3
+#   findings deferred (see deferred-work.md); 5 dismissed as noise/already-accepted trade-offs.
 # 2026-09-17: story 1-12-logoff-account-switching moved to review (dev-story). Implemented the
 #   SupportsFederatedLogout signal on /api/session (via IOptionsMonitor<OpenIdConnectOptions> in
 #   SessionEndpoints.cs directly -- no Program.cs change needed, simpler than the story's original
@@ -1071,7 +1084,7 @@ development_status:
   1-9-room-power-point-device-management: done
   1-10-structure-editor-archived-item-visibility-toggle: done
   1-11-azure-sql-entra-id-only-authentication: done
-  1-12-logoff-account-switching: review
+  1-12-logoff-account-switching: done
   epic-1-retrospective: done
 
   epic-2: done

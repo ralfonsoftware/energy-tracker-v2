@@ -46,6 +46,7 @@
       "confirmDescription": "You'll be signed out of Energy Tracker on this device.",
       "cancel": "Cancel",
       "confirm": "Yes, log off",
+      "checking": "Checking…",
       "queueWarningTitle": "Unsynced readings",
       "queueWarningDescription_one": "{{count}} Meter Reading is still waiting to sync and hasn't been saved yet. Logging off now leaves it queued on this device until you (or whoever logs in next) reconnect.",
       "queueWarningDescription_other": "{{count}} Meter Readings are still waiting to sync and haven't been saved yet. Logging off now leaves them queued on this device until you (or whoever logs in next) reconnects.",

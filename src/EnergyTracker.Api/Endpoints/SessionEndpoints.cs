@@ -3,6 +3,7 @@ using EnergyTracker.Infrastructure;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace EnergyTracker.Api.Endpoints;
 
@@ -47,8 +48,21 @@ public static class SessionEndpoints
             return false;
         }
 
-        var configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
-        return !string.IsNullOrEmpty(configuration.EndSessionEndpoint);
+        // A discovery fetch failure (IdP unreachable, e.g. on cold start before any successful
+        // fetch populates the cache) must not fail the whole /api/session request — it only means
+        // this one signal degrades to "unsupported," the same graceful fallback AC #3 already
+        // requires for a provider that genuinely lacks RP-initiated logout.
+        OpenIdConnectConfiguration configuration;
+        try
+        {
+            configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        {
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(configuration.EndSessionEndpoint);
     }
 }
 

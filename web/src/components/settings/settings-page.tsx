@@ -26,8 +26,10 @@ interface SettingsPageProps {
 }
 
 // FR-33/AC #1-#4: the three logoff dialog steps this control can walk through, in order —
-// 'confirm' always shown first, then at most one of the two warnings depending on what the
-// pre-logoff checks find. 'closed' is the resting state.
+// 'confirm' always shown first, then zero, one, or both warnings in sequence depending on what
+// the pre-logoff checks find (a member with both queued readings and no federated-logout support
+// sees 'queue-warning' first, then 'federated-warning' after confirming past it). 'closed' is the
+// resting state.
 type LogoffStep = 'closed' | 'confirm' | 'queue-warning' | 'federated-warning'
 
 // Not yet the full Settings page EXPERIENCE.md's Information Architecture eventually describes
@@ -73,16 +75,23 @@ export function SettingsPage({ householdId, supportsFederatedLogout, onBack, onT
   // discarding it or letting it carry over to whichever Household logs in next on this device.
   const handleConfirmLogoff = async () => {
     setLogoffChecking(true)
-    const { pendingCount } = await checkPendingReadingsBeforeLogoff()
-    setLogoffChecking(false)
+    try {
+      const { pendingCount } = await checkPendingReadingsBeforeLogoff(householdId)
 
-    if (pendingCount > 0) {
-      setPendingReadingCount(pendingCount)
-      setLogoffStep('queue-warning')
-      return
+      if (pendingCount > 0) {
+        setPendingReadingCount(pendingCount)
+        setLogoffStep('queue-warning')
+        return
+      }
+
+      proceedPastQueueCheck()
+    } catch {
+      // Couldn't verify the offline queue (e.g. IndexedDB unavailable) — stay on the confirm
+      // step rather than risk silently logging off past an unknown queue state (AC #4). The
+      // `finally` below always re-enables the buttons so the member can retry or cancel.
+    } finally {
+      setLogoffChecking(false)
     }
-
-    proceedPastQueueCheck()
   }
 
   return (
@@ -118,7 +127,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, onBack, onT
                   {t('settings.logoff.cancel')}
                 </Button>
                 <Button variant="glass-confirm" onClick={handleConfirmLogoff} disabled={logoffChecking}>
-                  {t('settings.logoff.confirm')}
+                  {logoffChecking ? t('settings.logoff.checking') : t('settings.logoff.confirm')}
                 </Button>
               </DialogFooter>
             </>

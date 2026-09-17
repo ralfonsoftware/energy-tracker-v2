@@ -51,6 +51,9 @@ function App() {
   const [smartPlugImportReturnView, setSmartPlugImportReturnView] = useState<'dashboard' | 'trendHistory'>('dashboard')
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
   const [openRegressionPrompt, setOpenRegressionPrompt] = useState<MeterRegressionPromptDto | null>(null)
+  // Plain derived value (not narrowable inline inside a dependency array literal) — extracted so
+  // the offline-sync effect below can depend on it directly instead of a re-computed expression.
+  const readyHouseholdId = state.status === 'ready' ? state.household.id : null
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [status, setStatus] = useState<StatusDto | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -183,18 +186,18 @@ function App() {
   useEffect(() => {
     // Only once a Household session is confirmed — flushing against an unauthenticated or
     // still-resolving session would just churn on 401s until the queued reading's owner is known.
-    if (state.status !== 'ready') {
+    if (readyHouseholdId === null) {
       return
     }
 
     // A reading synced from the offline queue in the background can itself raise a regression
     // (AC #1) or change Status — nothing else re-polls for either, so both are wired to the same
     // refresh a foreground save/resolve triggers.
-    return registerOfflineSync(() => {
+    return registerOfflineSync(readyHouseholdId, () => {
       void refreshOpenRegressionPrompt()
       void refreshStatus()
     })
-  }, [state.status, refreshOpenRegressionPrompt, refreshStatus])
+  }, [readyHouseholdId, refreshOpenRegressionPrompt, refreshStatus])
 
   useEffect(() => {
     if (state.status !== 'ready') {
