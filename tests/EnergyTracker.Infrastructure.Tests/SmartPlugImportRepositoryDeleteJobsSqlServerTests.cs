@@ -297,4 +297,74 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         survivingReadings.Count.ShouldBe(readingCount);
         survivingReadings.ShouldAllBe(r => r.SmartPlugImportId == null);
     }
+
+    // CAP-6 (spec-3-10-cleanup-sweep-async, 2026-09-17): SweepExpiredAsync's new bounded-per-call
+    // path added a provider-specific concurrency guard (sp_getapplock on SqlServer,
+    // pg_try_advisory_xact_lock on Postgres) with no prior SqlServer coverage at all — unlike
+    // DeleteJobsAsync above, SweepExpiredAsync wasn't previously exercised against this file's
+    // provider anywhere. This is the one targeted test proving the actual provider-specific branch
+    // (TryAcquireHouseholdSweepLockSqlServerAsync's sp_getapplock call) behaves correctly against
+    // the real production provider, mirroring SmartPlugImportRepositoryTests.cs's Postgres
+    // equivalent (SweepExpiredAsync_no_ops_instead_of_blocking_when_another_poll_already_holds_the_
+    // households_sweep_lock) rather than duplicating this file's full DeleteJobsAsync suite.
+    [Fact]
+    public async Task SweepExpiredAsync_no_ops_instead_of_blocking_when_another_poll_already_holds_the_households_sweep_lock_on_SqlServer()
+    {
+        var householdId = Guid.NewGuid();
+        Guid jobId, importId;
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+                CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
+            };
+            seedDbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: "Fridge");
+            import.CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31);
+            seedDbContext.SmartPlugImports.Add(import);
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            jobId = job.Id;
+            importId = import.Id;
+        }
+
+        await using var holderDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await using var holderTransaction = await holderDbContext.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        // ToListAsync(), not SingleAsync() — this DECLARE/EXEC/SELECT batch is non-composable SQL,
+        // and SqlQuery<T>().SingleAsync() throws trying to compose (wrap it in a subquery); see the
+        // matching fix in TryAcquireHouseholdSweepLockSqlServerAsync.
+        var lockResults = await holderDbContext.Database
+            .SqlQuery<int>($"""
+                DECLARE @LockResult int;
+                EXEC @LockResult = sp_getapplock
+                    @Resource = {householdId.ToString()},
+                    @LockMode = 'Exclusive',
+                    @LockOwner = 'Transaction',
+                    @LockTimeout = 0;
+                SELECT @LockResult AS "Value";
+                """)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        lockResults.Single().ShouldBeGreaterThanOrEqualTo(0);
+
+        await using var pollingDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var pollingRepository = new SmartPlugImportRepository(pollingDbContext, new AuditCorrectionRecorder(pollingDbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await pollingRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        // The polling call no-opped (lock unavailable) rather than blocking on or deleting rows the
+        // holder transaction still has locked.
+        (await pollingDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        (await pollingDbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+
+        await holderTransaction.RollbackAsync(TestContext.Current.CancellationToken);
+
+        // With the holder's lock released, the next poll succeeds normally.
+        await pollingRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        (await pollingDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await pollingDbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
 }

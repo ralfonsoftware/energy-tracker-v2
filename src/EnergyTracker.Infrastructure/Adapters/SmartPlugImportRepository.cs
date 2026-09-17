@@ -678,7 +678,14 @@ public class SmartPlugImportRepository(
         // comparing against the job's original (parse-time) CompletedAtUtc would sweep a
         // just-resolved import on the very next list read whenever the original parse happened
         // more than 30 days ago.
-        var eligible = await (
+        //
+        // CAP-6 (2026-09-17): ordered oldest-eligible-first, with a `job.Id` tiebreaker for
+        // determinism when two rows share the exact same completedAtUtc (plausible for imports
+        // parsed in the same batch) — and bounded to DeleteBatchSize rows at the QUERY level via
+        // `Take` before `ToListAsync`, not a client-side `.Take()` on an already-materialized list.
+        // This sweep runs inline on every GET poll, so even the SELECT that decides what's eligible
+        // must stay bounded regardless of total backlog size, not just the delete work that follows.
+        var boundedEligible = await (
             from job in dbContext.BackgroundJobs
             where job.HouseholdId == householdId && job.JobType == JobTypes.ProcessSmartPlugImport
             join import in dbContext.SmartPlugImports on job.Id equals import.BackgroundJobId into importGroup
@@ -688,17 +695,157 @@ public class SmartPlugImportRepository(
                 && (job.Status == BackgroundJobStatus.Failed
                     || (job.Status == BackgroundJobStatus.Completed && import != null
                         && (import.Status == SmartPlugImportStatus.Completed || import.Status == SmartPlugImportStatus.FlaggedForReview)))
-            select new { BackgroundJobId = job.Id, SmartPlugImportId = (Guid?)(import == null ? null : import.Id) }
-        ).ToListAsync(cancellationToken);
+            orderby completedAtUtc, job.Id
+            select new EligibleRow(job.Id, import == null ? null : import.Id)
+        ).Take(DeleteBatchSize).ToListAsync(cancellationToken);
 
-        if (eligible.Count == 0)
+        if (boundedEligible.Count == 0)
         {
             return;
         }
 
-        var importIds = eligible.Where(x => x.SmartPlugImportId is not null).Select(x => x.SmartPlugImportId!.Value).ToList();
-        var jobIds = eligible.Select(x => x.BackgroundJobId).ToList();
-        await DeleteEligibleAsync(jobIds, importIds, cancellationToken);
+        // Unlike DeleteJobsAsync/DeleteEligibleAsync below (which process every eligible row in one
+        // call), only this already-query-bounded take is even considered for deletion this call —
+        // any remainder is left for the next poll's fresh eligibility query. No persisted cursor is
+        // needed for that resume: a row this call deletes simply stops matching the query next time.
+        await DeleteBoundedChunkAsync(householdId, boundedEligible, cancellationToken);
+    }
+
+    private readonly record struct EligibleRow(Guid BackgroundJobId, Guid? SmartPlugImportId);
+
+    // CAP-6: bounded counterpart to DeleteEligibleAsync, used only by SweepExpiredAsync's per-call-
+    // chunked path above. Guarded by a non-blocking, transaction-scoped per-household advisory lock:
+    // without it, two concurrent GET polls for the same household (e.g. two open tabs) could both
+    // select the same oldest-eligible chunk and race their deletes, with the loser blocking on DB row
+    // locks for the duration of the winner's still-in-flight DetachReadingsForImportAsync loop —
+    // bounded by one chunk's own duration, but still a real, avoidable latency spike for exactly the
+    // population this spec protects. If the lock isn't acquired, another poll for this household is
+    // already mid-chunk; this call no-ops and the next poll (≤8s later) retries against then-current
+    // state.
+    //
+    // Round-2 review finding (Blind Hunter): the lock is acquired FIRST, before measuring reading
+    // counts or packing a chunk — a losing poller must short-circuit as cheaply as possible. The
+    // reading-count GROUP BY below is bounded by import count (≤DeleteBatchSize, inherited from the
+    // caller's query-level Take) but not by reading volume, so running it unconditionally — even for
+    // a call about to lose the lock race — could scan a large volume inline on every contended poll.
+    // Acquiring the lock up front means only the winner ever pays that cost.
+    private async Task DeleteBoundedChunkAsync(Guid householdId, IReadOnlyList<EligibleRow> boundedEligible, CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        if (!await TryAcquireHouseholdSweepLockAsync(householdId, cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var boundedImportIds = boundedEligible.Where(x => x.SmartPlugImportId is not null).Select(x => x.SmartPlugImportId!.Value).ToList();
+
+        var readingCounts = boundedImportIds.Count > 0
+            ? await dbContext.SmartPlugReadings
+                .Where(r => r.SmartPlugImportId != null && boundedImportIds.Contains(r.SmartPlugImportId!.Value))
+                .GroupBy(r => r.SmartPlugImportId!.Value)
+                .ToDictionaryAsync(g => g.Key, g => g.Count(), cancellationToken)
+            : new Dictionary<Guid, int>();
+
+        // Reproduces exactly what DeleteEligibleAsync's own full-sweep packer would yield as its
+        // first chunk: the greedy packer's first boundary depends only on the prefix of importIds up
+        // to whichever cap trips first, never on anything after it — so feeding it just this
+        // already-bounded prefix and taking its first chunk is equivalent, without measuring or
+        // packing a potentially large remaining backlog.
+        var importIdChunk = ChunkImportIdsByReadingVolume(boundedImportIds, readingCounts, DeleteReadingVolumeThreshold, DeleteBatchSize)
+            .FirstOrDefault() ?? [];
+        var importIdChunkSet = importIdChunk.ToHashSet();
+
+        // Import-less Failed jobs (no paired SmartPlugImport row) carry zero reading cost, so every
+        // one in the bounded take clears this call regardless of the import chunk boundary above —
+        // this can, in principle, clear a newer bare-Failed-job row while an older, volume-deferred
+        // import waits for a later call. Accepted: every row still clears within a bounded number of
+        // calls (no permanent starvation), and forcing bare jobs to wait behind volume-bound imports
+        // would only delay free work for no correctness benefit.
+        var jobIdChunk = boundedEligible
+            .Where(x => x.SmartPlugImportId is null || importIdChunkSet.Contains(x.SmartPlugImportId!.Value))
+            .Select(x => x.BackgroundJobId)
+            .ToList();
+
+        await DeleteImportChunkAsync(importIdChunk, cancellationToken);
+
+        // BackgroundJobs last — SmartPlugImport.BackgroundJobId's FK is Restrict, so any paired
+        // import row must already be gone before this delete can succeed. Already bounded to at most
+        // DeleteBatchSize rows by the caller, so unlike DeleteEligibleAsync's own jobIds loop below,
+        // no further internal chunking is needed here.
+        await dbContext.BackgroundJobs
+            .Where(j => jobIdChunk.Contains(j.Id))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    // Non-blocking, transaction-scoped advisory lock keyed by household, used only by
+    // DeleteBoundedChunkAsync above. Scoped to the CURRENT transaction on both providers so it
+    // releases automatically on commit or rollback — no separate unlock call to forget, no risk from
+    // connection pooling returning a connection to the pool while a session-scoped lock is still
+    // held. Provider-specific because neither primitive has a portable EF Core equivalent — same
+    // reason UpsertAwaitingMappingReadingsAsync above branches by provider.
+    private Task<bool> TryAcquireHouseholdSweepLockAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        if (dbContext.Database.IsNpgsql())
+        {
+            return TryAcquireHouseholdSweepLockPostgresAsync(householdId, cancellationToken);
+        }
+
+        if (dbContext.Database.IsSqlServer())
+        {
+            return TryAcquireHouseholdSweepLockSqlServerAsync(householdId, cancellationToken);
+        }
+
+        throw new InvalidOperationException(
+            $"No advisory-lock implementation is defined for database provider '{dbContext.Database.ProviderName}'.");
+    }
+
+    private async Task<bool> TryAcquireHouseholdSweepLockPostgresAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        // pg_try_advisory_xact_lock takes a bigint key; hashtextextended() derives one from the
+        // household Guid's string form using the full 64-bit output (there's no direct Guid-keyed
+        // advisory lock function) — chosen over the plain hashtext()'s 32-bit output for the same
+        // cost, to keep collision probability as low as the primitive allows. A hash collision
+        // between two different households' lock keys would only cause one to transiently no-op this
+        // call's chunk (it self-heals on the next poll), never incorrect data — an acceptable,
+        // extremely low-probability residual, the same class of accepted risk as this file's other
+        // starting-value/evidence-based tuning choices. Parameterized via string interpolation (EF
+        // Core rewrites the hole to a real parameter, never concatenates it — AD-2).
+        return await dbContext.Database
+            .SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock(hashtextextended({householdId.ToString()}, 0)) AS \"Value\"")
+            .SingleAsync(cancellationToken);
+    }
+
+    private async Task<bool> TryAcquireHouseholdSweepLockSqlServerAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        // sp_getapplock is SQL Server's closest non-blocking, transaction-scoped equivalent to
+        // Postgres's pg_try_advisory_xact_lock: @LockTimeout = 0 makes acquisition non-blocking,
+        // @LockOwner = 'Transaction' releases it automatically on commit/rollback. Return code 0 or 1
+        // means acquired; any negative code (timeout, cancel, deadlock, parameter error) means not
+        // acquired — treated the same as "another poll is already mid-chunk" either way.
+        //
+        // Round-2 review finding: this batch (DECLARE/EXEC before the final SELECT) is non-composable
+        // SQL, and SqlQuery<T>().SingleAsync() tries to compose (wrap it as a subquery) to apply its
+        // own TOP/LIMIT — throwing InvalidOperationException on every call. ToListAsync() executes the
+        // raw batch as-is with no composition; taking Single() over the materialized (always
+        // one-row) result client-side avoids it. Caught only once this file gained its first-ever
+        // SqlServer test exercising this method — this exact call would otherwise have thrown on
+        // every SweepExpiredAsync invocation against the real production (SqlServer) database.
+        var lockResults = await dbContext.Database
+            .SqlQuery<int>($"""
+                DECLARE @LockResult int;
+                EXEC @LockResult = sp_getapplock
+                    @Resource = {householdId.ToString()},
+                    @LockMode = 'Exclusive',
+                    @LockOwner = 'Transaction',
+                    @LockTimeout = 0;
+                SELECT @LockResult AS "Value";
+                """)
+            .ToListAsync(cancellationToken);
+        return lockResults.Single() >= 0;
     }
 
     public async Task<int> DeleteJobsAsync(Guid householdId, DateTimeOffset? cutoffUtc, CancellationToken cancellationToken)
@@ -922,31 +1069,16 @@ public class SmartPlugImportRepository(
 
         foreach (var importIdBatch in ChunkImportIdsByReadingVolume(importIds, importReadingCounts, DeleteReadingVolumeThreshold, DeleteBatchSize))
         {
-            await dbContext.SmartPlugImportGaps
-                .Where(g => importIdBatch.Contains(g.SmartPlugImportId))
-                .ExecuteDeleteAsync(cancellationToken);
-
-            // Incident fix round 4: explicitly detach each import's own SmartPlugReading rows in
-            // bounded batches (see DetachReadingsForImportAsync above) before deleting the import
-            // itself — for a terminal-state import this leaves nothing for the FK's SetNull
-            // behavior (Task 3/Story 3.6, AD-20) to do at delete time. It can still be the one doing
-            // real work for a still-Processing/AwaitingPowerPointMapping import (both eligible here
-            // by design): a new SmartPlugReading row inserted concurrently via AddAsyncCore, after
-            // this loop's last batch already observed zero remaining, is missed by this pass and
-            // falls back to the FK cascade — same pre-existing TOCTOU already tracked in
-            // deferred-work.md, narrowed to just the race-window rows, not closed by this fix.
-            foreach (var importId in importIdBatch)
-            {
-                await DetachReadingsForImportAsync(importId, cancellationToken);
-            }
-
-            await dbContext.SmartPlugImports
-                .Where(i => importIdBatch.Contains(i.Id))
-                .ExecuteDeleteAsync(cancellationToken);
+            await DeleteImportChunkAsync(importIdBatch, cancellationToken);
         }
 
         // BackgroundJobs last — SmartPlugImport.BackgroundJobId's FK is Restrict, so any paired
-        // import row must already be gone before this delete can succeed.
+        // import row must already be gone before this delete can succeed. Chunked independently from
+        // the importIds loop above (own DeleteBatchSize-sized batches over the full jobIds list, not
+        // one batch per importIdBatch): jobIds also includes bare Failed jobs with no paired import
+        // at all, which never appear in any importIdBatch (ChunkImportIdsByReadingVolume only ever
+        // packs importIds), so this loop's chunk boundaries are structurally independent of the
+        // import-volume-based ones above and can't be folded into the same per-chunk unit.
         foreach (var jobIdBatch in jobIds.Chunk(DeleteBatchSize))
         {
             await dbContext.BackgroundJobs
@@ -955,5 +1087,36 @@ public class SmartPlugImportRepository(
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    // CAP-6: extracted from DeleteEligibleAsync's own per-chunk loop body so SweepExpiredAsync's
+    // bounded path (DeleteBoundedChunkAsync above) reuses the exact same cascade-bounding delete
+    // order instead of drifting independently — this is the part worth sharing (gaps -> detach ->
+    // imports, the reading-volume-bounded cascade this file's whole incident-fix history is about);
+    // the jobs delete step deliberately stays out of this helper and lives separately in each caller
+    // (see the comment on DeleteEligibleAsync's own jobIds loop above for why).
+    private async Task DeleteImportChunkAsync(IReadOnlyList<Guid> importIds, CancellationToken cancellationToken)
+    {
+        await dbContext.SmartPlugImportGaps
+            .Where(g => importIds.Contains(g.SmartPlugImportId))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        // Incident fix round 4: explicitly detach each import's own SmartPlugReading rows in bounded
+        // batches (see DetachReadingsForImportAsync above) before deleting the import itself — for a
+        // terminal-state import this leaves nothing for the FK's SetNull behavior (Task 3/Story 3.6,
+        // AD-20) to do at delete time. It can still be the one doing real work for a still-
+        // Processing/AwaitingPowerPointMapping import (both eligible for DeleteJobsAsync by design): a
+        // new SmartPlugReading row inserted concurrently via AddAsyncCore, after this loop's last
+        // batch already observed zero remaining, is missed by this pass and falls back to the FK
+        // cascade — same pre-existing TOCTOU already tracked in deferred-work.md, narrowed to just
+        // the race-window rows, not closed by this fix.
+        foreach (var importId in importIds)
+        {
+            await DetachReadingsForImportAsync(importId, cancellationToken);
+        }
+
+        await dbContext.SmartPlugImports
+            .Where(i => importIds.Contains(i.Id))
+            .ExecuteDeleteAsync(cancellationToken);
     }
 }

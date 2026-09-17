@@ -689,6 +689,285 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         (await dbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
     }
 
+    // CAP-6 (2026-09-17): spec-3-10-cleanup-sweep-async — SweepExpiredAsync used to delegate the
+    // entire eligible set to DeleteEligibleAsync in one call, reintroducing (through this automatic
+    // sweep, which runs inline on every GET /api/smart-plug-import-jobs poll) the same "operation
+    // too slow for a synchronous HTTP request" failure mode round-3/CAP-5 fixed for the manual
+    // cleanup button. These tests are the regression guard for the bounded-per-call-chunking fix
+    // (loop 1 of the spec's review found and closed a concurrent-poll gap in the first pass — see
+    // the spec's own Spec Change Log): a backlog bigger than one chunk now takes multiple calls to
+    // clear (oldest-eligible first, via the new `orderby completedAtUtc, job.Id`), a single oversized
+    // import still clears fully within its own one call, a bounded take mixing free (import-less)
+    // and expensive (import-bearing) rows still processes both, and two polls racing on the same
+    // household never double-process or block on each other's row locks.
+
+    [Fact]
+    public async Task SweepExpiredAsync_clears_the_oldest_DeleteBatchSize_chunk_per_call_across_three_calls()
+    {
+        // 2 * DeleteBatchSize + 1 guarantees exactly three calls are needed: the first two calls'
+        // chunks each hit the import-count cap (no readings seeded, so nothing trips the volume cap
+        // first) and clear exactly DeleteBatchSize rows each, leaving one remainder for a third call
+        // — a two-call test alone couldn't distinguish correct chunking from an off-by-one that
+        // happens to still terminate after two calls.
+        const int seedCount = (2 * SmartPlugImportRepository.DeleteBatchSize) + 1;
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        // Ascending CompletedAtUtc across the seed loop, all comfortably older than the cutoff below,
+        // so index order IS oldest-eligible-first order — the exact property the new
+        // `orderby completedAtUtc, job.Id` in SweepExpiredAsync's eligibility query must preserve.
+        var baseline = DateTimeOffset.UtcNow.AddDays(-40);
+        var jobIdsOldestFirst = new List<Guid>(seedCount);
+        var importIdsOldestFirst = new List<Guid>(seedCount);
+        for (var i = 0; i < seedCount; i++)
+        {
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = baseline, CompletedAtUtc = baseline.AddSeconds(i),
+            };
+            dbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
+            import.CompletedAtUtc = baseline.AddSeconds(i);
+            dbContext.SmartPlugImports.Add(import);
+            jobIdsOldestFirst.Add(job.Id);
+            importIdsOldestFirst.Add(import.Id);
+        }
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var cutoffUtc = DateTimeOffset.UtcNow.AddDays(-30);
+
+        await repository.SweepExpiredAsync(householdId, cutoffUtc, TestContext.Current.CancellationToken);
+        var survivingAfterFirstCall = await dbContext.BackgroundJobs
+            .Where(j => jobIdsOldestFirst.Contains(j.Id)).CountAsync(TestContext.Current.CancellationToken);
+        survivingAfterFirstCall.ShouldBe(seedCount - SmartPlugImportRepository.DeleteBatchSize);
+
+        await repository.SweepExpiredAsync(householdId, cutoffUtc, TestContext.Current.CancellationToken);
+        var survivingAfterSecondCall = await dbContext.BackgroundJobs
+            .Where(j => jobIdsOldestFirst.Contains(j.Id)).CountAsync(TestContext.Current.CancellationToken);
+        survivingAfterSecondCall.ShouldBe(seedCount - (2 * SmartPlugImportRepository.DeleteBatchSize));
+        survivingAfterSecondCall.ShouldBe(1);
+        var lastSurvivor = await dbContext.BackgroundJobs
+            .Where(j => jobIdsOldestFirst.Contains(j.Id)).Select(j => j.Id).SingleAsync(TestContext.Current.CancellationToken);
+        lastSurvivor.ShouldBe(jobIdsOldestFirst[^1]); // the single newest row is the only one left
+
+        await repository.SweepExpiredAsync(householdId, cutoffUtc, TestContext.Current.CancellationToken);
+
+        (await dbContext.BackgroundJobs.CountAsync(j => jobIdsOldestFirst.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await dbContext.SmartPlugImports.CountAsync(i => importIdsOldestFirst.Contains(i.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    // Round-2 review finding (Blind Hunter): the three-call test above proves the right NUMBER of
+    // rows clears per call, but that assertion is identical whether DeleteBatchSize is pushed into
+    // the eligibility query as a server-side LIMIT or applied client-side via `.Take()` on an
+    // already-fully-materialized list — exactly the Loop 1 regression (an unbounded SELECT on every
+    // poll) this diff claims to have fixed. Capturing the actual generated SQL text is the only way
+    // to distinguish the two.
+    private sealed class CapturingCommandTextInterceptor : DbCommandInterceptor
+    {
+        private readonly List<string> _commandTexts = [];
+
+        public IReadOnlyList<string> CommandTexts => _commandTexts;
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            lock (_commandTexts)
+            {
+                _commandTexts.Add(command.CommandText);
+            }
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task SweepExpiredAsync_pushes_the_DeleteBatchSize_bound_into_the_eligibility_query_itself()
+    {
+        var householdId = Guid.NewGuid();
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var interceptor = new CapturingCommandTextInterceptor();
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        // Nothing was eligible, so this call issued exactly one command: the eligibility SELECT
+        // itself. It must carry the LIMIT Npgsql generates for a query-level `.Take()` — a
+        // client-side `.Take()` on a materialized list would generate no LIMIT at all here.
+        var eligibilityQueryText = interceptor.CommandTexts.ShouldHaveSingleItem();
+        eligibilityQueryText.ShouldContain("LIMIT", Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task SweepExpiredAsync_clears_a_single_import_whose_own_reading_count_exceeds_the_volume_threshold_in_one_call()
+    {
+        // Mirrors DeleteJobsAsync_bounds_a_single_import_whose_own_reading_count_exceeds_the_volume_
+        // threshold_into_batched_detach_commands below, but through SweepExpiredAsync's new bounded
+        // chunk path: an oversized single import still lands alone in the first (only) chunk
+        // ChunkImportIdsByReadingVolume yields from a bounded prefix, and clears fully in one call —
+        // it is never split across polls, and its own detach loop is still batched, not one
+        // unbounded SetNull cascade.
+        const int readingCount = SmartPlugImportRepository.DeleteReadingVolumeThreshold + 1;
+        var householdId = Guid.NewGuid();
+        Guid jobId, importId;
+        var readingIds = new List<Guid>(readingCount);
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+                CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
+            };
+            seedDbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: "Huge-import");
+            import.CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31);
+            seedDbContext.SmartPlugImports.Add(import);
+            seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            for (var i = 0; i < readingCount; i++)
+            {
+                var reading = MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i));
+                seedDbContext.SmartPlugReadings.Add(reading);
+                readingIds.Add(reading.Id);
+            }
+            await seedDbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            jobId = job.Id;
+            importId = import.Id;
+        }
+
+        // Same 104-command shape as DeleteJobsAsync's equivalent test: 1 gaps delete + ceil(20001/200)
+        // = 101 detach UPDATEs + 1 imports delete + 1 background jobs delete — one call, no split.
+        // The new advisory-lock check runs as a reader query (SqlQuery<bool>), not a non-query
+        // command, so it doesn't add to this count.
+        var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
+        await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        interceptor.CompletedCount.ShouldBe(104);
+        await using var verifyDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        (await verifyDbContext.BackgroundJobs.CountAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImports.CountAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await verifyDbContext.SmartPlugImportGaps.CountAsync(g => g.SmartPlugImportId == importId, TestContext.Current.CancellationToken)).ShouldBe(0);
+        var survivingReadings = await verifyDbContext.SmartPlugReadings
+            .Where(r => readingIds.Contains(r.Id)).ToListAsync(TestContext.Current.CancellationToken);
+        survivingReadings.Count.ShouldBe(readingCount);
+        survivingReadings.ShouldAllBe(r => r.SmartPlugImportId == null);
+    }
+
+    [Fact]
+    public async Task SweepExpiredAsync_clears_both_import_less_Failed_jobs_and_import_bearing_rows_in_one_bounded_take()
+    {
+        // Blind Hunter review finding: the first implementation's bounded take could spend its
+        // DeleteBatchSize row budget on cheap import-less Failed jobs (no paired SmartPlugImport row)
+        // while real imports sat just outside the window, and no test exercised that interaction at
+        // all. Three bare Failed jobs interleaved (oldest-first) with two Completed imports, all well
+        // under DeleteBatchSize, proves both kinds clear correctly together in one call.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var baseline = DateTimeOffset.UtcNow.AddDays(-40);
+
+        var bareFailedJobIds = new List<Guid>();
+        for (var i = 0; i < 3; i++)
+        {
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Failed, CreatedAtUtc = baseline, CompletedAtUtc = baseline.AddSeconds(i * 2),
+            };
+            dbContext.BackgroundJobs.Add(job);
+            bareFailedJobIds.Add(job.Id);
+        }
+
+        var importBearingJobIds = new List<Guid>();
+        var importIds = new List<Guid>();
+        for (var i = 0; i < 2; i++)
+        {
+            var job = new BackgroundJob
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed, CreatedAtUtc = baseline, CompletedAtUtc = baseline.AddSeconds((i * 2) + 1),
+            };
+            dbContext.BackgroundJobs.Add(job);
+            var import = MakeImport(householdId, job.Id, deviceTag: $"Mixed-{i}");
+            import.CompletedAtUtc = baseline.AddSeconds((i * 2) + 1);
+            dbContext.SmartPlugImports.Add(import);
+            importBearingJobIds.Add(job.Id);
+            importIds.Add(import.Id);
+        }
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        (await dbContext.BackgroundJobs.CountAsync(j => bareFailedJobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await dbContext.BackgroundJobs.CountAsync(j => importBearingJobIds.Contains(j.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await dbContext.SmartPlugImports.CountAsync(i => importIds.Contains(i.Id), TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task SweepExpiredAsync_no_ops_instead_of_blocking_when_another_poll_already_holds_the_households_sweep_lock()
+    {
+        // Edge Case Hunter review finding: two concurrent GET polls for the same household (e.g. two
+        // open tabs) could both select the same oldest-eligible chunk and race their deletes, with
+        // the loser blocking on DB row locks for the duration of the winner's still-in-flight detach
+        // loop. Deterministically reproduces the lock contention (rather than racing real threads) by
+        // acquiring the exact same pg_try_advisory_xact_lock this household's chunk would use, from a
+        // separate open transaction/connection, before calling SweepExpiredAsync — proving the second
+        // caller no-ops immediately instead of blocking or double-deleting.
+        var householdId = Guid.NewGuid();
+        Guid jobId, importId;
+
+        await using (var seedDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken))
+        {
+            seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+            var (seededJobId, seededImportId) = await SeedJobAndImportAsync(
+                seedDbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.Completed,
+                jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-31), TestContext.Current.CancellationToken);
+            jobId = seededJobId;
+            importId = seededImportId;
+        }
+
+        await using var holderDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        await using var holderTransaction = await holderDbContext.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        var lockAcquiredByHolder = await holderDbContext.Database
+            .SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock(hashtextextended({householdId.ToString()}, 0)) AS \"Value\"")
+            .SingleAsync(TestContext.Current.CancellationToken);
+        lockAcquiredByHolder.ShouldBeTrue();
+
+        await using var pollingDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
+        var pollingRepository = new SmartPlugImportRepository(pollingDbContext, new AuditCorrectionRecorder(pollingDbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+        await pollingRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        // The polling call no-opped (lock unavailable) rather than blocking on or deleting rows the
+        // holder transaction still has locked.
+        (await pollingDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        (await pollingDbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+
+        await holderTransaction.RollbackAsync(TestContext.Current.CancellationToken);
+
+        // With the holder's lock released, the next poll succeeds normally.
+        await pollingRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
+
+        (await pollingDbContext.BackgroundJobs.SingleOrDefaultAsync(j => j.Id == jobId, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await pollingDbContext.SmartPlugImports.SingleOrDefaultAsync(i => i.Id == importId, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
     // Story 3.10: DeleteJobsAsync is the manual, all-states counterpart to SweepExpiredAsync above.
     // The SweepExpiredAsync tests above are themselves the regression guard confirming the Task 1
     // shared-helper extraction left the automatic sweep's own eligibility behavior unchanged.
