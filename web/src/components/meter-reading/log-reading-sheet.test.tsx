@@ -14,10 +14,12 @@ function jsonResponse(body: object | null, status = 200) {
 // LogReadingSheet is a controlled component (Story 2.3) — this wrapper owns the `open` state the
 // same way App.tsx does, so these tests exercise the same click-to-open/save-to-close behavior as
 // before the controlled-props change.
+const householdId = '11111111-1111-1111-1111-111111111111'
+
 function ControlledLogReadingSheet() {
   const [open, setOpen] = useState(false)
   return (
-    <LogReadingSheet trigger={<button>Log reading</button>} open={open} onOpenChange={setOpen} />
+    <LogReadingSheet householdId={householdId} trigger={<button>Log reading</button>} open={open} onOpenChange={setOpen} />
   )
 }
 
@@ -112,7 +114,15 @@ describe('LogReadingSheet', () => {
     )
     const onSaved = vi.fn()
     const user = userEvent.setup()
-    render(<LogReadingSheet trigger={<button>Log reading</button>} open={true} onOpenChange={() => {}} onSaved={onSaved} />)
+    render(
+      <LogReadingSheet
+        householdId={householdId}
+        trigger={<button>Log reading</button>}
+        open={true}
+        onOpenChange={() => {}}
+        onSaved={onSaved}
+      />,
+    )
 
     await user.type(await screen.findByLabelText('kWh'), '4821.5')
     await user.click(screen.getByRole('button', { name: 'Save reading' }))

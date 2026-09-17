@@ -1,5 +1,46 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-17
+# 2026-09-17: story 1-12-logoff-account-switching moved to done (code review). Resolved the AC #4
+#   decision-needed finding by household-tagging the offline queue (offline-queue.ts/meter-reading-
+#   sync.ts/logoff.ts) so flushQueue refuses to post an entry under a different Household's session --
+#   closes the cross-Household misattribution mechanism the original design only disclosed via a
+#   confirm dialog. Applied 5 more patches: an unhandled-rejection fix so an IndexedDB failure can't
+#   permanently strand a member in the logoff dialog, a try/catch around SessionEndpoints.cs's OIDC
+#   discovery fetch (was 500ing the whole /api/session request on a transient IdP failure), an
+#   IsNullOrWhiteSpace fix for EndSessionEndpoint, a stale comment fix, and a loading affordance on the
+#   confirm button. Full backend (619/619) and frontend (321/321) suites pass; tsc -b/oxlint clean. Per
+#   this project's live-verification gate (any OIDC-touching change), re-ran the live logoff/re-auth
+#   round trip against the real dev identity provider after the SessionEndpoints.cs patch -- confirmed
+#   supportsFederatedLogout still resolves true and the full round trip still completes cleanly. 3
+#   findings deferred (see deferred-work.md); 5 dismissed as noise/already-accepted trade-offs.
+# 2026-09-17: story 1-12-logoff-account-switching moved to review (dev-story). Implemented the
+#   SupportsFederatedLogout signal on /api/session (via IOptionsMonitor<OpenIdConnectOptions> in
+#   SessionEndpoints.cs directly -- no Program.cs change needed, simpler than the story's original
+#   plan), the pre-logoff offline-queue check (logoff.ts), and the reachable Settings logoff control
+#   with its confirm/queue-warning/federated-warning dialog steps. Confirmed the existing /logout
+#   handler (Story 1.5) already implements RP-initiated logout correctly -- no backend change needed
+#   there. Full backend (617/617) and frontend (320/320) suites pass; tsc -b/oxlint clean. Live
+#   Auth0 + Chrome verification performed against the dev tenant: full logoff-then-re-login round
+#   trip confirmed the provider-side session was actually terminated (no silent re-auth), and the
+#   AC #4 unsynced-readings dialog confirmed via an IndexedDB-injected fixture with navigator.onLine
+#   forced false. One deviation from the pre-verification note below: Auth0 showed no logout-consent
+#   interstitial in practice -- went straight to re-authentication, stronger evidence of a correctly
+#   terminated session than the predicted screen would have been; not escalated.
+# 2026-09-17: story 1-12-logoff-account-switching created (create-story) - status set to ready-for-dev.
+#   New FR-33 (Logoff / Account Switching), added to Epic 1 this session via epic-planning doc updates
+#   even though epic-1 had previously reached 'done' -- flipped epic-1 back to in-progress to reflect
+#   this late addition, per the create-story workflow's own suggested resolution for a story added to
+#   a completed epic. Most of the backend federated-logout mechanism already exists from Story 1.5
+#   (AuthEndpoints.cs's /logout already does the two-scheme Results.SignOut); this story's real net-new
+#   surface is a frontend SupportsFederatedLogout signal on /api/session, the logoff control itself
+#   (doesn't exist anywhere in the UI yet), and an offline-queue pre-logoff check reusing existing
+#   offline-queue.ts/meter-reading-sync.ts. Flagged one genuinely open design point in the story's Dev
+#   Notes: neither the epic AC nor AD-17's FR-33 extension note fully resolves how to prevent a queued-
+#   but-unflushed Meter Reading from later attributing to a different Household if a different account
+#   logs in next on the same device -- left as a question for dev-story time rather than improvised here.
+#   Live Auth0/Chrome verification is mandatory per standing project practice, not deferrable, including
+#   a documented expectation (researched during story creation) that Auth0 shows a logout-consent
+#   interstitial given this app's SaveTokens=false config -- expected provider behavior, not a bug.
 # 2026-09-17: story 5-4-tariff-check-reminder moved to done (code review, /bmad-code-review). Blind
 #   Hunter + Acceptance Auditor ran (Edge Case Hunter stalled twice on infra issues -- a rate limit
 #   then two 600s stream-watchdog timeouts -- and was skipped per the workflow's failure-handling
@@ -1031,7 +1072,7 @@ tracking_system: file-system
 story_location: "{project-root}/_bmad-artifacts/implementation"
 
 development_status:
-  epic-1: done
+  epic-1: in-progress
   1-1-deployable-application-skeleton-local-dev-self-host: done
   1-2-azure-infrastructure-as-code-resource-deployment-pipeline: done
   1-3-ci-build-test-cd-deploy-pipeline-app-to-azure: done
@@ -1043,6 +1084,7 @@ development_status:
   1-9-room-power-point-device-management: done
   1-10-structure-editor-archived-item-visibility-toggle: done
   1-11-azure-sql-entra-id-only-authentication: done
+  1-12-logoff-account-switching: done
   epic-1-retrospective: done
 
   epic-2: done

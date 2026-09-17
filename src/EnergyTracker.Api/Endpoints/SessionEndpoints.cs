@@ -1,6 +1,9 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Infrastructure;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace EnergyTracker.Api.Endpoints;
 
@@ -14,20 +17,53 @@ public static class SessionEndpoints
         api.MapGet("/session", async (
             ICurrentHouseholdAccessor householdAccessor,
             EnergyTrackerDbContext dbContext,
+            IOptionsMonitor<OpenIdConnectOptions> oidcOptionsMonitor,
             CancellationToken cancellationToken) =>
         {
+            var oidcOptions = oidcOptionsMonitor.Get(OpenIdConnectDefaults.AuthenticationScheme);
+            var supportsFederatedLogout = await ResolveSupportsFederatedLogoutAsync(oidcOptions, cancellationToken);
+
             var householdId = householdAccessor.HouseholdId;
             if (householdId is null)
             {
-                return Results.Ok(new SessionResponse(HasHousehold: false, HouseholdId: null, Locale: null, Currency: null));
+                return Results.Ok(new SessionResponse(HasHousehold: false, HouseholdId: null, Locale: null, Currency: null, supportsFederatedLogout));
             }
 
             var household = await dbContext.Households.SingleAsync(h => h.Id == householdId, cancellationToken);
-            return Results.Ok(new SessionResponse(HasHousehold: true, household.Id, household.Locale, household.Currency));
+            return Results.Ok(new SessionResponse(HasHousehold: true, household.Id, household.Locale, household.Currency, supportsFederatedLogout));
         });
 
         return api;
     }
+
+    // FR-33/AC #3: reads the OIDC handler's own cached discovery document (the same
+    // ConfigurationManager the login flow already populates — no extra network round trip) rather
+    // than re-implementing discovery. When OIDC is unconfigured, the scheme was never registered
+    // (Program.cs), so IOptionsMonitor.Get returns a default-constructed OpenIdConnectOptions whose
+    // ConfigurationManager is null — that's the "logoff is unreachable anyway" case (Task 1).
+    internal static async Task<bool> ResolveSupportsFederatedLogoutAsync(OpenIdConnectOptions options, CancellationToken cancellationToken)
+    {
+        if (options.ConfigurationManager is null)
+        {
+            return false;
+        }
+
+        // A discovery fetch failure (IdP unreachable, e.g. on cold start before any successful
+        // fetch populates the cache) must not fail the whole /api/session request — it only means
+        // this one signal degrades to "unsupported," the same graceful fallback AC #3 already
+        // requires for a provider that genuinely lacks RP-initiated logout.
+        OpenIdConnectConfiguration configuration;
+        try
+        {
+            configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        {
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(configuration.EndSessionEndpoint);
+    }
 }
 
-public record SessionResponse(bool HasHousehold, Guid? HouseholdId, string? Locale, string? Currency);
+public record SessionResponse(bool HasHousehold, Guid? HouseholdId, string? Locale, string? Currency, bool SupportsFederatedLogout);

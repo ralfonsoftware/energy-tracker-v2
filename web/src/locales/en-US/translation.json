@@ -39,7 +39,22 @@
   },
   "settings": {
     "heading": "Settings",
-    "backToApp": "Go to Energy Tracker"
+    "backToApp": "Go to Energy Tracker",
+    "logoff": {
+      "trigger": "Log off",
+      "confirmTitle": "Log off?",
+      "confirmDescription": "You'll be signed out of Energy Tracker on this device.",
+      "cancel": "Cancel",
+      "confirm": "Yes, log off",
+      "checking": "Checking…",
+      "queueWarningTitle": "Unsynced readings",
+      "queueWarningDescription_one": "{{count}} Meter Reading is still waiting to sync and hasn't been saved yet. Logging off now leaves it queued on this device until you (or whoever logs in next) reconnect.",
+      "queueWarningDescription_other": "{{count}} Meter Readings are still waiting to sync and haven't been saved yet. Logging off now leaves them queued on this device until you (or whoever logs in next) reconnects.",
+      "queueWarningProceed": "Log off anyway",
+      "federatedWarningTitle": "You may still be signed in elsewhere",
+      "federatedWarningDescription": "This identity provider doesn't support signing you out everywhere. Energy Tracker will sign you out here, but you may still be signed in at the identity provider itself.",
+      "federatedWarningProceed": "Continue"
+    }
   },
   "taggingScaffold": {
     "heading": "Rooms, Power Points & Devices",

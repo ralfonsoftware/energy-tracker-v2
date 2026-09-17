@@ -23,6 +23,9 @@ function toDateTimeLocalValue(date: Date): string {
 }
 
 interface LogReadingSheetProps {
+  // Tagged onto the reading if it needs to be queued offline (AC #4, Story 1.12) — lets a later
+  // flush refuse to post it under a different Household's session on this device.
+  householdId: string
   trigger: ReactNode
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -32,7 +35,7 @@ interface LogReadingSheetProps {
   onSaved?: () => void
 }
 
-export function LogReadingSheet({ trigger, open, onOpenChange, onSaved }: LogReadingSheetProps) {
+export function LogReadingSheet({ householdId, trigger, open, onOpenChange, onSaved }: LogReadingSheetProps) {
   const { t, i18n } = useTranslation()
   const [kwhValue, setKwhValue] = useState('')
   const [readingTimestamp, setReadingTimestamp] = useState(() => toDateTimeLocalValue(new Date()))
@@ -64,6 +67,7 @@ export function LogReadingSheet({ trigger, open, onOpenChange, onSaved }: LogRea
 
     try {
       const result = await attemptSend({
+        householdId,
         kwhValue: Number(kwhValue),
         readingTimestamp: new Date(readingTimestamp).toISOString(),
         idempotencyKey,

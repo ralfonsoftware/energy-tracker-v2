@@ -39,7 +39,22 @@
   },
   "settings": {
     "heading": "Einstellungen",
-    "backToApp": "Zu Energy Tracker"
+    "backToApp": "Zu Energy Tracker",
+    "logoff": {
+      "trigger": "Abmelden",
+      "confirmTitle": "Abmelden?",
+      "confirmDescription": "Du wirst auf diesem Gerät bei Energy Tracker abgemeldet.",
+      "cancel": "Abbrechen",
+      "confirm": "Ja, abmelden",
+      "checking": "Wird geprüft…",
+      "queueWarningTitle": "Nicht synchronisierte Zählerstände",
+      "queueWarningDescription_one": "{{count}} Zählerstand wartet noch auf die Synchronisierung und wurde noch nicht gespeichert. Wenn du dich jetzt abmeldest, bleibt er auf diesem Gerät in der Warteschlange, bis du (oder die nächste angemeldete Person) wieder online bist.",
+      "queueWarningDescription_other": "{{count}} Zählerstände warten noch auf die Synchronisierung und wurden noch nicht gespeichert. Wenn du dich jetzt abmeldest, bleiben sie auf diesem Gerät in der Warteschlange, bis du (oder die nächste angemeldete Person) wieder online bist.",
+      "queueWarningProceed": "Trotzdem abmelden",
+      "federatedWarningTitle": "Du bist möglicherweise noch anderswo angemeldet",
+      "federatedWarningDescription": "Dieser Identitätsanbieter unterstützt keine geräteübergreifende Abmeldung. Energy Tracker meldet dich hier ab, du bist aber möglicherweise weiterhin beim Identitätsanbieter selbst angemeldet.",
+      "federatedWarningProceed": "Weiter"
+    }
   },
   "taggingScaffold": {
     "heading": "Räume, Steckdosen & Geräte",

@@ -17,6 +17,7 @@ interface SessionResponse {
   householdId: string | null
   locale: string | null
   currency: string | null
+  supportsFederatedLogout: boolean
 }
 
 type SessionState =
@@ -34,6 +35,10 @@ const INVITE_PATH_PATTERN = /^\/join\/([^/]+)\/?$/
 function App() {
   const { t } = useTranslation()
   const [state, setState] = useState<SessionState>({ status: 'loading' })
+  // Set once from the initial /api/session fetch below, independent of whether a Household exists
+  // yet — Story 1.12's logoff control only becomes reachable once 'ready', but the signal itself
+  // doesn't depend on household state, so it lives outside the SessionState union.
+  const [supportsFederatedLogout, setSupportsFederatedLogout] = useState(false)
   // Local view state, not a URL route — Story 1.9's Settings surface is the first thing reachable
   // via a button rather than a bookmarkable path, matching Story 1.5's "no react-router yet"
   // precedent (see invite-accept-form.tsx's /join/{token} handling for the one existing exception,
@@ -46,6 +51,9 @@ function App() {
   const [smartPlugImportReturnView, setSmartPlugImportReturnView] = useState<'dashboard' | 'trendHistory'>('dashboard')
   const inviteToken = window.location.pathname.match(INVITE_PATH_PATTERN)?.[1] ?? null
   const [openRegressionPrompt, setOpenRegressionPrompt] = useState<MeterRegressionPromptDto | null>(null)
+  // Plain derived value (not narrowable inline inside a dependency array literal) — extracted so
+  // the offline-sync effect below can depend on it directly instead of a re-computed expression.
+  const readyHouseholdId = state.status === 'ready' ? state.household.id : null
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [status, setStatus] = useState<StatusDto | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -146,6 +154,7 @@ function App() {
           return
         }
 
+        setSupportsFederatedLogout(session.supportsFederatedLogout)
         setState(
           session.hasHousehold
             ? {
@@ -177,18 +186,18 @@ function App() {
   useEffect(() => {
     // Only once a Household session is confirmed — flushing against an unauthenticated or
     // still-resolving session would just churn on 401s until the queued reading's owner is known.
-    if (state.status !== 'ready') {
+    if (readyHouseholdId === null) {
       return
     }
 
     // A reading synced from the offline queue in the background can itself raise a regression
     // (AC #1) or change Status — nothing else re-polls for either, so both are wired to the same
     // refresh a foreground save/resolve triggers.
-    return registerOfflineSync(() => {
+    return registerOfflineSync(readyHouseholdId, () => {
       void refreshOpenRegressionPrompt()
       void refreshStatus()
     })
-  }, [state.status, refreshOpenRegressionPrompt, refreshStatus])
+  }, [readyHouseholdId, refreshOpenRegressionPrompt, refreshStatus])
 
   useEffect(() => {
     if (state.status !== 'ready') {
@@ -265,6 +274,7 @@ function App() {
     return (
       <SettingsPage
         householdId={state.household.id}
+        supportsFederatedLogout={supportsFederatedLogout}
         onBack={() => setView('dashboard')}
         onTrendHistoryClick={() => setView('trendHistory')}
         onTariffRadarClick={() => setView('tariffRadar')}

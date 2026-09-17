@@ -36,12 +36,19 @@ export type SendResult = { outcome: 'sent'; reading: MeterReadingDto } | { outco
 // fetch() reject, which both call sites below already treat as "couldn't reach the server."
 const REQUEST_TIMEOUT_MS = 10_000
 
+// householdId is a client-side-only queue tag (AC #4) — never sent on the wire. The API derives
+// the Household from the authenticated session (AD-3), not from client input, so the request body
+// only ever carries the three fields CreateMeterReading actually expects.
 async function post(reading: QueuedMeterReading): Promise<Response> {
   return fetch('/api/meter-readings', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(reading),
+    body: JSON.stringify({
+      kwhValue: reading.kwhValue,
+      readingTimestamp: reading.readingTimestamp,
+      idempotencyKey: reading.idempotencyKey,
+    }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 }
@@ -85,9 +92,14 @@ function isPermanentRejection(status: number): boolean {
 // `onSynced` fires once per successfully-sent reading — a background flush can create a regression
 // prompt (Story 2.3) that nothing else would otherwise re-poll for, so callers that care about
 // state made stale by a queued reading landing (e.g. the open-regression-prompt poll) hook in here.
-export async function flushQueue(onSynced?: () => void): Promise<void> {
+export async function flushQueue(householdId: string, onSynced?: () => void): Promise<void> {
   const pending = await listPending()
   for (const reading of pending) {
+    if (reading.householdId !== householdId) {
+      // Left over from a different Household's session on this device (AC #4) — never post it
+      // under the wrong account. It stays queued until that Household's own session flushes it.
+      continue
+    }
     try {
       const response = await post(reading)
       if (response.ok) {
@@ -109,7 +121,7 @@ export async function flushQueue(onSynced?: () => void): Promise<void> {
 // window-scoped listener plus an app-mount flush is sufficient for this story's AC. Guards
 // against overlapping flushes (e.g. the mount call still in flight when 'online' fires) so two
 // concurrent flushes never race to POST the same queued idempotencyKey at once.
-export function registerOfflineSync(onSynced?: () => void): () => void {
+export function registerOfflineSync(householdId: string, onSynced?: () => void): () => void {
   let flushing = false
 
   const runFlush = () => {
@@ -117,7 +129,7 @@ export function registerOfflineSync(onSynced?: () => void): () => void {
       return
     }
     flushing = true
-    void flushQueue(onSynced).finally(() => {
+    void flushQueue(householdId, onSynced).finally(() => {
       flushing = false
     })
   }

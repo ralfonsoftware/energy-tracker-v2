@@ -6,6 +6,10 @@ export interface QueuedMeterReading {
   kwhValue: number
   readingTimestamp: string
   idempotencyKey: string
+  // Captured at enqueue time from the session that created the reading — lets flushQueue refuse
+  // to post an entry under a *different* Household's session if another account logs in on this
+  // device before the entry syncs (AC #4, Story 1.12's cross-Household misattribution fix).
+  householdId: string
 }
 
 const DB_NAME = 'energy-tracker-offline-queue'

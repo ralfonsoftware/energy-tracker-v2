@@ -18,6 +18,19 @@ public class SessionAndHouseholdCreationTests(EnergyTrackerApiFactory factory) :
         session.HouseholdId.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task GET_api_session_reports_no_federated_logout_support_when_OIDC_is_unconfigured_in_this_test_host()
+    {
+        // EnergyTrackerApiFactory never sets Oidc:Authority/Oidc:ClientId, so Program.cs never
+        // registers the OIDC scheme (Task 1) — the same "logoff unreachable anyway" state a
+        // self-hoster sees before configuring a real provider.
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var session = await client.GetFromJsonAsync<SessionResponse>("/api/session", TestContext.Current.CancellationToken);
+
+        session!.SupportsFederatedLogout.ShouldBeFalse();
+    }
+
     [Theory]
     [InlineData("de-DE", "EUR")]
     [InlineData("en-US", "USD")]
