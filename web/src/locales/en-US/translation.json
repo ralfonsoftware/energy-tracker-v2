@@ -112,6 +112,34 @@
     "savedOffline": "Saved — will sync when you're back online",
     "errorGeneric": "Something went wrong. Please try again."
   },
+  "event": {
+    "entryPointLabel": "Log an Event",
+    "sheetTitle": "Log an Event",
+    "sheetDescription": "Note something unmeasurable that might explain a consumption change.",
+    "descriptionLabel": "What happened",
+    "descriptionPlaceholder": "e.g. cooked 2h, away 2 weeks",
+    "dateTimeLabel": "Date & time",
+    "tagLabel": "Tag (optional)",
+    "noTag": "No tag",
+    "save": "Save event",
+    "saving": "Saving…",
+    "savedConfirmation": "Saved: {{description}}",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "tagLoading": "Loading tags…",
+    "tagLoadFailed": "Tags couldn't be loaded. You can still save without a tag.",
+    "errors": {
+      "description_blank": "Please describe what happened.",
+      "description_too_long": "The description is too long (max 500 characters).",
+      "timestamp_future": "That date is in the future. Check your device's clock.",
+      "timestamp_too_old": "That date is too far in the past.",
+      "tag_pair_mismatch": "The selected tag is incomplete. Please pick it again.",
+      "tag_type_unknown": "That tag type is not supported.",
+      "tag_not_found": "That tag no longer exists. Please pick another one.",
+      "tag_archived": "That tag has been archived. Please pick another one.",
+      "tag_parent_archived": "That tag belongs to an archived Room or Power Point. Please pick another one.",
+      "sessionExpired": "Your session has expired. Please reload the page to sign in again."
+    }
+  },
   "meterRegression": {
     "title": "That reading is lower than the last one",
     "description": "You entered {{kwh}} kWh on {{readingTime}}, but your last reading was {{previousKwh}} kWh on {{previousReadingTime}}. This usually means the meter was reset or it rolled over its digit limit — not that your consumption went backwards. Pick which one happened.",

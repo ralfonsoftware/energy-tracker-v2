@@ -1,5 +1,58 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-17
+# last_updated: 2026-09-18
+# 2026-09-18: story 6-2-event-history-view created (create-story) -- status ready-for-dev. Inserted
+#   between 6.1 and the wattage correlation story, which is RENUMBERED 6.2 -> 6.3: its ACs
+#   ("rendered inline with the Event", "shown without a correlation") already presuppose a surface
+#   that displays Events, which did not exist. 6.3 was still backlog so the renumber cost nothing.
+#   epic-6 file updated to match; two dated historical docs (epic-5-retro-2026-09-17,
+#   implementation-readiness-report-2026-08-22) still say "6.2" for the correlation story and were
+#   deliberately left as point-in-time records. 6-2 carries Story 6.1's deferred time-ordered
+#   Events index (Task 2) and closes 6.1's AC #4 display half.
+# 2026-09-18: story 6-1-event-logging code review complete -- status review -> in-progress. 3 parallel
+#   review layers ran; 17 patches applied (incl. a verified null/omitted-Description 500 -> 400 fix, a
+#   404/409 split for missing vs archived tag targets, an errorCode ProblemDetails contract the SPA
+#   localizes per AD-18, ancestor-archive filtering server-side and in the picker, a SqlServer
+#   EventRepository test pair for AD-2, and AD-3 cross-household coverage). 4 items deferred to
+#   deferred-work.md (a project-wide Npgsql non-zero-offset divergence, DST rewriting, clock-skew
+#   prefill, missing time-ordered index). Live Auth0/Chrome gate CLEARED: real signed-in session,
+#   tagged create 200, AC #4 persistence half confirmed against a live DB (snapshot stayed inert
+#   after archiving the tagged Power Point), confirmation-placement + error-localization + a11y
+#   fixes all confirmed in a real render, no console errors. NOT done: AC #4's display half needs
+#   the Event read path -- follow-up story being created.
+# 2026-09-18: story 6-1-event-logging moved to review (dev-story implementation complete). All 5
+#   tasks done, all 5 ACs satisfied. Event domain entity uses the story's resolved-ambiguity single
+#   discriminator (TaggedEntityType/TaggedEntityId) + by-value TaggedEntityName snapshot (AD-10),
+#   not three nullable FKs. CreateEvent resolves tags via the existing ITaggingScaffoldRepository
+#   (no new per-entity repository), rejects a tag against a missing/already-archived Room/
+#   PowerPoint/Device with a 409 (EventTaggedEntityArchivedException, matching
+#   TaggingScaffoldParentArchivedException's convention, not MeterReadingValidationException's 400
+#   convention), and deliberately never calls IStatusRecomputeService -- confirmed the AD-14
+#   PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests guard test still passes unmodified.
+#   Migration AddEvent added to both provider projects via scripts/add-migration.sh (AD-2). Frontend
+#   Log Event sheet built directly against LogReadingSheet's established visual structure/tokens (no
+#   mockup exists yet for this surface, per EXPERIENCE.md and the story's own Dev Notes precedent) --
+#   plain fetch, deliberately not routed through the Meter-Reading-only offline queue. Topbar gained
+#   a second icon-button entry point; logEventOpen state lifted into App.tsx like logSheetOpen,
+#   including the same UX-DR13 regression-prompt-supersedes-open-sheet behavior (not explicitly
+#   required by the ACs, flagged for review). Manual live-browser verification skipped -- no OIDC
+#   provider configured in this sandboxed environment (same gap noted in Story 4.1), covered instead
+#   by the Api.Tests/component-test suites. Full backend suite green (311 Application + 186 Api + 154
+#   Infrastructure incl. both provider migration tests + 3 Architecture), full frontend suite green
+#   (357/357), dotnet build/tsc -b/oxlint/vite build all clean.
+# 2026-09-18: story 6-1-event-logging created (create-story) -- status set to ready-for-dev; epic-6
+#   flipped backlog -> in-progress (first story in the epic). No mockup exists yet for the Log Event
+#   surface (EXPERIENCE.md flags it as spine-only) -- resolved as lower-risk than the pre-Epic-4
+#   spine-only incident because the surface composes almost entirely from the already-toned
+#   LogReadingSheet pattern; flagged for Ralf as an open question rather than blocking on a fresh
+#   Sally UX pass. Resolved one design ambiguity: Event's optional Room/PowerPoint/Device tag is
+#   modeled as a single TaggedEntityType/TaggedEntityId discriminator pair (matching
+#   AuditCorrection.EntityType's existing precedent), not three separate nullable FK columns as
+#   structural-seed.md's ERD sketches -- flagged for review, cheap to revisit since no other story
+#   depends on the physical shape yet. Also flagged: don't extend the Meter-Reading-only offline
+#   queue to Event creation, don't call IStatusRecomputeService from CreateEvent (AD-7 names exactly
+#   two call sites, Event isn't a third), and don't touch the 9 files
+#   PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests.cs source-scans for the literal word
+#   "Event" (AD-14 guard, written in anticipation of this story before Event existed in the codebase).
 # 2026-09-17: epic-5 retrospective run (/bmad-retrospective), scope = Epic 5 (4/4 stories) + Story
 #   1.12 (late Epic-1 addition, never separately retro'd). epic-5-retrospective -> done; epic-1 flipped
 #   back to done (1.12 was its only open item). 3 epic-4-retro action items for epic 5 (AuditCorrection/
@@ -516,7 +569,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-17
+last_updated: 2026-09-18
 # 2026-09-15: story 5-3-two-way-attractiveness-signal moved to review (dev-story implementation
 #   complete). All 7 tasks done: CompareTariff/TariffComparisonResponse extended with
 #   CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math, verified NOT
@@ -1136,9 +1189,10 @@ development_status:
   5-4-tariff-check-reminder: done
   epic-5-retrospective: done
 
-  epic-6: backlog
-  6-1-event-logging: backlog
-  6-2-wattage-plausibility-correlation: backlog
+  epic-6: in-progress
+  6-1-event-logging: in-progress
+  6-2-event-history-view: ready-for-dev
+  6-3-wattage-plausibility-correlation: backlog
   epic-6-retrospective: optional
 
   epic-7: backlog

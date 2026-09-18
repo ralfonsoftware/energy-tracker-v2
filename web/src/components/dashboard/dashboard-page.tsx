@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Plus, Upload } from 'lucide-react'
+import { NotebookPen, Plus, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { LogReadingSheet } from '@/components/meter-reading/log-reading-sheet'
+import { LogEventSheet } from '@/components/event/log-event-sheet'
 import { MeterRegressionPromptDialog } from '@/components/meter-reading/meter-regression-prompt-dialog'
 import type { MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import type { StatusDto } from '@/lib/status-api'
@@ -26,6 +27,8 @@ interface DashboardPageProps {
   logSheetOpen: boolean
   onLogSheetOpenChange: (open: boolean) => void
   onReadingSaved: () => void
+  logEventOpen: boolean
+  onLogEventOpenChange: (open: boolean) => void
   openRegressionPrompt: MeterRegressionPromptDto | null
   onRegressionResolved: () => void
   onSettingsClick: () => void
@@ -49,6 +52,8 @@ export function DashboardPage({
   logSheetOpen,
   onLogSheetOpenChange,
   onReadingSaved,
+  logEventOpen,
+  onLogEventOpenChange,
   openRegressionPrompt,
   onRegressionResolved,
   onSettingsClick,
@@ -58,6 +63,7 @@ export function DashboardPage({
 }: DashboardPageProps) {
   const { t } = useTranslation()
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [eventConfirmation, setEventConfirmation] = useState<string | null>(null)
 
   // UX-DR13 (one-level-deep modal stacking): a newly-raised regression prompt supersedes this
   // read-only drill-down rather than stacking on top of it, the same discipline already applied
@@ -118,16 +124,41 @@ export function DashboardPage({
     <main className="flex min-h-svh flex-col gap-4 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">{t('app.title')}</h1>
-        <button
-          type="button"
-          onClick={onSmartPlugImportClick}
-          aria-label={t('smartPlugImport.entryPointLabel')}
-          title={t('smartPlugImport.entryPointLabel')}
-          className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
-        >
-          <Upload className="size-4" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-2">
+          <LogEventSheet
+            trigger={
+              <button
+                type="button"
+                aria-label={t('event.entryPointLabel')}
+                title={t('event.entryPointLabel')}
+                className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
+              >
+                <NotebookPen className="size-4" aria-hidden="true" />
+              </button>
+            }
+            open={logEventOpen}
+            onOpenChange={onLogEventOpenChange}
+            onSaved={(event) => setEventConfirmation(event.description)}
+          />
+          <button
+            type="button"
+            onClick={onSmartPlugImportClick}
+            aria-label={t('smartPlugImport.entryPointLabel')}
+            title={t('smartPlugImport.entryPointLabel')}
+            className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
+          >
+            <Upload className="size-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
+
+      {eventConfirmation && (
+        // Rendered in the page body, not beside the topbar icons — an Event description runs to 500
+        // characters and would otherwise distort the fixed-height header row.
+        <p role="status" className="text-muted-foreground text-sm">
+          {t('event.savedConfirmation', { description: eventConfirmation })}
+        </p>
+      )}
 
       <StatusCard
         status={status}

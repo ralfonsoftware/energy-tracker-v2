@@ -47,6 +47,8 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
 
     public DbSet<Tariff> Tariffs => Set<Tariff>();
 
+    public DbSet<Event> Events => Set<Event>();
+
     // Backs PersistKeysToDbContext (AC #4) — Data Protection keys survive a scale-to-zero cold
     // start instead of being regenerated in memory (AD-17).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -73,5 +75,6 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
         modelBuilder.Entity<SmartPlugImportGap>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
         modelBuilder.Entity<AuditCorrection>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
         modelBuilder.Entity<Tariff>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
+        modelBuilder.Entity<Event>().HasQueryFilter(e => e.HouseholdId == CurrentHouseholdId);
     }
 }

@@ -112,6 +112,34 @@
     "savedOffline": "Gespeichert — wird synchronisiert, sobald du wieder online bist",
     "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   },
+  "event": {
+    "entryPointLabel": "Ereignis erfassen",
+    "sheetTitle": "Ereignis erfassen",
+    "sheetDescription": "Notiere etwas nicht Messbares, das eine Verbrauchsänderung erklären könnte.",
+    "descriptionLabel": "Was ist passiert",
+    "descriptionPlaceholder": "z. B. 2h gekocht, 2 Wochen verreist",
+    "dateTimeLabel": "Datum & Uhrzeit",
+    "tagLabel": "Tag (optional)",
+    "noTag": "Kein Tag",
+    "save": "Ereignis speichern",
+    "saving": "Wird gespeichert…",
+    "savedConfirmation": "Gespeichert: {{description}}",
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "tagLoading": "Tags werden geladen…",
+    "tagLoadFailed": "Tags konnten nicht geladen werden. Du kannst trotzdem ohne Tag speichern.",
+    "errors": {
+      "description_blank": "Bitte beschreibe, was passiert ist.",
+      "description_too_long": "Die Beschreibung ist zu lang (max. 500 Zeichen).",
+      "timestamp_future": "Dieses Datum liegt in der Zukunft. Prüfe die Uhr deines Geräts.",
+      "timestamp_too_old": "Dieses Datum liegt zu weit in der Vergangenheit.",
+      "tag_pair_mismatch": "Der gewählte Tag ist unvollständig. Bitte wähle ihn erneut.",
+      "tag_type_unknown": "Dieser Tag-Typ wird nicht unterstützt.",
+      "tag_not_found": "Diesen Tag gibt es nicht mehr. Bitte wähle einen anderen.",
+      "tag_archived": "Dieser Tag wurde archiviert. Bitte wähle einen anderen.",
+      "tag_parent_archived": "Dieser Tag gehört zu einem archivierten Raum oder Stromanschluss. Bitte wähle einen anderen.",
+      "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte lade die Seite neu, um dich erneut anzumelden."
+    }
+  },
   "meterRegression": {
     "title": "Dieser Zählerstand ist niedriger als der letzte",
     "description": "Du hast {{kwh}} kWh am {{readingTime}} eingegeben, aber dein letzter Zählerstand war {{previousKwh}} kWh am {{previousReadingTime}}. Das bedeutet normalerweise, dass der Zähler zurückgesetzt wurde oder seine Ziffernkapazität überschritten hat — nicht, dass dein Verbrauch rückwärts gelaufen ist. Wähle, was passiert ist.",
@@ -293,7 +321,7 @@
       "heading": "Tarifverlauf",
       "loading": "Wird geladen…",
       "loadError": "Der Tarifverlauf konnte nicht geladen werden — versuche es erneut.",
-    "retry": "Erneut versuchen",
+      "retry": "Erneut versuchen",
       "emptyState": "Noch keine Tarifeinträge — füge oben deinen aktuellen Vertrag hinzu.",
       "periodColumn": "Zeitraum",
       "baseFeeColumn": "Grundgebühr",

@@ -141,6 +141,44 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.ToTable("Devices", (string)null);
                 });
 
+            modelBuilder.Entity("EnergyTracker.Domain.Event", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TaggedEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TaggedEntityName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TaggedEntityType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.ToTable("Events", (string)null);
+                });
+
             modelBuilder.Entity("EnergyTracker.Domain.Household", b =>
                 {
                     b.Property<Guid>("Id")
@@ -687,6 +725,15 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasOne("EnergyTracker.Domain.PowerPoint", null)
                         .WithMany()
                         .HasForeignKey("PowerPointId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnergyTracker.Domain.Event", b =>
+                {
+                    b.HasOne("EnergyTracker.Domain.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
