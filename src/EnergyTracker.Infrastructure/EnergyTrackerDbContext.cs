@@ -1,5 +1,6 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using EnergyTracker.Infrastructure.Converters;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,6 +53,16 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
     // Backs PersistKeysToDbContext (AC #4) — Data Protection keys survive a scale-to-zero cold
     // start instead of being regenerated in memory (AD-17).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // AD-2: normalizes every DateTimeOffset write to UTC, in this one shared context, for both
+        // providers — see UtcDateTimeOffsetConverter for why (Npgsql's offset-0-only rule). Both
+        // nullable and non-nullable must be registered; a nullable-only registration would silently
+        // leave columns like ArchivedAt/EffectiveUntil exposed.
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<UtcDateTimeOffsetConverter>();
+        configurationBuilder.Properties<DateTimeOffset?>().HaveConversion<UtcDateTimeOffsetConverter>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -87,6 +87,23 @@ public class TariffEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         body.Currency.ShouldBe("EUR");
     }
 
+    // End-to-end regression for AC #6 (spec-datetimeoffset-utc-normalization.md, review loop 2):
+    // TariffRepository had the identical stale-echoed-offset bug loop 1 fixed for Event/MeterReading
+    // but the loop-1 audit missed it — this proves the actual HTTP JSON response, not just the
+    // repository's return value, now echoes a normalized offset for POST too.
+    [Fact]
+    public async Task POST_tariffs_with_a_non_zero_wire_offset_echoes_a_normalized_offset_in_the_response()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await PostTariffAsync(client, 12.50m, 0.32m, "EUR", new DateTimeOffset(2026, 8, 1, 9, 15, 0, TimeSpan.FromHours(2)));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<TariffResponse>(TestContext.Current.CancellationToken);
+        body!.ContractStartDate.Offset.ShouldBe(TimeSpan.Zero);
+        body.ContractStartDate.ShouldBe(new DateTimeOffset(2026, 8, 1, 7, 15, 0, TimeSpan.Zero));
+    }
+
     [Fact]
     public async Task POST_tariffs_with_a_non_positive_pricePerKwh_is_rejected()
     {

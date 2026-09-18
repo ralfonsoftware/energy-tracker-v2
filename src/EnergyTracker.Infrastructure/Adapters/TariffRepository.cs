@@ -11,6 +11,14 @@ public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffReposit
     {
         await dbContext.Tariffs.AddAsync(tariff, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        // UtcDateTimeOffsetConverter only translates the CLR<->provider boundary during the actual
+        // write; it never rewrites this already-tracked instance's ContractStartDate back to the
+        // persisted UTC value. Without this reload, the caller (and the API response built from it)
+        // would still see the client's original, non-normalized offset — same fix as
+        // EventRepository/MeterReadingRepository's AddAsync (spec-datetimeoffset-utc-normalization.md,
+        // review loop 2: this repository was the one the loop-1 fix missed).
+        await dbContext.Entry(tariff).ReloadAsync(cancellationToken);
         return tariff;
     }
 
@@ -113,6 +121,10 @@ public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffReposit
             throw new TariffConcurrencyConflictException(tariffId);
         }
 
+        // Same reload as AddAsync above — only ContractStartDate is affected in practice (the only
+        // DateTimeOffset field this method can change), but Reload is the generic, converter-agnostic
+        // fix rather than a per-field one.
+        await dbContext.Entry(tariff).ReloadAsync(cancellationToken);
         return tariff;
     }
 }

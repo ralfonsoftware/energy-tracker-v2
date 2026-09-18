@@ -55,6 +55,19 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            // UtcDateTimeOffsetConverter only translates the CLR<->provider boundary during the
+            // actual write; it never rewrites this already-tracked instance's ReadingTimestamp
+            // back to the persisted UTC value. Without this reload, the caller (and the API
+            // response built from it) would still see the client's original, non-normalized
+            // offset. The catch-below "winner" path already re-queries fresh from the DB, so it
+            // doesn't need this — a fresh query already goes through the converter's read side.
+            // Reload's own query goes through AD-3's HasQueryFilter like any other query, but that
+            // can never exclude this row: reading's HouseholdId is always the caller's own current
+            // household. ReloadAsync itself never throws DbUpdateException (that type is reserved
+            // for SaveChanges-family write failures), so it can't be misidentified by the catch
+            // below as the idempotency-key race that catch exists for.
+            await dbContext.Entry(reading).ReloadAsync(cancellationToken);
             return reading;
         }
         catch (DbUpdateException)
