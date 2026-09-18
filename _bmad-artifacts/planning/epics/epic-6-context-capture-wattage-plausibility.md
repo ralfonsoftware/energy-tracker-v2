@@ -35,7 +35,39 @@ So that I have a fast way to note the unmeasurable things — like the induction
 **When** observed
 **Then** each Event is a single dated occurrence — there is no recurring/pattern-event mechanism in v2 (FR-16, Out of Scope)
 
-## Story 6.2: Wattage Plausibility Correlation
+## Story 6.2: Event History View
+
+As a Household member,
+I want to see the Events I've logged, with their tags,
+So that the context I captured is actually readable back — and so a tag whose Room/Power Point/Device was later deleted still reads as plain text rather than a broken reference.
+
+**Acceptance Criteria:**
+
+**Given** Events logged for my Household
+**When** I open the Event history surface
+**Then** they are listed in reverse-chronological order by the date the Event occurred (not the date it was entered), scoped to my own Household only (AD-3)
+
+**Given** an Event with a tag
+**When** it is displayed
+**Then** the tag renders from the Event's stored `TaggedEntityName` snapshot verbatim — never re-derived by joining through `TaggedEntityId` (AD-10)
+
+**Given** an Event whose tagged Room/Power Point/Device was archived after the Event was logged
+**When** it is displayed
+**Then** the tag still renders as inert plain text, with no broken reference, no error, and no visual "deleted" treatment — this closes Story 6.1's AC #4 display half (FR-16)
+
+**Given** an Event with no tag
+**When** it is displayed
+**Then** it renders cleanly with no empty tag affordance or placeholder
+
+**Given** a Household with no Events yet
+**When** the surface is opened
+**Then** an empty state is shown in the product's established quiet voice — never an error
+
+**Given** the Event list
+**When** rendered
+**Then** no Event data is summed, totalled, or presented alongside the Main Meter total in any form (AD-14)
+
+## Story 6.3: Wattage Plausibility Correlation
 
 As a Household member,
 I want a logged Event to show a rough correlation against any consumption deviation Pattern Detective observed around that time,
