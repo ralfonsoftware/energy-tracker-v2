@@ -32,6 +32,34 @@ public class EventEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtur
         body.TaggedEntityName.ShouldBeNull();
     }
 
+    // End-to-end regression for AC #6 (spec-datetimeoffset-utc-normalization.md, review loop 1/2):
+    // Blind Hunter's loop-2 finding was that every prior test asserted only the repository's
+    // return value, never the actual HTTP JSON response a client would see — a bug in
+    // EventEndpoints.ToResponse's own mapping would not have been caught by those. This goes
+    // through the real ASP.NET Core pipeline (EnergyTrackerApiFactory, a real Postgres
+    // Testcontainer) and reads the wire JSON offset directly.
+    [Fact]
+    public async Task POST_events_with_a_non_zero_wire_offset_echoes_a_normalized_offset_in_the_response()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/events",
+            new { description = "non-zero offset probe", occurredAt = new DateTimeOffset(2026, 8, 1, 9, 15, 0, TimeSpan.FromHours(2)), taggedEntityType = (string?)null, taggedEntityId = (Guid?)null },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rawJson = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var parsed = JsonDocument.Parse(rawJson);
+        var wireOccurredAt = parsed.RootElement.GetProperty("occurredAt").GetString();
+        wireOccurredAt.ShouldNotBeNull();
+        wireOccurredAt.ShouldEndWith("+00:00");
+
+        var body = await response.Content.ReadFromJsonAsync<EventResponse>(TestContext.Current.CancellationToken);
+        body!.OccurredAt.Offset.ShouldBe(TimeSpan.Zero);
+        body.OccurredAt.ShouldBe(new DateTimeOffset(2026, 8, 1, 7, 15, 0, TimeSpan.Zero));
+    }
+
     [Fact]
     public async Task POST_events_returns_200_on_a_valid_tagged_create()
     {

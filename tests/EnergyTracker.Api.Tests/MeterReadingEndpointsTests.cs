@@ -51,6 +51,26 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
         body!.KwhValue.ShouldBe(4821.5m);
     }
 
+    // End-to-end regression for AC #6 (spec-datetimeoffset-utc-normalization.md, review loop 1/2):
+    // asserts the actual HTTP JSON response echoes a normalized offset, not just the repository's
+    // return value — goes through the real ASP.NET Core pipeline against a real Postgres
+    // Testcontainer (EnergyTrackerApiFactory).
+    [Fact]
+    public async Task POST_meter_readings_with_a_non_zero_wire_offset_echoes_a_normalized_offset_in_the_response()
+    {
+        var (client, _) = await CreateHouseholdAsync();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue = 100m, readingTimestamp = new DateTimeOffset(2026, 8, 1, 9, 15, 0, TimeSpan.FromHours(2)), idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<MeterReadingResponse>(TestContext.Current.CancellationToken);
+        body!.ReadingTimestamp.Offset.ShouldBe(TimeSpan.Zero);
+        body.ReadingTimestamp.ShouldBe(new DateTimeOffset(2026, 8, 1, 7, 15, 0, TimeSpan.Zero));
+    }
+
     [Fact]
     public async Task Replaying_the_same_idempotencyKey_returns_the_same_reading_id_with_no_second_row_in_the_table()
     {
