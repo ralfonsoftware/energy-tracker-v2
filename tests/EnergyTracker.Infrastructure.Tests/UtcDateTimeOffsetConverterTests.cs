@@ -228,7 +228,12 @@ public abstract class UtcDateTimeOffsetConverterTestsBase
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var repository = new EventRepository(dbContext);
-        var submitted = DateTimeOffset.UtcNow;
+        // A fixed value, not DateTimeOffset.UtcNow: Postgres' timestamptz has microsecond precision
+        // (6 fractional digits) vs. .NET's 100ns tick resolution (7 digits) — UtcNow's sub-microsecond
+        // tail would be truncated by the round trip through ReloadAsync, making an exact-equality
+        // assertion against it flaky (passes only when UtcNow happens to already be
+        // microsecond-aligned). A literal value has no sub-microsecond component to lose.
+        var submitted = new DateTimeOffset(2026, 8, 1, 7, 15, 0, TimeSpan.Zero);
 
         var returned = await repository.AddAsync(new Event
         {
