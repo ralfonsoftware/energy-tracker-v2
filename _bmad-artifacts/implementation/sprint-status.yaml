@@ -1273,5 +1273,5 @@ action_items:
   - epic: 5
     action: "Build an automated WCAG contrast-ratio check (unit test or lint step) covering every existing --color-* token pair (Status triad, --attractiveness-*, --tariff-check-card-*)"
     owner: "Winston/Murat"
-    status: open
-    note: "2026-09-17 epic-5/1.12 retro. Escalated from defer to a real, owned action item after three consecutive retro cycles (Story 2.2b 2026-08-16, Story 5.3 2026-09-15, Story 5.4 2026-09-17) deferred the identical gap as 'pre-existing.' No further deferring — Ralf's decision."
+    status: done
+    note: "2026-09-17 epic-5/1.12 retro. Escalated from defer to a real, owned action item after three consecutive retro cycles (Story 2.2b 2026-08-16, Story 5.3 2026-09-15, Story 5.4 2026-09-17) deferred the identical gap as 'pre-existing.' No further deferring — Ralf's decision. Closed 2026-09-17 21:09, commit 366722d ('feat: implement automated WCAG contrast checks for color tokens and add related utility functions') — added web/src/lib/contrast.ts (WCAG relative-luminance/contrast-ratio calc) + web/src/color-tokens.contrast.test.ts, asserting 4.5:1+ AA on every token pair named in this action item. 32/32 tests passing as of 2026-09-18 verification. Note: this landed as a direct commit to main 10 minutes after the retro, without a story file or updating this status — went untracked until Ralf asked Winston to check on 2026-09-18."
