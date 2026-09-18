@@ -417,6 +417,14 @@ public class SmartPlugImportRepository(
     // parsed batch. The throughput problem this AD exists to solve doesn't apply there, so it
     // deliberately stays on its existing mechanism rather than being forced onto
     // BulkInsertOrUpdateAsync."
+    //
+    // [AMENDED 2026-09-18] The "small/bounded volume" half of that reasoning was invalidated by a
+    // production incident (a full-history re-export colliding on ~100% of an existing Power
+    // Point's rows) — see invariants-rules.md's AD-23 section for the full amendment. The
+    // conflict-tolerant fallback below is now internally set-based too, but the carve-out's
+    // conclusion (never BulkInsertOrUpdateAsync/EFCore.BulkExtensions for this method) is
+    // unchanged: this is still a metadata re-tag over already-persisted, already-validated rows,
+    // not a bulk insert-or-upsert-by-content decision over a fresh parsed batch.
     public async Task UpdateMappingAsync(
         SmartPlugImport import, Guid powerPointId, string powerPointName, string? roomName, CancellationToken cancellationToken)
     {
@@ -432,9 +440,10 @@ public class SmartPlugImportRepository(
         {
             // Story 3.4 Dev Notes Open Question #4: at least one of this import's readings already
             // collides with an already-mapped reading at the same IntervalStart for the target
-            // Power Point — skip the doomed set-based attempt (avoids a wasted round trip on a
-            // large import) and go straight to the bounded per-row fallback.
-            await UpdateMappingPerRowWithConflictToleranceAsync(import.Id, powerPointId, powerPointName, roomName, cancellationToken);
+            // Power Point — skip the doomed single-statement ExecuteUpdateAsync attempt (avoids a
+            // wasted round trip on a large import) and go straight to the set-based conflict
+            // classification fallback.
+            await UpdateMappingSetBasedWithConflictToleranceAsync(import.Id, powerPointId, powerPointName, roomName, cancellationToken);
         }
         else
         {
@@ -463,7 +472,7 @@ public class SmartPlugImportRepository(
                 // (System.Data.Common.DbException, AD-2 — never a provider-specific exception type
                 // in shared Infrastructure code) must be caught here too, confirmed empirically
                 // against a real Postgres constraint violation during dev-story activation.
-                await UpdateMappingPerRowWithConflictToleranceAsync(import.Id, powerPointId, powerPointName, roomName, cancellationToken);
+                await UpdateMappingSetBasedWithConflictToleranceAsync(import.Id, powerPointId, powerPointName, roomName, cancellationToken);
             }
         }
 
@@ -492,102 +501,144 @@ public class SmartPlugImportRepository(
             r => r.PowerPointId == powerPointId && intervalStarts.Contains(r.IntervalStart), cancellationToken);
     }
 
-    private async Task UpdateMappingPerRowWithConflictToleranceAsync(
+    // Incident fix (2026-09-18, this bugfix): replaces the former per-row loop
+    // (UpdateMappingPerRowWithConflictToleranceAsync — one SaveChangesAsync per reading, plus an
+    // extra SELECT+conditional-ExecuteDeleteAsync per collision) whose O(n) round trips took ~4
+    // minutes against a full-history Eve Home re-export that collided on ~100% of its rows,
+    // exceeding Azure Container Apps' ~240s ingress timeout (HTTP 499) even though the
+    // classification logic itself (Story 3.7) was correct. Classification is now done once, in
+    // memory, from a single bulk-fetched result set, then applied via exactly two set-based
+    // statements — never load full SmartPlugReading entities into the change tracker for this
+    // path (both queries below are AsNoTracking projections).
+    private async Task UpdateMappingSetBasedWithConflictToleranceAsync(
         Guid smartPlugImportId, Guid powerPointId, string powerPointName, string? roomName, CancellationToken cancellationToken)
     {
-        var readings = await dbContext.SmartPlugReadings
+        // HouseholdId scoping is implicit for every query below, same as the deleted per-row
+        // fallback: AD-3's global query filter (wired once in EnergyTrackerDbContext.OnModelCreating)
+        // applies to any LINQ query against SmartPlugReadings through this DbContext, projected
+        // bulk queries and ExecuteUpdateAsync/ExecuteDeleteAsync included — not just full-entity loads.
+        var importReadings = await dbContext.SmartPlugReadings
+            .AsNoTracking()
             .Where(r => r.SmartPlugImportId == smartPlugImportId)
+            .Select(r => new { r.Id, r.IntervalStart, r.DeviceName, r.KwhValue, r.IntervalEnd })
             .ToListAsync(cancellationToken);
 
-        foreach (var reading in readings)
+        if (importReadings.Count == 0)
         {
-            var previousPowerPointId = reading.PowerPointId;
-            reading.PowerPointId = powerPointId;
-            reading.PowerPointName = powerPointName;
-            reading.RoomName = roomName ?? reading.RoomName;
+            return;
+        }
 
-            try
+        // One bulk fetch of every already-mapped reading at the target Power Point whose
+        // IntervalStart could collide with this import's readings — a dictionary keyed by
+        // IntervalStart built from a single result set (Design Notes: safe even at large N,
+        // unlike a per-row query). EF Core 10 translates List<Guid>/List<DateTimeOffset>.Contains
+        // as a JSON-array parameter (verified for both SQL Server's OPENJSON and Npgsql's
+        // ANY(@array) translation), not one parameter per value (Design Notes), so this doesn't
+        // hit the 2100-parameter ceiling even for very large imports.
+        //
+        // Review finding (2026-09-18, this bugfix's own review loop): MUST exclude this import's
+        // own readings (`r.SmartPlugImportId != smartPlugImportId`) — without it, a concurrent or
+        // duplicate mapping request for the SAME import (e.g. a user double-clicking "Map" while
+        // an earlier, still-processing request is slow) can see this import's OWN just-committed
+        // rows here after the first request commits. Since a reading trivially matches itself on
+        // DeviceName/KwhValue/IntervalEnd, the second request would classify every one of its own
+        // already-correctly-mapped rows as an "exact duplicate" of itself and delete them all —
+        // silently destroying a fully-succeeded import. The old per-row loop never had this
+        // failure mode: it updated each row by its own Id (a no-op re-write when already correct),
+        // never re-classified a row's relationship to itself.
+        var intervalStarts = importReadings.Select(r => r.IntervalStart).ToList();
+        var existingByIntervalStart = await dbContext.SmartPlugReadings
+            .AsNoTracking()
+            .Where(r => r.PowerPointId == powerPointId
+                && r.SmartPlugImportId != smartPlugImportId
+                && intervalStarts.Contains(r.IntervalStart))
+            .Select(r => new { r.IntervalStart, r.DeviceName, r.KwhValue, r.IntervalEnd })
+            .ToDictionaryAsync(r => r.IntervalStart, cancellationToken);
+
+        var noConflictIds = new List<Guid>();
+        var exactDuplicates = new List<(Guid Id, DateTimeOffset IntervalStart)>();
+
+        foreach (var reading in importReadings)
+        {
+            if (!existingByIntervalStart.TryGetValue(reading.IntervalStart, out var existing))
             {
-                await dbContext.SaveChangesAsync(cancellationToken);
+                noConflictIds.Add(reading.Id);
+                continue;
             }
-            catch (DbUpdateException)
+
+            // Story 3.7 AC #1/#2 classification, unchanged from the deleted per-row fallback:
+            // DeviceName must be part of the exact-duplicate match — a Power Point can receive
+            // manually-mapped readings from more than one distinct SmartPlugImport/device over
+            // time (MapSmartPlugImportToPowerPoint imposes no device-identity constraint), so two
+            // different devices' readings could otherwise coincide on
+            // IntervalStart/KwhValue/IntervalEnd without actually being the same duplicate.
+            if (existing.DeviceName == reading.DeviceName
+                && existing.KwhValue == reading.KwhValue
+                && existing.IntervalEnd == reading.IntervalEnd)
             {
-                dbContext.Entry(reading).State = EntityState.Detached;
+                exactDuplicates.Add((reading.Id, reading.IntervalStart));
+            }
+            else
+            {
+                // AC #2: genuinely divergent data at the same key (e.g. a DST fall-back duplicate
+                // local timestamp) — never silently discard data that might actually differ; leave
+                // the reading unmapped (PowerPointId stays null via the ExecuteUpdateAsync below,
+                // which only ever touches noConflictIds) and log it straight from this in-memory
+                // classification — no per-row DB round trip for the log path.
+                logger.LogWarning(
+                    "Skipped mapping SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) to PowerPointId={PowerPointId}: " +
+                    "a reading already exists at IntervalStart={IntervalStart:O} for that Power Point (unique-constraint conflict, " +
+                    "possibly a DST fall-back duplicate local timestamp).",
+                    reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
+            }
+        }
 
-                // Confirm this is really the (PowerPointId, IntervalStart) unique-constraint
-                // conflict this fallback exists for (AD-2 — no provider-specific error inspection)
-                // rather than an unrelated failure that would otherwise vanish silently. Story 3.7
-                // AC #1/#2: also pull the colliding row's DeviceName/KwhValue/IntervalEnd here so
-                // an exact duplicate can be resolved (deleted) instead of left orphaned forever.
-                // FirstOrDefaultAsync, not SingleOrDefaultAsync — AD-20's own rationale is "don't
-                // over-trust the DB constraint alone"; a genuine (PowerPointId, IntervalStart)
-                // uniqueness violation must fall through to the historical "unrelated failure,
-                // rethrow" path below rather than crash this fallback with an unhandled
-                // InvalidOperationException.
-                var conflictingReading = await dbContext.SmartPlugReadings.AsNoTracking()
-                    .Where(r => r.PowerPointId == powerPointId && r.IntervalStart == reading.IntervalStart)
-                    .Select(r => new { r.DeviceName, r.KwhValue, r.IntervalEnd })
-                    .FirstOrDefaultAsync(cancellationToken);
-                if (conflictingReading is null)
-                {
-                    reading.PowerPointId = previousPowerPointId;
-                    throw;
-                }
+        if (noConflictIds.Count > 0)
+        {
+            // Same set-based idiom as UpdateMappingAsync's own fast path above, scoped to just the
+            // non-colliding subset of this import's rows via their projected Id.
+            await dbContext.SmartPlugReadings
+                .Where(r => noConflictIds.Contains(r.Id))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.PowerPointId, powerPointId)
+                    .SetProperty(r => r.PowerPointName, powerPointName)
+                    .SetProperty(r => r.RoomName, r => roomName ?? r.RoomName),
+                    cancellationToken);
+        }
 
-                // AC #1: an exact duplicate — same DeviceName/KwhValue/IntervalEnd as the
-                // already-mapped reading (HouseholdId equality is implicit: both rows are read
-                // through this same request-scoped DbContext, so AD-3's global query filter
-                // already scopes both to the current household) — is dead data now that the
-                // mapped row is authoritative; delete it instead of leaving it behind with
-                // PowerPointId still NULL forever (Story 3.4 Dev Notes Open Question #4's AD-20
-                // gap, confirmed live in production at 179,324-row scale — see this story's
-                // Context). DeviceName must be part of the match: a Power Point can receive
-                // manually-mapped readings from more than one distinct SmartPlugImport/device
-                // over time (MapSmartPlugImportToPowerPoint imposes no device-identity
-                // constraint), so two different devices' readings could otherwise coincide on
-                // IntervalStart/KwhValue/IntervalEnd without actually being the same duplicate.
-                // Set-based, same idiom as the ExecuteUpdateAsync fast path above; `reading` is
-                // already detached so this can't be done via the change tracker.
-                if (conflictingReading.DeviceName == reading.DeviceName
-                    && conflictingReading.KwhValue == reading.KwhValue
-                    && conflictingReading.IntervalEnd == reading.IntervalEnd)
-                {
-                    var deletedCount = await dbContext.SmartPlugReadings
-                        .Where(r => r.Id == reading.Id)
-                        .ExecuteDeleteAsync(cancellationToken);
+        if (exactDuplicates.Count > 0)
+        {
+            // AC #1: dead data now that the mapped row is authoritative — delete every
+            // exact-duplicate colliding row in one statement instead of one DELETE per row
+            // (Story 3.4 Dev Notes Open Question #4's AD-20 gap, confirmed live in production at
+            // 179,324-row scale — see this story's Context).
+            var exactDuplicateIds = exactDuplicates.Select(d => d.Id).ToList();
+            var deletedCount = await dbContext.SmartPlugReadings
+                .Where(r => exactDuplicateIds.Contains(r.Id))
+                .ExecuteDeleteAsync(cancellationToken);
 
-                    // deletedCount can be 0 if a concurrent operation already removed this exact
-                    // row between the conflict-confirmation read above and this delete — don't
-                    // claim a deletion that didn't happen.
-                    if (deletedCount > 0)
-                    {
-                        logger.LogWarning(
-                            "Deleted duplicate SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) instead of mapping it to " +
-                            "PowerPointId={PowerPointId}: an already-mapped reading with identical DeviceName/KwhValue/IntervalEnd already " +
-                            "exists at IntervalStart={IntervalStart:O} for that Power Point.",
-                            reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
-                    }
-                    else
-                    {
-                        logger.LogWarning(
-                            "SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) was already removed by the time its " +
-                            "duplicate-mapping conflict against PowerPointId={PowerPointId} at IntervalStart={IntervalStart:O} was resolved " +
-                            "— no delete was needed.",
-                            reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
-                    }
-                }
-                else
-                {
-                    // AC #2: genuinely divergent data at the same key (e.g. a DST fall-back
-                    // duplicate local timestamp) — never silently discard data that might
-                    // actually differ. Same tolerant behavior as before this story: leave the
-                    // reading unmapped, just log it.
-                    logger.LogWarning(
-                        "Skipped mapping SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) to PowerPointId={PowerPointId}: " +
-                        "a reading already exists at IntervalStart={IntervalStart:O} for that Power Point (unique-constraint conflict, " +
-                        "possibly a DST fall-back duplicate local timestamp).",
-                        reading.Id, smartPlugImportId, powerPointId, reading.IntervalStart);
-                }
+            // Review finding (2026-09-18): log what was actually classified/attempted, not a
+            // per-row "Deleted" claim we can't back up from a single batched DELETE's row count
+            // alone. The I/O matrix's concurrent-delete race (a row already gone by the time this
+            // DELETE runs — e.g. the 30-day sweep, or another concurrent mapping request) still
+            // isn't an error, but it's no longer silently misreported as "Deleted duplicate X" for
+            // a row that may not have still been there.
+            if (deletedCount < exactDuplicateIds.Count)
+            {
+                logger.LogWarning(
+                    "Import {SmartPlugImportId}: {ClassifiedCount} SmartPlugReading(s) classified as exact duplicates for " +
+                    "PowerPointId={PowerPointId}, but only {DeletedCount} were still present to delete — the rest were already " +
+                    "removed by a concurrent operation before this batch's DELETE ran.",
+                    smartPlugImportId, exactDuplicateIds.Count, powerPointId, deletedCount);
+            }
+
+            foreach (var (id, intervalStart) in exactDuplicates)
+            {
+                logger.LogWarning(
+                    "Resolved SmartPlugReading {SmartPlugReadingId} (import {SmartPlugImportId}) as a duplicate of an already-mapped " +
+                    "reading instead of mapping it to PowerPointId={PowerPointId}: identical DeviceName/KwhValue/IntervalEnd already " +
+                    "exists at IntervalStart={IntervalStart:O} for that Power Point; removed if still present.",
+                    id, smartPlugImportId, powerPointId, intervalStart);
             }
         }
     }
