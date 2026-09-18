@@ -50,6 +50,22 @@ public interface ISmartPlugImportRepository
     // round trips (not one transaction like AddAsync) — a crash between them leaves readings
     // already correctly attributed but the import row still AwaitingPowerPointMapping, which a
     // retry safely repeats (the UPDATE is idempotent).
+    //
+    // This same set-based conflict-classification fallback (2026-09-18 incident fix) is reachable
+    // two ways: (1) the AnyMappingConflictAsync pre-check finds a collision upfront, or (2) the
+    // pre-check finds none but the optimistic single-statement ExecuteUpdateAsync above still
+    // throws against a genuine race that appeared after that check ran — both routes land in the
+    // same fallback. It does: one bulk, AsNoTracking fetch of the colliding existing readings
+    // (excluding this import's own rows — otherwise a second mapping call for the same import,
+    // e.g. a double-click or a retry racing an already-committed first call, would match its own
+    // just-mapped readings against themselves and delete them as self-duplicates), partitioned in
+    // memory into no-conflict / exact-duplicate (identical DeviceName/KwhValue/IntervalEnd —
+    // deleted via one ExecuteDeleteAsync) / divergent (left unmapped, logged from the in-memory
+    // classification), then one ExecuteUpdateAsync for the no-conflict subset. This replaced an
+    // earlier per-row SaveChangesAsync-per-reading loop whose O(n) round trips took ~4 minutes
+    // against a full-history re-export colliding on ~100% of its rows — long enough to exceed
+    // Azure Container Apps' ~240s ingress timeout. Never loads full SmartPlugReading entities into
+    // the change tracker for this path either.
     Task UpdateMappingAsync(
         SmartPlugImport import, Guid powerPointId, string powerPointName, string? roomName, CancellationToken cancellationToken);
 
