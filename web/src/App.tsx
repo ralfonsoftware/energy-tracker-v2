@@ -55,6 +55,7 @@ function App() {
   // the offline-sync effect below can depend on it directly instead of a re-computed expression.
   const readyHouseholdId = state.status === 'ready' ? state.household.id : null
   const [logSheetOpen, setLogSheetOpen] = useState(false)
+  const [logEventOpen, setLogEventOpen] = useState(false)
   const [status, setStatus] = useState<StatusDto | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [tariffCheck, setTariffCheck] = useState<TariffCheckReminderDto | null>(null)
@@ -112,9 +113,10 @@ function App() {
       const prompt = await fetchOpenMeterRegressionPrompt()
       setOpenRegressionPrompt(prompt)
       if (prompt) {
-        // A newly-raised (or still-open) prompt supersedes the Log Reading sheet rather than
-        // stacking on top of it — force it closed in the same state update.
+        // A newly-raised (or still-open) prompt supersedes the Log Reading/Log Event sheets rather
+        // than stacking on top of them — force both closed in the same state update (UX-DR13).
         setLogSheetOpen(false)
+        setLogEventOpen(false)
       }
     } catch {
       // Best-effort — a transient failure here just means the prompt (if any) surfaces on the
@@ -127,6 +129,13 @@ function App() {
       return
     }
     setLogSheetOpen(next)
+  }
+
+  const handleLogEventOpenChange = (next: boolean) => {
+    if (next && openRegressionPrompt) {
+      return
+    }
+    setLogEventOpen(next)
   }
 
   useEffect(() => {
@@ -328,6 +337,8 @@ function App() {
         void refreshOpenRegressionPrompt()
         void refreshStatus()
       }}
+      logEventOpen={logEventOpen}
+      onLogEventOpenChange={handleLogEventOpenChange}
       openRegressionPrompt={openRegressionPrompt}
       onRegressionResolved={() => {
         void refreshOpenRegressionPrompt()

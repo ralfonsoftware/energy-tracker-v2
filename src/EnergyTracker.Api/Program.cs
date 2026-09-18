@@ -332,6 +332,9 @@ builder.Services.AddScoped<EditTariff>();
 builder.Services.AddScoped<CompareTariff>();
 builder.Services.AddScoped<GetTariffCheckReminder>();
 
+builder.Services.AddScoped<IEventRepository, EventRepository>();
+builder.Services.AddScoped<CreateEvent>();
+
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
 builder.Services.AddScoped<JobHouseholdContext>();
@@ -424,6 +427,7 @@ api.MapMeterRegressionPromptEndpoints();
 api.MapStatusEndpoints();
 api.MapSmartPlugReadingEndpoints();
 api.MapSmartPlugImportEndpoints();
+api.MapEventEndpoints();
 api.MapJobEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
