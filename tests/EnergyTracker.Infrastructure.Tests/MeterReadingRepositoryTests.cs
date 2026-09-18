@@ -211,6 +211,25 @@ public abstract class MeterReadingRepositoryTestsBase
 
         result.Select(r => r.Id).ShouldBe([latestReading.Id, withinWindow.Id], ignoreOrder: true);
     }
+
+    [Fact]
+    public async Task An_ordinary_repository_call_does_not_inherit_the_Smart_Plug_imports_elevated_command_timeout()
+    {
+        // spec-db-command-timeout-scope: proves the other half of the scoping boundary — an ordinary
+        // repository call's DbContext, which SmartPlugImportRepository never touches, no longer
+        // inherits an explicit 120s CommandTimeout from Program.cs's ConfigureDbContext (as both
+        // provider branches did there from spec-background-job-changetracker-orphan-fix, 2026-09-05,
+        // until this spec removed it). GetCommandTimeout() returns null when nothing has explicitly
+        // set it, meaning the ADO.NET/provider default (~30s) applies.
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new MeterReadingRepository(dbContext);
+
+        await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: null, TestContext.Current.CancellationToken);
+
+        dbContext.Database.GetCommandTimeout().ShouldBeNull();
+    }
 }
 
 public class PostgresMeterReadingRepositoryTests : MeterReadingRepositoryTestsBase, IAsyncLifetime

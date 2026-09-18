@@ -127,14 +127,7 @@ void ConfigureDbContext(DbContextOptionsBuilder options)
     {
         case "postgres":
             options.UseNpgsql(connectionString,
-                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres").MaxBatchSize(1000)
-                    // Precautionary, not incident-evidenced: the SqlServer branch's CommandTimeout
-                    // bump below is confirmed against an observed Basic-tier Azure SQL DTU-throttling
-                    // incident. No equivalent Postgres-hosting incident has been observed — this
-                    // mirrors the same headroom on the (reasonable but unverified) assumption that a
-                    // large enough import could stall a constrained self-hosted Postgres instance the
-                    // same way. Revisit if it turns out to be unnecessary or insufficient there.
-                    .CommandTimeout(120));
+                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres").MaxBatchSize(1000));
             break;
         case "sqlserver":
             // Default MaxBatchSize (42) meant a large Smart Plug import (Story 3.3 — a full-history
@@ -145,18 +138,18 @@ void ConfigureDbContext(DbContextOptionsBuilder options)
             // batch limit for the widest entity being saved, so 1000 is a safe upper bound, not a
             // literal row count.
             //
-            // CommandTimeout raised from the 30s ADO.NET default to 120s: confirmed live in
-            // production 2026-09-05 that Basic-tier Azure SQL (5 DTU) hits 100% DTU for ~2 minutes
-            // during a single large SmartPlugReadings import, tripping the 30s default
-            // ("Execution Timeout Expired"). This covers ordinary EF-generated commands only (e.g.
-            // the SmartPlugImport row insert) — the readings bulk-insert itself goes through
-            // EFCore.BulkExtensions' own BulkCopyTimeout (set alongside its BulkConfig in
-            // SmartPlugImportRepository.AddAsyncCore), which this setting does not reach. This is a
-            // mitigation, not a fix for arbitrarily large files — if 120s ever isn't enough
-            // headroom, the durable fix is a DB tier upgrade, not a further timeout bump.
+            // CommandTimeout is left at the 30s ADO.NET default here. It was briefly raised to 120s
+            // globally (2026-09-05, to cover Basic-tier Azure SQL hitting 100% DTU during a large
+            // SmartPlugReadings import) but that applied to every command app-wide, not just the
+            // import path that needed the headroom. spec-db-command-timeout-scope narrows this: the
+            // elevated 120s now lives only on the DbContext scope used by the Smart Plug import write
+            // path (see SmartPlugImportRepository.AddAsyncCore's SetCommandTimeout call), so an
+            // unrelated slow/blocked query elsewhere still fails fast at 30s. UpdateMappingAsync's own
+            // separate 180s (elsewhere in the same class) is untouched by and independent of this —
+            // 120s does not uniformly cover the whole Smart Plug import lifecycle, only AddAsyncCore's
+            // scope.
             options.UseSqlServer(connectionString,
-                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer").MaxBatchSize(1000)
-                    .CommandTimeout(120));
+                o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer").MaxBatchSize(1000));
             break;
         default:
             throw new InvalidOperationException(
