@@ -137,6 +137,8 @@
       "tag_not_found": "That tag no longer exists. Please pick another one.",
       "tag_archived": "That tag has been archived. Please pick another one.",
       "tag_parent_archived": "That tag belongs to an archived Room or Power Point. Please pick another one.",
+      "page_invalid": "That page number isn't valid.",
+      "page_size_invalid": "That page size isn't valid.",
       "sessionExpired": "Your session has expired. Please reload the page to sign in again."
     }
   },
@@ -225,6 +227,18 @@
       "summary": "Meter Readings — {{count}} logged",
       "expand": "Browse & correct",
       "collapse": "Hide"
+    },
+    "eventsCard": {
+      "summary": "Events — {{count}} logged",
+      "expand": "Browse",
+      "collapse": "Hide",
+      "loading": "Loading…",
+      "emptyState": "No Events logged yet.",
+      "descriptionColumn": "What happened",
+      "timestampColumn": "Date & time",
+      "previousPage": "Previous",
+      "nextPage": "Next",
+      "pageIndicator": "Page {{page}} of {{totalPages}}"
     },
     "perPlugCard": {
       "heading": "Room → Power Point → Device",

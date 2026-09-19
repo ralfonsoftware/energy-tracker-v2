@@ -174,7 +174,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HouseholdId");
+                    b.HasIndex("HouseholdId", "OccurredAt", "CreatedAtUtc");
 
                     b.ToTable("Events", (string)null);
                 });

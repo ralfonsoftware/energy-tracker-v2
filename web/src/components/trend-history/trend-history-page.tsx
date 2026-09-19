@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { GlassCard } from '@/components/ui/glass-card'
+import { EventsCard } from '@/components/event/events-card'
 import { MeterReadingsCard } from '@/components/meter-reading/meter-readings-card'
 import { fetchStatusHistory, type StatusHistoryEntryDto } from '@/lib/status-api'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
@@ -19,8 +20,9 @@ interface TrendHistoryPageProps {
 // Shell mirrors SettingsPage — Trend History is a real nav-chrome tab (UX-DR9), unlike the
 // standalone MeterReadingHistoryPage it absorbs (Story 2.8), which deliberately had no tab slot.
 // Card order: chart, then Meter Readings — the two views of the same Main Meter data (FR-8), read
-// as a pair. The Room -> Power Point -> Device tree (PerPlugDataCard) is a structurally different
-// Smart Plug signal and stays last.
+// as a pair. Events comes next (Story 6.2) — a persistent list is a better host for Story 6.3's
+// "inline with the Event" correlation than the transient Log Event sheet. The Room -> Power Point
+// -> Device tree (PerPlugDataCard) is a structurally different Smart Plug signal and stays last.
 export function TrendHistoryPage({ locale, onBack, onSettingsClick, onTariffRadarClick, onSmartPlugImportClick }: TrendHistoryPageProps) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<StatusHistoryEntryDto[]>([])
@@ -83,6 +85,8 @@ export function TrendHistoryPage({ locale, onBack, onSettingsClick, onTariffRada
         </GlassCard>
 
         <MeterReadingsCard locale={locale} onReadingCorrected={loadStatusHistory} />
+
+        <EventsCard locale={locale} />
 
         <PerPlugDataCard locale={locale} />
       </div>

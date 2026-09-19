@@ -334,6 +334,7 @@ builder.Services.AddScoped<GetTariffCheckReminder>();
 
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<CreateEvent>();
+builder.Services.AddScoped<GetEventHistory>();
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.

@@ -58,6 +58,31 @@ public static class EventEndpoints
             }
         });
 
+        api.MapGet("/events", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            GetEventHistory getEventHistory,
+            CancellationToken cancellationToken,
+            int page = 1,
+            int pageSize = 20) =>
+        {
+            // Auth gate only — the id itself is discarded because AD-3's query filter does the
+            // scoping (see GetEventHistory/IEventRepository).
+            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                var result = await getEventHistory.ExecuteAsync(page, pageSize, cancellationToken);
+                return Results.Ok(ToHistoryPageResponse(result));
+            }
+            catch (EventValidationException ex)
+            {
+                return Problem(ex.Message, ex.ErrorCode, StatusCodes.Status400BadRequest);
+            }
+        });
+
         return api;
     }
 
@@ -71,8 +96,17 @@ public static class EventEndpoints
 
     private static EventResponse ToResponse(Event @event) =>
         new(@event.Id, @event.Description, @event.OccurredAt, @event.TaggedEntityType, @event.TaggedEntityName);
+
+    private static EventHistoryPageResponse ToHistoryPageResponse(EventHistoryPage page) =>
+        new(
+            Items: page.Items.Select(ToResponse).ToList(),
+            TotalCount: page.TotalCount,
+            Page: page.Page,
+            PageSize: page.PageSize);
 }
 
 public record CreateEventRequest(string? Description, DateTimeOffset OccurredAt, string? TaggedEntityType, Guid? TaggedEntityId);
 
 public record EventResponse(Guid Id, string Description, DateTimeOffset OccurredAt, string? TaggedEntityType, string? TaggedEntityName);
+
+public record EventHistoryPageResponse(IReadOnlyList<EventResponse> Items, int TotalCount, int Page, int PageSize);

@@ -236,6 +236,82 @@ public class EventEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtur
         problem.GetProperty("errorCode").GetString().ShouldBe("event.description_too_long");
     }
 
+    [Fact]
+    public async Task GET_events_returns_200_with_the_page_shape()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        await client.PostAsJsonAsync(
+            "/api/events",
+            new { description = "cooked 2h", occurredAt = DateTimeOffset.UtcNow, taggedEntityType = (string?)null, taggedEntityId = (Guid?)null },
+            TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/events", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<EventHistoryPageResponse>(TestContext.Current.CancellationToken);
+        body!.TotalCount.ShouldBe(1);
+        body.Page.ShouldBe(1);
+        body.PageSize.ShouldBe(20);
+        body.Items.Single().Description.ShouldBe("cooked 2h");
+    }
+
+    [Fact]
+    public async Task GET_events_returns_a_400_with_an_errorCode_for_a_bad_page()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+
+        var response = await client.GetAsync("/api/events?page=0", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("errorCode").GetString().ShouldBe("event.page_invalid");
+    }
+
+    [Fact]
+    public async Task GET_events_returns_a_400_with_an_errorCode_for_a_bad_pageSize()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+
+        var response = await client.GetAsync("/api/events?pageSize=101", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("errorCode").GetString().ShouldBe("event.page_size_invalid");
+    }
+
+    [Fact]
+    public async Task A_principal_without_a_Household_is_forbidden_from_reading_Event_history()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.GetAsync("/api/events", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    // AC #3, end-to-end: the display path must render the AD-10 snapshot even after the tagged
+    // Room is archived, never re-derive it and never 404/error.
+    [Fact]
+    public async Task GET_events_still_returns_the_original_taggedEntityName_after_the_tagged_Room_is_archived()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = "Kitchen" }, TestContext.Current.CancellationToken);
+        var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync(
+            "/api/events",
+            new { description = "cooked 2h", occurredAt = DateTimeOffset.UtcNow, taggedEntityType = "Room", taggedEntityId = room!.Id },
+            TestContext.Current.CancellationToken);
+        await client.DeleteAsync($"/api/rooms/{room.Id}", TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/events", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<EventHistoryPageResponse>(TestContext.Current.CancellationToken);
+        var entry = body!.Items.Single();
+        entry.TaggedEntityType.ShouldBe("Room");
+        entry.TaggedEntityName.ShouldBe("Kitchen");
+    }
+
     private static async Task<PowerPointResponse> CreatePowerPointAsync(HttpClient client, string roomName, string powerPointName)
     {
         var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = roomName }, TestContext.Current.CancellationToken);

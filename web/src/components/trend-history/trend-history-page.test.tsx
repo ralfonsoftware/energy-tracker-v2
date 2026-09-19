@@ -18,6 +18,9 @@ function mockRoutes(historyEntries: unknown[] = []) {
       if (url.startsWith('/api/meter-readings')) {
         return Promise.resolve(jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }))
       }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve(jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }))
+      }
       if (url === '/api/smart-plug-readings') {
         return Promise.resolve(jsonResponse([]))
       }
@@ -31,16 +34,18 @@ describe('TrendHistoryPage', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the chart, the Meter Readings card, and the Per-Plug card in that order', async () => {
+  it('renders the chart, the Meter Readings card, the Events card, and the Per-Plug card in that order', async () => {
     mockRoutes([])
 
     render(<TrendHistoryPage locale="en-US" onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
 
     expect(await screen.findByText('Not enough history yet to show a trend.')).toBeInTheDocument()
     expect(await screen.findByText('Meter Readings — 0 logged')).toBeInTheDocument()
+    const eventsSummary = await screen.findByText('Events — 0 logged')
     const perPlugHeading = await screen.findByText('Room → Power Point → Device')
     const readingsSummary = screen.getByText('Meter Readings — 0 logged')
-    expect(readingsSummary.compareDocumentPosition(perPlugHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(readingsSummary.compareDocumentPosition(eventsSummary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(eventsSummary.compareDocumentPosition(perPlugHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('renders the Smart Plug Import icon button and calls onSmartPlugImportClick', async () => {
@@ -105,6 +110,9 @@ describe('TrendHistoryPage', () => {
         return Promise.resolve(
           jsonResponse({ items: [{ ...readingItem, kwhValue: saved ? 150 : 100 }], totalCount: 1, page: 1, pageSize: 20 }),
         )
+      }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve(jsonResponse({ items: [], totalCount: 0, page: 1, pageSize: 20 }))
       }
       if (url === '/api/smart-plug-readings') {
         return Promise.resolve(jsonResponse([]))

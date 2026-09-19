@@ -137,6 +137,8 @@
       "tag_not_found": "Diesen Tag gibt es nicht mehr. Bitte wähle einen anderen.",
       "tag_archived": "Dieser Tag wurde archiviert. Bitte wähle einen anderen.",
       "tag_parent_archived": "Dieser Tag gehört zu einem archivierten Raum oder Stromanschluss. Bitte wähle einen anderen.",
+      "page_invalid": "Diese Seitenzahl ist ungültig.",
+      "page_size_invalid": "Diese Seitengröße ist ungültig.",
       "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte lade die Seite neu, um dich erneut anzumelden."
     }
   },
@@ -225,6 +227,18 @@
       "summary": "Zählerstände — {{count}} erfasst",
       "expand": "Durchsuchen & korrigieren",
       "collapse": "Verbergen"
+    },
+    "eventsCard": {
+      "summary": "Ereignisse — {{count}} erfasst",
+      "expand": "Durchsuchen",
+      "collapse": "Verbergen",
+      "loading": "Wird geladen…",
+      "emptyState": "Noch keine Ereignisse erfasst.",
+      "descriptionColumn": "Was ist passiert",
+      "timestampColumn": "Datum & Uhrzeit",
+      "previousPage": "Zurück",
+      "nextPage": "Weiter",
+      "pageIndicator": "Seite {{page}} von {{totalPages}}"
     },
     "perPlugCard": {
       "heading": "Raum → Steckdose → Gerät",

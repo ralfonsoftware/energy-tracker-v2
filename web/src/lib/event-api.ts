@@ -63,6 +63,13 @@ export interface CreateEventInput {
   taggedEntityId: string | null
 }
 
+export interface EventHistoryPageDto {
+  items: EventDto[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
 export async function createEvent(input: CreateEventInput): Promise<EventDto> {
   // Plain fetch, not attemptSend/the offline queue — Event creation is deliberately not extended
   // into the Meter-Reading-only offline pattern (see the story's Dev Notes).
@@ -78,6 +85,34 @@ export async function createEvent(input: CreateEventInput): Promise<EventDto> {
   }
 
   return (await response.json()) as EventDto
+}
+
+export async function fetchEventHistory(page: number, pageSize: number): Promise<EventHistoryPageDto> {
+  const response = await fetch(`/api/events?page=${page}&pageSize=${pageSize}`, { credentials: 'include' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  return (await response.json()) as EventHistoryPageDto
+}
+
+// Shared by log-event-sheet.tsx and events-card.tsx — both surfaces need identical behavior, so this
+// lives in one place rather than being copied per-file the way ApiError/toApiError deliberately are.
+// The server's `detail` is English by contract; `errorCode` is what gets localized (AD-18). A 401 is
+// called out separately so an expired session doesn't read as a generic failure the user would retry
+// forever — matching App.tsx's own 401 handling.
+export function messageForEventError(err: unknown, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) {
+      return t('event.errors.sessionExpired')
+    }
+    if (err.errorCode) {
+      return t(`event.errors.${err.errorCode.replace(/^event\./, '')}`, {
+        defaultValue: t('event.errorGeneric'),
+      })
+    }
+  }
+  return t('event.errorGeneric')
 }
 
 /**
