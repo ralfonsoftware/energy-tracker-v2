@@ -170,6 +170,140 @@ public abstract class EventRepositoryTestsBase
 
         visible.ShouldBeEmpty();
     }
+
+    // AC #1: reverse-chronological by OccurredAt (the date the Event occurred), not insertion order.
+    [Fact]
+    public async Task GetPageForHouseholdAsync_orders_by_OccurredAt_descending()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var older = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "older",
+            OccurredAt = DateTimeOffset.UtcNow.AddDays(-2),
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-2),
+        };
+        var newer = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "newer",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        // Inserted in the opposite order from expected read order, to prove sort isn't insertion order.
+        await repository.AddAsync(older, TestContext.Current.CancellationToken);
+        await repository.AddAsync(newer, TestContext.Current.CancellationToken);
+
+        var (items, totalCount) = await repository.GetPageForHouseholdAsync(1, 20, TestContext.Current.CancellationToken);
+
+        totalCount.ShouldBe(2);
+        items.Select(e => e.Id).ShouldBe([newer.Id, older.Id]);
+    }
+
+    // Two Events backfilled to the same OccurredAt must not reorder between pages — CreatedAtUtc DESC
+    // is the stable tiebreaker.
+    [Fact]
+    public async Task GetPageForHouseholdAsync_breaks_ties_on_equal_OccurredAt_by_CreatedAtUtc_descending()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var sameOccurredAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        var createdEarlier = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "created earlier",
+            OccurredAt = sameOccurredAt,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
+        };
+        var createdLater = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "created later",
+            OccurredAt = sameOccurredAt,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        await repository.AddAsync(createdEarlier, TestContext.Current.CancellationToken);
+        await repository.AddAsync(createdLater, TestContext.Current.CancellationToken);
+
+        var (items, _) = await repository.GetPageForHouseholdAsync(1, 20, TestContext.Current.CancellationToken);
+
+        items.Select(e => e.Id).ShouldBe([createdLater.Id, createdEarlier.Id]);
+    }
+
+    [Fact]
+    public async Task GetPageForHouseholdAsync_paginates_correctly_at_page_boundaries()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var events = Enumerable.Range(0, 5)
+            .Select(i => new Event
+            {
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                Description = $"event {i}",
+                OccurredAt = DateTimeOffset.UtcNow.AddDays(-i),
+                CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-i),
+            })
+            .ToList();
+        foreach (var @event in events)
+        {
+            await repository.AddAsync(@event, TestContext.Current.CancellationToken);
+        }
+
+        var (firstPageItems, totalCount) = await repository.GetPageForHouseholdAsync(1, 2, TestContext.Current.CancellationToken);
+        var (secondPageItems, _) = await repository.GetPageForHouseholdAsync(2, 2, TestContext.Current.CancellationToken);
+        var (lastPageItems, _) = await repository.GetPageForHouseholdAsync(3, 2, TestContext.Current.CancellationToken);
+
+        totalCount.ShouldBe(5);
+        firstPageItems.Select(e => e.Id).ShouldBe([events[0].Id, events[1].Id]);
+        secondPageItems.Select(e => e.Id).ShouldBe([events[2].Id, events[3].Id]);
+        lastPageItems.Select(e => e.Id).ShouldBe([events[4].Id]);
+    }
+
+    // AD-3 for the read path — mirrors Events_are_scoped_to_the_current_Household_by_the_AD_3_query_filter
+    // above, but through the paged read method rather than a bare DbSet query.
+    [Fact]
+    public async Task GetPageForHouseholdAsync_excludes_another_Households_Events()
+    {
+        var householdId = Guid.NewGuid();
+        var otherHouseholdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, otherHouseholdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        await repository.AddAsync(new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            Description = "not yours",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }, TestContext.Current.CancellationToken);
+        await repository.AddAsync(new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "yours",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }, TestContext.Current.CancellationToken);
+
+        var (items, totalCount) = await repository.GetPageForHouseholdAsync(1, 20, TestContext.Current.CancellationToken);
+
+        totalCount.ShouldBe(1);
+        items.Single().Description.ShouldBe("yours");
+    }
 }
 
 public class PostgresEventRepositoryTests : EventRepositoryTestsBase, IAsyncLifetime

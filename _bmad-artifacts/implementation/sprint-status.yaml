@@ -576,7 +576,29 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-18
+last_updated: 2026-09-19
+# 2026-09-19: story 6-2-event-history-view code review complete -- status review -> done. 3
+#   parallel review layers ran; AC #5's deferred live verification was resolved in-session (shared
+#   test household's Event row temporarily removed and restored, confirming the empty state live
+#   in Chrome); 3 patches applied and verified (events-card.tsx pagination/error-state UI gate,
+#   empty-string taggedEntityName guard, EventRepository ordering tiebreaker); 6 items deferred to
+#   deferred-work.md; 4 dismissed as noise. All suites re-verified green after patches.
+# 2026-09-19: story 6-2-event-history-view moved to review (dev-story implementation complete).
+#   All 7 tasks done, all 6 ACs satisfied. GET /api/events (GetEventHistory + IEventRepository.
+#   GetPageForHouseholdAsync) added, mirroring GetMeterReadingHistory's shape; Events.HouseholdId
+#   index replaced with a composite (HouseholdId, OccurredAt, CreatedAtUtc) index via the
+#   AddEventOccurredAtIndex migration on both providers. New events-card.tsx renders
+#   taggedEntityName verbatim with no live join (AD-10); errorCode->catalog mapping extracted from
+#   log-event-sheet.tsx into a shared event-api.ts helper. Live Auth0/Chrome verification: AC #3
+#   confirmed (archived-Room tag still renders as plain text, no error; network-request check
+#   confirmed no /api/rooms|power-points|devices call fired) -- AC #5 empty state verified via
+#   component test instead, since the shared test household already carries other stories' verified
+#   data. Full backend suite green (325 Application + 188 Infrastructure + 201 Api + 4
+#   Architecture), full frontend suite green (369/369). Also closed out story 6.1's AC #4
+#   display-half decision item (see below).
+# 2026-09-19: story 6-1-event-logging moved to done. Its sole remaining blocker (AC #4's display
+#   half, deferred to story 6.2) is now closed: 6.2 shipped the Event read path and the Events
+#   card rendering `taggedEntityName` verbatim. No other review item was open.
 # 2026-09-15: story 5-3-two-way-attractiveness-signal moved to review (dev-story implementation
 #   complete). All 7 tasks done: CompareTariff/TariffComparisonResponse extended with
 #   CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math, verified NOT
@@ -1197,8 +1219,8 @@ development_status:
   epic-5-retrospective: done
 
   epic-6: in-progress
-  6-1-event-logging: in-progress
-  6-2-event-history-view: ready-for-dev
+  6-1-event-logging: done
+  6-2-event-history-view: done
   6-3-wattage-plausibility-correlation: backlog
   epic-6-retrospective: optional
 

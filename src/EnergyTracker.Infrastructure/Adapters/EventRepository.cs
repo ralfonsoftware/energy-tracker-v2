@@ -1,5 +1,6 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.EntityFrameworkCore;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
@@ -19,5 +20,23 @@ public class EventRepository(EnergyTrackerDbContext dbContext) : IEventRepositor
         // which is exactly what the filter matches against.
         await dbContext.Entry(@event).ReloadAsync(cancellationToken);
         return @event;
+    }
+
+    public async Task<(IReadOnlyList<Event> Items, int TotalCount)> GetPageForHouseholdAsync(
+        int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var query = dbContext.Events.AsNoTracking();
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(e => e.OccurredAt)
+            .ThenByDescending(e => e.CreatedAtUtc)
+            .ThenByDescending(e => e.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
     }
 }

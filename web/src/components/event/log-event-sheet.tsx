@@ -12,7 +12,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { GLASS_SHEET_CLASSNAME } from '@/lib/glass-classnames'
-import { ApiError, createEvent, fetchTagOptions, type EventDto, type TagOption } from '@/lib/event-api'
+import { createEvent, fetchTagOptions, messageForEventError, type EventDto, type TagOption } from '@/lib/event-api'
 
 const MAX_DESCRIPTION_LENGTH = 500
 
@@ -89,23 +89,6 @@ export function LogEventSheet({ trigger, open, onOpenChange, onSaved }: LogEvent
     onOpenChange(next)
   }
 
-  // The server's `detail` is English by contract; `errorCode` is what gets localized (AD-18). A 401
-  // is called out separately so an expired session doesn't read as a generic failure the user would
-  // retry forever — matching App.tsx's own 401 handling.
-  const messageFor = (err: unknown): string => {
-    if (err instanceof ApiError) {
-      if (err.status === 401) {
-        return t('event.errors.sessionExpired')
-      }
-      if (err.errorCode) {
-        return t(`event.errors.${err.errorCode.replace(/^event\./, '')}`, {
-          defaultValue: t('event.errorGeneric'),
-        })
-      }
-    }
-    return t('event.errorGeneric')
-  }
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -123,7 +106,7 @@ export function LogEventSheet({ trigger, open, onOpenChange, onSaved }: LogEvent
       onOpenChange(false)
       onSaved?.(saved)
     } catch (err) {
-      setError(messageFor(err))
+      setError(messageForEventError(err, t))
     } finally {
       setSubmitting(false)
     }

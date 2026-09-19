@@ -39,8 +39,11 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
 
-        // AD-3's query filter runs on every Event query — index the column it filters on.
-        builder.HasIndex(e => e.HouseholdId);
+        // AD-3's query filter runs on every Event query. The composite leads with HouseholdId (the
+        // filtered column) and trails with OccurredAt + CreatedAtUtc (GetPageForHouseholdAsync's
+        // sort), so the read path is fully index-ordered on both providers; the single-column index
+        // this replaces is now strictly redundant.
+        builder.HasIndex(e => new { e.HouseholdId, e.OccurredAt, e.CreatedAtUtc });
 
         // No FK from TaggedEntityId to Room/PowerPoint/Device — it's polymorphic across the three
         // discriminated types, so a real FK constraint can only ever target one table; this is a
