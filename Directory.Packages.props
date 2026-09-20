@@ -63,8 +63,11 @@
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.1.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.13.0" />
+    <!-- 4.14.0+ bumps its own SSH.NET dependency to 2026.0.0, past 2025.1.0's two high-severity
+         ScpClient advisories (GHSA-q939-rpr3-3284 path traversal, GHSA-mggc-4xg6-vcxf command
+         injection) — no local override needed. -->
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
   </ItemGroup>
 
 </Project>

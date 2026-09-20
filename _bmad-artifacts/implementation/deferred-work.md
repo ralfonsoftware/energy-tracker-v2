@@ -345,3 +345,9 @@
 - source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
   summary: Story 6.1's status flip to `done` (this story's own Task 6) is bundled into the same diff/PR as 6.2's new feature code, coupling the two stories' lifecycle state.
   evidence: Raised by adversarial review (Blind Hunter). Process/documentation observation, not a code defect — if 6.2 needed a substantial revert post-review, 6.1 would revert alongside it even though none of 6.1's already-shipped code changed in this diff.
+
+## Deferred from: code review of spec-ssh-net-cve-fix (2026-09-20)
+
+- source_spec: `_bmad-artifacts/implementation/spec-ssh-net-cve-fix.md`
+  summary: No CI step turns a NuGet vulnerable-transitive-package advisory (NU1903) into a build failure — `dotnet restore`/`build` only ever emits a non-blocking warning, so the next routine dependency bump could silently reintroduce a vulnerable transitive package (SSH.NET or otherwise) with nothing in `pr-review.yml` to catch it.
+  evidence: Raised by adversarial review (Blind Hunter) against an earlier local-pin approach to this same fix; the gap is systemic (`NuGetAuditMode`/`WarningsAsErrors` configured nowhere in the repo) and pre-existing, not introduced by this fix, which instead tracks Testcontainers' own upstream SSH.NET bump (4.15.0) rather than adding a local override. Worth a dedicated `NuGetAuditMode`/`NuGetAuditLevel` (or `dotnet list package --vulnerable` CI gate) pass covering the whole solution, not just this one advisory.
