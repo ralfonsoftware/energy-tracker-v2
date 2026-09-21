@@ -1,5 +1,21 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-18
+# last_updated: 2026-09-20
+# 2026-09-20: story 6-3-wattage-plausibility-correlation created (create-story) -- status set to
+#   ready-for-dev. This is the largest story in the epic by a wide margin: exhaustive codebase
+#   research confirmed IAiPlausibilityClient/OpenAiCompatibleClient (AD-8), the windowed
+#   bump/dip deviation calculation, and the Household-level AI setting are all fully greenfield --
+#   nothing beyond architecture prose exists yet. Story resolves two design tensions not settled
+#   anywhere in the docs (flagged for review): (1) AC #5's "local vs cloud is a Household-level
+#   choice" is resolved as one deployment-wide backend (env-var config, AD-8/AD-19) plus a
+#   per-Household on/off toggle, not per-household backend selection -- no precedent exists for
+#   storing per-household secrets; (2) correlation display is always one of two fixed i18n-catalog
+#   strings driven by an AI classification-only call, never raw AI prose, per AD-18/UX-DR17.
+#   Correlation is stored as two nullable columns directly on Event (not a new table). New windowed
+#   deviation calculator must not touch the 9 files PatternDetectiveDoesNotReferenceSmartPlugOrEvent
+#   DataTests.cs source-scans (AD-14 guard, written in 6.1 anticipating this story) -- it may only
+#   read Pattern Detective's outputs from a new file. CreateEvent will unconditionally enqueue a
+#   correlation job; the enabled/configured check lives solely inside the new CorrelateEvent use
+#   case, per AD-8's anti-hard-branch rule.
 # 2026-09-18: queued spec-datetimeoffset-utc-normalization.md (ready-for-dev) from story 6.1's
 #   deferred-work triage. Npgsql rejects a non-zero-offset DateTimeOffset while SQL Server accepts
 #   it, so the ISO-8601-with-explicit-offset wire format project-context.md itself mandates is a 500
@@ -1221,7 +1237,7 @@ development_status:
   epic-6: in-progress
   6-1-event-logging: done
   6-2-event-history-view: done
-  6-3-wattage-plausibility-correlation: backlog
+  6-3-wattage-plausibility-correlation: ready-for-dev
   epic-6-retrospective: optional
 
   epic-7: backlog
