@@ -23,6 +23,9 @@ function stubFetch(meterReadingsResponse: () => Response = () => jsonResponse(nu
       if (url === `/api/households/${householdId}`) {
         return Promise.resolve(jsonResponse({ id: householdId, locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }))
       }
+      if (url === `/api/households/${householdId}/ai-plausibility`) {
+        return Promise.resolve(jsonResponse({ enabled: false, backendConfigured: false, backendLabel: null, version: 0 }))
+      }
       if (url === '/api/meter-readings') {
         return Promise.resolve(meterReadingsResponse())
       }
@@ -76,6 +79,9 @@ describe('SettingsPage', () => {
         }
         if (url === `/api/households/${householdId}`) {
           return Promise.resolve(jsonResponse({ id: householdId, locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }))
+        }
+        if (url === `/api/households/${householdId}/ai-plausibility`) {
+          return Promise.resolve(jsonResponse({ enabled: false, backendConfigured: false, backendLabel: null, version: 0 }))
         }
         return Promise.resolve(jsonResponse(null))
       }),

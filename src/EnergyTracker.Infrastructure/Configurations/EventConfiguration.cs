@@ -32,6 +32,10 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.TaggedEntityName)
             .HasMaxLength(200);
 
+        // "Bump"|"Dip" — plenty of headroom without pinning to the exact enum member length.
+        builder.Property(e => e.CorrelationDirection)
+            .HasMaxLength(16);
+
         // Restrict, not Cascade — same AD-10 reasoning as MeterReading's FK to Household.
         builder.HasOne<Household>()
             .WithMany()

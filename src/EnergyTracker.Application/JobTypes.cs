@@ -12,4 +12,9 @@ public static class JobTypes
     // can exceed Azure Container Apps' ~240s HTTP ingress ceiling even with every DB command
     // individually bounded (CAP-1/CAP-4). No chunk-size tuning fixes a wall-clock ceiling.
     public const string CleanUpSmartPlugImportJobs = "CleanUpSmartPlugImportJobs";
+
+    // Story 6.3 — CreateEvent unconditionally enqueues this; CorrelateEvent is the one place that
+    // checks Household.AiPlausibilityEnabled/whether a real IAiPlausibilityClient is configured
+    // (AD-8's anti-hard-branch rule).
+    public const string CorrelateEvent = "CorrelateEvent";
 }

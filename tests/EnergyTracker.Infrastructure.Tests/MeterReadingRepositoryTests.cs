@@ -230,6 +230,71 @@ public abstract class MeterReadingRepositoryTestsBase
 
         dbContext.Database.GetCommandTimeout().ShouldBeNull();
     }
+
+    // Story 6.3 — WindowedDeviationCalculator's fixed ±7-day-around-an-Event window, independent of
+    // GetRecentByMainMeterAsync's "recency from the latest reading" anchor.
+    [Fact]
+    public async Task GetInWindowByMainMeterAsync_returns_only_readings_within_the_inclusive_window()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var eventTimestamp = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+        var windowStart = eventTimestamp - TimeSpan.FromDays(7);
+        var windowEnd = eventTimestamp + TimeSpan.FromDays(7);
+        var beforeWindow = NewReading(householdId, mainMeterId, 100m, windowStart - TimeSpan.FromDays(1));
+        var atWindowStart = NewReading(householdId, mainMeterId, 200m, windowStart);
+        var insideWindow = NewReading(householdId, mainMeterId, 300m, eventTimestamp);
+        var atWindowEnd = NewReading(householdId, mainMeterId, 400m, windowEnd);
+        var afterWindow = NewReading(householdId, mainMeterId, 500m, windowEnd + TimeSpan.FromDays(1));
+        dbContext.MeterReadings.AddRange(beforeWindow, atWindowStart, insideWindow, atWindowEnd, afterWindow);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new MeterReadingRepository(dbContext);
+
+        var result = await repository.GetInWindowByMainMeterAsync(mainMeterId, windowStart, windowEnd, TestContext.Current.CancellationToken);
+
+        result.Select(r => r.Id).ShouldBe([atWindowStart.Id, insideWindow.Id, atWindowEnd.Id]);
+    }
+
+    [Fact]
+    public async Task GetInWindowByMainMeterAsync_returns_empty_when_no_readings_fall_in_the_window()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new MeterReadingRepository(dbContext);
+
+        var result = await repository.GetInWindowByMainMeterAsync(
+            mainMeterId, DateTimeOffset.UtcNow.AddDays(-7), DateTimeOffset.UtcNow.AddDays(7), TestContext.Current.CancellationToken);
+
+        result.ShouldBeEmpty();
+    }
+
+    // A Household can only ever have one MainMeter (unique HouseholdId index), so "another Main
+    // Meter" necessarily belongs to a different Household — this exercises the explicit
+    // r.MainMeterId == mainMeterId filter together with (not instead of) AD-3's own HouseholdId
+    // scoping, same as GetPageForHouseholdAsync_excludes_another_Households_Events's precedent in
+    // EventRepositoryTests.cs.
+    [Fact]
+    public async Task GetInWindowByMainMeterAsync_excludes_another_Main_Meters_readings()
+    {
+        var householdId = Guid.NewGuid();
+        var otherHouseholdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var otherMainMeterId = Guid.NewGuid();
+        dbContext.Households.Add(new Household { Id = otherHouseholdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        dbContext.MainMeters.Add(new MainMeter { Id = otherMainMeterId, HouseholdId = otherHouseholdId, CreatedAtUtc = DateTimeOffset.UtcNow });
+        var now = DateTimeOffset.UtcNow;
+        dbContext.MeterReadings.Add(NewReading(otherHouseholdId, otherMainMeterId, 999m, now));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new MeterReadingRepository(dbContext);
+
+        var result = await repository.GetInWindowByMainMeterAsync(
+            mainMeterId, now.AddDays(-7), now.AddDays(7), TestContext.Current.CancellationToken);
+
+        result.ShouldBeEmpty();
+    }
 }
 
 public class PostgresMeterReadingRepositoryTests : MeterReadingRepositoryTestsBase, IAsyncLifetime

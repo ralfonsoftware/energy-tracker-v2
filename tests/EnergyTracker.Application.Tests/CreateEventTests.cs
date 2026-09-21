@@ -9,8 +9,9 @@ public class CreateEventTests
 {
     private readonly IEventRepository _repository = Substitute.For<IEventRepository>();
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
+    private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
 
-    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository);
+    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository, _jobQueue);
 
     public CreateEventTests()
     {
@@ -274,5 +275,39 @@ public class CreateEventTests
         result.Description.ShouldBe("cooked 2h");
         result.OccurredAt.ShouldBe(occurredAt);
         await _repository.Received(1).AddAsync(Arg.Is<Event>(e => e.HouseholdId == householdId), Arg.Any<CancellationToken>());
+    }
+
+    // Story 6.3 (AC #6, #7): unconditional — CreateEvent itself never checks
+    // Household.AiPlausibilityEnabled or whether an AI backend is configured; that check lives
+    // solely inside CorrelateEvent (AD-8's anti-hard-branch rule).
+    [Fact]
+    public async Task Unconditionally_enqueues_a_CorrelateEvent_job_after_persisting()
+    {
+        var householdId = Guid.NewGuid();
+        var sut = Sut();
+        var occurredAt = DateTimeOffset.UtcNow;
+
+        var result = await sut.ExecuteAsync(householdId, "cooked 2h", occurredAt, null, null, TestContext.Current.CancellationToken);
+
+        await _jobQueue.Received(1).EnqueueAsync(
+            Arg.Is<JobEnvelope<CorrelateEventPayload>>(envelope =>
+                envelope.HouseholdId == householdId &&
+                envelope.JobType == JobTypes.CorrelateEvent &&
+                envelope.Payload.EventId == result.Id &&
+                envelope.Payload.HouseholdId == householdId &&
+                envelope.Payload.OccurredAt == occurredAt &&
+                envelope.Payload.Description == "cooked 2h"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Does_not_enqueue_a_job_when_validation_fails_before_persisting()
+    {
+        var sut = Sut();
+
+        await Should.ThrowAsync<EventValidationException>(() =>
+            sut.ExecuteAsync(Guid.NewGuid(), "", DateTimeOffset.UtcNow, null, null, TestContext.Current.CancellationToken));
+
+        await _jobQueue.DidNotReceive().EnqueueAsync(Arg.Any<JobEnvelope<CorrelateEventPayload>>(), Arg.Any<CancellationToken>());
     }
 }

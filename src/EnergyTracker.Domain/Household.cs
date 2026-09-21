@@ -35,6 +35,13 @@ public class Household
     // constraint (confirmed with Ralf during story creation; see story 5.4 Dev Notes).
     public int TariffCheckCadenceMonths { get; set; } = 3;
 
+    // Story 6.3 (AC #5, #6) — resolves AC #5's "local vs cloud is a household-level choice" as one
+    // deployment-wide backend (AD-8's env-var BaseUrl/ApiKey, read once at the composition root)
+    // plus this per-Household on/off dial for whether the household's Event data is ever sent to
+    // it at all. Defaults false: AI correlation is opt-in, never a silent phone-home the moment a
+    // deployment happens to have a backend configured (see story Dev Notes decision #1).
+    public bool AiPlausibilityEnabled { get; set; }
+
     // Portable EF Core concurrency token (AD-4) — guards two concurrent Yearly Baseline edits
     // from both succeeding. Household's first Version column; see HouseholdInvite.cs for the
     // established precedent this copies. Also covers the two Story 2.4 columns above — no new

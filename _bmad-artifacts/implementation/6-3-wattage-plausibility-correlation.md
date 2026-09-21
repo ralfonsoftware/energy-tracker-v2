@@ -1,6 +1,10 @@
+---
+baseline_commit: eae971d61ec2403af929a85e6fbd20cf25c6f159
+---
+
 # Story 6.3: Wattage Plausibility Correlation
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,45 +26,45 @@ so that I get a plausible, honest explanation without a false sense of precision
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — AI plausibility port & adapters (AC: #5, #6)**
-  - [ ] Define `IAiPlausibilityClient` in `src/EnergyTracker.Application/Ports/IAiPlausibilityClient.cs`: one method, `Task<AiPlausibilityDirection?> ClassifyAsync(string eventDescription, IReadOnlyCollection<AiPlausibilityDirection> observedDirections, CancellationToken cancellationToken)`. Define `AiPlausibilityDirection { Bump, Dip }` alongside it (Domain or Application — follow existing enum placement convention, e.g. next to `Status`).
-  - [ ] Implement `NoOpAiPlausibilityClient` (Infrastructure/Adapters) — always returns `null`. This is what's registered when unconfigured.
-  - [ ] Implement `OpenAiCompatibleClient` (Infrastructure/Adapters) — plain `HttpClient` call to `{BaseUrl}/v1/chat/completions` (OpenAI-compatible chat/completions shape — see Dev Notes §Latest Technical Info). System prompt instructs classification-only output; parse defensively — any unexpected/malformed response, timeout, or non-2xx **returns `null`, never throws**. This is the concrete mechanism behind NFR14 for the "AI is configured but flaky" case, not just the "unset" case.
-  - [ ] Wire DI in `Program.cs`: exactly one config value read once at the composition root selects the adapter (`AiPlausibility:BaseUrl` empty/unset → `NoOpAiPlausibilityClient`; else → `OpenAiCompatibleClient` with `BaseUrl` + optional `AiPlausibility:ApiKey` bearer header) — mirrors the existing DB-provider/job-queue selection pattern (consistency-conventions.md). No new NuGet package — `Directory.Packages.props` has zero AI/LLM SDK references today; use `HttpClient`/`System.Text.Json` directly.
-  - [ ] Tests: an Infrastructure test for `OpenAiCompatibleClient`'s request shaping and defensive response parsing (stub `HttpMessageHandler`, cover malformed/timeout/non-2xx → `null`).
+- [x] **Task 1 — AI plausibility port & adapters (AC: #5, #6)**
+  - [x] Define `IAiPlausibilityClient` in `src/EnergyTracker.Application/Ports/IAiPlausibilityClient.cs`: one method, `Task<AiPlausibilityDirection?> ClassifyAsync(string eventDescription, IReadOnlyCollection<AiPlausibilityDirection> observedDirections, CancellationToken cancellationToken)`. Define `AiPlausibilityDirection { Bump, Dip }` alongside it (Domain or Application — follow existing enum placement convention, e.g. next to `Status`).
+  - [x] Implement `NoOpAiPlausibilityClient` (Infrastructure/Adapters) — always returns `null`. This is what's registered when unconfigured.
+  - [x] Implement `OpenAiCompatibleClient` (Infrastructure/Adapters) — plain `HttpClient` call to `{BaseUrl}/v1/chat/completions` (OpenAI-compatible chat/completions shape — see Dev Notes §Latest Technical Info). System prompt instructs classification-only output; parse defensively — any unexpected/malformed response, timeout, or non-2xx **returns `null`, never throws**. This is the concrete mechanism behind NFR14 for the "AI is configured but flaky" case, not just the "unset" case.
+  - [x] Wire DI in `Program.cs`: exactly one config value read once at the composition root selects the adapter (`AiPlausibility:BaseUrl` empty/unset → `NoOpAiPlausibilityClient`; else → `OpenAiCompatibleClient` with `BaseUrl` + optional `AiPlausibility:ApiKey` bearer header) — mirrors the existing DB-provider/job-queue selection pattern (consistency-conventions.md). No new NuGet package — `Directory.Packages.props` has zero AI/LLM SDK references today; use `HttpClient`/`System.Text.Json` directly.
+  - [x] Tests: an Infrastructure test for `OpenAiCompatibleClient`'s request shaping and defensive response parsing (stub `HttpMessageHandler`, cover malformed/timeout/non-2xx → `null`).
 
-- [ ] **Task 2 — Household-level AI setting (AC: #5)**
-  - [ ] Add `AiPlausibilityEnabled` (`bool`, default `false`) to `Household` (`src/EnergyTracker.Domain/Household.cs`), following the existing `TrendingThresholdKwh`/`LowConfidenceGapDays` config-column pattern (AD-15). Add via `scripts/add-migration.sh` (both providers, AD-2).
-  - [ ] New use case mirroring `SetYearlyBaseline.cs`'s shape, e.g. `SetAiPlausibilityEnabled.cs` (Application) — updates the flag, respects AD-4 optimistic concurrency (`Household.Version`).
-  - [ ] New read endpoint exposing what's "always visible" per AC #5: `{ enabled: bool, backendConfigured: bool, backendLabel: string | null }`. `backendConfigured` reflects whether `AiPlausibility:BaseUrl` is set at this deployment; `backendLabel` is a plain deploy-time env var (e.g. `AiPlausibility:BackendLabel = "Local (LMStudio)"` or `"OpenAI"`) — a human-set label, not a heuristic guess from the URL. Extend `HouseholdEndpoints.cs` (or sibling) rather than inventing a new endpoints file, matching the one-file-per-entity convention.
-  - [ ] Frontend: Settings page gets an on/off toggle bound to `AiPlausibilityEnabled` plus the read-only backend label — always visible per AC #5, not hidden behind an "advanced" section.
-  - [ ] i18n: add `settings.aiPlausibility.*` keys to both `en-US` and `de-DE` catalogs in the same commit (AD-18).
-  - [ ] Tests: Application (`SetAiPlausibilityEnabledTests`), Infrastructure dual-provider (Household column round-trip), Api (endpoint), frontend component test for the toggle.
+- [x] **Task 2 — Household-level AI setting (AC: #5)**
+  - [x] Add `AiPlausibilityEnabled` (`bool`, default `false`) to `Household` (`src/EnergyTracker.Domain/Household.cs`), following the existing `TrendingThresholdKwh`/`LowConfidenceGapDays` config-column pattern (AD-15). Add via `scripts/add-migration.sh` (both providers, AD-2).
+  - [x] New use case mirroring `SetYearlyBaseline.cs`'s shape, e.g. `SetAiPlausibilityEnabled.cs` (Application) — updates the flag, respects AD-4 optimistic concurrency (`Household.Version`).
+  - [x] New read endpoint exposing what's "always visible" per AC #5: `{ enabled: bool, backendConfigured: bool, backendLabel: string | null }`. `backendConfigured` reflects whether `AiPlausibility:BaseUrl` is set at this deployment; `backendLabel` is a plain deploy-time env var (e.g. `AiPlausibility:BackendLabel = "Local (LMStudio)"` or `"OpenAI"`) — a human-set label, not a heuristic guess from the URL. Extend `HouseholdEndpoints.cs` (or sibling) rather than inventing a new endpoints file, matching the one-file-per-entity convention.
+  - [x] Frontend: Settings page gets an on/off toggle bound to `AiPlausibilityEnabled` plus the read-only backend label — always visible per AC #5, not hidden behind an "advanced" section.
+  - [x] i18n: add `settings.aiPlausibility.*` keys to both `en-US` and `de-DE` catalogs in the same commit (AD-18).
+  - [x] Tests: Application (`SetAiPlausibilityEnabledTests`), Infrastructure dual-provider (Household column round-trip), Api (endpoint), frontend component test for the toggle.
 
-- [ ] **Task 3 — Windowed consumption-deviation detection (AC: #2, #3, #4)**
-  - [ ] **Do not modify** the 9 files the `PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests` architecture guard source-scans for the literal word "Event" (see Dev Notes §AD-14 guard for the exact list). New logic must live in a **new** file that *reads* Pattern Detective's existing calculations/data (`PatternDetectiveCalculator`, `MeterReading`, `SmartPlugReading`, `Household` baseline config) — the isolation is one-directional; Pattern Detective must stay Event-unaware, but new Event-aware code may consume its outputs.
-  - [ ] New calculator (e.g. `src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs`) that, given a Household's `MeterReading`/`SmartPlugReading` data and a `±7 day` window around a timestamp, computes whether the windowed pace deviates meaningfully from the baseline-implied expected rate for that window, returning `Bump`, `Dip`, or `null` (no deviation). **Reuse `BonusDecayNormalizer`'s pace/savings math (AD-5) — do not write a second copy of that formula.** Use `Household.TrendingThresholdKwh` (already exists, already household-tunable) prorated to the window length as the deviation bar, since no other threshold is specified anywhere in the PRD/architecture — flagged as a product-tuning decision, not a value to hardcode-and-forget.
-  - [ ] Tests: Domain unit tests covering bump / dip / none / boundary-exactly-at-threshold cases.
-  - [ ] Explicitly re-run `PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests` after this task and confirm it still passes unmodified — do not assume; verify.
+- [x] **Task 3 — Windowed consumption-deviation detection (AC: #2, #3, #4)**
+  - [x] **Do not modify** the 9 files the `PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests` architecture guard source-scans for the literal word "Event" (see Dev Notes §AD-14 guard for the exact list). New logic must live in a **new** file that *reads* Pattern Detective's existing calculations/data (`PatternDetectiveCalculator`, `MeterReading`, `SmartPlugReading`, `Household` baseline config) — the isolation is one-directional; Pattern Detective must stay Event-unaware, but new Event-aware code may consume its outputs.
+  - [x] New calculator (e.g. `src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs`) that, given a Household's `MeterReading`/`SmartPlugReading` data and a `±7 day` window around a timestamp, computes whether the windowed pace deviates meaningfully from the baseline-implied expected rate for that window, returning `Bump`, `Dip`, or `null` (no deviation). **Reuse `BonusDecayNormalizer`'s pace/savings math (AD-5) — do not write a second copy of that formula.** Use `Household.TrendingThresholdKwh` (already exists, already household-tunable) prorated to the window length as the deviation bar, since no other threshold is specified anywhere in the PRD/architecture — flagged as a product-tuning decision, not a value to hardcode-and-forget.
+  - [x] Tests: Domain unit tests covering bump / dip / none / boundary-exactly-at-threshold cases.
+  - [x] Explicitly re-run `PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests` after this task and confirm it still passes unmodified — do not assume; verify.
 
-- [ ] **Task 4 — Correlate an Event end-to-end (AC: #1, #2, #3, #4, #6, #7)**
-  - [ ] Add two nullable columns directly to `Event` (`src/EnergyTracker.Domain/Event.cs`): `CorrelationDirection` (`string?`, "Bump"|"Dip") and `CorrelationComputedAtUtc` (`DateTimeOffset?`). Both null = "no correlation" (AC #3) — this is the simplest representation and needs no new table/repository, since correlation is 1:1-owned by its Event with no independent lifecycle. Migration via `scripts/add-migration.sh` (both providers).
-  - [ ] Add `Task SetCorrelationAsync(Guid eventId, string? direction, DateTimeOffset computedAtUtc, CancellationToken cancellationToken)` to `IEventRepository` + `EventRepository` adapter.
-  - [ ] New `CorrelateEvent` use case (Application) — payload carries `EventId`, `HouseholdId`, `OccurredAt`, `Description`. Logic: load `Household`; **if `AiPlausibilityEnabled` is false or `IAiPlausibilityClient` resolves to the no-op (unconfigured), do nothing and return** — this is the *only* place in the whole feature that checks "is AI enabled," per AD-8's explicit anti-hard-branch rule (`project-context.md`: "features must not check 'is AI enabled' and take a different code path"). Otherwise: run Task 3's calculator for the Event's window to get observed direction(s); if none, leave correlation null (AC #3); if a deviation exists, call `IAiPlausibilityClient.ClassifyAsync(description, observedDirections, ct)` to see whether the Event's inferred expected direction matches; persist the result via `SetCorrelationAsync`. Must never throw out of `ExecuteAsync` — a job-queue retry storm on an AI/network hiccup would itself become a product-availability issue that NFR14 exists to prevent.
-  - [ ] Wire `CreateEvent` (`src/EnergyTracker.Application/CreateEvent.cs`) to **unconditionally** enqueue a `JobEnvelope<CorrelateEventPayload>` via `IBackgroundJobQueue` right after `AddAsync` succeeds — no enable/disable check here (that lives entirely in `CorrelateEvent`, per the rule above). This is new wiring: `CreateEvent` currently enqueues nothing at all.
-  - [ ] Register the job-queue consumer for `CorrelateEventPayload` (mirror how the existing Smart Plug import job consumer is wired in `Program.cs`/Infrastructure).
-  - [ ] Tests: `CorrelateEventTests` (Application, NSubstitute for `IEventRepository`/`IAiPlausibilityClient`/`IHouseholdRepository`) covering enabled+deviation+match, enabled+deviation+no-match, enabled+no-deviation, disabled, unconfigured, AI-client-throws-nothing-propagates. Infrastructure dual-provider test for the new `Event` columns + `SetCorrelationAsync`. Api test confirming `GetEventHistory`/`GET /api/events` now returns the correlation fields.
+- [x] **Task 4 — Correlate an Event end-to-end (AC: #1, #2, #3, #4, #6, #7)**
+  - [x] Add two nullable columns directly to `Event` (`src/EnergyTracker.Domain/Event.cs`): `CorrelationDirection` (`string?`, "Bump"|"Dip") and `CorrelationComputedAtUtc` (`DateTimeOffset?`). Both null = "no correlation" (AC #3) — this is the simplest representation and needs no new table/repository, since correlation is 1:1-owned by its Event with no independent lifecycle. Migration via `scripts/add-migration.sh` (both providers).
+  - [x] Add `Task SetCorrelationAsync(Guid eventId, string? direction, DateTimeOffset computedAtUtc, CancellationToken cancellationToken)` to `IEventRepository` + `EventRepository` adapter.
+  - [x] New `CorrelateEvent` use case (Application) — payload carries `EventId`, `HouseholdId`, `OccurredAt`, `Description`. Logic: load `Household`; **if `AiPlausibilityEnabled` is false or `IAiPlausibilityClient` resolves to the no-op (unconfigured), do nothing and return** — this is the *only* place in the whole feature that checks "is AI enabled," per AD-8's explicit anti-hard-branch rule (`project-context.md`: "features must not check 'is AI enabled' and take a different code path"). Otherwise: run Task 3's calculator for the Event's window to get observed direction(s); if none, leave correlation null (AC #3); if a deviation exists, call `IAiPlausibilityClient.ClassifyAsync(description, observedDirections, ct)` to see whether the Event's inferred expected direction matches; persist the result via `SetCorrelationAsync`. Must never throw out of `ExecuteAsync` — a job-queue retry storm on an AI/network hiccup would itself become a product-availability issue that NFR14 exists to prevent.
+  - [x] Wire `CreateEvent` (`src/EnergyTracker.Application/CreateEvent.cs`) to **unconditionally** enqueue a `JobEnvelope<CorrelateEventPayload>` via `IBackgroundJobQueue` right after `AddAsync` succeeds — no enable/disable check here (that lives entirely in `CorrelateEvent`, per the rule above). This is new wiring: `CreateEvent` currently enqueues nothing at all.
+  - [x] Register the job-queue consumer for `CorrelateEventPayload` (mirror how the existing Smart Plug import job consumer is wired in `Program.cs`/Infrastructure).
+  - [x] Tests: `CorrelateEventTests` (Application, NSubstitute for `IEventRepository`/`IAiPlausibilityClient`/`IHouseholdRepository`) covering enabled+deviation+match, enabled+deviation+no-match, enabled+no-deviation, disabled, unconfigured, AI-client-throws-nothing-propagates. Infrastructure dual-provider test for the new `Event` columns + `SetCorrelationAsync`. Api test confirming `GetEventHistory`/`GET /api/events` now returns the correlation fields.
 
-- [ ] **Task 5 — Frontend inline display (AC: #1, #3, #7)**
-  - [ ] Extend `EventDto` (`web/src/lib/event-api.ts`) with `correlationDirection: 'Bump' | 'Dip' | null`.
-  - [ ] In `EventRow`/`events-card.tsx`, render the correlation **inline in the same row** — never a separate step/view (AC #7). No correlation → render nothing extra, no placeholder, no "no match found" state (AC #3, UX-DR14).
-  - [ ] Display text is **always one of exactly two fixed, translated strings** — never raw AI output rendered verbatim (this is required by AD-18 i18n and UX-DR17's plain-language/no-false-precision voice-and-tone rule, even though it's not spelled out as its own AC): `trendHistory.eventsCard.correlation.bump` → *"Roughly matches the bump seen."* and `.dip` → *"Roughly matches the dip seen."* (exact copy from EXPERIENCE.md's Voice and Tone Do/Don't table — do not paraphrase). Add both keys to `en-US` and `de-DE` in the same commit.
-  - [ ] Component tests: present (bump), present (dip), absent — confirm absent renders cleanly with no extra markup.
+- [x] **Task 5 — Frontend inline display (AC: #1, #3, #7)**
+  - [x] Extend `EventDto` (`web/src/lib/event-api.ts`) with `correlationDirection: 'Bump' | 'Dip' | null`.
+  - [x] In `EventRow`/`events-card.tsx`, render the correlation **inline in the same row** — never a separate step/view (AC #7). No correlation → render nothing extra, no placeholder, no "no match found" state (AC #3, UX-DR14).
+  - [x] Display text is **always one of exactly two fixed, translated strings** — never raw AI output rendered verbatim (this is required by AD-18 i18n and UX-DR17's plain-language/no-false-precision voice-and-tone rule, even though it's not spelled out as its own AC): `trendHistory.eventsCard.correlation.bump` → *"Roughly matches the bump seen."* and `.dip` → *"Roughly matches the dip seen."* (exact copy from EXPERIENCE.md's Voice and Tone Do/Don't table — do not paraphrase). Add both keys to `en-US` and `de-DE` in the same commit.
+  - [x] Component tests: present (bump), present (dip), absent — confirm absent renders cleanly with no extra markup.
 
-- [ ] **Task 6 — Cross-cutting verification (AC: all)**
-  - [ ] Full backend suite green per-project (Domain/Application/Infrastructure/Api/Architecture — MTP runner rejects a combined multi-project run), full frontend suite green, `tsc -b`, `oxlint`, `vite build` all clean.
-  - [ ] Live verification gate (project convention — blocks review→done, does not defer): confirm end-to-end in a real render with the household AI toggle **off** (no correlation appears, no console errors) and, if a reachable AI backend is available in the dev environment, **on** (a real classification round-trip completes and renders one of the two fixed strings). If no backend is reachable in this sandboxed environment, explicitly say so rather than claiming the "on" path was verified (same gap the project has already hit for OIDC in earlier stories).
-  - [ ] File anything punted into `_bmad-artifacts/implementation/deferred-work.md` under a `## Deferred from: code review of story-6.3 (date)` heading, with `summary`/`evidence`/`[file:line]`, matching the existing format.
+- [x] **Task 6 — Cross-cutting verification (AC: all)**
+  - [x] Full backend suite green per-project (Domain/Application/Infrastructure/Api/Architecture — MTP runner rejects a combined multi-project run), full frontend suite green, `tsc -b`, `oxlint`, `vite build` all clean.
+  - [x] Live verification gate (project convention — blocks review→done, does not defer): **CLEARED — see Completion Notes' "Live verification" entry.** Confirmed live in Chrome against the real Auth0 test-user session (Postgres + API + Vite running locally): the AI-disabled path (toggle off, no correlation, clean console) and the toggle-on-but-unconfigured-backend path (AC #6) both verified end-to-end. No AI backend is configured in this environment, so the real classification round-trip (AC #1/#7's rendered bump/dip text) was not exercised — explicitly disclosed, not claimed.
+  - [x] File anything punted into `_bmad-artifacts/implementation/deferred-work.md` under a `## Deferred from: code review of story-6.3 (date)` heading, with `summary`/`evidence`/`[file:line]`, matching the existing format.
 
 ## Dev Notes
 
@@ -180,10 +184,106 @@ Auth is a `Authorization: Bearer {ApiKey}` header when `ApiKey` is configured (L
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+- `./scripts/add-migration.sh AddAiPlausibilityEnabledToHousehold` — succeeded both providers.
+- `./scripts/add-migration.sh AddCorrelationToEvent` — succeeded both providers.
+- `dotnet build EnergyTracker.sln` — 0 warnings, 0 errors (final pass).
+- `dotnet test tests/EnergyTracker.Application.Tests/...` — 344/344 passed.
+- `dotnet test tests/EnergyTracker.Infrastructure.Tests/...` (dual-provider Testcontainers) — 214/214 passed.
+- `dotnet test tests/EnergyTracker.Api.Tests/...` — 206/206 passed.
+- `dotnet test tests/EnergyTracker.Architecture.Tests/...` — 4/4 passed, including `PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests` re-verified unmodified after Task 3.
+- `npx vitest run` (web/) — 376/376 passed.
+- `npx tsc -b` (web/) — clean.
+- `npx oxlint` (web/) — clean (pre-existing warnings only, in files this story didn't touch).
+- `npx vite build` (web/) — clean.
+- `npx shadcn@latest add switch` — generated `web/src/components/ui/switch.tsx` with a wrong `cn` import (`from "cn"` instead of the project's `@/lib/utils` alias) and added a spurious `cn` npm dependency; both corrected by hand (`npm uninstall cn`, fixed the import).
+- First live verification attempt (initial dev-story pass): `mcp__claude-in-chrome__tabs_context_mcp` → "Browser extension is not connected." Local stack (Postgres via docker-compose, API via `scripts/run-api.sh`, Vite dev server) was started and confirmed healthy (`GET /health` → 200) in preparation, then stopped after the extension proved unavailable.
+- Second attempt, same session, user-requested retry: extension connected successfully (`tabs_context_mcp` returned a live tab). Local stack restarted (Postgres container was already up; API + Vite dev server restarted) — see "Live verification" under Completion Notes for the full run.
+
 ### Completion Notes List
 
+- Implemented all 6 tasks. AC #1–#7 satisfied by automated tests, and the AI-disabled / toggle-on-unconfigured-backend paths additionally confirmed live in Chrome (see "Live verification" below). The real AI classification round-trip (a configured, reachable backend) was not exercised — no `AiPlausibility:BaseUrl` is configured in this environment.
+
+**Live verification (2026-09-21, Chrome against the real Auth0 test-user session already signed in from prior stories' verifications, Postgres + API + Vite running locally via `scripts/migrate.sh`/`scripts/run-api.sh`/`npm run dev`):**
+- Settings page: "AI Wattage Plausibility" card renders unconditionally (AC #5) with the toggle off and "No AI backend is configured for this deployment." — matches this environment's actual config (no `AiPlausibility:BaseUrl` set).
+- `GET /api/households/{id}/ai-plausibility` → 200 (confirmed via `read_network_requests`), rendering the fetched state correctly.
+- Toggled the switch on: `PUT /api/households/{id}/ai-plausibility` → 200, switch updated to checked, no console errors.
+- Logged a real Event ("Story 6.3 live verification: gaming session 3h") via the Log Event sheet with the toggle now on: `POST /api/events` → 200, confirmation banner rendered. Server log confirmed `CreateEvent` enqueued a `CorrelateEvent` background job, which ran, queried `Households` (including the new `AiPlausibilityEnabled` column), found no `YearlyBaselineKwh` set, and completed cleanly with `Status = Completed` and no exception — the exact AC #6 "AI enabled but nothing to correlate against yet" degrade-gracefully path.
+- Trend History → Events card: the new Event renders inline in its row with no correlation text (AC #3 — correctly absent, not flagged as wrong, no placeholder) and no separate view/step was needed (AC #7).
+- `read_console_messages` (`onlyErrors: true`) was clean throughout every step above.
+- Toggle switched back off afterward (`PUT` → 200) to leave local-dev state as found; the test Event itself was left in place (Events are append-only — no delete path exists), matching Story 6.2's own "expected, inert local-dev state" precedent.
+- **Not verified live:** a real AI classification round-trip and its rendered "Roughly matches the bump/dip seen." text (AC #1/#7's actual copy) — this environment has no reachable `AiPlausibility:BaseUrl` configured (LMStudio/OpenAI/etc.), so `IAiPlausibilityClient` resolves to `NoOpAiPlausibilityClient` regardless of the toggle. Covered instead by `OpenAiCompatibleClientTests` (stubbed HTTP) and `events-card.test.tsx`'s component tests for the bump/dip rendering.
+- **Design decisions resolved during implementation (flagged for review, per this story's own Dev Notes framing):**
+  1. `WindowedDeviationCalculator` (Task 3) reads only `MeterReading` data, never `SmartPlugReading` — AD-14 explicitly forbids summing `SmartPlugReading` into a figure compared against the Main Meter total, so the windowed pace/delta is computed exactly like `PatternDetectiveCalculator` does (Main-Meter-only), just over a fixed ±7-day window instead of a trailing-365-day one anchored on the latest reading.
+  2. The ±7-day window's deviation threshold is `Household.TrendingThresholdKwh` **re-run through `BonusDecayNormalizer.NormalizeToDate` a second time** (same call used for the expected-consumption figure, just with `TrendingThresholdKwh` as the "annual rate" argument instead of `YearlyBaselineKwh`) — this reuses AD-5's one proration formula for both figures rather than inventing a second, window-specific proration, and keeps the two figures on an identical decimal-precision basis.
+  3. `CorrelateEvent` does **not** apply AD-12's open-`MeterRegressionPrompt` exclusion `GetCurrentStatus` applies via `PatternDetectiveCalculator.ExcludeFromOpenPrompt` — a deliberate scope simplification given AC #1's own "rough/approximate, never false precision" framing. Filed to `deferred-work.md`.
+  4. Correlation is derived exactly once, right after Event creation, and never recomputed later even if a Meter Reading is subsequently backfilled into an already-correlated Event's window (AD-10's "derive once, read back forever" discipline, applied by extension). Filed to `deferred-work.md`.
+  5. `GetInWindowByMainMeterAsync` (new `IMeterReadingRepository` method) does a plain `[windowStart, windowEnd]` inclusive filter with no bracketing/interpolation from outside the window — matches Task 3's literal "±7 day window around a timestamp" wording; if zero or one reading falls inside that exact window, the correlation is simply absent (AC #3), even if readings exist just outside it.
+- The `npx shadcn@latest add switch` CLI run added a broken `cn` import and an unnecessary `cn` npm package (see Debug Log) — this looks like a bug/version mismatch in the shadcn CLI given this project's `components.json` already declares the standard `@/lib/utils` alias; corrected by hand rather than accepting the generated import as-is.
+- **Live verification:** the Claude-in-Chrome extension reported "not connected" on the first attempt; the user asked for a retry later in the same session, at which point it connected successfully. The AI-disabled path and the toggle-on-but-unconfigured-backend path (AC #5, #6) were both confirmed live (see "Live verification" entry above) — gate cleared for those. No `AiPlausibility:BaseUrl` is configured in this environment, so the real AI classification round-trip and its rendered bump/dip text (AC #1/#7's actual copy) still was not, and could not be, exercised live here — that specific gap is filed to `deferred-work.md`.
+- Full backend suite green per-project (Application 344, Infrastructure 214 dual-provider, Api 206, Architecture 4 including the re-verified AD-14 guard); full frontend suite green (376 Vitest); `tsc -b`, `oxlint`, `vite build` all clean.
+
 ### File List
+
+**New files:**
+- `src/EnergyTracker.Domain/AiPlausibilityDirection.cs`
+- `src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs`
+- `src/EnergyTracker.Application/Ports/IAiPlausibilityClient.cs`
+- `src/EnergyTracker.Application/AiPlausibilityBackendOptions.cs`
+- `src/EnergyTracker.Application/SetAiPlausibilityEnabled.cs`
+- `src/EnergyTracker.Application/CorrelateEvent.cs`
+- `src/EnergyTracker.Infrastructure/Adapters/NoOpAiPlausibilityClient.cs`
+- `src/EnergyTracker.Infrastructure/Adapters/OpenAiCompatibleClient.cs`
+- `src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20260921050717_AddAiPlausibilityEnabledToHousehold.cs` (+ `.Designer.cs`)
+- `src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20260921051234_AddCorrelationToEvent.cs` (+ `.Designer.cs`)
+- `src/EnergyTracker.Infrastructure.Migrations.SqlServer/Migrations/20260921050719_AddAiPlausibilityEnabledToHousehold.cs` (+ `.Designer.cs`)
+- `src/EnergyTracker.Infrastructure.Migrations.SqlServer/Migrations/20260921051236_AddCorrelationToEvent.cs` (+ `.Designer.cs`)
+- `tests/EnergyTracker.Application.Tests/WindowedDeviationCalculatorTests.cs`
+- `tests/EnergyTracker.Application.Tests/CorrelateEventTests.cs`
+- `tests/EnergyTracker.Infrastructure.Tests/OpenAiCompatibleClientTests.cs`
+- `tests/EnergyTracker.Infrastructure.Tests/HouseholdRepositoryTests.cs`
+- `tests/EnergyTracker.Api.Tests/AiPlausibilityEndpointsTests.cs`
+- `web/src/components/ui/switch.tsx`
+- `web/src/components/ai-plausibility/ai-plausibility-form.tsx`
+- `web/src/components/ai-plausibility/ai-plausibility-form.test.tsx`
+
+**Modified files:**
+- `src/EnergyTracker.Domain/Household.cs`
+- `src/EnergyTracker.Domain/Event.cs`
+- `src/EnergyTracker.Application/Ports/IHouseholdRepository.cs`
+- `src/EnergyTracker.Application/Ports/IEventRepository.cs`
+- `src/EnergyTracker.Application/Ports/IMeterReadingRepository.cs`
+- `src/EnergyTracker.Application/CreateEvent.cs`
+- `src/EnergyTracker.Application/JobTypes.cs`
+- `src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs`
+- `src/EnergyTracker.Infrastructure/Adapters/EventRepository.cs`
+- `src/EnergyTracker.Infrastructure/Adapters/MeterReadingRepository.cs`
+- `src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs`
+- `src/EnergyTracker.Infrastructure/Configurations/HouseholdConfiguration.cs`
+- `src/EnergyTracker.Infrastructure/Configurations/EventConfiguration.cs`
+- `src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/EnergyTrackerDbContextModelSnapshot.cs`
+- `src/EnergyTracker.Infrastructure.Migrations.SqlServer/Migrations/EnergyTrackerDbContextModelSnapshot.cs`
+- `src/EnergyTracker.Api/Program.cs`
+- `src/EnergyTracker.Api/Endpoints/HouseholdEndpoints.cs`
+- `src/EnergyTracker.Api/Endpoints/EventEndpoints.cs`
+- `tests/EnergyTracker.Application.Tests/CreateEventTests.cs`
+- `tests/EnergyTracker.Infrastructure.Tests/EventRepositoryTests.cs`
+- `tests/EnergyTracker.Infrastructure.Tests/MeterReadingRepositoryTests.cs`
+- `tests/EnergyTracker.Api.Tests/EventEndpointsTests.cs`
+- `web/src/lib/event-api.ts`
+- `web/src/components/event/events-card.tsx`
+- `web/src/components/event/events-card.test.tsx`
+- `web/src/components/settings/settings-page.tsx`
+- `web/src/components/settings/settings-page.test.tsx`
+- `web/src/App.test.tsx`
+- `web/src/locales/en-US/translation.json`
+- `web/src/locales/de-DE/translation.json`
+- `_bmad-artifacts/implementation/deferred-work.md`
+
+## Change Log
+
+- 2026-09-21: Live Auth0/Chrome verification performed at the user's request (extension reconnected after an initial "not connected" failure). Confirmed live: Settings' AI Wattage Plausibility card (always visible, correct unconfigured-backend messaging), the enable/disable toggle's GET/PUT round trip, and logging a real Event with the toggle on — the background `CorrelateEvent` job ran and completed cleanly with no `YearlyBaselineKwh` set (AC #6's graceful-degrade path), the Event rendered inline in Trend History with no correlation text (AC #3, #7), and the console/network were clean throughout. Toggle switched back off afterward; the test Event left in place (append-only, no delete path — matches Story 6.2's precedent). The real AI classification round-trip (AC #1/#7's bump/dip copy) remains unverified live — no `AiPlausibility:BaseUrl` is configured in this environment — and stays filed in `deferred-work.md`, covered instead by `OpenAiCompatibleClientTests`/`events-card.test.tsx`.
+- 2026-09-21: Story implemented (dev-story). All 6 tasks complete, all 7 ACs satisfied by automated tests. Full backend suite green (344 Application + 214 Infrastructure dual-provider + 206 Api + 4 Architecture, including a re-verified AD-14 guard), full frontend suite green (376/376), `dotnet build`/`tsc -b`/`oxlint`/`vite build` all clean. Resolved AD-8's local-vs-cloud tension per the story's own pre-flagged decision #1 (one deployment-wide `OpenAiCompatibleClient` backend + per-Household `AiPlausibilityEnabled` toggle). Windowed deviation math reuses `BonusDecayNormalizer` for both the expected-consumption figure and the prorated threshold — no second proration formula. Live Auth0/Chrome verification could **not** be performed this session (Claude-in-Chrome extension reported "not connected"), even though a real OIDC provider and local Postgres are both configured here — disclosed in Completion Notes and `deferred-work.md` rather than silently skipped, per this project's live-verification-gate convention. Status set to review.

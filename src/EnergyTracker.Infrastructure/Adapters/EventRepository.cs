@@ -39,4 +39,16 @@ public class EventRepository(EnergyTrackerDbContext dbContext) : IEventRepositor
 
         return (items, totalCount);
     }
+
+    public async Task SetCorrelationAsync(Guid eventId, string? direction, DateTimeOffset computedAtUtc, CancellationToken cancellationToken)
+    {
+        // ExecuteUpdateAsync bypasses the change tracker entirely — no fetch-modify-save round
+        // trip needed for a terminal, fire-and-forget write from the job-processing loop, and a
+        // 0-row match (Event no longer exists) is simply a no-op rather than a thrown exception.
+        await dbContext.Events
+            .Where(e => e.Id == eventId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(e => e.CorrelationDirection, direction)
+                .SetProperty(e => e.CorrelationComputedAtUtc, computedAtUtc), cancellationToken);
+    }
 }

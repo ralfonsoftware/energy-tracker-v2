@@ -42,6 +42,9 @@ public class HouseholdConfiguration : IEntityTypeConfiguration<Household>
         builder.Property(h => h.TariffCheckCadenceMonths)
             .HasDefaultValue(3);
 
+        builder.Property(h => h.AiPlausibilityEnabled)
+            .HasDefaultValue(false);
+
         builder.Property(h => h.Version)
             .IsConcurrencyToken();
 

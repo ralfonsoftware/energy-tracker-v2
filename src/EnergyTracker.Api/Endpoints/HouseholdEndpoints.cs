@@ -128,11 +128,56 @@ public static class HouseholdEndpoints
             }
         });
 
+        // AC #5: always visible regardless of AiPlausibilityEnabled's value — GET never 404s or
+        // omits the payload just because the toggle is off or the backend is unconfigured.
+        api.MapGet("/households/{id}/ai-plausibility", async (
+            Guid id,
+            ICurrentHouseholdAccessor householdAccessor,
+            EnergyTrackerDbContext dbContext,
+            AiPlausibilityBackendOptions backendOptions,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryAuthorizeHousehold(id, householdAccessor, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            var household = await dbContext.Households.SingleAsync(h => h.Id == id, cancellationToken);
+            return Results.Ok(ToAiPlausibilityResponse(household, backendOptions));
+        });
+
+        api.MapPut("/households/{id}/ai-plausibility", async (
+            Guid id,
+            SetAiPlausibilityEnabledRequest request,
+            ICurrentHouseholdAccessor householdAccessor,
+            SetAiPlausibilityEnabled setAiPlausibilityEnabled,
+            AiPlausibilityBackendOptions backendOptions,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryAuthorizeHousehold(id, householdAccessor, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                var household = await setAiPlausibilityEnabled.ExecuteAsync(id, request.Enabled, request.Version, cancellationToken);
+                return Results.Ok(ToAiPlausibilityResponse(household, backendOptions));
+            }
+            catch (HouseholdConcurrencyConflictException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
+
         return api;
     }
 
     private static HouseholdResponse ToDetailsResponse(Household household) =>
         new(household.Id, household.Locale, household.Currency, household.YearlyBaselineKwh, household.Version);
+
+    private static AiPlausibilitySettingsResponse ToAiPlausibilityResponse(Household household, AiPlausibilityBackendOptions backendOptions) =>
+        new(household.AiPlausibilityEnabled, backendOptions.Configured, backendOptions.Label, household.Version);
 }
 
 public record CreateHouseholdRequest(string Locale, string Currency);
@@ -143,3 +188,7 @@ public record CreateHouseholdRequest(string Locale, string Currency);
 public record HouseholdResponse(Guid Id, string Locale, string Currency, decimal? YearlyBaselineKwh, int Version);
 
 public record SetYearlyBaselineRequest(decimal YearlyBaselineKwh, int Version);
+
+public record AiPlausibilitySettingsResponse(bool Enabled, bool BackendConfigured, string? BackendLabel, int Version);
+
+public record SetAiPlausibilityEnabledRequest(bool Enabled, int Version);

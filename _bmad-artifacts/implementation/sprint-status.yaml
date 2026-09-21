@@ -1,5 +1,36 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-20
+# last_updated: 2026-09-21
+# 2026-09-21: story 6-3-wattage-plausibility-correlation -- live Auth0/Chrome verification gate
+#   cleared (user-requested retry after the extension initially reported "not connected"). Confirmed
+#   live: Settings' AI Wattage Plausibility card and its enable/disable toggle round trip, and a real
+#   Event logged with the toggle on -- CorrelateEvent's background job ran and completed cleanly with
+#   no YearlyBaselineKwh set (AC #6's graceful-degrade path), no correlation rendered (AC #3), no
+#   separate step needed (AC #7), clean console/network throughout. Still not verified live: the real
+#   AI classification round-trip and its rendered bump/dip copy (AC #1/#7) -- no AiPlausibility:BaseUrl
+#   is configured in this environment; that narrower gap stays filed in deferred-work.md, covered by
+#   OpenAiCompatibleClientTests/events-card.test.tsx instead. Toggle switched back off afterward;
+#   Status remains review (a code-review pass is still the gate for done).
+# 2026-09-21: story 6-3-wattage-plausibility-correlation moved to review (dev-story implementation
+#   complete). All 6 tasks done, all 7 ACs satisfied by automated tests. Full backend suite green
+#   (344 Application + 214 Infrastructure dual-provider + 206 Api + 4 Architecture incl. re-verified
+#   AD-14 guard), full frontend suite green (376/376), dotnet build/tsc -b/oxlint/vite build all
+#   clean. Resolved AC #5/AD-8 tension per the story's own pre-flagged decision: one deployment-wide
+#   OpenAiCompatibleClient backend (env-var BaseUrl/ApiKey) + per-Household AiPlausibilityEnabled
+#   toggle, never per-household backend selection. WindowedDeviationCalculator (new, ±7-day window)
+#   reuses BonusDecayNormalizer for both the expected-consumption figure and the prorated threshold
+#   -- no second proration formula, per AD-5. CorrelateEvent is the sole place that checks
+#   AiPlausibilityEnabled/backend-configured, per AD-8's anti-hard-branch rule; CreateEvent
+#   unconditionally enqueues the job. Live Auth0/Chrome verification could NOT be performed this
+#   session -- Claude-in-Chrome extension reported "not connected" -- even though this environment
+#   (unlike 6.1/6.2's sandboxes) has a real OIDC provider and local Postgres configured. Disclosed
+#   in the story's Completion Notes and filed to deferred-work.md rather than silently skipped; must
+#   be cleared during code review before this story can move to done, per the project's standing
+#   live-verification-gate convention. 3 deliberate scope simplifications also filed to
+#   deferred-work.md: no AD-12 open-regression-prompt exclusion in the windowed calculator, no
+#   correlation recompute on a later backfilled reading, and the ±7-day window fetch has no
+#   outside-window bracketing/interpolation.
+# 2026-09-21: story 6-3-wattage-plausibility-correlation started (dev-story) -- status ready-for-dev
+#   -> in-progress. baseline_commit eae971d61ec2403af929a85e6fbd20cf25c6f159 captured.
 # 2026-09-20: story 6-3-wattage-plausibility-correlation created (create-story) -- status set to
 #   ready-for-dev. This is the largest story in the epic by a wide margin: exhaustive codebase
 #   research confirmed IAiPlausibilityClient/OpenAiCompatibleClient (AD-8), the windowed
@@ -1237,7 +1268,7 @@ development_status:
   epic-6: in-progress
   6-1-event-logging: done
   6-2-event-history-view: done
-  6-3-wattage-plausibility-correlation: ready-for-dev
+  6-3-wattage-plausibility-correlation: review
   epic-6-retrospective: optional
 
   epic-7: backlog

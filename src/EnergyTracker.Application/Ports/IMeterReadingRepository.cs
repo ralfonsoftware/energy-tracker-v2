@@ -51,4 +51,12 @@ public interface IMeterReadingRepository
     // MeterReadingConcurrencyConflictException on a Version mismatch — mirrors
     // HouseholdRepository.UpdateYearlyBaselineAsync's exact mechanics.
     Task<MeterReading> UpdateKwhValueAsync(Guid readingId, decimal kwhValue, int expectedVersion, CancellationToken cancellationToken);
+
+    // Story 6.3 — an explicit [windowStart, windowEnd] fetch (inclusive both ends) for one Main
+    // Meter, ordered by ReadingTimestamp then Id. Deliberately independent of
+    // GetRecentByMainMeterAsync's "recency from the latest reading" anchor: WindowedDeviationCalculator
+    // needs a fixed ±7-day window around an arbitrary Event timestamp, which can be anywhere in the
+    // Main Meter's history, not just its most recent trailing window.
+    Task<IReadOnlyList<MeterReading>> GetInWindowByMainMeterAsync(
+        Guid mainMeterId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken);
 }

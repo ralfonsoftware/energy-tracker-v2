@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
@@ -335,6 +336,37 @@ builder.Services.AddScoped<GetTariffCheckReminder>();
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<CreateEvent>();
 builder.Services.AddScoped<GetEventHistory>();
+builder.Services.AddScoped<SetAiPlausibilityEnabled>();
+builder.Services.AddScoped<CorrelateEvent>();
+
+// AD-8: AiPlausibility:BaseUrl is read exactly once, here at the composition root — same
+// switch-on-configured-value shape as Database:Provider/JobQueue:Provider. Blank/unset selects the
+// no-op adapter; CorrelateEvent is the only place downstream allowed to also check
+// Household.AiPlausibilityEnabled — nothing else branches on whether AI is configured.
+var aiPlausibilityBaseUrl = (builder.Configuration["AiPlausibility:BaseUrl"] ?? string.Empty).Trim();
+var aiPlausibilityBackendLabel = builder.Configuration["AiPlausibility:BackendLabel"];
+if (string.IsNullOrEmpty(aiPlausibilityBaseUrl))
+{
+    builder.Services.AddSingleton<IAiPlausibilityClient, NoOpAiPlausibilityClient>();
+}
+else
+{
+    var aiPlausibilityApiKey = (builder.Configuration["AiPlausibility:ApiKey"] ?? string.Empty).Trim();
+    builder.Services.AddHttpClient<IAiPlausibilityClient, OpenAiCompatibleClient>(client =>
+    {
+        client.BaseAddress = new Uri(aiPlausibilityBaseUrl);
+        if (!string.IsNullOrEmpty(aiPlausibilityApiKey))
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", aiPlausibilityApiKey);
+        }
+    });
+}
+
+// AC #5's "always visible, regardless of enablement" backend info — a human-set label, not a
+// heuristic guess from the URL (Dev Notes). Registered once here rather than re-read per request.
+builder.Services.AddSingleton(new AiPlausibilityBackendOptions(
+    Configured: !string.IsNullOrEmpty(aiPlausibilityBaseUrl),
+    Label: string.IsNullOrEmpty(aiPlausibilityBackendLabel) ? null : aiPlausibilityBackendLabel));
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.

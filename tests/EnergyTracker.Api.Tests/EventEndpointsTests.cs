@@ -312,6 +312,33 @@ public class EventEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtur
         entry.TaggedEntityName.ShouldBe("Kitchen");
     }
 
+    // Story 6.3 — proves EventEndpoints.ToResponse actually threads CorrelationDirection through
+    // the wire response (not just the internal Event/EventDto mapping). AI Wattage Plausibility is
+    // disabled by default (Household.AiPlausibilityEnabled defaults false, and this test host has
+    // no AiPlausibility:BaseUrl configured either) — CorrelateEvent's background job runs but
+    // no-ops, so the field stays null end-to-end rather than being absent from the JSON shape.
+    [Fact]
+    public async Task GET_events_includes_a_null_correlationDirection_when_AI_Wattage_Plausibility_is_disabled()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        await client.PostAsJsonAsync(
+            "/api/events",
+            new { description = "gaming session 3h", occurredAt = DateTimeOffset.UtcNow, taggedEntityType = (string?)null, taggedEntityId = (Guid?)null },
+            TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/events", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rawJson = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var parsed = JsonDocument.Parse(rawJson);
+        var item = parsed.RootElement.GetProperty("items")[0];
+        item.TryGetProperty("correlationDirection", out var correlationDirectionProperty).ShouldBeTrue();
+        correlationDirectionProperty.ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var body = JsonSerializer.Deserialize<EventHistoryPageResponse>(rawJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        body!.Items.Single().CorrelationDirection.ShouldBeNull();
+    }
+
     private static async Task<PowerPointResponse> CreatePowerPointAsync(HttpClient client, string roomName, string powerPointName)
     {
         var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = roomName }, TestContext.Current.CancellationToken);

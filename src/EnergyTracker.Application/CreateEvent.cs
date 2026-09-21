@@ -4,7 +4,7 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>Creates an Event for the caller's own Household, optionally tagged to a live, non-archived Room/PowerPoint/Device (AC #1, #2, #3).</summary>
-public class CreateEvent(IEventRepository repository, ITaggingScaffoldRepository taggingScaffoldRepository)
+public class CreateEvent(IEventRepository repository, ITaggingScaffoldRepository taggingScaffoldRepository, IBackgroundJobQueue jobQueue)
 {
     private const int MaxDescriptionLength = 500;
 
@@ -77,7 +77,17 @@ public class CreateEvent(IEventRepository repository, ITaggingScaffoldRepository
             TaggedEntityName = taggedEntityName,
         };
 
-        return await repository.AddAsync(@event, cancellationToken);
+        var persisted = await repository.AddAsync(@event, cancellationToken);
+
+        // Story 6.3 (AC #6, #7): unconditional — the AiPlausibilityEnabled/backend-configured check
+        // lives entirely inside CorrelateEvent (AD-8's anti-hard-branch rule), never here.
+        await jobQueue.EnqueueAsync(
+            new JobEnvelope<CorrelateEventPayload>(
+                Guid.NewGuid(), householdId, JobTypes.CorrelateEvent,
+                new CorrelateEventPayload(persisted.Id, householdId, persisted.OccurredAt, persisted.Description)),
+            cancellationToken);
+
+        return persisted;
     }
 
     // Resolves via the existing ITaggingScaffoldRepository — one port for the whole Room/

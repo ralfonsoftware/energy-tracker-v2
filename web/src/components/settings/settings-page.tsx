@@ -13,6 +13,7 @@ import {
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 import { TaggingScaffoldManager } from '@/components/tagging-scaffold/tagging-scaffold-manager'
 import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline-form'
+import { AiPlausibilityForm } from '@/components/ai-plausibility/ai-plausibility-form'
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 import { checkPendingReadingsBeforeLogoff } from '@/lib/logoff'
@@ -105,6 +106,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, onBack, onT
 
       <div className="flex flex-col gap-[var(--spacing-card-gap)]">
         <YearlyBaselineForm householdId={householdId} />
+        <AiPlausibilityForm householdId={householdId} />
         <TaggingScaffoldManager />
         <InviteGeneratePanel />
 
