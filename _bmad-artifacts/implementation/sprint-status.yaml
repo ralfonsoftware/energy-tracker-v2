@@ -1,5 +1,16 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-21
+# 2026-09-21: epic-6 retrospective complete (bmad-retrospective). Clean epic (3/3 stories done, zero
+#   incidents). 5 action items recorded: (1) dev-story must raise+pause immediately on a
+#   "Chrome not connected" live-verification failure rather than checking the task off and letting
+#   review catch the skip later; (2) the real AI backend for Wattage Plausibility (Azure AI Foundry
+#   vs. self-hosted LMStudio vs. cloud API) is still an open decision -- only the no-op path has ever
+#   been verified live, non-blocking spike; (3)/(4) Story 7.2 kickoff flags pulled from a full
+#   deferred-work.md review: apply Stories 3.8-3.10's bulk-write/chunking/timeout lessons (a full
+#   restore is the same incident-prone shape), and resolve the EF DateTimeOffset value-comparer gap
+#   from spec-datetimeoffset-utc-normalization's own review before it becomes reachable via restore
+#   writes; (5) add a CI gate turning NU1903 (vulnerable transitive NuGet package) into a build
+#   failure, escalated to an owned item per Ralf. See epic-6-retro-2026-09-21.md for full detail.
 # 2026-09-21: story 6-3-wattage-plausibility-correlation -- code review complete, status review ->
 #   done. 3 decision-needed findings resolved (AC #5 deferred/wording corrected; Model-config gap
 #   and WindowedDeviationCalculator rollover-correction gap both patched), 4 patch findings applied
@@ -1271,11 +1282,11 @@ development_status:
   5-4-tariff-check-reminder: done
   epic-5-retrospective: done
 
-  epic-6: in-progress
+  epic-6: done
   6-1-event-logging: done
   6-2-event-history-view: done
   6-3-wattage-plausibility-correlation: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
 
   epic-7: backlog
   7-1-full-data-export: backlog
@@ -1394,8 +1405,8 @@ action_items:
   - epic: 5
     action: "At Story 6.2 kickoff, explicitly verify IAiPlausibilityClient's no-op-when-unconfigured degradation (AD-8) — its first real consumer, mirroring how 5.1/5.2 kickoff-verified AuditCorrection/BonusDecayNormalizer"
     owner: "story author (create-story)"
-    status: open
-    note: "2026-09-17 epic-5/1.12 retro, next-epic prep."
+    status: done
+    note: "2026-09-17 epic-5/1.12 retro, next-epic prep. Closed 2026-09-21 (epic-6 retro) — landed in the *renumbered* Story 6.3 (the mid-epic 6.1-review insertion of Story 6.2 'Event History View' bumped the correlation story from 6.2 to 6.3); verified live: toggle-on + unconfigured backend -> CorrelateEvent job completes clean, no correlation rendered, no product-wide branch on AI availability."
   - epic: 5
     action: "Add a non-blocking checklist reminder for multi-field edit use cases: capture every 'old' field value into a local before any repository write call, not just the first one touched"
     owner: "story authors/reviewers"
@@ -1411,3 +1422,28 @@ action_items:
     owner: "Winston/Murat"
     status: done
     note: "2026-09-17 epic-5/1.12 retro. Escalated from defer to a real, owned action item after three consecutive retro cycles (Story 2.2b 2026-08-16, Story 5.3 2026-09-15, Story 5.4 2026-09-17) deferred the identical gap as 'pre-existing.' No further deferring — Ralf's decision. Closed 2026-09-17 21:09, commit 366722d ('feat: implement automated WCAG contrast checks for color tokens and add related utility functions') — added web/src/lib/contrast.ts (WCAG relative-luminance/contrast-ratio calc) + web/src/color-tokens.contrast.test.ts, asserting 4.5:1+ AA on every token pair named in this action item. 32/32 tests passing as of 2026-09-18 verification. Note: this landed as a direct commit to main 10 minutes after the retro, without a story file or updating this status — went untracked until Ralf asked Winston to check on 2026-09-18."
+  - epic: 6
+    action: "When the Claude-in-Chrome extension reports 'not connected' during dev-story's live-verification step, raise it immediately and pause for the user to start/connect Chrome, then resume — don't check the task off and let code review catch the skip later"
+    owner: "story authors/dev-story workflow"
+    status: open
+    note: "2026-09-21 epic-6 retro. Story 6.2's Task 7 (live verification, AC #5 empty state) was checked off complete on a component test alone, contradicting its own 'does not defer' instruction — caught in code review, not before. Ralf: catch it earlier, at the 'not connected' moment itself, as a hard dev-story-time gate."
+  - epic: 6
+    action: "Decide the real AI backend for Wattage Plausibility (Azure AI Foundry vs. self-hosted LMStudio vs. cloud API) — cost/latency/privacy tradeoffs are still fully open; only the no-op-when-unconfigured path has ever been verified live"
+    owner: "Ralf/Winston"
+    status: open
+    note: "2026-09-21 epic-6 retro. Story 6.3 shipped the full AD-8 plumbing (port, adapter, Household toggle, background job, graceful degradation) but no AiPlausibility:BaseUrl is configured anywhere in this environment, so the real classification round-trip has never run. Not blocking Epic 6's done — AD-8's degradation is honest by design — but flagged as a deliberate mid-term decision, not something to leave implicit."
+  - epic: 6
+    action: "At Story 7.2 kickoff, apply Stories 3.8-3.10's bulk-write/chunking/command-timeout-scoping lessons — a full-household restore is the same 'large bulk write' shape that caused 4 real production incidents in Epic 3"
+    owner: "story author (create-story)"
+    status: open
+    note: "2026-09-21 epic-6 retro, next-epic prep. Surfaced by a full deferred-work.md review requested by Ralf ahead of Epic 7."
+  - epic: 6
+    action: "At Story 7.2 kickoff, resolve the EF DateTimeOffset value-comparer gap flagged in spec-datetimeoffset-utc-normalization's own review (comparer ignores stored offset, so a write reassigning an existing row to an instant-equal value with a different offset is silently skipped by change tracking) before it becomes reachable via restore/migration writes"
+    owner: "story author (create-story)"
+    status: open
+    note: "2026-09-21 epic-6 retro, next-epic prep. Filed at the time as 'not reachable today, no backfill path exists yet' — Story 7.2's restore is that backfill path. Surfaced by the same deferred-work.md review."
+  - epic: 6
+    action: "Add a CI gate that turns a NuGet vulnerable-transitive-package advisory (NU1903) into a build failure — NuGetAuditMode/NuGetAuditLevel or a 'dotnet list package --vulnerable' step across the whole solution"
+    owner: "Winston"
+    status: open
+    note: "2026-09-21 epic-6 retro. Raised in spec-ssh-net-cve-fix's own review as a systemic gap (the SSH.NET CVE shipped silently until manually caught); escalated to its own owned action item per Ralf's explicit request during this retro, rather than left as a quiet deferred-work entry."
