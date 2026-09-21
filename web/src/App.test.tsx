@@ -216,6 +216,7 @@ describe('App', () => {
         { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([]) },
         { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
         { method: 'GET', url: '/api/households/11111111-1111-1111-1111-111111111111', respond: () => jsonResponse({ id: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }) },
+        { method: 'GET', url: '/api/households/11111111-1111-1111-1111-111111111111/ai-plausibility', respond: () => jsonResponse({ enabled: false, backendConfigured: false, backendLabel: null, version: 0 }) },
       ])
 
       render(<App />)
@@ -289,6 +290,11 @@ describe('App', () => {
         method: 'GET',
         url: '/api/households/11111111-1111-1111-1111-111111111111',
         respond: () => jsonResponse({ id: '11111111-1111-1111-1111-111111111111', locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }),
+      },
+      {
+        method: 'GET',
+        url: '/api/households/11111111-1111-1111-1111-111111111111/ai-plausibility',
+        respond: () => jsonResponse({ enabled: false, backendConfigured: false, backendLabel: null, version: 0 }),
       },
     ]
 

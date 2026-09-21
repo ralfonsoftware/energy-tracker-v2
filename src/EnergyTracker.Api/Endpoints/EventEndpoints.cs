@@ -95,7 +95,7 @@ public static class EventEndpoints
             extensions: new Dictionary<string, object?> { ["errorCode"] = errorCode });
 
     private static EventResponse ToResponse(Event @event) =>
-        new(@event.Id, @event.Description, @event.OccurredAt, @event.TaggedEntityType, @event.TaggedEntityName);
+        new(@event.Id, @event.Description, @event.OccurredAt, @event.TaggedEntityType, @event.TaggedEntityName, @event.CorrelationDirection);
 
     private static EventHistoryPageResponse ToHistoryPageResponse(EventHistoryPage page) =>
         new(
@@ -107,6 +107,7 @@ public static class EventEndpoints
 
 public record CreateEventRequest(string? Description, DateTimeOffset OccurredAt, string? TaggedEntityType, Guid? TaggedEntityId);
 
-public record EventResponse(Guid Id, string Description, DateTimeOffset OccurredAt, string? TaggedEntityType, string? TaggedEntityName);
+public record EventResponse(
+    Guid Id, string Description, DateTimeOffset OccurredAt, string? TaggedEntityType, string? TaggedEntityName, string? CorrelationDirection);
 
 public record EventHistoryPageResponse(IReadOnlyList<EventResponse> Items, int TotalCount, int Page, int PageSize);

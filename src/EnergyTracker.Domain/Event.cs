@@ -26,4 +26,14 @@ public class Event
     // AD-10 by-value snapshot, captured once at write time — never re-derived or overwritten,
     // even after the tagged item is renamed, archived, or re-parented (Story 2.6).
     public string? TaggedEntityName { get; init; }
+
+    // Story 6.3 (AC #1, #3, #4) — both null means "no correlation" (AC #3), the simplest
+    // representation for data that's 1:1-owned by this Event with no independent lifecycle. Set
+    // once, together, by CorrelateEvent's background job and never recomputed at render time
+    // (AD-10's "derive once, read back forever" discipline extends here too). Plain "Bump"|"Dip"
+    // string column, not an enum, matching TaggedEntityType's own discriminator-column precedent —
+    // mutable (not init), since it's written well after the Event row itself is created.
+    public string? CorrelationDirection { get; set; }
+
+    public DateTimeOffset? CorrelationComputedAtUtc { get; set; }
 }

@@ -1,5 +1,6 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
 
@@ -9,8 +10,9 @@ public class CreateEventTests
 {
     private readonly IEventRepository _repository = Substitute.For<IEventRepository>();
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
+    private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
 
-    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository);
+    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository, _jobQueue, NullLogger<CreateEvent>.Instance);
 
     public CreateEventTests()
     {
@@ -274,5 +276,57 @@ public class CreateEventTests
         result.Description.ShouldBe("cooked 2h");
         result.OccurredAt.ShouldBe(occurredAt);
         await _repository.Received(1).AddAsync(Arg.Is<Event>(e => e.HouseholdId == householdId), Arg.Any<CancellationToken>());
+    }
+
+    // Story 6.3 (AC #6, #7): unconditional — CreateEvent itself never checks
+    // Household.AiPlausibilityEnabled or whether an AI backend is configured; that check lives
+    // solely inside CorrelateEvent (AD-8's anti-hard-branch rule).
+    [Fact]
+    public async Task Unconditionally_enqueues_a_CorrelateEvent_job_after_persisting()
+    {
+        var householdId = Guid.NewGuid();
+        var sut = Sut();
+        var occurredAt = DateTimeOffset.UtcNow;
+
+        var result = await sut.ExecuteAsync(householdId, "cooked 2h", occurredAt, null, null, TestContext.Current.CancellationToken);
+
+        await _jobQueue.Received(1).EnqueueAsync(
+            Arg.Is<JobEnvelope<CorrelateEventPayload>>(envelope =>
+                envelope.HouseholdId == householdId &&
+                envelope.JobType == JobTypes.CorrelateEvent &&
+                envelope.Payload.EventId == result.Id &&
+                envelope.Payload.HouseholdId == householdId &&
+                envelope.Payload.OccurredAt == occurredAt &&
+                envelope.Payload.Description == "cooked 2h"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Does_not_enqueue_a_job_when_validation_fails_before_persisting()
+    {
+        var sut = Sut();
+
+        await Should.ThrowAsync<EventValidationException>(() =>
+            sut.ExecuteAsync(Guid.NewGuid(), "", DateTimeOffset.UtcNow, null, null, TestContext.Current.CancellationToken));
+
+        await _jobQueue.DidNotReceive().EnqueueAsync(Arg.Any<JobEnvelope<CorrelateEventPayload>>(), Arg.Any<CancellationToken>());
+    }
+
+    // Story 6.3 code review: the Event above is already committed by the time EnqueueAsync runs
+    // (e.g. AzureStorageQueueJobQueue.EnqueueAsync rethrows after a transient queue-send failure) —
+    // the create must still succeed and return the persisted Event rather than surfacing a failed
+    // request for data that was, in fact, saved. Losing the correlation job is an acceptable
+    // "AI absent" degrade, the same one AC #6 already requires for an unconfigured/disabled backend.
+    [Fact]
+    public async Task A_failed_job_enqueue_does_not_fail_the_create()
+    {
+        _jobQueue.EnqueueAsync(Arg.Any<JobEnvelope<CorrelateEventPayload>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("queue send failed")));
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(
+            Guid.NewGuid(), "cooked 2h", DateTimeOffset.UtcNow, null, null, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
     }
 }

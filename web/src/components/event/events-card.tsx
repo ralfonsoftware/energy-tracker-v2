@@ -121,6 +121,8 @@ export function EventsCard({ locale }: EventsCardProps) {
 // tagged entity still exists — a tag whose target was later archived renders identically to one
 // that's still live, with no "(deleted)" decoration.
 function EventRow({ item, dateTimeFormat }: { item: EventDto; dateTimeFormat: Intl.DateTimeFormat }) {
+  const { t } = useTranslation()
+
   return (
     <TableRow>
       <TableCell>
@@ -128,6 +130,16 @@ function EventRow({ item, dateTimeFormat }: { item: EventDto; dateTimeFormat: In
           <span>{item.description}</span>
           {item.taggedEntityName != null && (
             <span className="text-muted-foreground text-xs">{item.taggedEntityName}</span>
+          )}
+          {/* AC #1, #3, #7: rendered inline in the same row, never a separate step/view. No
+              correlation -> render nothing extra, no placeholder, no "no match found" state
+              (UX-DR14). Always one of exactly two fixed, translated strings (UX-DR17) — never raw
+              AI output. */}
+          {item.correlationDirection === 'Bump' && (
+            <span className="text-muted-foreground text-xs">{t('trendHistory.eventsCard.correlation.bump')}</span>
+          )}
+          {item.correlationDirection === 'Dip' && (
+            <span className="text-muted-foreground text-xs">{t('trendHistory.eventsCard.correlation.dip')}</span>
           )}
         </div>
       </TableCell>

@@ -1,10 +1,15 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.Extensions.Logging;
 
 namespace EnergyTracker.Application;
 
 /// <summary>Creates an Event for the caller's own Household, optionally tagged to a live, non-archived Room/PowerPoint/Device (AC #1, #2, #3).</summary>
-public class CreateEvent(IEventRepository repository, ITaggingScaffoldRepository taggingScaffoldRepository)
+public class CreateEvent(
+    IEventRepository repository,
+    ITaggingScaffoldRepository taggingScaffoldRepository,
+    IBackgroundJobQueue jobQueue,
+    ILogger<CreateEvent> logger)
 {
     private const int MaxDescriptionLength = 500;
 
@@ -77,7 +82,31 @@ public class CreateEvent(IEventRepository repository, ITaggingScaffoldRepository
             TaggedEntityName = taggedEntityName,
         };
 
-        return await repository.AddAsync(@event, cancellationToken);
+        var persisted = await repository.AddAsync(@event, cancellationToken);
+
+        // Story 6.3 (AC #6, #7): unconditional — the AiPlausibilityEnabled/backend-configured check
+        // lives entirely inside CorrelateEvent (AD-8's anti-hard-branch rule), never here.
+        //
+        // Code review 2026-09-21: the Event above is already committed, so a transient enqueue
+        // failure (e.g. AzureStorageQueueJobQueue.EnqueueAsync rethrowing after a queue-send
+        // failure) must not fail this request — the client would otherwise see a failed create for
+        // an Event that was, in fact, saved. Losing the correlation job is the same acceptable
+        // "AI absent" degrade AC #6 already requires for an unconfigured/disabled backend.
+        try
+        {
+            await jobQueue.EnqueueAsync(
+                new JobEnvelope<CorrelateEventPayload>(
+                    Guid.NewGuid(), householdId, JobTypes.CorrelateEvent,
+                    new CorrelateEventPayload(persisted.Id, householdId, persisted.OccurredAt, persisted.Description)),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                ex, "Failed to enqueue CorrelateEvent job for Event {EventId}; it will never receive a correlation.", persisted.Id);
+        }
+
+        return persisted;
     }
 
     // Resolves via the existing ITaggingScaffoldRepository — one port for the whole Room/

@@ -304,6 +304,47 @@ public abstract class EventRepositoryTestsBase
         totalCount.ShouldBe(1);
         items.Single().Description.ShouldBe("yours");
     }
+
+    // Story 6.3 — CorrelateEvent's terminal write. ExecuteUpdateAsync bypasses the change tracker
+    // entirely, so this proves the write actually lands in the database, not just on a
+    // still-in-memory tracked instance.
+    [Fact]
+    public async Task SetCorrelationAsync_persists_both_fields_together()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var @event = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "gaming session 3h",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        await repository.AddAsync(@event, TestContext.Current.CancellationToken);
+        var computedAtUtc = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+
+        await repository.SetCorrelationAsync(@event.Id, "Bump", computedAtUtc, TestContext.Current.CancellationToken);
+
+        await using var freshDbContext = OpenFreshDbContext(householdId);
+        var reloaded = await freshDbContext.Events.SingleAsync(e => e.Id == @event.Id, TestContext.Current.CancellationToken);
+        reloaded.CorrelationDirection.ShouldBe("Bump");
+        reloaded.CorrelationComputedAtUtc.ShouldBe(computedAtUtc);
+    }
+
+    [Fact]
+    public async Task SetCorrelationAsync_for_a_nonexistent_Event_is_a_no_op_not_a_throw()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+
+        await Should.NotThrowAsync(() =>
+            repository.SetCorrelationAsync(Guid.NewGuid(), "Bump", DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+    }
 }
 
 public class PostgresEventRepositoryTests : EventRepositoryTestsBase, IAsyncLifetime

@@ -3,6 +3,7 @@ using System;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(EnergyTrackerDbContext))]
-    partial class EnergyTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921050717_AddAiPlausibilityEnabledToHousehold")]
+    partial class AddAiPlausibilityEnabledToHousehold
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -146,13 +149,6 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("CorrelationComputedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CorrelationDirection")
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");

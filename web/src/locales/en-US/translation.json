@@ -54,6 +54,19 @@
       "federatedWarningTitle": "You may still be signed in elsewhere",
       "federatedWarningDescription": "This identity provider doesn't support signing you out everywhere. Energy Tracker will sign you out here, but you may still be signed in at the identity provider itself.",
       "federatedWarningProceed": "Continue"
+    },
+    "aiPlausibility": {
+      "heading": "AI Wattage Plausibility",
+      "description": "When turned on, a logged Event's description may be sent to this deployment's configured AI backend to check for a rough match against any consumption change Pattern Detective noticed around that time.",
+      "toggleLabel": "Send Events for AI correlation",
+      "backendConfigured": "Backend: {{label}}",
+      "backendUnconfigured": "No AI backend is configured for this deployment.",
+      "loading": "Loading…",
+      "saving": "Saving…",
+      "retry": "Retry",
+      "errorGeneric": "Something went wrong. Please try again.",
+      "errorConflict": "This setting was changed elsewhere. We've loaded the latest value — please try again.",
+      "errorConflictRefetchFailed": "This setting was changed elsewhere, and we couldn't load the latest value. Please refresh the page."
     }
   },
   "taggingScaffold": {
@@ -238,7 +251,11 @@
       "timestampColumn": "Date & time",
       "previousPage": "Previous",
       "nextPage": "Next",
-      "pageIndicator": "Page {{page}} of {{totalPages}}"
+      "pageIndicator": "Page {{page}} of {{totalPages}}",
+      "correlation": {
+        "bump": "Roughly matches the bump seen.",
+        "dip": "Roughly matches the dip seen."
+      }
     },
     "perPlugCard": {
       "heading": "Room → Power Point → Device",

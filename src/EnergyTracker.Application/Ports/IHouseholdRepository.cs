@@ -20,4 +20,7 @@ public interface IHouseholdRepository
 
     /// <summary>Updates the Yearly Baseline under AD-4 optimistic concurrency, throwing <see cref="HouseholdConcurrencyConflictException"/> on a lost race.</summary>
     Task<Household> UpdateYearlyBaselineAsync(Guid householdId, decimal yearlyBaselineKwh, int expectedVersion, CancellationToken cancellationToken);
+
+    /// <summary>Updates the AI Wattage Plausibility on/off toggle under AD-4 optimistic concurrency, throwing <see cref="HouseholdConcurrencyConflictException"/> on a lost race.</summary>
+    Task<Household> UpdateAiPlausibilityEnabledAsync(Guid householdId, bool enabled, int expectedVersion, CancellationToken cancellationToken);
 }

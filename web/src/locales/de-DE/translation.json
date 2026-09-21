@@ -54,6 +54,19 @@
       "federatedWarningTitle": "Du bist möglicherweise noch anderswo angemeldet",
       "federatedWarningDescription": "Dieser Identitätsanbieter unterstützt keine geräteübergreifende Abmeldung. Energy Tracker meldet dich hier ab, du bist aber möglicherweise weiterhin beim Identitätsanbieter selbst angemeldet.",
       "federatedWarningProceed": "Weiter"
+    },
+    "aiPlausibility": {
+      "heading": "KI-Plausibilitätsprüfung",
+      "description": "Wenn aktiviert, kann die Beschreibung eines protokollierten Ereignisses an das für diese Bereitstellung konfigurierte KI-Backend gesendet werden, um grob zu prüfen, ob sie zu einer vom Pattern Detective bemerkten Verbrauchsänderung passt.",
+      "toggleLabel": "Ereignisse für KI-Abgleich senden",
+      "backendConfigured": "Backend: {{label}}",
+      "backendUnconfigured": "Für diese Bereitstellung ist kein KI-Backend konfiguriert.",
+      "loading": "Wird geladen…",
+      "saving": "Wird gespeichert…",
+      "retry": "Erneut versuchen",
+      "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+      "errorConflict": "Diese Einstellung wurde an anderer Stelle geändert. Wir haben den aktuellen Wert geladen — bitte versuche es erneut.",
+      "errorConflictRefetchFailed": "Diese Einstellung wurde an anderer Stelle geändert, und der aktuelle Wert konnte nicht geladen werden. Bitte lade die Seite neu."
     }
   },
   "taggingScaffold": {
@@ -238,7 +251,11 @@
       "timestampColumn": "Datum & Uhrzeit",
       "previousPage": "Zurück",
       "nextPage": "Weiter",
-      "pageIndicator": "Seite {{page}} von {{totalPages}}"
+      "pageIndicator": "Seite {{page}} von {{totalPages}}",
+      "correlation": {
+        "bump": "Passt grob zum beobachteten Anstieg.",
+        "dip": "Passt grob zum beobachteten Rückgang."
+      }
     },
     "perPlugCard": {
       "heading": "Raum → Steckdose → Gerät",

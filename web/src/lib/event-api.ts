@@ -54,6 +54,7 @@ export interface EventDto {
   occurredAt: string
   taggedEntityType: string | null
   taggedEntityName: string | null
+  correlationDirection: 'Bump' | 'Dip' | null
 }
 
 export interface CreateEventInput {

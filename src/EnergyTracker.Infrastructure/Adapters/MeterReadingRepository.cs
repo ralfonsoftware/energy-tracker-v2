@@ -163,6 +163,14 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
         return (items, totalCount);
     }
 
+    public async Task<IReadOnlyList<MeterReading>> GetInWindowByMainMeterAsync(
+        Guid mainMeterId, DateTimeOffset windowStart, DateTimeOffset windowEnd, CancellationToken cancellationToken) =>
+        await dbContext.MeterReadings
+            .Where(r => r.MainMeterId == mainMeterId && r.ReadingTimestamp >= windowStart && r.ReadingTimestamp <= windowEnd)
+            .OrderBy(r => r.ReadingTimestamp)
+            .ThenBy(r => r.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<MeterReading> UpdateKwhValueAsync(Guid readingId, decimal kwhValue, int expectedVersion, CancellationToken cancellationToken)
     {
         var reading = await dbContext.MeterReadings.SingleAsync(r => r.Id == readingId, cancellationToken);

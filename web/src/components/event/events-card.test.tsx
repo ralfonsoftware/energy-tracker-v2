@@ -15,6 +15,7 @@ function eventItem(overrides: Partial<EventDto> = {}): EventDto {
     occurredAt: '2026-08-15T14:32:00+00:00',
     taggedEntityType: null,
     taggedEntityName: null,
+    correlationDirection: null,
     ...overrides,
   }
 }
@@ -75,6 +76,47 @@ describe('EventsCard', () => {
     const row = descriptionCell.closest('tr')
     // Only the description text node itself — no second (empty/placeholder) line for the tag.
     expect(row?.querySelectorAll('span')).toHaveLength(1)
+  })
+
+  // Story 6.3 (AC #1, #3, #7): rendered inline in the same row, never a separate view; a fixed,
+  // translated string, never raw AI output; absent renders cleanly with no extra markup (UX-DR14).
+  it('renders the Bump correlation inline with the Event', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse(page({ items: [eventItem({ correlationDirection: 'Bump' })] })))),
+    )
+
+    render(<EventsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    expect(await screen.findByText('Roughly matches the bump seen.')).toBeInTheDocument()
+  })
+
+  it('renders the Dip correlation inline with the Event', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse(page({ items: [eventItem({ correlationDirection: 'Dip' })] })))),
+    )
+
+    render(<EventsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    expect(await screen.findByText('Roughly matches the dip seen.')).toBeInTheDocument()
+  })
+
+  it('renders no correlation markup at all when correlationDirection is null', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page({ items: [eventItem()] })))))
+
+    render(<EventsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    const descriptionCell = await screen.findByText('cooked 2h')
+    const row = descriptionCell.closest('tr')
+    expect(row?.querySelectorAll('span')).toHaveLength(1)
+    expect(screen.queryByText(/roughly matches/i)).not.toBeInTheDocument()
   })
 
   it('renders the empty state when totalCount is 0', async () => {

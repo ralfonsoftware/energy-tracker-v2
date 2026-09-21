@@ -120,4 +120,28 @@ public class HouseholdRepository(EnergyTrackerDbContext dbContext) : IHouseholdR
 
         return household;
     }
+
+    public async Task<Household> UpdateAiPlausibilityEnabledAsync(Guid householdId, bool enabled, int expectedVersion, CancellationToken cancellationToken)
+    {
+        var household = await dbContext.Households.SingleAsync(h => h.Id == householdId, cancellationToken);
+
+        // Same OriginalValue-pinning technique as UpdateYearlyBaselineAsync above — compares
+        // expectedVersion (the caller's known value) against the DB, not whatever this
+        // freshly-loaded entity already has.
+        dbContext.Entry(household).Property(h => h.Version).OriginalValue = expectedVersion;
+
+        household.AiPlausibilityEnabled = enabled;
+        household.Version++;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new HouseholdConcurrencyConflictException(householdId);
+        }
+
+        return household;
+    }
 }

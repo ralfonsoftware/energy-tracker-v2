@@ -136,6 +136,12 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
                     var deletedCount = await cleanUpUseCase.ExecuteAsync(message.HouseholdId, cleanupPayload.DeleteAll, cancellationToken);
                     logger.LogInformation("Cleanup job {JobId} deleted {DeletedCount} row(s)", message.JobId, deletedCount);
                     break;
+                case JobTypes.CorrelateEvent:
+                    var correlatePayload = JsonSerializer.Deserialize<CorrelateEventPayload>(message.PayloadJson)
+                        ?? throw new InvalidOperationException($"Job {message.JobId}: payload deserialized to null.");
+                    var correlateUseCase = services.GetRequiredService<CorrelateEvent>();
+                    await correlateUseCase.ExecuteAsync(message.HouseholdId, correlatePayload, cancellationToken);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unknown JobType '{message.JobType}'.");
             }
