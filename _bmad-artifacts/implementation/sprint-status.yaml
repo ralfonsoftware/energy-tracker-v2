@@ -1445,5 +1445,5 @@ action_items:
   - epic: 6
     action: "Add a CI gate that turns a NuGet vulnerable-transitive-package advisory (NU1903) into a build failure — NuGetAuditMode/NuGetAuditLevel or a 'dotnet list package --vulnerable' step across the whole solution"
     owner: "Winston"
-    status: open
+    status: done
     note: "2026-09-21 epic-6 retro. Raised in spec-ssh-net-cve-fix's own review as a systemic gap (the SSH.NET CVE shipped silently until manually caught); escalated to its own owned action item per Ralf's explicit request during this retro, rather than left as a quiet deferred-work entry."
