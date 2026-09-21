@@ -130,11 +130,12 @@ public class WindowedDeviationCalculatorTests
     }
 
     [Fact]
-    public void Uses_only_the_first_and_last_reading_in_the_window_not_intermediate_ones()
+    public void An_uncorrected_intermediate_reading_telescopes_to_the_same_delta_as_first_and_last()
     {
-        // An intermediate reading (e.g. a lower-value correction) must not change the delta — only
-        // first-vs-last matters, exactly like PatternDetectiveCalculator's own cumulative-total
-        // assumption.
+        // MeterReading.KwhValue is a cumulative lifetime total, so a pairwise walk across any
+        // number of intermediate readings telescopes to the exact same total as a plain
+        // last-minus-first subtraction, as long as none of them was a resolved rollover/reset —
+        // exactly like PatternDetectiveCalculator.ComputePaceToDate's own cumulative-total walk.
         var readings = new List<MeterReading>
         {
             Reading(1000m, WindowStart),
@@ -145,5 +146,68 @@ public class WindowedDeviationCalculatorTests
         var result = WindowedDeviationCalculator.ComputeDeviation(readings, YearlyBaselineKwh, TrendingThresholdKwh);
 
         result.ShouldBe(AiPlausibilityDirection.Bump);
+    }
+
+    // Story 6.3 code review: a resolved Rollover/Reset landing inside the window must not poison
+    // the raw delta — mirrors PatternDetectiveCalculator.ComputePaceToDate's own correction tests.
+    [Fact]
+    public void A_resolved_Rollover_reading_is_corrected_via_its_digit_capacity_not_a_raw_subtraction()
+    {
+        var previous = Reading(1000m, WindowStart);
+        // The meter rolled over: its counter wrapped from near DigitCapacityKwh back to a low
+        // value. A raw subtraction (50 - 1000 = -950) would look like a huge, spurious Dip; the
+        // correction instead treats it as (DigitCapacityKwh - previous) + current.
+        var rolledOver = Reading(50m, WindowStart + ElapsedSpan);
+        var prompt = new MeterRegressionPrompt
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = Guid.NewGuid(),
+            MainMeterId = Guid.NewGuid(),
+            MeterReadingId = rolledOver.Id,
+            PreviousMeterReadingId = previous.Id,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ResolvedAtUtc = DateTimeOffset.UtcNow,
+            Classification = MeterRegressionClassification.Rollover,
+            DigitCapacityKwh = 1000m + ExpectedKwh + ThresholdKwh + 80m,
+        };
+        var resolvedPrompts = new Dictionary<Guid, MeterRegressionPrompt> { [rolledOver.Id] = prompt };
+
+        var result = WindowedDeviationCalculator.ComputeDeviation(
+            [previous, rolledOver], YearlyBaselineKwh, TrendingThresholdKwh, resolvedPrompts);
+
+        // Corrected consumption == (DigitCapacityKwh - 1000) + 50 == 350, well above the ~220
+        // (expected + threshold) ceiling for this elapsed span — resolves to Bump, not the huge
+        // spurious Dip an uncorrected raw subtraction would have produced.
+        result.ShouldBe(AiPlausibilityDirection.Bump);
+    }
+
+    [Fact]
+    public void A_resolved_Reset_pair_contributes_nothing_to_the_delta()
+    {
+        var previous = Reading(1000m, WindowStart);
+        // The meter's counter restarted (Reset) — this pair must be voided entirely, not summed.
+        var reset = Reading(5m, WindowStart + TimeSpan.FromDays(1));
+        var last = Reading(5m + ExpectedKwh, WindowStart + ElapsedSpan);
+        var prompt = new MeterRegressionPrompt
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = Guid.NewGuid(),
+            MainMeterId = Guid.NewGuid(),
+            MeterReadingId = reset.Id,
+            PreviousMeterReadingId = previous.Id,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ResolvedAtUtc = DateTimeOffset.UtcNow,
+            Classification = MeterRegressionClassification.Reset,
+        };
+        var resolvedPrompts = new Dictionary<Guid, MeterRegressionPrompt> { [reset.Id] = prompt };
+
+        var result = WindowedDeviationCalculator.ComputeDeviation(
+            [previous, reset, last], YearlyBaselineKwh, TrendingThresholdKwh, resolvedPrompts);
+
+        // Only the post-Reset leg (reset -> last, ExpectedKwh consumed) counts, over its own
+        // (shorter) elapsed span — close enough to the prorated expected rate to stay within the
+        // prorated threshold band, so no deviation. A voided pre-Reset leg would otherwise have
+        // pulled the raw last-minus-first delta (ExpectedKwh - 995, a huge spurious Dip) instead.
+        result.ShouldBeNull();
     }
 }

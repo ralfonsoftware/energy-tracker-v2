@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using EnergyTracker.Application;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,10 +33,11 @@ public class OpenAiCompatibleClientTests
         Content = new StringContent(content, Encoding.UTF8, "application/json"),
     };
 
-    private static OpenAiCompatibleClient NewSut(StubHandler handler, TimeSpan? requestTimeout = null)
+    private static OpenAiCompatibleClient NewSut(StubHandler handler, TimeSpan? requestTimeout = null, string model = "default")
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
-        return new OpenAiCompatibleClient(httpClient, NullLogger<OpenAiCompatibleClient>.Instance, requestTimeout);
+        var backendOptions = new AiPlausibilityBackendOptions(Configured: true, Label: null, Model: model);
+        return new OpenAiCompatibleClient(httpClient, NullLogger<OpenAiCompatibleClient>.Instance, backendOptions, requestTimeout);
     }
 
     [Fact]
@@ -107,6 +109,37 @@ public class OpenAiCompatibleClientTests
             "gaming session 3h", [AiPlausibilityDirection.Bump], TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
+    }
+
+    // Story 6.3 code review: distinct from the malformed-JSON-body case above — a 2xx response
+    // whose Content-Type isn't application/json (e.g. an HTML error page from a misconfigured
+    // reverse proxy/gateway) makes ReadFromJsonAsync throw NotSupportedException, not JsonException.
+    [Fact]
+    public async Task Returns_null_on_a_non_json_content_type_instead_of_throwing()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>not json</html>", Encoding.UTF8, "text/html"),
+        }));
+        var sut = NewSut(handler);
+
+        var result = await sut.ClassifyAsync(
+            "gaming session 3h", [AiPlausibilityDirection.Bump], TestContext.Current.CancellationToken);
+
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Sends_the_configured_Model_in_the_request_body()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(
+            JsonResponse(HttpStatusCode.OK, """{"choices":[{"message":{"role":"assistant","content":"Bump"}}]}""")));
+        var sut = NewSut(handler, model: "gpt-4o-mini");
+
+        await sut.ClassifyAsync("gaming session 3h", [AiPlausibilityDirection.Bump], TestContext.Current.CancellationToken);
+
+        handler.LastRequestBody.ShouldNotBeNull();
+        handler.LastRequestBody.ShouldContain("\"model\":\"gpt-4o-mini\"");
     }
 
     [Fact]

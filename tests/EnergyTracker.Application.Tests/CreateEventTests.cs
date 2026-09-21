@@ -1,5 +1,6 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
 
@@ -11,7 +12,7 @@ public class CreateEventTests
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
     private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
 
-    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository, _jobQueue);
+    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository, _jobQueue, NullLogger<CreateEvent>.Instance);
 
     public CreateEventTests()
     {
@@ -309,5 +310,23 @@ public class CreateEventTests
             sut.ExecuteAsync(Guid.NewGuid(), "", DateTimeOffset.UtcNow, null, null, TestContext.Current.CancellationToken));
 
         await _jobQueue.DidNotReceive().EnqueueAsync(Arg.Any<JobEnvelope<CorrelateEventPayload>>(), Arg.Any<CancellationToken>());
+    }
+
+    // Story 6.3 code review: the Event above is already committed by the time EnqueueAsync runs
+    // (e.g. AzureStorageQueueJobQueue.EnqueueAsync rethrows after a transient queue-send failure) —
+    // the create must still succeed and return the persisted Event rather than surfacing a failed
+    // request for data that was, in fact, saved. Losing the correlation job is an acceptable
+    // "AI absent" degrade, the same one AC #6 already requires for an unconfigured/disabled backend.
+    [Fact]
+    public async Task A_failed_job_enqueue_does_not_fail_the_create()
+    {
+        _jobQueue.EnqueueAsync(Arg.Any<JobEnvelope<CorrelateEventPayload>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("queue send failed")));
+        var sut = Sut();
+
+        var result = await sut.ExecuteAsync(
+            Guid.NewGuid(), "cooked 2h", DateTimeOffset.UtcNow, null, null, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
     }
 }

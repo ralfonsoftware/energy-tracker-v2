@@ -9,10 +9,17 @@ public class CorrelateEventTests
 {
     private readonly IHouseholdRepository _householdRepository = Substitute.For<IHouseholdRepository>();
     private readonly IMeterReadingRepository _readingRepository = Substitute.For<IMeterReadingRepository>();
+    private readonly IMeterRegressionPromptRepository _regressionPromptRepository = Substitute.For<IMeterRegressionPromptRepository>();
     private readonly IEventRepository _eventRepository = Substitute.For<IEventRepository>();
     private readonly IAiPlausibilityClient _aiPlausibilityClient = Substitute.For<IAiPlausibilityClient>();
 
-    private CorrelateEvent Sut() => new(_householdRepository, _readingRepository, _eventRepository, _aiPlausibilityClient);
+    public CorrelateEventTests()
+    {
+        _regressionPromptRepository.GetResolvedForMainMeterAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<MeterRegressionPrompt>)[]);
+    }
+
+    private CorrelateEvent Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository, _eventRepository, _aiPlausibilityClient);
 
     private static readonly DateTimeOffset OccurredAt = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 

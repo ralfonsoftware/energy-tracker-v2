@@ -345,6 +345,15 @@ builder.Services.AddScoped<CorrelateEvent>();
 // Household.AiPlausibilityEnabled — nothing else branches on whether AI is configured.
 var aiPlausibilityBaseUrl = (builder.Configuration["AiPlausibility:BaseUrl"] ?? string.Empty).Trim();
 var aiPlausibilityBackendLabel = builder.Configuration["AiPlausibility:BackendLabel"];
+// "default" is a safe no-op for LMStudio's local server (it ignores the field entirely) but is
+// NOT a valid model id for real OpenAI or another cloud provider — those deployments must set
+// AiPlausibility:Model explicitly, or every classification call 400s and silently resolves to null.
+var aiPlausibilityModel = (builder.Configuration["AiPlausibility:Model"] ?? string.Empty).Trim();
+if (string.IsNullOrEmpty(aiPlausibilityModel))
+{
+    aiPlausibilityModel = "default";
+}
+
 if (string.IsNullOrEmpty(aiPlausibilityBaseUrl))
 {
     builder.Services.AddSingleton<IAiPlausibilityClient, NoOpAiPlausibilityClient>();
@@ -364,9 +373,12 @@ else
 
 // AC #5's "always visible, regardless of enablement" backend info — a human-set label, not a
 // heuristic guess from the URL (Dev Notes). Registered once here rather than re-read per request.
+// Also carries Model through to OpenAiCompatibleClient (Infrastructure) — one registration instead
+// of a second deployment-wide options type.
 builder.Services.AddSingleton(new AiPlausibilityBackendOptions(
     Configured: !string.IsNullOrEmpty(aiPlausibilityBaseUrl),
-    Label: string.IsNullOrEmpty(aiPlausibilityBackendLabel) ? null : aiPlausibilityBackendLabel));
+    Label: string.IsNullOrEmpty(aiPlausibilityBackendLabel) ? null : aiPlausibilityBackendLabel,
+    Model: aiPlausibilityModel));
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.

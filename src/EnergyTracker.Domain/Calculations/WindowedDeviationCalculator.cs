@@ -15,6 +15,9 @@ public static class WindowedDeviationCalculator
 {
     public static readonly TimeSpan WindowRadius = TimeSpan.FromDays(7);
 
+    private static readonly IReadOnlyDictionary<Guid, MeterRegressionPrompt> NoResolvedPrompts =
+        new Dictionary<Guid, MeterRegressionPrompt>();
+
     // AC #2: caller decides which readings fall in the window and passes them in already —
     // mirrors PatternDetectiveCalculator.ComputePaceToDate's "caller supplies the already-windowed
     // sequence" shape rather than this static method reaching for a repository itself.
@@ -24,8 +27,19 @@ public static class WindowedDeviationCalculator
     // (AD-5 reuse, not a second copy of the proration math) — TrendingThresholdKwh is meaningful on
     // an annual basis (Household.cs), so a ±7-day window's bar must be scaled down from it, not
     // applied at full annual magnitude.
+    //
+    // `resolvedPromptsByTriggeringReadingId` mirrors PatternDetectiveCalculator.ComputePaceToDate's
+    // own parameter of the same name/shape: a resolved (Story 2.3) MeterRegressionPrompt's raw
+    // current-previous delta is meaningless and must be corrected (Rollover) or voided (Reset),
+    // exactly like the trailing-365-day pace walk does — a meter rollover/reset landing inside an
+    // Event's ±7-day window would otherwise poison this first/last delta into a spurious Bump/Dip.
+    // (AD-12's *open*-prompt exclusion is a separate, earlier concern — deliberately still deferred,
+    // see deferred-work.md — this only ever sees resolved prompts.)
     public static AiPlausibilityDirection? ComputeDeviation(
-        IReadOnlyList<MeterReading> readingsInWindow, decimal yearlyBaselineKwh, decimal trendingThresholdKwh)
+        IReadOnlyList<MeterReading> readingsInWindow,
+        decimal yearlyBaselineKwh,
+        decimal trendingThresholdKwh,
+        IReadOnlyDictionary<Guid, MeterRegressionPrompt>? resolvedPromptsByTriggeringReadingId = null)
     {
         if (readingsInWindow.Count < 2)
         {
@@ -35,19 +49,44 @@ public static class WindowedDeviationCalculator
         }
 
         var ordered = readingsInWindow.OrderBy(r => r.ReadingTimestamp).ThenBy(r => r.Id).ToList();
-        var first = ordered[0];
-        var last = ordered[^1];
+        var resolvedPrompts = resolvedPromptsByTriggeringReadingId ?? NoResolvedPrompts;
 
-        var elapsed = last.ReadingTimestamp - first.ReadingTimestamp;
+        // Pairwise walk, not a plain last-first subtraction — telescopes to the identical result
+        // when no resolved prompt intersects the window (MeterReading.KwhValue is a cumulative
+        // lifetime total), but correctly absorbs a Rollover's digit-capacity offset or voids a
+        // Reset pair when one does, exactly like ComputePaceToDate's own walk.
+        var actualConsumedKwh = 0m;
+        var elapsed = TimeSpan.Zero;
+        for (var i = 1; i < ordered.Count; i++)
+        {
+            var previous = ordered[i - 1];
+            var current = ordered[i];
+
+            if (resolvedPrompts.TryGetValue(current.Id, out var resolvedPrompt))
+            {
+                if (resolvedPrompt.Classification == MeterRegressionClassification.Rollover)
+                {
+                    actualConsumedKwh += (resolvedPrompt.DigitCapacityKwh!.Value - previous.KwhValue) + current.KwhValue;
+                    elapsed += current.ReadingTimestamp - previous.ReadingTimestamp;
+                }
+
+                // Reset: the meter's cumulative counter restarted — this pair contributes nothing.
+                continue;
+            }
+
+            actualConsumedKwh += current.KwhValue - previous.KwhValue;
+            elapsed += current.ReadingTimestamp - previous.ReadingTimestamp;
+        }
+
         if (elapsed <= TimeSpan.Zero)
         {
-            // Every reading in the window shares an identical timestamp — no meaningful rate,
-            // same "undefined rather than a spurious zero-elapsed distortion" principle
-            // PatternDetectiveCalculator.ComputePaceToDate documents for its own analogous case.
+            // Every reading in the window shares an identical timestamp, or every pair was a
+            // voided Reset boundary — no meaningful rate, same "undefined rather than a spurious
+            // zero-elapsed distortion" principle PatternDetectiveCalculator.ComputePaceToDate
+            // documents for its own analogous case.
             return null;
         }
 
-        var actualConsumedKwh = last.KwhValue - first.KwhValue;
         var expectedKwh = BonusDecayNormalizer.NormalizeToDate(yearlyBaselineKwh, bonusTermsKwh: 0m, elapsed);
         var thresholdForWindow = BonusDecayNormalizer.NormalizeToDate(trendingThresholdKwh, bonusTermsKwh: 0m, elapsed);
 

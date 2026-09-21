@@ -1,5 +1,11 @@
 # generated: 2026-08-09
 # last_updated: 2026-09-21
+# 2026-09-21: story 6-3-wattage-plausibility-correlation -- code review complete, status review ->
+#   done. 3 decision-needed findings resolved (AC #5 deferred/wording corrected; Model-config gap
+#   and WindowedDeviationCalculator rollover-correction gap both patched), 4 patch findings applied
+#   and verified (full backend suite green: 347 Application + 216 Infrastructure + 206 Api + 4
+#   Architecture), 4 findings deferred to deferred-work.md, 10 dismissed as noise. See the story's
+#   own Review Findings section and Change Log for detail.
 # 2026-09-21: story 6-3-wattage-plausibility-correlation -- live Auth0/Chrome verification gate
 #   cleared (user-requested retry after the extension initially reported "not connected"). Confirmed
 #   live: Settings' AI Wattage Plausibility card and its enable/disable toggle round trip, and a real
@@ -1268,7 +1274,7 @@ development_status:
   epic-6: in-progress
   6-1-event-logging: done
   6-2-event-history-view: done
-  6-3-wattage-plausibility-correlation: review
+  6-3-wattage-plausibility-correlation: done
   epic-6-retrospective: optional
 
   epic-7: backlog

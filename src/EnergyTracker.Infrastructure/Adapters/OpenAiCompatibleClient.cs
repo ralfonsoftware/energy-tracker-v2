@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,11 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // was configured with at the composition root (Program.cs); this class itself has no branch on
 // deployment target. No SDK dependency — Directory.Packages.props has zero AI/LLM package
 // references by design (Dev Notes).
-public class OpenAiCompatibleClient(HttpClient httpClient, ILogger<OpenAiCompatibleClient> logger, TimeSpan? requestTimeout = null)
+public class OpenAiCompatibleClient(
+    HttpClient httpClient,
+    ILogger<OpenAiCompatibleClient> logger,
+    AiPlausibilityBackendOptions backendOptions,
+    TimeSpan? requestTimeout = null)
     : IAiPlausibilityClient
 {
     // A classification call is small and latency-sensitive to the job-processing loop (AD-6 has
@@ -45,7 +50,7 @@ public class OpenAiCompatibleClient(HttpClient httpClient, ILogger<OpenAiCompati
             "Which single observed deviation, if any, does this event plausibly explain?";
 
         var request = new ChatCompletionRequest(
-            Model: "default",
+            Model: backendOptions.Model,
             Messages: [new ChatMessage("system", SystemPrompt), new ChatMessage("user", userPrompt)],
             Temperature: 0);
 
@@ -82,6 +87,15 @@ public class OpenAiCompatibleClient(HttpClient httpClient, ILogger<OpenAiCompati
         }
         catch (JsonException ex)
         {
+            logger.LogWarning(ex, "OpenAiCompatibleClient: malformed classification response");
+            return null;
+        }
+        catch (NotSupportedException ex)
+        {
+            // A 2xx response with a non-JSON Content-Type (e.g. an HTML error page from a
+            // misconfigured reverse proxy/gateway) makes ReadFromJsonAsync throw this instead of
+            // JsonException — still "malformed classification response" from this method's own
+            // never-throws (NFR14) contract's point of view.
             logger.LogWarning(ex, "OpenAiCompatibleClient: malformed classification response");
             return null;
         }

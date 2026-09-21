@@ -18,6 +18,7 @@ public record CorrelateEventPayload(Guid EventId, Guid HouseholdId, DateTimeOffs
 public class CorrelateEvent(
     IHouseholdRepository householdRepository,
     IMeterReadingRepository readingRepository,
+    IMeterRegressionPromptRepository regressionPromptRepository,
     IEventRepository eventRepository,
     IAiPlausibilityClient aiPlausibilityClient)
 {
@@ -46,7 +47,13 @@ public class CorrelateEvent(
         var windowEnd = payload.OccurredAt + WindowedDeviationCalculator.WindowRadius;
         var readingsInWindow = await readingRepository.GetInWindowByMainMeterAsync(mainMeter.Id, windowStart, windowEnd, cancellationToken);
 
-        var deviation = WindowedDeviationCalculator.ComputeDeviation(readingsInWindow, yearlyBaselineKwh, household.TrendingThresholdKwh);
+        // Same resolved-prompt correction GetCurrentStatus feeds PatternDetectiveCalculator.ComputePaceToDate
+        // — a rollover/reset that landed inside this window must not poison the raw delta below.
+        var resolvedPrompts = await regressionPromptRepository.GetResolvedForMainMeterAsync(mainMeter.Id, cancellationToken);
+        var resolvedPromptsByTriggeringReadingId = resolvedPrompts.ToDictionary(p => p.MeterReadingId);
+
+        var deviation = WindowedDeviationCalculator.ComputeDeviation(
+            readingsInWindow, yearlyBaselineKwh, household.TrendingThresholdKwh, resolvedPromptsByTriggeringReadingId);
         if (deviation is null)
         {
             // AC #3: no observable deviation — leave the correlation null, never flagged as wrong.
