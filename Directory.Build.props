@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    NuGet Audit gate (epic 6 retro action item #5): turns a vulnerable-transitive-package advisory
+    into a hard `dotnet restore` failure instead of a silent NU1901-NU1904 warning. This is the gap
+    that let the SSH.NET CVE (PR #65) ship silently until it was manually caught — SSH.NET came in
+    transitively via Testcontainers, never as a direct PackageReference.
+
+    NuGetAuditMode=all scans transitive packages, not just direct references — made explicit here
+    rather than relying on Central Package Management's implicit default, matching this project's
+    "one config value, explicitly set" convention (project-context.md).
+
+    NuGetAuditLevel=moderate is the reporting floor: advisories below moderate don't even surface,
+    so NU1901 (low) is never emitted and doesn't need to be listed in WarningsAsErrors below.
+    NU1900 (audit itself couldn't run, e.g. no network) is deliberately left as a warning — a
+    transient registry outage shouldn't block every PR.
+
+    This runs during `dotnet restore`, not `dotnet build` — pr-review.yml's existing
+    "Restore .NET solution" step is already the gate, no new CI step needed.
+  -->
+  <PropertyGroup>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

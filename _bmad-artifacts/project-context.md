@@ -126,6 +126,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Runs on every PR against `main`: builds/tests/lints the .NET solution and web frontend; runs infra `what-if` only when `infra/**` changed and the PR isn't from a fork. Never deploys — deploys only happen from `app-deploy.yml`/`infra-deploy.yml` on push to `main`.
 - The `build-test-lint` job has **no `name:` override** — GitHub branch protection matches required status checks by job id, not display name.
 - Workflow-level `concurrency` cancels in-progress runs on new pushes to the same PR.
+- **NuGet Audit gate (`Directory.Build.props`):** `NuGetAuditMode=all` + `NuGetAuditLevel=moderate` + `NU1902`–`NU1904` in `WarningsAsErrors` — a moderate-or-worse advisory on a direct **or transitive** package fails `dotnet restore` (the `build-test-lint` job's first step), not just warns. Don't suppress an NU190x code to unblock a PR — bump/replace the offending package (see `spec-nuget-audit-ci-gate.md`, `spec-ssh-net-cve-fix.md`).
 
 **Migrations:**
 - Always add migrations via `scripts/add-migration.sh <Name>` — never `dotnet ef migrations add` directly against one provider project (AD-2).
@@ -176,4 +177,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-09-17
+Last Updated: 2026-09-21
