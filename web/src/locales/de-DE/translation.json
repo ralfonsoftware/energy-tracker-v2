@@ -67,6 +67,13 @@
       "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
       "errorConflict": "Diese Einstellung wurde an anderer Stelle geändert. Wir haben den aktuellen Wert geladen — bitte versuche es erneut.",
       "errorConflictRefetchFailed": "Diese Einstellung wurde an anderer Stelle geändert, und der aktuelle Wert konnte nicht geladen werden. Bitte lade die Seite neu."
+    },
+    "dataExport": {
+      "heading": "Datenexport",
+      "description": "Lade alle Daten deines Haushalts herunter — Zählerstände, Tarifverlauf, Ereignisse, Smart-Plug-Daten und Einstellungen — in einer einzigen dokumentierten Datei. Nutze sie als Notfall-Backup oder um deine Daten außerhalb von Energy Tracker zu lesen.",
+      "trigger": "Daten exportieren",
+      "exporting": "Wird exportiert…",
+      "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
     }
   },
   "taggingScaffold": {

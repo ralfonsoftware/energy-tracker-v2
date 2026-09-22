@@ -640,7 +640,56 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-09
-last_updated: 2026-09-19
+last_updated: 2026-09-22
+# 2026-09-22: story 7-1-full-data-export code review complete -- status review -> done. 3 parallel
+#   review layers ran (Blind Hunter, Edge Case Hunter, Acceptance Auditor -- no spec violations
+#   found). 6 patch findings applied: extended both cross-household isolation tests to cover all 12
+#   export entity categories (was 4, the top finding given AC #3/AD-3's security-critical nature);
+#   fixed the isolation test's unchecked setup calls; fixed a filename/exportedAtUtc UTC-midnight
+#   mismatch; fixed the frontend fallback filename's stale module-load-time date; added a
+#   double-click guard to the export button; corrected an imprecise AD-3-exception comment. 5 items
+#   deferred to deferred-work.md (pre-existing codebase conventions or trade-offs already disclosed
+#   in this story's own Dev Notes, not regressions). Full suite re-verified green: 358 Application +
+#   220 Infrastructure (dual-provider) + 210 Api + 4 Architecture, 379/379 frontend, clean
+#   build/tsc/oxlint.
+# 2026-09-22: story 7-1-full-data-export moved to review (dev-story implementation complete). All
+#   7 tasks done, all 4 ACs satisfied. Resolved both flagged design decisions per the story's own
+#   recommendations: single JSON document, formatVersion "v2"; entity scope = every Household-
+#   scoped entity except HouseholdInvite (live bearer secret) and BackgroundJob/SmartPlugImport/
+#   SmartPlugImportGap (transient job-queue metadata) -- disclosed in full in the new
+#   docs/data-export-format.md. New IHouseholdExportReader port + HouseholdExportReader adapter
+#   (AsNoTracking, AD-3 query filter throughout) feed ExportHouseholdData (zero derivation, AD-14)
+#   and GET /api/household-export (Results.File, sets Content-Disposition automatically). Frontend
+#   DataExportPanel added to Settings. Full backend suite green (358 Application + 220
+#   Infrastructure dual-provider + 210 Api + 4 Architecture), full frontend suite green (379/379),
+#   dotnet build/tsc -b/oxlint/vite build all clean. Live Auth0/Chrome verification gate CLEARED:
+#   extension connected first try; the real household had zero data at session start, so paused
+#   and asked Ralf before writing anything -- he chose to add minimal real test data live (one
+#   Meter Reading, one Tariff, one Event). Exported file (32 MB, real download via the browser)
+#   inspected directly: correct v2 shape, real settings/member/reading/tariff/event data, an
+#   archived Room's Event tag correctly preserved by value (AD-10), and 117,770 genuine
+#   SmartPlugReading rows from this household's real prior import history round-tripped with no
+#   smartPlugImportId leakage. MeterRegressionPrompt/StatusSnapshot/AuditCorrection/Device were
+#   legitimately empty for this household, not a gap. One self-caught test bug fixed pre-review
+#   (Infrastructure isolation test's other-Household MeterReading needed a real MainMeter row to
+#   satisfy the FK -- not a production bug).
+# 2026-09-22: story 7-1-full-data-export started (dev-story) -- status ready-for-dev -> in-progress.
+#   baseline_commit 710db9604bc0265be23e6387ade26eb4db4f7dc0 captured.
+# 2026-09-21: story 7-1-full-data-export created (bmad-create-story). Epic 7 flipped to
+#   in-progress (first story). Read epic-7, PRD FR-22/23/NFR4/NFR11/NFR13, architecture spine
+#   AD-2/AD-3/AD-7/AD-10/AD-11/AD-14/AD-19, UX EXPERIENCE.md/key-settings.html mockup (no dedicated
+#   export screen mock exists -- flagged, precedent from Story 3.10/UX-DR21), and the Epic 6 retro's
+#   Epic 7 kickoff note (Event snapshot fields, AiPlausibilityEnabled + backend label must round
+#   trip). Story discloses two open design decisions for dev-story to confirm rather than silently
+#   resolving: (1) export format -- recommended single JSON doc, no format was mandated anywhere;
+#   (2) entity-inclusion scope across the 15 Household-scoped entity types -- recommended
+#   include-list (Household settings, HouseholdMember, MainMeter, MeterReading,
+#   MeterRegressionPrompt, Tariff, Event, Room/PowerPoint/Device incl. archived, SmartPlugReading,
+#   StatusSnapshot, AuditCorrection) vs. exclude-list (HouseholdInvite -- live bearer token, a
+#   secret not data; BackgroundJob/SmartPlugImport/SmartPlugImportGap -- transient job-queue
+#   metadata with its own 30-day lifecycle, not household energy data). Embedded the Epic 6 retro's
+#   Action Item #1 (live Auth0/Chrome verification is a hard gate, does not defer) directly as
+#   Task 7.
 # 2026-09-19: story 6-2-event-history-view code review complete -- status review -> done. 3
 #   parallel review layers ran; AC #5's deferred live verification was resolved in-session (shared
 #   test household's Event row temporarily removed and restored, confirming the empty state live
@@ -1288,8 +1337,8 @@ development_status:
   6-3-wattage-plausibility-correlation: done
   epic-6-retrospective: done
 
-  epic-7: backlog
-  7-1-full-data-export: backlog
+  epic-7: in-progress
+  7-1-full-data-export: done
   7-2-full-data-import-restore-migration: backlog
   epic-7-retrospective: optional
 

@@ -339,6 +339,9 @@ builder.Services.AddScoped<GetEventHistory>();
 builder.Services.AddScoped<SetAiPlausibilityEnabled>();
 builder.Services.AddScoped<CorrelateEvent>();
 
+builder.Services.AddScoped<IHouseholdExportReader, HouseholdExportReader>();
+builder.Services.AddScoped<ExportHouseholdData>();
+
 // AD-8: AiPlausibility:BaseUrl is read exactly once, here at the composition root — same
 // switch-on-configured-value shape as Database:Provider/JobQueue:Provider. Blank/unset selects the
 // no-op adapter; CorrelateEvent is the only place downstream allowed to also check
@@ -474,6 +477,7 @@ api.MapSmartPlugReadingEndpoints();
 api.MapSmartPlugImportEndpoints();
 api.MapEventEndpoints();
 api.MapJobEndpoints();
+api.MapHouseholdExportEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();
