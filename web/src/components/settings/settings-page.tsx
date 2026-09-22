@@ -15,6 +15,7 @@ import { TaggingScaffoldManager } from '@/components/tagging-scaffold/tagging-sc
 import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline-form'
 import { AiPlausibilityForm } from '@/components/ai-plausibility/ai-plausibility-form'
 import { DataExportPanel } from '@/components/data-export/data-export-panel'
+import { DataImportPanel } from '@/components/data-import/data-import-panel'
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 import { checkPendingReadingsBeforeLogoff } from '@/lib/logoff'
@@ -41,8 +42,8 @@ type LogoffStep = 'closed' | 'confirm' | 'queue-warning' | 'federated-warning'
 // review of Story 2.5, once this page existed as a real destination), Logoff / Account Switching
 // (Story 1.12, FR-33) — the one control on this page reachable from every screen in exactly one
 // further tap (AC #1), since Settings itself is one tap away via NavChrome's always-present
-// bottom tab bar — and full Data Export (Story 7.1, UX-DR12). DataExportPanel ships only the
-// export half; import is Story 7.2's job.
+// bottom tab bar — and full Data Export/Import (Story 7.1's DataExportPanel, Story 7.2's
+// DataImportPanel, UX-DR12).
 // Smart Plug Import moved OFF this page by Story 3.5 (FR-4 amendment, UX-DR20) — it's now a
 // dedicated Dashboard-launched screen, not a Settings-embedded panel.
 export function SettingsPage({ householdId, supportsFederatedLogout, onBack, onTrendHistoryClick, onTariffRadarClick }: SettingsPageProps) {
@@ -112,6 +113,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, onBack, onT
         <TaggingScaffoldManager />
         <InviteGeneratePanel />
         <DataExportPanel />
+        <DataImportPanel />
 
         <Button variant="outline" className="self-start" onClick={() => setLogoffStep('confirm')}>
           <LogOut aria-hidden="true" />

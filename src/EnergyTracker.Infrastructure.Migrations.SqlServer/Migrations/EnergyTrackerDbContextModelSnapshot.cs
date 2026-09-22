@@ -724,7 +724,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasOne("EnergyTracker.Domain.HouseholdMember", null)
                         .WithMany()
                         .HasForeignKey("QueuedByHouseholdMemberId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("EnergyTracker.Domain.Device", b =>
@@ -872,7 +872,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasOne("EnergyTracker.Domain.PowerPoint", null)
                         .WithMany()
                         .HasForeignKey("PowerPointId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("EnergyTracker.Domain.SmartPlugImport", null)
                         .WithMany()

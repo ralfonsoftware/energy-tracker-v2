@@ -17,4 +17,9 @@ public static class JobTypes
     // checks Household.AiPlausibilityEnabled/whether a real IAiPlausibilityClient is configured
     // (AD-8's anti-hard-branch rule).
     public const string CorrelateEvent = "CorrelateEvent";
+
+    // Story 7.2 — the wholesale delete+insert restore, same async-job shape as
+    // CleanUpSmartPlugImportJobs above (Epic 6 Retro Action Item #3: this is the same
+    // "large bulk write" incident shape, just across all 12 entity categories).
+    public const string RestoreHouseholdData = "RestoreHouseholdData";
 }

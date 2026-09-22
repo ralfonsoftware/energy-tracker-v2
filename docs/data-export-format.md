@@ -3,9 +3,9 @@
 This document describes the file `GET /api/household-export` produces. It is
 the authoritative reference for reading the export back out — the whole
 point of a disaster-recovery backup is that it is never locked into this
-product. There is no companion import tool published anywhere yet (Story 7.2
-builds one); until then, this document plus any JSON tool is enough to
-recover your data.
+product. A companion import/restore tool now exists — see
+[`data-import-restore.md`](./data-import-restore.md) — but this document
+plus any JSON tool remains enough to recover your data on its own.
 
 ## Format decision
 
