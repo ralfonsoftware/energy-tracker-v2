@@ -67,6 +67,13 @@
       "errorGeneric": "Something went wrong. Please try again.",
       "errorConflict": "This setting was changed elsewhere. We've loaded the latest value — please try again.",
       "errorConflictRefetchFailed": "This setting was changed elsewhere, and we couldn't load the latest value. Please refresh the page."
+    },
+    "dataExport": {
+      "heading": "Data Export",
+      "description": "Download all of your Household's data — Meter Readings, Tariff history, Events, Smart Plug data, and settings — in a single documented file. Keep it as a disaster-recovery backup, or to read your data outside Energy Tracker.",
+      "trigger": "Export data",
+      "exporting": "Exporting…",
+      "errorGeneric": "Something went wrong. Please try again."
     }
   },
   "taggingScaffold": {
