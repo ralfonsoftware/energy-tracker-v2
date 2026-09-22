@@ -1,5 +1,22 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-21
+# last_updated: 2026-09-22
+# 2026-09-22: story 7-2-full-data-import-restore-migration created (create-story) -- status set to
+#   ready-for-dev. Resolves Epic 6 Retro Action Items #3/#4 as explicit design decisions: (3) the
+#   wholesale delete+insert runs as an async background job (AD-6), chunked per Stories 3.8-3.10's
+#   proven DeleteBatchSize=200/CommandTimeout-bump/single-outer-transaction pattern, never
+#   synchronously on the request thread; (4) the EF DateTimeOffset value-comparer gap doesn't apply
+#   because restore only ever INSERTs fresh rows (never UPDATEs an existing tracked row's
+#   DateTimeOffset property) -- Household's own row is the one exception, updated in place, but none
+#   of its updated fields is a DateTimeOffset. Also resolves a design question the epic left open:
+#   restore always targets the CURRENT session's Household (ICurrentHouseholdAccessor.HouseholdId),
+#   never the import file's own household.id -- the export format (Story 7.1) never carries
+#   HouseholdId on child rows at all, so every reconstructed entity's HouseholdId is simply set to
+#   the current Household explicitly, with internal cross-references (PowerPoint.RoomId etc.)
+#   reused byte-for-byte from the file. Validation/import reuses ExportHouseholdData's own DTO
+#   family rather than a parallel schema. Flagged for dev-story to verify: the FK-dependency
+#   delete/insert order in the story's Dev Notes was derived from entity shapes read during story
+#   creation, not an exhaustive Fluent-API audit -- confirm against the real *Configuration.cs
+#   files before relying on it.
 # 2026-09-21: epic-6 retrospective complete (bmad-retrospective). Clean epic (3/3 stories done, zero
 #   incidents). 5 action items recorded: (1) dev-story must raise+pause immediately on a
 #   "Chrome not connected" live-verification failure rather than checking the task off and letting
@@ -1339,7 +1356,7 @@ development_status:
 
   epic-7: in-progress
   7-1-full-data-export: done
-  7-2-full-data-import-restore-migration: backlog
+  7-2-full-data-import-restore-migration: ready-for-dev
   epic-7-retrospective: optional
 
 action_items:
