@@ -34,10 +34,19 @@ public class SmartPlugImportGapConfiguration : IEntityTypeConfiguration<SmartPlu
             .OnDelete(DeleteBehavior.Restrict);
 
         // Nullable — the AC #7 whole-file FlaggedForReview case never resolves a Power Point.
+        // SetNull, not Restrict (changed in Story 7.2, same reasoning/incident as
+        // BackgroundJobConfiguration.QueuedByHouseholdMemberId): PowerPoint is deleted and
+        // reinserted wholesale on restore (RestoreHouseholdData), and SmartPlugImportGap is
+        // explicitly out of that operation's scope (never deleted/reinserted). Restrict here made
+        // a real live restore fail — caught during Story 7.2's own Task 8 live verification
+        // against a household with real historical Smart Plug import gaps — the moment any
+        // SmartPlugImportGap row still referenced an about-to-be-deleted PowerPoint. Mirrors
+        // SmartPlugReading.SmartPlugImportId's own precedent: gap history survives independently
+        // of the row it was attributed to at creation time.
         builder.HasOne<PowerPoint>()
             .WithMany()
             .HasForeignKey(g => g.PowerPointId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.SetNull);
 
         // AD-3's query filter runs on every SmartPlugImportGap query — index the column it
         // filters on.

@@ -3,6 +3,7 @@ using System;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(EnergyTrackerDbContext))]
-    partial class EnergyTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260922102215_BackgroundJobQueuedByMemberSetNull")]
+    partial class BackgroundJobQueuedByMemberSetNull
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -871,7 +874,7 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasOne("EnergyTracker.Domain.PowerPoint", null)
                         .WithMany()
                         .HasForeignKey("PowerPointId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EnergyTracker.Domain.SmartPlugImport", null)
                         .WithMany()

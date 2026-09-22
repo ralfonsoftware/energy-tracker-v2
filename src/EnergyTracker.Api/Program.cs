@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry;
@@ -342,6 +343,26 @@ builder.Services.AddScoped<CorrelateEvent>();
 builder.Services.AddScoped<IHouseholdExportReader, HouseholdExportReader>();
 builder.Services.AddScoped<ExportHouseholdData>();
 
+// Story 7.2 — restore/migration import. Registry is a singleton (in-memory token→temp-file
+// mapping, MemoryHouseholdImportUploadRegistry's own doc comment); the writer/use case are scoped
+// like every other DbContext-backed adapter/use case in this file.
+builder.Services.AddSingleton<IHouseholdImportUploadRegistry, MemoryHouseholdImportUploadRegistry>();
+builder.Services.AddScoped<ValidateHouseholdImport>();
+builder.Services.AddScoped<IHouseholdRestoreWriter, HouseholdRestoreWriter>();
+builder.Services.AddScoped<RestoreHouseholdData>();
+
+// Task 1's decided upload cap (HouseholdImportEndpoints.MaxFileSizeBytes) exceeds FormOptions'
+// default MultipartBodyLengthLimit (128 MB) — raised once, here at the composition root.
+// FormOptions.MultipartBodyLengthLimit is a secondary, form-parsing-stage limit only reached
+// after Kestrel's own MaxRequestBodySize gate (below) has already let the body through, so
+// raising it globally is harmless as long as that primary gate stays correctly scoped: the
+// Kestrel-level raise is deliberately NOT applied globally here — see the route-scoped middleware
+// below (Code Review, Story 7.2 Pass 1: a process-wide Kestrel raise previously widened
+// SmartPlugImportEndpoints' own DoS exposure too, since Kestrel would then buffer up to this same
+// 250 MB for every route before that endpoint's own lower 20 MB app-level check ever got a chance
+// to run).
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = HouseholdImportEndpoints.MaxFileSizeBytes);
+
 // AD-8: AiPlausibility:BaseUrl is read exactly once, here at the composition root — same
 // switch-on-configured-value shape as Database:Provider/JobQueue:Provider. Blank/unset selects the
 // no-op adapter; CorrelateEvent is the only place downstream allowed to also check
@@ -448,6 +469,28 @@ forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
 
+// Scopes the raised body-size limit to just /api/household-import (Code Review, Story 7.2 Pass 1)
+// — Minimal API's IFormFile model binding reads the whole body as part of invoking the endpoint,
+// before the lambda body itself ever runs, so an in-handler override would be too late; this must
+// run as middleware, before routing/endpoint execution, to actually take effect first. Every
+// other route keeps Kestrel's original default MaxRequestBodySize (~28.6 MB) — including
+// SmartPlugImportEndpoints, whose own lower 20 MB app-level cap this restores the original
+// headroom for.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/household-import"))
+    {
+        var maxRequestBodySizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (maxRequestBodySizeFeature is { IsReadOnly: false })
+        {
+            maxRequestBodySizeFeature.MaxRequestBodySize =
+                HouseholdImportEndpoints.MaxFileSizeBytes + HouseholdImportEndpoints.BodySizeHeadroomBytes;
+        }
+    }
+
+    await next(context);
+});
+
 // AddProblemDetails() above only backs endpoints that explicitly call Results.Problem(...) —
 // without this, unhandled exceptions bypass RFC 7807 entirely and return a bare empty 500.
 app.UseExceptionHandler();
@@ -478,6 +521,7 @@ api.MapSmartPlugImportEndpoints();
 api.MapEventEndpoints();
 api.MapJobEndpoints();
 api.MapHouseholdExportEndpoints();
+api.MapHouseholdImportEndpoints();
 
 // Single-artifact deployment (AD-13): the API serves the built React SPA from wwwroot/.
 app.UseDefaultFiles();

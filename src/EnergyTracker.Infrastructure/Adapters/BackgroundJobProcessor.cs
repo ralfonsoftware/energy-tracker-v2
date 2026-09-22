@@ -142,6 +142,12 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
                     var correlateUseCase = services.GetRequiredService<CorrelateEvent>();
                     await correlateUseCase.ExecuteAsync(message.HouseholdId, correlatePayload, cancellationToken);
                     break;
+                case JobTypes.RestoreHouseholdData:
+                    var restorePayload = JsonSerializer.Deserialize<RestoreHouseholdDataPayload>(message.PayloadJson)
+                        ?? throw new InvalidOperationException($"Job {message.JobId}: payload deserialized to null.");
+                    var restoreUseCase = services.GetRequiredService<RestoreHouseholdData>();
+                    await restoreUseCase.ExecuteAsync(message.HouseholdId, restorePayload, cancellationToken);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unknown JobType '{message.JobType}'.");
             }
@@ -172,7 +178,7 @@ public class BackgroundJobProcessor(IServiceScopeFactory scopeFactory, ILogger<B
             // null lets that existing fallback do its job instead of being pre-empted by unlocalized
             // backend text. A round-3 attempt at fixing only the cleanup job's *wording* (branching
             // the hardcoded string on JobType) still shipped raw English to non-English users.
-            job.ErrorMessage = ex is SmartPlugImportValidationException ? ex.Message : null;
+            job.ErrorMessage = ex is SmartPlugImportValidationException or HouseholdImportValidationException ? ex.Message : null;
         }
 
         job.CompletedAtUtc = DateTimeOffset.UtcNow;

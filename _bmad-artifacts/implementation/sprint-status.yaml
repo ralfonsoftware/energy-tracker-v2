@@ -1,5 +1,89 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-21
+# last_updated: 2026-09-22
+# 2026-09-22: story 7-2-full-data-import-restore-migration -- live Auth0/Chrome re-verification
+#   (post-review, Ralf's explicit go-ahead) complete: in-progress -> done. Both review passes'
+#   changes driven live -- new validation rules (duplicate-id, undefined-enum, negative-value) all
+#   correctly rejected together; a fully-populated 12-category file restored end-to-end with the
+#   corrected confirm-dialog summary and success-button label; session continuity held; a fresh
+#   export confirmed exact data replacement. Caught one real regression not found by either
+#   automated review: ValidateMeterReading's kwhValue had been missed by Pass 1's own
+#   range-validation patch (still allowed negative values). Fixed on the spot + 4 new regression
+#   tests added for the four Pass-1 validation features that had shipped with zero test coverage --
+#   Application.Tests now 387/387. Household restored back to its pre-verification snapshot
+#   afterward; local dev servers stopped.
+# 2026-09-22: story 7-2-full-data-import-restore-migration -- code review Pass 2/2 (frontend+docs
+#   scope) complete: 6 patches applied (double-read response-body bug found independently by all
+#   three review layers, confirm-dialog summary completeness, duplicate React key, missing
+#   unmount-abort, misleading button-label reuse, stale docs section left behind by Pass 1's own
+#   Program.cs fix), 3 deferred, 6 dismissed (two verified false positives by re-reading the
+#   code/doc directly). Also resolved Pass 1's deferred OriginalFileName/XSS question: confirmed
+#   safe (plain JSX text, never dangerouslySetInnerHTML). Full frontend suite green: tsc/oxlint/
+#   vite build clean, Vitest 385/385. Both review passes now complete -- status still in-progress
+#   pending a decision on whether to re-run live Auth0/Chrome verification given code changed
+#   since Task 8's original live check.
+# 2026-09-22: story 7-2-full-data-import-restore-migration -- code review Pass 1/2 (backend scope)
+#   complete: review -> in-progress. 3 decision-needed resolved with Ralf (all -> patch), 10
+#   patches applied (range/enum/reference/duplicate-id validation, guarded Deserialize,
+#   per-household concurrent-restore guard, route-scoped body-size limit, upload-registry sweep,
+#   forced-rollback test, MeterRegressionPrompts summary count), 4 deferred, 4 dismissed. Full
+#   suite green after patches (Application 383/383, Api 218/218, Infrastructure 232/232). Pass 2
+#   (frontend + docs) still outstanding -- run as a separate code-review invocation before moving
+#   to done.
+# 2026-09-22: story 7-2-full-data-import-restore-migration -- Task 8 (live Auth0/Chrome
+#   verification) complete with Ralf's explicit go-ahead. Full local stack (Postgres, API via
+#   scripts/run-api.sh, Vite dev server) driven via Claude-in-Chrome against the existing
+#   authenticated test-user session. Verified live: validation-failure UI for a corrupted file,
+#   the "replace all data" confirm dialog with a real entity-count summary, poll-to-completion,
+#   and session continuity (Dashboard/Settings both loaded normally post-restore, no forced
+#   re-login) -- confirmed with a real before/after export comparison (32 MB / 117,770 Smart Plug
+#   readings -> 57,850 bytes / 200 readings, every other category unchanged, matching the restored
+#   file exactly). One deviation from the story's literal recommendation, decided with Ralf
+#   mid-session (AskUserQuestion): the real household's own export exceeded the browser-automation
+#   upload tool's 10 MB cap, so a copy with smartPlugReadings trimmed to 200 rows was restored
+#   instead of the exact original file -- a real, disclosed, permanent reduction of that one
+#   household's Smart Plug reading history. A SECOND real FK bug (beyond the BackgroundJob one
+#   found via automated tests, see below) was found live on the very first restore attempt:
+#   SmartPlugImportGap.PowerPointId was also Restrict, invisible to every automated test since none
+#   ever created a real SmartPlugImportGap row -- fixed via SetNull + migration
+#   SmartPlugImportGapPowerPointSetNull, applied to the local dev DB and verified working on retry.
+#   All 8 tasks now complete; status moved to review.
+# 2026-09-22: story 7-2-full-data-import-restore-migration -- Tasks 1-7 complete (dev-story),
+#   status remains in-progress (NOT moved to review yet). Full validate/confirm/apply flow shipped:
+#   ValidateHouseholdImport (structural validation, collects every failure, no DB write),
+#   RestoreHouseholdData + IHouseholdRestoreWriter/HouseholdRestoreWriter (chunked wholesale
+#   delete+insert, one transaction, AD-2/AD-6 compliant), JobTypes.RestoreHouseholdData async job
+#   wiring, two new API endpoints (POST /api/household-import, .../confirm) backed by a new
+#   in-memory token registry (MemoryHouseholdImportUploadRegistry -- disclosed trade-off, see
+#   docs/data-import-restore.md), and a new Settings DataImportPanel. All 4 test layers green:
+#   383 Application + 230 Infrastructure (dual-provider Testcontainers) + 218 Api + 384 frontend.
+#   One real, previously-undocumented bug found and fixed via the Api-layer real-Postgres
+#   end-to-end test (not caught by mocked unit tests): BackgroundJob.QueuedByHouseholdMemberId's
+#   FK to HouseholdMember was Restrict, which made every restore fail (the confirm endpoint's own
+#   BackgroundJob row for the restore job already references the current member before the delete
+#   phase runs) -- fixed via a new dual-provider migration changing that FK to SetNull. Task 8
+#   (live Auth0/Chrome verification) is deliberately PAUSED, per its own instruction: this
+#   verification is genuinely destructive against real data (unlike Story 7.1's read-only export
+#   check), and no go-ahead has been given yet -- status stays in-progress until that's resolved.
+# 2026-09-22: story 7-2-full-data-import-restore-migration started (dev-story) -- status ready-for-dev
+#   -> in-progress. baseline_commit eac96e37e4c44d982bbdb7bba2c3d4293953991a preserved (already set
+#   at story creation).
+# 2026-09-22: story 7-2-full-data-import-restore-migration created (create-story) -- status set to
+#   ready-for-dev. Resolves Epic 6 Retro Action Items #3/#4 as explicit design decisions: (3) the
+#   wholesale delete+insert runs as an async background job (AD-6), chunked per Stories 3.8-3.10's
+#   proven DeleteBatchSize=200/CommandTimeout-bump/single-outer-transaction pattern, never
+#   synchronously on the request thread; (4) the EF DateTimeOffset value-comparer gap doesn't apply
+#   because restore only ever INSERTs fresh rows (never UPDATEs an existing tracked row's
+#   DateTimeOffset property) -- Household's own row is the one exception, updated in place, but none
+#   of its updated fields is a DateTimeOffset. Also resolves a design question the epic left open:
+#   restore always targets the CURRENT session's Household (ICurrentHouseholdAccessor.HouseholdId),
+#   never the import file's own household.id -- the export format (Story 7.1) never carries
+#   HouseholdId on child rows at all, so every reconstructed entity's HouseholdId is simply set to
+#   the current Household explicitly, with internal cross-references (PowerPoint.RoomId etc.)
+#   reused byte-for-byte from the file. Validation/import reuses ExportHouseholdData's own DTO
+#   family rather than a parallel schema. Flagged for dev-story to verify: the FK-dependency
+#   delete/insert order in the story's Dev Notes was derived from entity shapes read during story
+#   creation, not an exhaustive Fluent-API audit -- confirm against the real *Configuration.cs
+#   files before relying on it.
 # 2026-09-21: epic-6 retrospective complete (bmad-retrospective). Clean epic (3/3 stories done, zero
 #   incidents). 5 action items recorded: (1) dev-story must raise+pause immediately on a
 #   "Chrome not connected" live-verification failure rather than checking the task off and letting
@@ -1339,7 +1423,7 @@ development_status:
 
   epic-7: in-progress
   7-1-full-data-export: done
-  7-2-full-data-import-restore-migration: backlog
+  7-2-full-data-import-restore-migration: done
   epic-7-retrospective: optional
 
 action_items:
