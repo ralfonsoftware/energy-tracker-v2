@@ -28,6 +28,11 @@ Lets a household explain a spike or dip the Status surfaced, by logging fast tex
 Full-household backup/restore in a documented format, covering every entity type introduced by Epics 1–6 (Readings, Tariff history, Events, Smart Plug data, settings) — the safety net underneath the whole product, sequenced last so it captures the complete data model rather than growing piecemeal alongside each feature epic.
 **FRs covered:** FR-22, FR-23
 
+## Epic 8: Desktop & Tablet Layout Correction
+Every existing frontend surface (Dashboard, Trend History, Tariff Radar, Settings) renders correctly at desktop and tablet width (≥660px) instead of an unconstrained mobile layout — one shared breakpoint, a top-nav chrome variant, a Profile menu, and system-wide application of already-established-but-under-used patterns (unit-inside-field, card-hierarchy, section grouping, tree summary rows). Delivers no new domain capability; makes every existing capability (Epics 1, 2, 4, 5) usable at desktop/tablet width, closing the gap between the already-documented UX-DR19 responsive-layout intent and what actually shipped. Added 2026-09-23 from a UX review of all 9 production screens (see `mockups/critique-desktop-breakpoint-2026-09-23.html`).
+**FRs covered:** none (no new FR) — additive touch on FR-33 (Story 1.12, done) only
+**UX-DRs covered:** UX-DR9 (amended), UX-DR19 (amended), UX-DR23, UX-DR24, UX-DR25, UX-DR26, UX-DR27
+
 **Deferred — not decomposed into an epic:**
 - FR-19 (Custom Event/Plausibility Rules) — Could-have, explicitly out of MVP scope per PRD §6.2; no rule engine designed yet
 - FR-20 (Generic Data-Source Column Mapping) — Could-have, explicitly out of MVP scope per PRD §6.2; PRD itself flags as low-confidence pending a feasibility spike (Open Question 1)
