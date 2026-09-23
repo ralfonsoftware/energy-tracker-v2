@@ -1,0 +1,1326 @@
+# Sprint Status — Change History Archive
+
+Archived 2026-09-23 from sprint-status.yaml's dated `#`-comment changelog (had grown to ~1300 lines / ~85% of that file's size, none of it machine-read by any BMAD skill — see `bmad-sprint-status/SKILL.md`, which only parses the real YAML fields). Moved here for token efficiency; current state (`development_status`, `action_items`) stays in `sprint-status.yaml`. Entries are historical narrative only, most-recent-first as originally written, unedited except for stripping the `#` comment markers.
+
+---
+
+2026-09-22: story 7-2-full-data-import-restore-migration -- live Auth0/Chrome re-verification
+  (post-review, Ralf's explicit go-ahead) complete: in-progress -> done. Both review passes'
+  changes driven live -- new validation rules (duplicate-id, undefined-enum, negative-value) all
+  correctly rejected together; a fully-populated 12-category file restored end-to-end with the
+  corrected confirm-dialog summary and success-button label; session continuity held; a fresh
+  export confirmed exact data replacement. Caught one real regression not found by either
+  automated review: ValidateMeterReading's kwhValue had been missed by Pass 1's own
+  range-validation patch (still allowed negative values). Fixed on the spot + 4 new regression
+  tests added for the four Pass-1 validation features that had shipped with zero test coverage --
+  Application.Tests now 387/387. Household restored back to its pre-verification snapshot
+  afterward; local dev servers stopped.
+2026-09-22: story 7-2-full-data-import-restore-migration -- code review Pass 2/2 (frontend+docs
+  scope) complete: 6 patches applied (double-read response-body bug found independently by all
+  three review layers, confirm-dialog summary completeness, duplicate React key, missing
+  unmount-abort, misleading button-label reuse, stale docs section left behind by Pass 1's own
+  Program.cs fix), 3 deferred, 6 dismissed (two verified false positives by re-reading the
+  code/doc directly). Also resolved Pass 1's deferred OriginalFileName/XSS question: confirmed
+  safe (plain JSX text, never dangerouslySetInnerHTML). Full frontend suite green: tsc/oxlint/
+  vite build clean, Vitest 385/385. Both review passes now complete -- status still in-progress
+  pending a decision on whether to re-run live Auth0/Chrome verification given code changed
+  since Task 8's original live check.
+2026-09-22: story 7-2-full-data-import-restore-migration -- code review Pass 1/2 (backend scope)
+  complete: review -> in-progress. 3 decision-needed resolved with Ralf (all -> patch), 10
+  patches applied (range/enum/reference/duplicate-id validation, guarded Deserialize,
+  per-household concurrent-restore guard, route-scoped body-size limit, upload-registry sweep,
+  forced-rollback test, MeterRegressionPrompts summary count), 4 deferred, 4 dismissed. Full
+  suite green after patches (Application 383/383, Api 218/218, Infrastructure 232/232). Pass 2
+  (frontend + docs) still outstanding -- run as a separate code-review invocation before moving
+  to done.
+2026-09-22: story 7-2-full-data-import-restore-migration -- Task 8 (live Auth0/Chrome
+  verification) complete with Ralf's explicit go-ahead. Full local stack (Postgres, API via
+  scripts/run-api.sh, Vite dev server) driven via Claude-in-Chrome against the existing
+  authenticated test-user session. Verified live: validation-failure UI for a corrupted file,
+  the "replace all data" confirm dialog with a real entity-count summary, poll-to-completion,
+  and session continuity (Dashboard/Settings both loaded normally post-restore, no forced
+  re-login) -- confirmed with a real before/after export comparison (32 MB / 117,770 Smart Plug
+  readings -> 57,850 bytes / 200 readings, every other category unchanged, matching the restored
+  file exactly). One deviation from the story's literal recommendation, decided with Ralf
+  mid-session (AskUserQuestion): the real household's own export exceeded the browser-automation
+  upload tool's 10 MB cap, so a copy with smartPlugReadings trimmed to 200 rows was restored
+  instead of the exact original file -- a real, disclosed, permanent reduction of that one
+  household's Smart Plug reading history. A SECOND real FK bug (beyond the BackgroundJob one
+  found via automated tests, see below) was found live on the very first restore attempt:
+  SmartPlugImportGap.PowerPointId was also Restrict, invisible to every automated test since none
+  ever created a real SmartPlugImportGap row -- fixed via SetNull + migration
+  SmartPlugImportGapPowerPointSetNull, applied to the local dev DB and verified working on retry.
+  All 8 tasks now complete; status moved to review.
+2026-09-22: story 7-2-full-data-import-restore-migration -- Tasks 1-7 complete (dev-story),
+  status remains in-progress (NOT moved to review yet). Full validate/confirm/apply flow shipped:
+  ValidateHouseholdImport (structural validation, collects every failure, no DB write),
+  RestoreHouseholdData + IHouseholdRestoreWriter/HouseholdRestoreWriter (chunked wholesale
+  delete+insert, one transaction, AD-2/AD-6 compliant), JobTypes.RestoreHouseholdData async job
+  wiring, two new API endpoints (POST /api/household-import, .../confirm) backed by a new
+  in-memory token registry (MemoryHouseholdImportUploadRegistry -- disclosed trade-off, see
+  docs/data-import-restore.md), and a new Settings DataImportPanel. All 4 test layers green:
+  383 Application + 230 Infrastructure (dual-provider Testcontainers) + 218 Api + 384 frontend.
+  One real, previously-undocumented bug found and fixed via the Api-layer real-Postgres
+  end-to-end test (not caught by mocked unit tests): BackgroundJob.QueuedByHouseholdMemberId's
+  FK to HouseholdMember was Restrict, which made every restore fail (the confirm endpoint's own
+  BackgroundJob row for the restore job already references the current member before the delete
+  phase runs) -- fixed via a new dual-provider migration changing that FK to SetNull. Task 8
+  (live Auth0/Chrome verification) is deliberately PAUSED, per its own instruction: this
+  verification is genuinely destructive against real data (unlike Story 7.1's read-only export
+  check), and no go-ahead has been given yet -- status stays in-progress until that's resolved.
+2026-09-22: story 7-2-full-data-import-restore-migration started (dev-story) -- status ready-for-dev
+  -> in-progress. baseline_commit eac96e37e4c44d982bbdb7bba2c3d4293953991a preserved (already set
+  at story creation).
+2026-09-22: story 7-2-full-data-import-restore-migration created (create-story) -- status set to
+  ready-for-dev. Resolves Epic 6 Retro Action Items #3/#4 as explicit design decisions: (3) the
+  wholesale delete+insert runs as an async background job (AD-6), chunked per Stories 3.8-3.10's
+  proven DeleteBatchSize=200/CommandTimeout-bump/single-outer-transaction pattern, never
+  synchronously on the request thread; (4) the EF DateTimeOffset value-comparer gap doesn't apply
+  because restore only ever INSERTs fresh rows (never UPDATEs an existing tracked row's
+  DateTimeOffset property) -- Household's own row is the one exception, updated in place, but none
+  of its updated fields is a DateTimeOffset. Also resolves a design question the epic left open:
+  restore always targets the CURRENT session's Household (ICurrentHouseholdAccessor.HouseholdId),
+  never the import file's own household.id -- the export format (Story 7.1) never carries
+  HouseholdId on child rows at all, so every reconstructed entity's HouseholdId is simply set to
+  the current Household explicitly, with internal cross-references (PowerPoint.RoomId etc.)
+  reused byte-for-byte from the file. Validation/import reuses ExportHouseholdData's own DTO
+  family rather than a parallel schema. Flagged for dev-story to verify: the FK-dependency
+  delete/insert order in the story's Dev Notes was derived from entity shapes read during story
+  creation, not an exhaustive Fluent-API audit -- confirm against the real *Configuration.cs
+  files before relying on it.
+2026-09-21: epic-6 retrospective complete (bmad-retrospective). Clean epic (3/3 stories done, zero
+  incidents). 5 action items recorded: (1) dev-story must raise+pause immediately on a
+  "Chrome not connected" live-verification failure rather than checking the task off and letting
+  review catch the skip later; (2) the real AI backend for Wattage Plausibility (Azure AI Foundry
+  vs. self-hosted LMStudio vs. cloud API) is still an open decision -- only the no-op path has ever
+  been verified live, non-blocking spike; (3)/(4) Story 7.2 kickoff flags pulled from a full
+  deferred-work.md review: apply Stories 3.8-3.10's bulk-write/chunking/timeout lessons (a full
+  restore is the same incident-prone shape), and resolve the EF DateTimeOffset value-comparer gap
+  from spec-datetimeoffset-utc-normalization's own review before it becomes reachable via restore
+  writes; (5) add a CI gate turning NU1903 (vulnerable transitive NuGet package) into a build
+  failure, escalated to an owned item per Ralf. See epic-6-retro-2026-09-21.md for full detail.
+2026-09-21: story 6-3-wattage-plausibility-correlation -- code review complete, status review ->
+  done. 3 decision-needed findings resolved (AC #5 deferred/wording corrected; Model-config gap
+  and WindowedDeviationCalculator rollover-correction gap both patched), 4 patch findings applied
+  and verified (full backend suite green: 347 Application + 216 Infrastructure + 206 Api + 4
+  Architecture), 4 findings deferred to deferred-work.md, 10 dismissed as noise. See the story's
+  own Review Findings section and Change Log for detail.
+2026-09-21: story 6-3-wattage-plausibility-correlation -- live Auth0/Chrome verification gate
+  cleared (user-requested retry after the extension initially reported "not connected"). Confirmed
+  live: Settings' AI Wattage Plausibility card and its enable/disable toggle round trip, and a real
+  Event logged with the toggle on -- CorrelateEvent's background job ran and completed cleanly with
+  no YearlyBaselineKwh set (AC #6's graceful-degrade path), no correlation rendered (AC #3), no
+  separate step needed (AC #7), clean console/network throughout. Still not verified live: the real
+  AI classification round-trip and its rendered bump/dip copy (AC #1/#7) -- no AiPlausibility:BaseUrl
+  is configured in this environment; that narrower gap stays filed in deferred-work.md, covered by
+  OpenAiCompatibleClientTests/events-card.test.tsx instead. Toggle switched back off afterward;
+  Status remains review (a code-review pass is still the gate for done).
+2026-09-21: story 6-3-wattage-plausibility-correlation moved to review (dev-story implementation
+  complete). All 6 tasks done, all 7 ACs satisfied by automated tests. Full backend suite green
+  (344 Application + 214 Infrastructure dual-provider + 206 Api + 4 Architecture incl. re-verified
+  AD-14 guard), full frontend suite green (376/376), dotnet build/tsc -b/oxlint/vite build all
+  clean. Resolved AC #5/AD-8 tension per the story's own pre-flagged decision: one deployment-wide
+  OpenAiCompatibleClient backend (env-var BaseUrl/ApiKey) + per-Household AiPlausibilityEnabled
+  toggle, never per-household backend selection. WindowedDeviationCalculator (new, ±7-day window)
+  reuses BonusDecayNormalizer for both the expected-consumption figure and the prorated threshold
+  -- no second proration formula, per AD-5. CorrelateEvent is the sole place that checks
+  AiPlausibilityEnabled/backend-configured, per AD-8's anti-hard-branch rule; CreateEvent
+  unconditionally enqueues the job. Live Auth0/Chrome verification could NOT be performed this
+  session -- Claude-in-Chrome extension reported "not connected" -- even though this environment
+  (unlike 6.1/6.2's sandboxes) has a real OIDC provider and local Postgres configured. Disclosed
+  in the story's Completion Notes and filed to deferred-work.md rather than silently skipped; must
+  be cleared during code review before this story can move to done, per the project's standing
+  live-verification-gate convention. 3 deliberate scope simplifications also filed to
+  deferred-work.md: no AD-12 open-regression-prompt exclusion in the windowed calculator, no
+  correlation recompute on a later backfilled reading, and the ±7-day window fetch has no
+  outside-window bracketing/interpolation.
+2026-09-21: story 6-3-wattage-plausibility-correlation started (dev-story) -- status ready-for-dev
+  -> in-progress. baseline_commit eae971d61ec2403af929a85e6fbd20cf25c6f159 captured.
+2026-09-20: story 6-3-wattage-plausibility-correlation created (create-story) -- status set to
+  ready-for-dev. This is the largest story in the epic by a wide margin: exhaustive codebase
+  research confirmed IAiPlausibilityClient/OpenAiCompatibleClient (AD-8), the windowed
+  bump/dip deviation calculation, and the Household-level AI setting are all fully greenfield --
+  nothing beyond architecture prose exists yet. Story resolves two design tensions not settled
+  anywhere in the docs (flagged for review): (1) AC #5's "local vs cloud is a Household-level
+  choice" is resolved as one deployment-wide backend (env-var config, AD-8/AD-19) plus a
+  per-Household on/off toggle, not per-household backend selection -- no precedent exists for
+  storing per-household secrets; (2) correlation display is always one of two fixed i18n-catalog
+  strings driven by an AI classification-only call, never raw AI prose, per AD-18/UX-DR17.
+  Correlation is stored as two nullable columns directly on Event (not a new table). New windowed
+  deviation calculator must not touch the 9 files PatternDetectiveDoesNotReferenceSmartPlugOrEvent
+  DataTests.cs source-scans (AD-14 guard, written in 6.1 anticipating this story) -- it may only
+  read Pattern Detective's outputs from a new file. CreateEvent will unconditionally enqueue a
+  correlation job; the enabled/configured check lives solely inside the new CorrelateEvent use
+  case, per AD-8's anti-hard-branch rule.
+2026-09-18: queued spec-datetimeoffset-utc-normalization.md (ready-for-dev) from story 6.1's
+  deferred-work triage. Npgsql rejects a non-zero-offset DateTimeOffset while SQL Server accepts
+  it, so the ISO-8601-with-explicit-offset wire format project-context.md itself mandates is a 500
+  on Postgres and a success on SQL Server -- an AD-2 divergence affecting all 29 DateTimeOffset
+  properties (nothing in src/ normalizes anywhere), not just Event. Fix is one EF
+  ConfigureConventions value converter; no schema change, no migration. Not an epic story: this is
+  a cross-cutting one-shot, the shape the epic-4 retro's action item says belongs in a spec-*.md.
+2026-09-18: story 6-2-event-history-view created (create-story) -- status ready-for-dev. Inserted
+  between 6.1 and the wattage correlation story, which is RENUMBERED 6.2 -> 6.3: its ACs
+  ("rendered inline with the Event", "shown without a correlation") already presuppose a surface
+  that displays Events, which did not exist. 6.3 was still backlog so the renumber cost nothing.
+  epic-6 file updated to match; two dated historical docs (epic-5-retro-2026-09-17,
+  implementation-readiness-report-2026-08-22) still say "6.2" for the correlation story and were
+  deliberately left as point-in-time records. 6-2 carries Story 6.1's deferred time-ordered
+  Events index (Task 2) and closes 6.1's AC #4 display half.
+2026-09-18: story 6-1-event-logging code review complete -- status review -> in-progress. 3 parallel
+  review layers ran; 17 patches applied (incl. a verified null/omitted-Description 500 -> 400 fix, a
+  404/409 split for missing vs archived tag targets, an errorCode ProblemDetails contract the SPA
+  localizes per AD-18, ancestor-archive filtering server-side and in the picker, a SqlServer
+  EventRepository test pair for AD-2, and AD-3 cross-household coverage). 4 items deferred to
+  deferred-work.md (a project-wide Npgsql non-zero-offset divergence, DST rewriting, clock-skew
+  prefill, missing time-ordered index). Live Auth0/Chrome gate CLEARED: real signed-in session,
+  tagged create 200, AC #4 persistence half confirmed against a live DB (snapshot stayed inert
+  after archiving the tagged Power Point), confirmation-placement + error-localization + a11y
+  fixes all confirmed in a real render, no console errors. NOT done: AC #4's display half needs
+  the Event read path -- follow-up story being created.
+2026-09-18: story 6-1-event-logging moved to review (dev-story implementation complete). All 5
+  tasks done, all 5 ACs satisfied. Event domain entity uses the story's resolved-ambiguity single
+  discriminator (TaggedEntityType/TaggedEntityId) + by-value TaggedEntityName snapshot (AD-10),
+  not three nullable FKs. CreateEvent resolves tags via the existing ITaggingScaffoldRepository
+  (no new per-entity repository), rejects a tag against a missing/already-archived Room/
+  PowerPoint/Device with a 409 (EventTaggedEntityArchivedException, matching
+  TaggingScaffoldParentArchivedException's convention, not MeterReadingValidationException's 400
+  convention), and deliberately never calls IStatusRecomputeService -- confirmed the AD-14
+  PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests guard test still passes unmodified.
+  Migration AddEvent added to both provider projects via scripts/add-migration.sh (AD-2). Frontend
+  Log Event sheet built directly against LogReadingSheet's established visual structure/tokens (no
+  mockup exists yet for this surface, per EXPERIENCE.md and the story's own Dev Notes precedent) --
+  plain fetch, deliberately not routed through the Meter-Reading-only offline queue. Topbar gained
+  a second icon-button entry point; logEventOpen state lifted into App.tsx like logSheetOpen,
+  including the same UX-DR13 regression-prompt-supersedes-open-sheet behavior (not explicitly
+  required by the ACs, flagged for review). Manual live-browser verification skipped -- no OIDC
+  provider configured in this sandboxed environment (same gap noted in Story 4.1), covered instead
+  by the Api.Tests/component-test suites. Full backend suite green (311 Application + 186 Api + 154
+  Infrastructure incl. both provider migration tests + 3 Architecture), full frontend suite green
+  (357/357), dotnet build/tsc -b/oxlint/vite build all clean.
+2026-09-18: story 6-1-event-logging created (create-story) -- status set to ready-for-dev; epic-6
+  flipped backlog -> in-progress (first story in the epic). No mockup exists yet for the Log Event
+  surface (EXPERIENCE.md flags it as spine-only) -- resolved as lower-risk than the pre-Epic-4
+  spine-only incident because the surface composes almost entirely from the already-toned
+  LogReadingSheet pattern; flagged for Ralf as an open question rather than blocking on a fresh
+  Sally UX pass. Resolved one design ambiguity: Event's optional Room/PowerPoint/Device tag is
+  modeled as a single TaggedEntityType/TaggedEntityId discriminator pair (matching
+  AuditCorrection.EntityType's existing precedent), not three separate nullable FK columns as
+  structural-seed.md's ERD sketches -- flagged for review, cheap to revisit since no other story
+  depends on the physical shape yet. Also flagged: don't extend the Meter-Reading-only offline
+  queue to Event creation, don't call IStatusRecomputeService from CreateEvent (AD-7 names exactly
+  two call sites, Event isn't a third), and don't touch the 9 files
+  PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests.cs source-scans for the literal word
+  "Event" (AD-14 guard, written in anticipation of this story before Event existed in the codebase).
+2026-09-17: epic-5 retrospective run (/bmad-retrospective), scope = Epic 5 (4/4 stories) + Story
+  1.12 (late Epic-1 addition, never separately retro'd). epic-5-retrospective -> done; epic-1 flipped
+  back to done (1.12 was its only open item). 3 epic-4-retro action items for epic 5 (AuditCorrection/
+  AD-4 2nd-consumer check, BonusDecayNormalizer/AD-5 1st-consumer check, AD-21 permission check) closed
+  done -- all held or were not applicable. Epic-4's i18n/unmounted-guard checklist item also closed done
+  -- zero recurrence across epic 5/1.12. 4 new action items added: verify IAiPlausibilityClient/AD-8 at
+  Story 6.2 kickoff (its first real consumer); 2 non-blocking checklist reminders (capture all old field
+  values before a repository write in multi-field edits; test lock-gate bypass via a different field) --
+  both drawn from real bugs found in Story 5.1's code review; and the WCAG-contrast-automation gap
+  escalated from a 3-cycle defer streak (2.2b, 5.3, 5.4) to a real owned action item, per Ralf's decision.
+  Full retro doc: epic-5-retro-2026-09-17.md.
+2026-09-17: story 1-12-logoff-account-switching moved to done (code review). Resolved the AC #4
+  decision-needed finding by household-tagging the offline queue (offline-queue.ts/meter-reading-
+  sync.ts/logoff.ts) so flushQueue refuses to post an entry under a different Household's session --
+  closes the cross-Household misattribution mechanism the original design only disclosed via a
+  confirm dialog. Applied 5 more patches: an unhandled-rejection fix so an IndexedDB failure can't
+  permanently strand a member in the logoff dialog, a try/catch around SessionEndpoints.cs's OIDC
+  discovery fetch (was 500ing the whole /api/session request on a transient IdP failure), an
+  IsNullOrWhiteSpace fix for EndSessionEndpoint, a stale comment fix, and a loading affordance on the
+  confirm button. Full backend (619/619) and frontend (321/321) suites pass; tsc -b/oxlint clean. Per
+  this project's live-verification gate (any OIDC-touching change), re-ran the live logoff/re-auth
+  round trip against the real dev identity provider after the SessionEndpoints.cs patch -- confirmed
+  supportsFederatedLogout still resolves true and the full round trip still completes cleanly. 3
+  findings deferred (see deferred-work.md); 5 dismissed as noise/already-accepted trade-offs.
+2026-09-17: story 1-12-logoff-account-switching moved to review (dev-story). Implemented the
+  SupportsFederatedLogout signal on /api/session (via IOptionsMonitor<OpenIdConnectOptions> in
+  SessionEndpoints.cs directly -- no Program.cs change needed, simpler than the story's original
+  plan), the pre-logoff offline-queue check (logoff.ts), and the reachable Settings logoff control
+  with its confirm/queue-warning/federated-warning dialog steps. Confirmed the existing /logout
+  handler (Story 1.5) already implements RP-initiated logout correctly -- no backend change needed
+  there. Full backend (617/617) and frontend (320/320) suites pass; tsc -b/oxlint clean. Live
+  Auth0 + Chrome verification performed against the dev tenant: full logoff-then-re-login round
+  trip confirmed the provider-side session was actually terminated (no silent re-auth), and the
+  AC #4 unsynced-readings dialog confirmed via an IndexedDB-injected fixture with navigator.onLine
+  forced false. One deviation from the pre-verification note below: Auth0 showed no logout-consent
+  interstitial in practice -- went straight to re-authentication, stronger evidence of a correctly
+  terminated session than the predicted screen would have been; not escalated.
+2026-09-17: story 1-12-logoff-account-switching created (create-story) - status set to ready-for-dev.
+  New FR-33 (Logoff / Account Switching), added to Epic 1 this session via epic-planning doc updates
+  even though epic-1 had previously reached 'done' -- flipped epic-1 back to in-progress to reflect
+  this late addition, per the create-story workflow's own suggested resolution for a story added to
+  a completed epic. Most of the backend federated-logout mechanism already exists from Story 1.5
+  (AuthEndpoints.cs's /logout already does the two-scheme Results.SignOut); this story's real net-new
+  surface is a frontend SupportsFederatedLogout signal on /api/session, the logoff control itself
+  (doesn't exist anywhere in the UI yet), and an offline-queue pre-logoff check reusing existing
+  offline-queue.ts/meter-reading-sync.ts. Flagged one genuinely open design point in the story's Dev
+  Notes: neither the epic AC nor AD-17's FR-33 extension note fully resolves how to prevent a queued-
+  but-unflushed Meter Reading from later attributing to a different Household if a different account
+  logs in next on the same device -- left as a question for dev-story time rather than improvised here.
+  Live Auth0/Chrome verification is mandatory per standing project practice, not deferrable, including
+  a documented expectation (researched during story creation) that Auth0 shows a logout-consent
+  interstitial given this app's SaveTokens=false config -- expected provider behavior, not a bug.
+2026-09-17: story 5-4-tariff-check-reminder moved to done (code review, /bmad-code-review). Blind
+  Hunter + Acceptance Auditor ran (Edge Case Hunter stalled twice on infra issues -- a rate limit
+  then two 600s stream-watchdog timeouts -- and was skipped per the workflow's failure-handling
+  rule). Acceptance Auditor found zero AC violations: all 7 ACs and both resolved ambiguities
+  (monotonic due-ness ignoring TariffCheckCadenceMonths; card renders nothing with no Tariff
+  configured) verified correct against the actual code. 5 patch findings applied, mostly test-
+  quality gaps rather than production bugs: a "boundary" test that didn't test the boundary
+  (its own algebra reduced to a duplicate of the already-well-in-the-past case); two tests that
+  recomputed the same formula as the production code instead of asserting a hardcoded expected
+  value; the Dev Notes' "monotonic, once true stays true" framing overstated the mechanism (a
+  live recompute, correctly per AC #5, can flip IsDue back to false on a Tariff edit -- comment
+  corrected, a regression test added for that direction); TariffCheckCard's clickable variant had
+  no hover/focus-visible state and its button's accessible name was the entire sentence (both
+  fixed). One finding was initially triaged as a patch (no automated WCAG-contrast check for the
+  new --tariff-check-card-* tokens) but reclassified to defer mid-implementation on discovering
+  Story 5.3's own review had already deferred the identical class of finding as a pre-existing,
+  file-wide gap (tracing back to Story 2.2b, 2026-08-16) rather than something to patch per-story.
+  3 further findings deferred as pre-existing patterns elsewhere in the codebase (refreshTariffCheck's
+  silent error/no-data collapse mirrors refreshStatus; TariffCheckCard's locale prop driving only
+  date formatting mirrors status-card.tsx; the new endpoint's missing OpenAPI metadata matches every
+  other route in the file). 6 findings dismissed as noise (mostly spec-compliant-by-design behavior
+  misread as bugs, or already-discussed tradeoffs from the story's own Dev Notes). Full backend
+  suite green (296 Application + 174 Api.Tests, re-verified after patches), full frontend suite
+  green (310/310), dotnet build/tsc -b/oxlint all clean.
+2026-09-15: story 5-4-tariff-check-reminder moved to review (dev-story implementation complete).
+  All 9 tasks done, all 7 ACs satisfied. Household.TariffCheckCadenceMonths added (default 3, a
+  real column but deliberately not read by the monotonic due-ness computation, per the
+  resolved-ambiguity discussion in story creation). GetTariffCheckReminder use case (pure,
+  synchronous, no persisted schedule, AD-7) + GET /api/tariff-check singleton endpoint +
+  TariffCheckCard rendered on both Dashboard and Tariff Radar. One unplanned fix: 4 pre-existing
+  Infrastructure.Tests migration-checkpoint tests broke from the new Household column (EF
+  tracked-insert-at-a-historical-checkpoint issue, same class already documented for BackgroundJob's
+  Story 3.6 columns) -- fixed with an analogous raw-SQL Household insert helper. Full backend suite
+  green (609/609), full frontend suite green (310/310), dotnet build/tsc -b/oxlint/vite build all
+  clean.
+2026-09-15: story 5-4-tariff-check-reminder moved to in-progress (dev-story activation)
+2026-09-15: story 5-4-tariff-check-reminder created (create-story) -- status set to ready-for-dev.
+  Epic 5's fourth and final story. Resolved two ambiguities the PRD/epic left open, both confirmed
+  with Ralf: (1) given AD-7's "zero persisted reminder state" constraint, FR-15's "recurring
+  cadence" computes as monotonic (once due, stays due forever) rather than a cyclic on/off window --
+  Household.TariffCheckCadenceMonths is added as a real column (default 3, AD-15 precedent) for
+  AC #2's structural "editable per household" requirement but is deliberately not read by the
+  due-ness computation this story ships; (2) the Tariff Check prompt card renders nothing at all
+  (not neutral copy) when no Tariff is configured yet, confirmed via direct mockup evidence
+  (key-dashboard.html's empty-state frames never render the .tariff-quiet line). Also flagged: the
+  mockup's due-state copy ("It's been 3 months since you last compared rates...") asserts a
+  "last compared" fact this product has no data for and must not fabricate (AD-7, UX-DR5) -- the
+  story's own copy must state only what the computed gate-open date actually proves. Card renders
+  on both Dashboard and Tariff Radar (dashboard-page.tsx's own header comment, which currently says
+  this card is deliberately not built yet, is now stale and gets corrected as part of this story).
+2026-09-11: story 3-10-manual-job-history-cleanup code-reviewed (/code-review, forked). 4 patch
+  findings applied: wrapped SmartPlugImportRepository's 3-step delete (Gaps -> Imports ->
+  BackgroundJobs) in an explicit transaction (this story's "delete everything" path materially
+  widened a pre-existing untransacted gap's blast radius); deduplicated the RetentionWindow
+  constant between ListSmartPlugImportJobs/CleanUpSmartPlugImportJobs; fixed the cleanup dialog's
+  deleteAll/cleanupError state surviving across close/reopen (violated AC #3's "default on every
+  open"); added the 2 missing DeleteJobsAsync test states (Failed-no-import, FlaggedForReview).
+  5 findings deliberately not fixed, reasoning recorded in the story's Review Findings section —
+  2 are tradeoffs already called out as intentional in the story's own pre-review Dev Notes, 3 are
+  genuine but low-priority/out-of-scope polish. 6 new tests added. Full backend suite green
+  (489/489), full frontend suite green (261/261), dotnet build/tsc -b/oxlint/vite build all
+  clean. Status stays review — no human sign-off gate reached in this pass.
+2026-09-11: story 3-10-manual-job-history-cleanup moved to review (dev-story implementation
+  complete). All 6 tasks done: generalized SweepExpiredAsync's delete mechanics into a shared
+  private helper without changing its own eligibility query/behavior; added DeleteJobsAsync
+  (all six states, optional age cutoff, falls back to BackgroundJob.CreatedAtUtc for Queued/
+  Processing rows which have no CompletedAtUtc); CleanUpSmartPlugImportJobs use case; DELETE
+  /api/smart-plug-import-jobs?deleteAll=true|false endpoint; frontend Clean Up History button +
+  confirmation dialog on JobHistoryList (native radios, no alert-dialog primitive installed);
+  i18n both locales. One test bug caught and fixed (not a product bug): a tenant-isolation test
+  queried through the wrong household's DbContext, whose own AD-3 filter would have hidden a
+  false pass — fixed by verifying through a DbContext scoped to the other household. Full backend
+  suite green (487/487: 230 Application, 108 Infrastructure via Testcontainers, 146 Api.Tests,
+  3 Architecture), full frontend suite green (259/259), tsc -b/oxlint/vite build all clean.
+2026-09-11: story 3-10-manual-job-history-cleanup moved to in-progress (dev-story activation)
+2026-09-11: story 3-10-manual-job-history-cleanup created (create-story) — status set to
+  ready-for-dev. Read SweepExpiredAsync's real current implementation (SmartPlugImportRepository.
+  cs:660-724) plus ProcessSmartPlugImport.cs/MapSmartPlugImportToPowerPoint.cs directly to verify
+  a subtle point before speccing it: SmartPlugImport.CompletedAtUtc is set at initial parse time
+  for AwaitingPowerPointMapping too, not only once resolved — so the new all-states delete
+  method's age fallback to BackgroundJob.CreatedAtUtc is only actually needed for Queued/
+  Processing rows (no SmartPlugImport row, null BackgroundJob.CompletedAtUtc), not for Needs
+  Mapping. Design keeps SweepExpiredAsync's own eligibility query completely untouched (extract
+  the shared 3-step FK-ordered delete into a private helper; do not parameterize the existing
+  query with an "include active states" flag) so the automatic sweep's Story 3.6 behavior cannot
+  regress. Confirmed with Ralf and captured as an explicit AC: deleting a Processing job's row
+  does not cancel the in-flight parse (this product has no cancellation mechanism) — the worker's
+  existing defensive-fallback path (BackgroundJobProcessor.cs:31-45) already handles a missing
+  row, so the job silently reappears attribution-less on the next poll rather than erroring.
+2026-09-11: story 3-10-manual-job-history-cleanup added to backlog under epic-3 (Ralf's manual
+  cleanup-button request for the Job Status & History list, taken through bmad-agent-pm ->
+  bmad-create-epics-and-stories); FR-32 and UX-DR21 extended in requirements-inventory.md, new
+  Story 3.10 appended to epic-3-smart-plug-import-baseline-sharpening.md. epic-3 reopened from
+  done to in-progress since not all its stories are done (same reopen pattern as the 2026-08-27
+  3.5/3.6 addition below). Deliberately generalizes Story 3.6's SweepExpiredAsync (age cutoff +
+  state restriction both now optional) rather than a second delete path; deliberately carves a
+  narrow exception into 3.6 AC #7 for this manual, explicitly-confirmed action only — the
+  automatic sweep's terminal-states-only behavior is unchanged.
+2026-09-04: story 3-9-watermark-correction-detection-and-bulk-write-adoption implemented
+  (dev-story) — status set to review. Both AD-22 (watermark correction detection) and AD-23
+  (bulk-write adoption) fully implemented and tested against real Postgres AND real SQL Server
+  (Testcontainers, both providers) — 456/456 tests green across the whole solution. Two rounds of
+  mid-session escalation to Ralf were needed and resolved before proceeding: (1) Story 3.8's spike
+  returned a split go/no-go verdict rather than this story's own Task 1 gate's required
+  unambiguous "go" — Ralf chose a hand-written raw-SQL upsert for the AwaitingPowerPointMapping
+  path Finding #2 blocked; (2) that choice needed provider-specific SQL text, conflicting with
+  AD-2's "never branched on elsewhere" rule as written — Ralf chose a narrow, explicit AD-2
+  amendment (documented in invariants-rules.md) over a weaker-atomicity portable alternative.
+  Implementation then surfaced three further empirical findings beyond Story 3.8's spike coverage
+  (within-batch match-key collisions throw and needed de-duplication; Postgres's CREATE INDEX
+  CONCURRENTLY needed a new migration — AddSmartPlugReadingPowerPointIntervalStartUniqueConstraint,
+  both provider projects — promoting the match-key unique index to a real constraint; a library
+  schema-resolution quirk needed a CustomDestinationTableName workaround, Postgres-only), all
+  confirmed via direct reproduction against real databases and resolved without further
+  escalation. One item remains open for Ralf: AD-21's live Entra-auth connection-string
+  re-verification against real Azure SQL couldn't run in this sandboxed session (no credentials,
+  same gap Story 3.8 recorded) — only the Microsoft.Data.SqlClient version-resolution half (6.1.4)
+  is confirmed. See the story file's own Dev Agent Record for full detail.
+2026-09-04: story 3-8-smart-plug-bulk-write-throughput-spike moved to review (dev-story) — real
+  spike run completed against both the project's real Postgres and the real Azure SQL Basic
+  instance (energytracker-prod-qvc6vfmtp5-sql). Results doc written at
+  _bmad-artifacts/implementation/spike-results/3-8-bulk-write-throughput-spike-results.md: go
+  for AD-23's [PowerPointId, IntervalStart] match-key path (with a PropertiesToExcludeOnUpdate
+  correction), no-go as specified for the [HouseholdId, IntervalStart] path (fails on both real
+  providers), recommended NFR1 Tier 3 = 15 minutes (cross-referenced into deferred.md). Story 3.9
+  is gated on this go/no-go verdict per its own header note.
+2026-09-03: story 3-8-smart-plug-bulk-write-throughput-spike started (dev-story) — status set to
+  in-progress. Harness project (spikes/3-8-bulk-write-throughput/) built and smoke-tested
+  end-to-end against throwaway local Postgres/SQL Server containers, surfacing two real findings
+  (see the story's Dev Agent Record / harness README.md). Actual spike run against the real
+  Azure SQL Basic + project Postgres instances still pending — deferred to Ralf per his own
+  choice (open DTU-tier-bump/timing question named in the story's Dev Notes).
+2026-09-03: story 1-11-azure-sql-entra-id-only-authentication moved to done — post-review fixes
+  now verified stable in production. Code review (PR #35) fixed the grant script's object-ID
+  instruction (already known live-broken, Msg 33130) and deduped infra-deploy.yml's env: blocks.
+  PR #35's own merge then surfaced a real production break: main.bicep redeploys on every push to
+  infra/**, and Azure SQL rejects any server write carrying administratorLogin/
+  administratorLoginPassword once azureADOnlyAuthentication: true is live — breaking every future
+  infra deploy, not just Entra-related ones. Fixed in two follow-up PRs: #36 omitted those
+  properties when azureADOnlyAuthenticationEnabled is true; #37 corrected the fix once a routine
+  push-triggered run failed identically (infra-deploy.yml always explicitly overrode that
+  parameter to false) — the real fix was flipping the default to true everywhere
+  (main.bicepparam and the workflow), since Deploy B has permanently landed for this environment.
+  Final az deployment group what-if after PR #37 showed the sqlServer resource as a true
+  NoChange. epic-1 flipped back to done — all its stories (1.1-1.11) plus its retrospective are
+  now complete, matching the reset-to-done pattern used after Stories 3.6/3.7/4.1.
+2026-09-03: story 1-11-azure-sql-entra-id-only-authentication implemented (dev-story) — status
+  set to review. All 5 tasks complete, including Task 4 (the manual cutover), executed live
+  against production (energy-tracker-rg) with Ralf's explicit confirmation at each
+  production-affecting step: PR #33 (Entra Admin/connection-string changes, Deploy A) merged and
+  verified; infra/sql/grant-entra-db-users.sql run against production as the Entra Admin
+  (corrected mid-execution to use the identities' Entra display names, not their object IDs —
+  CREATE USER ... FROM EXTERNAL PROVIDER resolves a managed identity by display name, confirmed
+  empirically); Container App and CI (energy-tracker-devops-uami) connectivity both verified live
+  via Entra auth; PR #34 (a workflow_dispatch input added to infra-deploy.yml so Deploy B could
+  run without any human needing DATABASE_ADMIN_PASSWORD, which none of us has post-Deploy-A's
+  connection-string rewrite) merged; Deploy B triggered and verified — azureAdOnlyAuthentication:
+  true live on the server, Container App serving real traffic, SQL-password logins now rejected
+  server-side. See the story file's own Dev Agent Record for full detail and command evidence.
+2026-09-03: stories 3-8-smart-plug-bulk-write-throughput-spike and
+  3-9-watermark-correction-detection-and-bulk-write-adoption drafted (create-story) — both set to
+  ready-for-dev, flipped from their prior backlog placeholder entries. Implements new architecture
+  spine AD-22 (watermark corruption detection — extends the delta-detection watermark to carry
+  KwhValue, not just IntervalStart; both parsers now include the exact boundary row instead of
+  skipping it; the orchestration layer, not the parser, compares values and performs a narrow
+  KwhValue-only update plus an IAuditCorrectionRecorder call on mismatch) and AD-23 (adopts
+  EFCore.BulkExtensions — .Core+.SqlServer+.PostgreSql, 10.0.1 — via BulkInsertOrUpdateAsync to
+  replace SmartPlugImportRepository.AddAsync's existing pre-check/fast-path/per-row-fallback
+  machinery, branching the match-key between AD-20's two real unique indexes, explicitly carving
+  out UpdateMappingAsync as untouched, requiring explicit transaction-wrapping for parent-row
+  atomicity). Both ADs already fully specified and reviewer-gate-corrected in invariants-rules.md
+  (2026-09-03 brainstorming/architecture session with Ralf) before these stories were drafted.
+  Story 3.8 is a standalone technical spike (real Azure SQL Basic + real Postgres, dedicated
+  disposable spike-only tables, never the live SmartPlugReading schema) measuring
+  BulkInsertOrUpdateAsync throughput/cancellation-rollback at realistic scale (~120k-row
+  single-device full-history, ~470k-row multi-device household baseline — both derived from real
+  numbers in Stories 3.4/3.7, not arbitrary) and producing a written go/no-go recommendation plus
+  a recommended NFR1 Tier-3 time budget, closing that long-deferred deferred.md item. Story 3.9
+  (the AD-22/AD-23 implementation) is explicitly BLOCKED BY Story 3.8's own written "go"
+  recommendation for its AD-23 tasks specifically (stated as a header note and restated in Dev
+  Notes, not left to story-number ordering to imply) — its AD-22 tasks have no such dependency and
+  may proceed independently. 3.9 deliberately does not fabricate 3.8's unmeasured throughput
+  numbers or verdict. epic-3-smart-plug-import-baseline-sharpening.md's header Architecture line
+  updated to add AD-11 (extended — Smart Plug KwhValue boundary corrections), AD-22, AD-23; new
+  per-story sections appended after Story 3.7's. epic-3 was already in-progress — no epic status
+  change needed. One genuinely open question left for Ralf (flagged in Story 3.8's own Dev Notes,
+  not resolved with a recommended default): whether to request a temporary Azure SQL tier bump for
+  the spike's Azure-SQL-side runs, and a preferred low-usage execution window, since the spike
+  shares the live Basic-tier (5 DTU) SQL Server with real household traffic.
+2026-09-02: story 1-11-azure-sql-entra-id-only-authentication added under Epic 1 (Winston/
+  bmad-architecture session with Ralf) implementing new architecture spine AD-21 (Azure SQL
+  access via Microsoft Entra ID-only authentication). Cuts the production Azure SQL server over
+  from SQL auth to Entra-only in two separate Bicep deploys with a manual, out-of-band DB-user
+  grant script (infra/sql/grant-entra-db-users.sql, committed but never pipeline-automated, per
+  Ralf's explicit direction) run in between — never one deploy, to avoid self-locking the server
+  before the Container App/CI identities have contained database users. DATABASE_ADMIN_PASSWORD
+  stays live as a break-glass fallback; retiring it is explicitly out of scope, a follow-up.
+  docs/local-vs-azure-deltas.md gained a new D6 entry and infra/README.md a runbook section, both
+  cross-referencing this story. epic-1 reopened from done to in-progress, matching the same
+  reopen pattern already used for epic-3 (Stories 3.5-3.7) and epic-1 itself (Story 1.10) when a
+  story is added after an epic's initial close-out.
+2026-08-30: story 4-2-per-plug-measured-data-view drafted (create-story) — status set to
+  ready-for-dev. This is the Room -> Power Point -> Device tree Story 4.1 explicitly deferred
+  (its own trend-history-page.tsx/meter-readings-card.tsx comments name this story and mark the
+  slot: third card, appended after Meter Readings). Read-only: new ISmartPlugReadingRepository/
+  SmartPlugReadingRepository (dedicated read port, mirrors Story 4.1's IStatusSnapshotRepository
+  split rather than extending the 17-method ISmartPlugImportRepository), GetPerPlugMeasuredData
+  use case building a nested Room/PowerPoint/Device sum tree, GET /api/smart-plug-readings.
+  Grouping is on SmartPlugReading's snapshotted-by-value RoomName/PowerPointName/DeviceName
+  string columns only (never a live join to Room/PowerPoint/Device) — this is what makes AC #3
+  (retag doesn't move history, AD-10) true by construction; SmartPlugReading has no DeviceId at
+  all (Device tag is a raw parsed string, no Device entity resolved, per the entity's own doc
+  comment). AD-14 caveat text ("measured context, not a reconciled attribution") is a hard
+  requirement on the new PerPlugDataCard, not cosmetic. No EF migration needed — SmartPlugReading
+  schema already exists. No open questions flagged; card ordering/placement and tree structure
+  were fully specified by mockups (density-trend-history.html, key-trend-history.html) and by
+  Story 4.1's own placeholder comments.
+2026-08-29: story 4-1-trend-history-view implemented (dev-story) — status set to review. All 13
+  tasks complete: backend GetStatusHistory/StatusSnapshotRepository/GET /api/status/history;
+  frontend TrendChart (hand-rolled SVG), MeterReadingsCard (extracted from the now-deleted
+  MeterReadingHistoryPage), TrendHistoryPage, NavChrome's Trend History tab now real, Dashboard's
+  standalone History trigger removed. Full regression green: 425 backend tests (incl. Architecture
+  guard tests), 223 frontend tests, tsc/oxlint/vite build clean. All 3 of the story's own Open
+  Questions implemented as specified (non-blocking). Manual browser verification skipped — no
+  OIDC provider configured in this environment; covered instead by dedicated component/
+  integration tests. See the story file's own Dev Agent Record for detail.
+2026-08-29: story 4-1-trend-history-view drafted (create-story) — status set to ready-for-dev.
+  epic-4 flipped from backlog to in-progress (first story in the epic). Absorbs Story 2.8's
+  Meter Reading History page (list + edit-in-place) into the new Trend History surface per the
+  Epic 3 Retro's Significant Discovery (2026-08-23) — MeterReadingHistoryPage is deleted, its
+  table/pagination/edit logic extracted into a new MeterReadingsCard reused unchanged;
+  EditMeterReadingDialog and meter-reading-history-api.ts are untouched. Adds a first-of-its-kind
+  read path against StatusSnapshot (IStatusSnapshotRepository/GetStatusHistory/
+  GET /api/status/history) — safe only because the Epic 3 Retro's action items #1/#2
+  (recompute-race + bounded-history perf fix, PR #21, 2026-08-25) already landed. Also closes out
+  Story 3.5's deferred Smart Plug Import icon entry point on Trend History. nav-chrome.tsx's
+  Trend History tab becomes real (only Tariff Radar remains an inert placeholder after this
+  story). No EF migration needed — StatusSnapshot's schema already exists (Story 2.4). Trend
+  chart is hand-rolled inline SVG (no charting library dependency), reusing existing
+  --color-status-* CSS tokens and the shared computeStatusDifference sign/rounding utility. Story
+  flags 3 open, non-blocking questions for Ralf (chart gap-threshold reuse of
+  Household.LowConfidenceGapDays, unbounded StatusSnapshot history read, empty-state copy) — see
+  the story file's own Open Questions section.
+2026-08-28: story 3-6-smart-plug-import-job-status-history code-reviewed and moved to done
+  (Blind Hunter + Edge Case Hunter + Acceptance Auditor). 2 decision-needed (both resolved during
+  review): the Story 3.5 "Waiting"-badge regression fixed rather than left degraded; the OIDC
+  `name`-claim mapping live-verified via Claude-in-Chrome against this project's dedicated Auth0
+  test user - confirmed as a real bug (ClaimTypes.Name never populates against this app's exact
+  OIDC config; the raw "name" claim does), fixed by reading the raw claim first. 10 further patch
+  findings applied, including two sweep-correctness bugs (a Failed job with no paired
+  SmartPlugImport row was permanently un-sweepable via the old inner join; a Needs-Mapping job
+  resolved long after its original parse was getting swept on the very next list read because the
+  cutoff compared against the stale BackgroundJob.CompletedAtUtc instead of the import's own) and
+  a redelivery race in BackgroundJobProcessor's Queued->Processing transition. 1 defer
+  (pre-existing HouseholdMember query-filter convention, not exploitable via any current call
+  path), 2 dismissed as noise. Full backend suite green (414/414), full frontend suite green
+  (208/208). epic-3 flipped back to done - all its stories (3.1-3.7) plus its retrospective are
+  now complete, matching the reset-to-done pattern used after Story 3.7.
+2026-08-28: story 3-6-smart-plug-import-job-status-history moved to review (dev-story
+  implementation complete) - see the matching, fuller entry further down this file for detail.
+  Full backend suite green (403/403), full frontend suite green (205/205).
+2026-08-27: story 3-6-smart-plug-import-job-status-history drafted (create-story) - status set
+  to ready-for-dev. epic-3 already in-progress (Story 3.5 just merged, Story 3.7 done), so no
+  epic status change needed. Story context flags two load-bearing implementation hazards found
+  during drafting: SmartPlugReading.SmartPlugImportId's FK is Restrict today, which will hard-fail
+  the story's own 30-day retention sweep on delete unless changed to nullable+SetNull first; and
+  BackgroundJobStatus.Queued must be appended after Failed, never inserted before Processing, to
+  avoid reinterpreting every already-persisted job's stored int status. Also designed a new
+  HouseholdMember.DisplayName field (captured from the OIDC name claim at membership-creation
+  time) since no member-attribution/display-name concept exists anywhere in this codebase yet,
+  needed for UX-DR21's "Queued by {member}" row meta line.
+2026-08-27: stories 3-5-dual-entry-points-multi-file-import-queuing and
+  3-6-smart-plug-import-job-status-history added to backlog under Epic 3 (sprint-planning
+  refresh, Ralf's request). Both already existed in epic-3-smart-plug-import-baseline-
+  sharpening.md (Story 3.5: Dual Entry Points & Multi-File Import Queuing / FR-4 amendment,
+  UX-DR12/UX-DR20; Story 3.6: Smart Plug Import Job Status & History / FR-32, AD-6 extension,
+  UX-DR21) but were previously left as untracked backlog-only entries — the 2026-08-26 3.7 entry
+  above explicitly notes they were deliberately not addressed by that change. No story files
+  exist yet for either under _bmad-artifacts/implementation, so both stay `backlog`. epic-3
+  reopened from done to in-progress, since not all its stories are complete now (mirrors the
+  same reopen/re-close pattern used for Story 3.7 above).
+2026-08-26: story 3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping code-reviewed and
+  moved to done (Amelia, code-review). 0 decision-needed, 5 patch (all applied — see the story
+  file's Review Findings and Change Log), 1 defer (logged in deferred-work.md), 8 dismissed.
+  Full backend suite green (377/377) after patches. epic-3 status reset to done, matching its
+  pre-3.7 state (Stories 3.5/3.6 remain untracked backlog-only entries in the epic file, same as
+  before this story existed — not addressed by this change).
+2026-08-26: story 3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping added to backlog under
+  Epic 3, then immediately drafted (create-story) — status set to ready-for-dev. Triggered by a
+  live production data audit (Ralf's request, bmad-agent-dev/Amelia session): confirmed
+  `MapSmartPlugImportToPowerPoint`'s per-row conflict-tolerant fallback
+  (`SmartPlugImportRepository.UpdateMappingPerRowWithConflictToleranceAsync`, added by Story
+  3.4's Dev Notes Open Question #4) silently leaves a colliding reading permanently unmapped
+  instead of reconciling it — exactly the gap AD-20's own Dev Notes had already named but left
+  unaddressed. Live evidence: 179,324 orphaned duplicate `SmartPlugReading` rows in one household
+  (122,154 "Netzwerk" + 57,170 "Steckdose Tür"), out of 467,787 total rows. Epic 3 was "done" in
+  this file; reopened to in-progress since not all its stories are complete now. A second finding
+  from the same audit (two Power Points both named "Tür" in different Rooms) was deliberately
+  NOT folded into this story — flagged as a separate, unconfirmed-as-bug item, not yet tracked
+  here.
+2026-08-25: epic-3 retro action items #1/#2/#3 marked done — see the action_items entries below
+  and epic-3-retro-2026-08-23.md for detail. #1/#2 (recompute-race fix + bounded-history perf
+  fix) shipped together via PR #21 (spec-status-recompute-serialization-perf.md), merged to
+  main and deployed. #3 (git add -N before adversarial-review diffs) applied consistently
+  across that PR's 4 review rounds. Epic 4 story-drafting is now unblocked (action item #4 was
+  already done as of 2026-08-23).
+2026-08-23: story 2-8-meter-reading-history-view moved to done (adversarial code review, 3
+  layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Acceptance Auditor: 0 findings —
+  every AC and binding Dev Notes/AD constraint checked out. Review artifact note: same untracked-
+  files omission as story 2.7's review — `git diff` silently excludes untracked files; regenerated
+  with `git add -N` before launching reviewers this time, so all findings reflect the complete
+  diff from the first pass. 1 decision-needed, 8 patch findings fixed, 0 deferred pre-existing,
+  9 dismissed as noise. Highlights: EditMeterReading's value update and its AuditCorrection write
+  were two independent SaveChangesAsync calls with no shared transaction — a failure recording the
+  correction after the value update committed would leave a silent, uncorrected value change,
+  exactly the class of bug AC #3/NFR8 exist to prevent — fixed via a new IUnitOfWork port/adapter
+  (first of its kind in this codebase) wrapping both writes in one DB transaction; a no-op edit
+  (saving the same kWh value) was unconditionally bumping Version and writing to the DB, handing
+  out spurious 409s to anyone else viewing the same reading — fixed with an early return; an
+  unbounded `page` query param could integer-overflow GetPageForMainMeterAsync's Skip() into a
+  500; every row's "Edit" button shared one accessible name with nothing distinguishing rows for
+  screen-reader/voice-control users; the history page's `loading` state was tracked but never
+  rendered, leaving the page blank with no feedback during every fetch. Decision-needed (deferred,
+  needs product judgment): Epic 4's own Story 4.3 "Correcting a Meter Reading" is now materially
+  superseded/contradicted by this story — it still describes editing via Trend History (this story
+  built a separate History page instead) and requires a Status recompute-forward-through-present
+  on every edit that this story deliberately does not implement; logged in deferred-work.md
+  alongside the existing no-recompute-on-edit entry so the gap isn't lost. Full backend suite
+  green: 346/346 (Application, Architecture, Api.Tests via Testcontainers Postgres+SqlServer,
+  Infrastructure.Tests), dotnet build clean. 185 frontend tests green (1 new), tsc/oxlint clean.
+  Confirmed with Ralf during story creation, since FR-31 postdates the UX freeze the same way
+  FR-30 did for Story 2.7: no mockup, no nav-chrome slot (all 4 tabs already claimed, Trend
+  History/Tariff Radar still inert placeholders for Epic 4/5) — surface is a new full page (not
+  a dialog, given pagination + inline edit), reached via a Dashboard text-link trigger mirroring
+  Story 2.7's Status Detail link, using the existing local `view` state (no react-router). This
+  is also the first story to activate two previously-deferred architecture invariants: AD-4's
+  MeterReading.Version column (explicitly deferred by MeterReading.cs's own comment until an
+  edit path existed) and AD-11's shared AuditCorrection table/IAuditCorrectionRecorder (built
+  generic so a future Tariff-editing story can reuse it unmodified).
+2026-08-23: story 2-7-status-calculation-detail moved to done (adversarial code review, 3
+  layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Review artifact note: the diff
+  first handed to reviewers omitted the story's 4 new untracked files (status-detail-dialog.tsx/
+  test, status-difference.ts/test) — git diff silently excludes untracked files; regenerated with
+  `git add -N` mid-review before triage, all findings reflect the complete diff. 0 decision-
+  needed, 8 patch findings fixed, 1 deferred, 4 dismissed as noise. Highlights: the low-confidence
+  explanation could read self-contradictory at the rounding boundary ("It's been 45 days... more
+  than the household's 45-day threshold") since isLowConfidence is decided on the raw day count
+  but the dialog displayed Math.round — switched to Math.ceil; the dialog's async loading/error
+  transition had no aria-live region unlike status-card.tsx's established pattern; the dialog
+  could be force-unmounted by a transient status-refresh failure and then silently reopen once
+  status repopulated (detailDialogOpen lives in the parent, wasn't reset) — fixed with a
+  supersession effect mirroring the existing openRegressionPrompt pattern; day figures bypassed
+  Intl.NumberFormat (AD-18). Fixing the cross-household isolation test's missing symmetric
+  assertion surfaced a genuine pre-existing bug in the test's own fixture (a kwhValue: 0m reading
+  silently rejected by CreateMeterReading's positive-value validation, never checked). Deferred:
+  duplicate "Close" accessible name inside the dialog (pre-existing shadcn Dialog pattern,
+  codebase-wide, not introduced by this diff). Full backend suite green: 319 tests (166
+  Application + 34 Infrastructure + 3 Architecture + 116 Api.Tests via Testcontainers
+  Postgres+SqlServer), dotnet build clean in Debug and Release. 168 frontend tests green (2 new),
+  tsc/oxlint/vite build clean.
+2026-08-23: story 2-8-meter-reading-history-view added to backlog under Epic 2 (Ralf's request,
+  following a small PRD update). Implements FR-31 (Meter Reading History View) — a dedicated,
+  browsable list of individual Meter Readings, distinct from FR-8/FR-30's aggregate-only views;
+  fills the entry point the NFR8 audit-trail-on-corrections requirement needed (no existing FR
+  let a household member find a past Reading to correct it).
+2026-08-23: story 2-7-status-calculation-detail added to backlog under Epic 2 (Ralf's request,
+  following a small PRD update). Implements FR-30 (Status Calculation Detail) — a details view
+  opened from the dashboard Status card breaking down the pace-to-date/baseline-to-date/threshold
+  figures behind the "X kWh over/under expected" headline, extending Story 2.5's Status card.
+  Scoped to aggregate figures only, no per-Meter-Reading list, per Ralf's explicit direction.
+2026-08-22: story 1-10-structure-editor-archived-item-visibility-toggle added to backlog under
+  Epic 1 (Ralf's request, following the implementation-readiness check below). Implements FR-29
+  (Structure Editor Archived-Item Visibility Toggle) — a show/hide toggle for archived
+  Rooms/Power Points/Devices in the structure editor built by Story 1.9 and extended by Story
+  2.6. FR-29 existed only in requirements-inventory.md with no epic/story home and no PRD entry
+  (surfaced by the implementation-readiness check, then backfilled into the PRD's 4-features.md
+  the same day). Originally drafted as Story 3.5 under Epic 3 per an initial explicit request,
+  then moved here at Ralf's follow-up request since it's a direct extension of Story 1.9's
+  structure editor and has no topical relationship to Epic 3's Smart Plug import. One open
+  question left for whoever implements it: whether the toggle state persists across visits
+  (undecided, flagged in the story's own ACs).
+2026-08-22: story 3-4-incremental-smart-plug-import added to backlog (correct-course, triggered
+  during Story 3.4 architecture planning with Ralf/Winston). Eve Home exports are always cumulative
+  (full device history on every download, confirmed against three dated sample-data/eve HiFi samples:
+  108,715 rows on 2026-06-20 -> 114,815 on 2026-08-01 -> 117,782 on 2026-08-22, still reaching back to
+  2023-05-27) and Meross exports are manually date-ranged by the household with no visibility into the
+  last import's end date, so an overlapping re-import is the expected normal case for both vendors, not
+  a rare mistake. SmartPlugReading carries no uniqueness constraint today, so an overlapping re-import
+  silently duplicates already-stored rows, inflating SmartPlugGapDetector's daily kWh totals and FR-5's
+  baseline-sharpening signal a little more each time. Story drafted directly into
+  epic-3-smart-plug-import-baseline-sharpening.md (watermark-based incremental parse, DB-level
+  (PowerPointId, IntervalStart) uniqueness constraint, one-time dedup migration cleanup for existing
+  duplicates). PRD cross-cutting-nfrs.md NFR10 broadened from "no-silent-loss under concurrency" to
+  also cover "no-silent-duplication under repeated writes"; new architecture-spine AD-20
+  (Duplicate-safe Smart-Plug reading writes) added alongside AD-16's existing idempotent-writes
+  precedent (Meter Reading). requirements-inventory.md and epic-3's own NFR/Architecture header lines
+  updated to match. See sprint-change-proposal for the full analysis.
+2026-08-20: story 3-3-smart-plug-import-gap-handling-baseline-sharpening created (create-story) -
+  status set to ready-for-dev. The hardest story in Epic 3: wires both of 3.1/3.2's import-completion
+  paths (ProcessSmartPlugImport direct-match, MapSmartPlugImportToPowerPoint mapping) into a new
+  shared CompleteSmartPlugImportProcessing helper that (a) runs a new SmartPlugGapDetector domain
+  calculation to flag/interpolate missing dates within an import's covered range (new
+  SmartPlugImportGap entity + migration) and (b) calls IStatusRecomputeService per Story 3.2's own
+  flagged AD-7 boundary. FR-24's "entirely gaps" case reinterprets ProcessSmartPlugImport's existing
+  readings.Count==0 hard failure into a new SmartPlugImportStatus.FlaggedForReview terminal state
+  instead of a thrown exception. The "sharpens the Status" mechanism (FR-5, AC #2) is genuinely
+  underspecified anywhere in the PRD/epics/architecture/UX docs - story proposes a concrete design
+  (a new ISmartPlugCoverageSignal port that can only soften GetCurrentStatus's existing IsLowConfidence
+  flag, never touch PaceToDateKwh/BaselineToDateKwh/the Trending resolution) carefully designed to
+  satisfy the literal source-text AD-14 architecture guard test
+  (PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests, which fails the build if the identifier
+  "SmartPlugReading" appears anywhere in GetCurrentStatus.cs/StatusRecomputeService.cs/etc.) - flagged
+  as an Open Question for Ralf to confirm before/during dev-story activation, same pattern as Story
+  2.4's LowConfidenceGapDays default.
+2026-08-20: story 3-2-import-to-power-point-mapping created (create-story) - status set to ready-for-dev.
+  Extends Story 3.1's already-parked AwaitingPowerPointMapping state (no new upload/parse/polling
+  infra needed): new MapSmartPlugImportToPowerPoint use case + POST /api/smart-plug-imports/{id}/
+  power-point-mapping endpoint, reusing the existing CreatePowerPoint endpoint unchanged for the
+  create-new-Power-Point branch (two sequential frontend calls, not one atomic op - recoverable via
+  retry if the mapping call fails after create succeeds). Frontend replaces the "coming soon"
+  awaitingMappingNote placeholder with a real create/map dialog (mockup State 3). AD-7 boundary note
+  left for Story 3.3: two completion paths now exist (ProcessSmartPlugImport's direct match, and this
+  story's mapping-completion) and 3.3 must hook IStatusRecomputeService into both.
+project: energy-tracker
+project_key: NOKEY
+tracking_system: file-system
+story_location: {project-root}/_bmad-artifacts/implementation
+
+
+2026-09-22: story 7-1-full-data-export code review complete -- status review -> done. 3 parallel
+  review layers ran (Blind Hunter, Edge Case Hunter, Acceptance Auditor -- no spec violations
+  found). 6 patch findings applied: extended both cross-household isolation tests to cover all 12
+  export entity categories (was 4, the top finding given AC #3/AD-3's security-critical nature);
+  fixed the isolation test's unchecked setup calls; fixed a filename/exportedAtUtc UTC-midnight
+  mismatch; fixed the frontend fallback filename's stale module-load-time date; added a
+  double-click guard to the export button; corrected an imprecise AD-3-exception comment. 5 items
+  deferred to deferred-work.md (pre-existing codebase conventions or trade-offs already disclosed
+  in this story's own Dev Notes, not regressions). Full suite re-verified green: 358 Application +
+  220 Infrastructure (dual-provider) + 210 Api + 4 Architecture, 379/379 frontend, clean
+  build/tsc/oxlint.
+2026-09-22: story 7-1-full-data-export moved to review (dev-story implementation complete). All
+  7 tasks done, all 4 ACs satisfied. Resolved both flagged design decisions per the story's own
+  recommendations: single JSON document, formatVersion "v2"; entity scope = every Household-
+  scoped entity except HouseholdInvite (live bearer secret) and BackgroundJob/SmartPlugImport/
+  SmartPlugImportGap (transient job-queue metadata) -- disclosed in full in the new
+  docs/data-export-format.md. New IHouseholdExportReader port + HouseholdExportReader adapter
+  (AsNoTracking, AD-3 query filter throughout) feed ExportHouseholdData (zero derivation, AD-14)
+  and GET /api/household-export (Results.File, sets Content-Disposition automatically). Frontend
+  DataExportPanel added to Settings. Full backend suite green (358 Application + 220
+  Infrastructure dual-provider + 210 Api + 4 Architecture), full frontend suite green (379/379),
+  dotnet build/tsc -b/oxlint/vite build all clean. Live Auth0/Chrome verification gate CLEARED:
+  extension connected first try; the real household had zero data at session start, so paused
+  and asked Ralf before writing anything -- he chose to add minimal real test data live (one
+  Meter Reading, one Tariff, one Event). Exported file (32 MB, real download via the browser)
+  inspected directly: correct v2 shape, real settings/member/reading/tariff/event data, an
+  archived Room's Event tag correctly preserved by value (AD-10), and 117,770 genuine
+  SmartPlugReading rows from this household's real prior import history round-tripped with no
+  smartPlugImportId leakage. MeterRegressionPrompt/StatusSnapshot/AuditCorrection/Device were
+  legitimately empty for this household, not a gap. One self-caught test bug fixed pre-review
+  (Infrastructure isolation test's other-Household MeterReading needed a real MainMeter row to
+  satisfy the FK -- not a production bug).
+2026-09-22: story 7-1-full-data-export started (dev-story) -- status ready-for-dev -> in-progress.
+  baseline_commit 710db9604bc0265be23e6387ade26eb4db4f7dc0 captured.
+2026-09-21: story 7-1-full-data-export created (bmad-create-story). Epic 7 flipped to
+  in-progress (first story). Read epic-7, PRD FR-22/23/NFR4/NFR11/NFR13, architecture spine
+  AD-2/AD-3/AD-7/AD-10/AD-11/AD-14/AD-19, UX EXPERIENCE.md/key-settings.html mockup (no dedicated
+  export screen mock exists -- flagged, precedent from Story 3.10/UX-DR21), and the Epic 6 retro's
+  Epic 7 kickoff note (Event snapshot fields, AiPlausibilityEnabled + backend label must round
+  trip). Story discloses two open design decisions for dev-story to confirm rather than silently
+  resolving: (1) export format -- recommended single JSON doc, no format was mandated anywhere;
+  (2) entity-inclusion scope across the 15 Household-scoped entity types -- recommended
+  include-list (Household settings, HouseholdMember, MainMeter, MeterReading,
+  MeterRegressionPrompt, Tariff, Event, Room/PowerPoint/Device incl. archived, SmartPlugReading,
+  StatusSnapshot, AuditCorrection) vs. exclude-list (HouseholdInvite -- live bearer token, a
+  secret not data; BackgroundJob/SmartPlugImport/SmartPlugImportGap -- transient job-queue
+  metadata with its own 30-day lifecycle, not household energy data). Embedded the Epic 6 retro's
+  Action Item #1 (live Auth0/Chrome verification is a hard gate, does not defer) directly as
+  Task 7.
+2026-09-19: story 6-2-event-history-view code review complete -- status review -> done. 3
+  parallel review layers ran; AC #5's deferred live verification was resolved in-session (shared
+  test household's Event row temporarily removed and restored, confirming the empty state live
+  in Chrome); 3 patches applied and verified (events-card.tsx pagination/error-state UI gate,
+  empty-string taggedEntityName guard, EventRepository ordering tiebreaker); 6 items deferred to
+  deferred-work.md; 4 dismissed as noise. All suites re-verified green after patches.
+2026-09-19: story 6-2-event-history-view moved to review (dev-story implementation complete).
+  All 7 tasks done, all 6 ACs satisfied. GET /api/events (GetEventHistory + IEventRepository.
+  GetPageForHouseholdAsync) added, mirroring GetMeterReadingHistory's shape; Events.HouseholdId
+  index replaced with a composite (HouseholdId, OccurredAt, CreatedAtUtc) index via the
+  AddEventOccurredAtIndex migration on both providers. New events-card.tsx renders
+  taggedEntityName verbatim with no live join (AD-10); errorCode->catalog mapping extracted from
+  log-event-sheet.tsx into a shared event-api.ts helper. Live Auth0/Chrome verification: AC #3
+  confirmed (archived-Room tag still renders as plain text, no error; network-request check
+  confirmed no /api/rooms|power-points|devices call fired) -- AC #5 empty state verified via
+  component test instead, since the shared test household already carries other stories' verified
+  data. Full backend suite green (325 Application + 188 Infrastructure + 201 Api + 4
+  Architecture), full frontend suite green (369/369). Also closed out story 6.1's AC #4
+  display-half decision item (see below).
+2026-09-19: story 6-1-event-logging moved to done. Its sole remaining blocker (AC #4's display
+  half, deferred to story 6.2) is now closed: 6.2 shipped the Event read path and the Events
+  card rendering `taggedEntityName` verbatim. No other review item was open.
+2026-09-15: story 5-3-two-way-attractiveness-signal moved to review (dev-story implementation
+  complete). All 7 tasks done: CompareTariff/TariffComparisonResponse extended with
+  CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math, verified NOT
+  routed through BonusDecayNormalizer) and both server-computed verdict flags; dedicated
+  --attractiveness-* color tokens added to index.css, dark verbatim from the mockup, light-mode
+  values independently derived and actually contrast-verified with a WCAG relative-luminance
+  script (4.5:1+ on every AA-critical pairing, not eyeballed) since the mockup is dark-only;
+  tariff-comparison-form.tsx's old single-line result replaced with current-vs-candidate summary
+  panels + a two-way signal card, colors/badges driven independently per row by each row's own
+  verdict flag; i18n added both locales, orphaned savingsPositive/savingsNegative keys removed.
+  Full backend suite green (600/600, incl. Testcontainers Postgres+SqlServer), full frontend
+  suite green (296/296), dotnet build/tsc -b/oxlint/vite build all clean. Status stays review —
+  no human sign-off gate reached in this pass.
+2026-09-15: story 5-3-two-way-attractiveness-signal created (create-story) — status set to
+  ready-for-dev. Builds directly on Story 5.2's CompareTariff/tariff-comparison-form.tsx (done),
+  which deliberately left this story's bonus-included figure and signal-card UI unbuilt (its own
+  header comment named this story explicitly and pre-verified the target numbers). Adds
+  CandidateAnnualCostBonusIncluded/BonusIncludedAnnualSavings (plain undecayed math — deliberately
+  does NOT call BonusDecayNormalizer, unlike the existing bonus-normalized figure) plus two
+  server-computed verdict flags (IsBonusIncludedWorthSwitching/IsBonusNormalizedWorthSwitching,
+  following the same design instinct as GetCurrentStatus's server-computed Status enum) to
+  TariffComparisonResult/Response/Dto. New dedicated `--attractiveness-*` color tokens (index.css)
+  per colors.md's already-specified Mint/Clay pair — mockup (key-tariff-radar.html) is dark-mode
+  only, so light-mode values have no mockup precedent and are flagged for actual contrast
+  verification during dev-story, not assumed identical to dark. Resolved one scope ambiguity: the
+  epic AC's breakeven tie-break text names only "the normalized signal," but EXPERIENCE.md's own
+  generic phrasing and the lack of any principled reason for asymmetric behavior resolve it to
+  apply identically to both signal rows. Also adds the "current-vs-candidate tariff summary"
+  stacked glass panels (UX-DR7) that neither 5.1 nor 5.2 built. epic-5 already in-progress, no
+  epic status change needed.
+2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings moved to done
+  (code review complete). 3-layer adversarial review found 22 raw findings, triaged to 11 patch
+  (1 resolved from decision-needed with Ralf: added an IsLowConfidence caveat to the comparison
+  result/UI) + 1 defer (pre-existing, not introduced by this story) + 3 dismissed (by-design).
+  All 11 patches applied — most notably, candidate field currency labels now come from the
+  current Tariff's own Currency instead of Household.Currency (they can independently diverge),
+  and the comparison-form gate now checks for an actual current Tariff entry, not just any
+  history entry. Full re-verification green across both backend and frontend suites. See the
+  story file's Review Findings section for the full list.
+2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings moved to review
+  (dev-story implementation complete). All 5 tasks done: CompareTariff use case (depends only on
+  GetCurrentStatus + ITariffRepository, per AD-7's single computation seam — never re-queries the
+  lower-level repositories GetCurrentStatus itself uses); new
+  ITariffRepository.FindCurrentForHouseholdAsync (its own `<= now` filter, unlike
+  GetHistoryForHouseholdAsync); POST /api/tariffs/compare (no-write, null-body-when-undefined
+  matching /api/status's convention); frontend TariffComparisonForm wired into TariffRadarPage
+  behind a "has at least one Tariff entry" gate reusing TariffHistoryList's own already-fetched
+  page (new optional onLoaded callback, useCallback'd with empty deps to avoid Story 3.5's
+  previously-found render-loop class of bug); BonusDecayNormalizer's stale forward-reference doc
+  comment updated to describe both real callers (Pattern Detective's zero-bonus case, this
+  story's real case). The mockup's own worked numbers (current €12.50/mo+€0.3200/kWh, candidate
+  €14.90/mo+€0.3150/kWh+€350 bonus, pace 3,200 kWh/yr -> BonusNormalizedAnnualSavings = -12.80)
+  are asserted as an exact test case at both the Application layer and the full HTTP round trip.
+  One small additive change beyond the story's literal text: GetCurrentStatus.ExecuteAsync marked
+  virtual so CompareTariffTests could mock it directly with NSubstitute, exactly as Task 5's own
+  test-design note specifies — no interface introduced (would have touched StatusEndpoints/
+  StatusRecomputeService/Program.cs's DI for no functional benefit). Full backend suite green
+  (Application 281/281, Architecture 3/3, Infrastructure 140/140 via Testcontainers Postgres+SQL
+  Server, Api.Tests 169/169), full frontend suite green (289/289), dotnet build/tsc -b/oxlint/
+  vite build all clean. Manual browser verification skipped (no OIDC provider configured in this
+  sandboxed session, same gap Stories 4.1/1.11/5.1 recorded) — covered by TariffEndpointsTests'
+  full HTTP round trip instead, including an AD-3 tenant-isolation test.
+2026-09-14: story 5-2-candidate-tariff-comparison-bonus-decay-normalized-savings created
+  (create-story) — status set to ready-for-dev. Scoped strictly to FR-11/FR-12/FR-14 + AD-5
+  (candidate entry, bonus-normalized annual savings projection reusing the shared
+  Domain.Calculations.BonusDecayNormalizer) — explicitly excludes Story 5.3's Two-Way
+  Attractiveness Signal (dedicated colors/verdict badges, the naive bonus-included figure) and
+  Story 5.4's Tariff Check Reminder. Design recommends a new CompareTariff use case depending on
+  the existing GetCurrentStatus (AD-7's single live-computation seam for Pattern Detective pace,
+  reused rather than re-queried) plus a new ITariffRepository.FindCurrentForHouseholdAsync port
+  method. The BonusDecayNormalizer call shape (money units, not kWh, at elapsed = 365 days) was
+  verified line-for-line against mockups/key-tariff-radar.html's own worked numbers (€12.50/
+  €0.3200 current, €14.90/€0.3150/€350-bonus candidate, 3,200 kWh/yr pace) before being written
+  into the story — reproduces the mockup's "About €13/yr more, not less" bonus-normalized line
+  exactly. Also flags a reuse callback to Story 5.1's review-found Intl.NumberFormat
+  minimumFractionDigits bug for any new currency formatting this story adds.
+2026-09-13: story 5-1-tariff-configuration moved to done (code review). 11 patch findings
+  applied (most significant: EditTariff's server-side locked-price-field override, AC #3, could
+  be bypassed by pairing a ContractStartDate change with a price-field change — closed by
+  gating on both the old and new ContractStartDate), 1 decision resolved with Ralf (reject a
+  duplicate ContractStartDate outright), 1 low-severity item deferred. Live browser verification
+  performed against the Auth0 test user this session (create/edit/override/correction-note/
+  duplicate-rejection flows all confirmed working). See story file's Review Findings and
+  Completion Notes for detail.
+2026-09-13: story 5-1-tariff-configuration moved to review (dev-story implementation complete).
+  All 7 tasks done: Tariff entity/EF config/migration (both providers), ITariffRepository/
+  TariffRepository, CreateTariff/GetTariffHistory/EditTariff (server-side locked-price-field
+  override gate per the resolved Open Question #1, per-field change diffing, one AuditCorrection
+  row per changed field via the new additive IAuditCorrectionRecorder.
+  GetLatestPerFieldForEntitiesAsync — MeterReading's existing GetLatestForEntitiesAsync
+  untouched), TariffEndpoints (POST/GET/PUT), frontend TariffRadarPage/
+  TariffConfigurationForm/TariffHistoryList/EditTariffDialog, NavChrome's Tariff Radar tab now
+  real (the last of the four nav tabs to go live), both locales' i18n. Found and fixed one real
+  bug during Task 7's own Api.Tests round-trip verification (not caught by the mocked
+  Application-layer tests): EditTariff read a Tariff field's OLD value for its AuditCorrection
+  note AFTER calling ITariffRepository.UpdateAsync, but EF Core's identity map hands back the
+  SAME tracked instance from that call (same DbContext, same PK) — so the "old" value it read
+  had already been mutated to the new one. Fixed by capturing all 5 fields' old values into
+  locals before the transaction runs, the same discipline EditMeterReading's own
+  `var oldValue = reading.KwhValue;` precedent already established for its one field. Full
+  backend suite green (568/568: Application, Infrastructure via Testcontainers Postgres+SqlServer,
+  Api.Tests, Architecture), full frontend suite green (281/281), dotnet build/tsc -b/oxlint/
+  vite build all clean. Manual browser verification skipped (no OIDC provider configured in this
+  sandboxed session, same gap Stories 4.1/1.11 recorded) — covered by the Api.Tests' full HTTP
+  round-trip instead, including an AD-3 tenant-isolation test verified through the other
+  household's own DbContext scope per Story 3.9's precedent.
+2026-09-13: story 5-1-tariff-configuration moved to in-progress (dev-story activation). Resolved
+  all 4 Open Questions with Ralf before starting: (1) AC #3's locked-field override is
+  server-side enforced — EditTariff gains an `overrideConfirmed` bool parameter that throws when
+  false and the target's ContractStartDate has passed; (2) multi-field edits ARE in scope — Task
+  4's additive IAuditCorrectionRecorder.GetLatestPerFieldForEntitiesAsync port method will be
+  built; (3) Contract Period is a fixed preset list (1/6/12/18/24/36 months), not a free-form
+  integer; (4) Currency pre-fills from Household.Currency on the new-entry form (still editable,
+  remains its own independent column).
+2026-09-13: story 5-1-tariff-configuration created (create-story) — status set to ready-for-dev.
+  First story in Epic 5, greenfield: no Tariff entity/repository/use case/endpoint/frontend
+  surface exists yet, though nav-chrome.tsx already carries a disabled placeholder tab for it and
+  AuditCorrection.cs already carries a comment anticipating this exact story. Scoped strictly to
+  FR-10 (configure/edit/history the current Tariff) — explicitly excludes Epic 5's AD-5
+  (BonusDecayNormalizer, Story 5.2) and AD-7 (Reminder computation, Story 5.4), both bound at the
+  epic level but out of this story. Resolved one real source tension during analysis: cross-
+  cutting-nfrs.md's Currency bullet reads as Household-level, but consistency-conventions.md
+  explicitly says "Currency: ISO 4217 code stored per Tariff entry" and the ERD models Tariff as
+  its own entity — went with the latter (Tariff gets its own Currency column, separate from the
+  existing Household.Currency). Also flagged PricePerKwh needing HasPrecision(18,4), not the
+  (18,2) every other decimal column in this codebase uses — the mockup shows 4-decimal tariff
+  pricing (€0.3200) that (18,2) would silently truncate. No mockup exists for the Configuration
+  form itself (key-tariff-radar.html only mocks the read-only comparison summary, Story 5.2/5.3's
+  UI) — story points the dev agent at yearly-baseline-form.tsx/edit-meter-reading-dialog.tsx as
+  the closest shipped analogs instead. Left 4 open questions for Ralf in the story file rather
+  than silently guessing: whether AC #3's locked-field override is frontend-only friction or
+  needs server-side enforcement too; whether one Tariff edit can correct multiple fields at once
+  (would need a new additive IAuditCorrectionRecorder port method, since GetLatestForEntitiesAsync
+  only surfaces one correction row per entity — fine for MeterReading's single field, not
+  Tariff's five); Contract Period's input shape (free months integer vs. preset list); and
+  whether Currency should pre-fill from Household.Currency. epic-5 flipped from backlog to
+  in-progress (first story in the epic).
+2026-09-13: story 3-10-manual-job-history-cleanup moved to done — Ralf confirmed live on Azure
+  ("live tested on azure"). Story had been stuck in `review` since 2026-09-11 while a four-round
+  production-incident chain played out against its "clean up everything" path, each confirmed via
+  live Azure Container App logs/Azure Monitor before any fix: round 1 (PR #47) batched the bulk
+  delete by import count (unbatched single transaction saturated Azure SQL Basic-tier, hit the
+  120s CommandTimeout); round 2 (PR #48) added chunking by cumulative SmartPlugReading volume per
+  chunk, since a handful of imports individually carrying 57k-122k reading rows bypassed the
+  count-only batching entirely; round 3 (PR #49) moved the whole operation onto an async
+  background job (AD-6), since even correctly-chunked commands could collectively exceed Azure
+  Container Apps' ~240s HTTP ingress ceiling; round 4 (PR #50) fixed the actual final root cause —
+  a single import's own FK SetNull cascade (detaching however many reading rows it had, up to
+  122,158) was itself one unboundable server-side operation that could still blow the 120s SQL
+  CommandTimeout regardless of sync vs. async, fixed by explicitly pre-detaching each import's
+  readings in bounded batches before deleting it. Round 4 also fixed a separately-reported i18n
+  bug (a hardcoded English fallback error message bypassing the frontend's localization). All four
+  rounds went through adversarial + edge-case review before merge; canonical spec at
+  _bmad-artifacts/specs/spec-job-cleanup-bulk-delete-timeout/SPEC.md carries full detail (CAP-1
+  through CAP-6). epic-3 flipped back to done — all its stories (3.1-3.10) plus its retrospective
+  are now complete, matching the reset-to-done pattern used after prior epic-3 story additions.
+2026-09-11: epic-4-retrospective completed — 14 items reviewed: epic-4 (4.1-4.3), plus orphaned
+  stories 1.11 (epic-1) and 3.5-3.9 (epic-3) done since the 2026-08-23 epic-3 retro, plus 3
+  spec-*.md one-shots (trend-chart-time-axis, power-point-mapping-list-scroll,
+  background-job-changetracker-orphan-fix) and 2 previously-undocumented hotfixes (PR #40 SQL
+  Server bulk-upsert CREATE TABLE permission, PR #41 Power Point mapping status rollback) folded
+  in at Ralf's explicit request after being surfaced during epic discovery. 1 real production
+  incident found and already fixed: 2026-09-05 10:56 UTC, Azure SQL Basic tier hit 100% DTU
+  during a bulk insert, timed out, and a ChangeTracker.Clear() bug silently swallowed the
+  resulting job-failure status (spec-background-job-changetracker-orphan-fix). 4-1 and 3-8 were
+  functionally complete but stuck in `review` status (bookkeeping gap, not unfinished work) —
+  flipped to done as part of this retro, along with epic-3 and epic-4 both resetting to done. 3.8's
+  spike teardown (disposable Spike_* objects, AC #10) confirmed clean by Ralf. All 6 action items
+  from the prior epic-3 retro (2026-08-23) were done, including the Epic 4 definition update
+  being followed exactly as decided. 6 new action items recorded: 3 hard/lightweight process gates
+  from this epic's own patterns (no undocumented hotfixes — hard PR-merge gate; live Auth0/Chrome
+  verification required before review->done for OIDC/claim/browser-dependent behavior, blocking if
+  Chrome unavailable; non-blocking i18n/unmounted-guard checklist reminders) and 3 Epic 5
+  next-epic-prep items (verify AuditCorrection/AD-4's second real consumer at 5.1 kickoff; verify
+  BonusDecayNormalizer/AD-5's first real consumer at 5.2 kickoff; verify AD-21 Azure permissions
+  early for any Epic 5 production-write story). See epic-4-retro-2026-09-11.md.
+2026-09-10: story 4-3-correcting-a-meter-reading implemented (dev-story) — status set to
+  review. Wired IStatusRecomputeService.RecomputeAsync into EditMeterReading as AD-7's third
+  call site (AC #3), placed after the value-update transaction commits, skipped on a no-op
+  save — mirrors CreateMeterReading's existing placement exactly. Regression-proved AC #1/#2/#4
+  on the already-shipped Story 2.8 code path: strengthened the concurrency-conflict test to
+  prove the first writer's committed value survives a second writer's rejected request (not
+  just a 409 status), and added a new integration test proving an edit never resolves an open
+  MeterRegressionPrompt it's tracking. Task 4's frontend check found a genuine (small) staleness
+  gap — TrendHistoryPage's chart fetched StatusHistory once on mount with no way for the sibling
+  MeterReadingsCard's edit-save flow to trigger a refresh — fixed by wiring one callback
+  (onReadingCorrected) through, no new cache-invalidation infrastructure. Resolved both related
+  deferred-work.md entries from the Story 2.8 review. Full regression bar green: backend
+  475/475, frontend 254/254, tsc -b clean, oxlint clean (only pre-existing unrelated warnings).
+2026-09-10: story 4-3-correcting-a-meter-reading created (create-story) — status set to
+  ready-for-dev. Scope is narrower than the epic text implies: Story 2.8 (absorbed into 4.1)
+  already built AC #1/#2/#4 (audit trail, 409 concurrency, regression-prompt non-interference);
+  the only net-new production code is AC #3's IStatusRecomputeService wiring into
+  EditMeterReading. AC #3's literal wording ("StatusSnapshot rows are updated") conflicts with
+  StatusSnapshot's documented immutable/insert-only design (AD-7/NFR9) and has no supporting
+  mechanism (no FK from StatusSnapshot back to MeterReading, no as-of-date recompute capability).
+  This was already flagged unresolved in deferred-work.md and the Epic 3 Retro. Ralf resolved it
+  during story creation: reword the AC to the buildable, single-call behavior (one
+  RecomputeAsync call mirroring CreateMeterReading's existing call site) rather than build new
+  as-of-date recompute machinery. The epic file's AC #3 text and this story were both updated
+  to match. See the story file's "Why AC #3 Reads the Way It Does" section for full detail.
+2026-09-05: story 3-9-watermark-correction-detection-and-bulk-write-adoption moved to done
+  (adversarial code review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 3
+  decision-needed (2 dismissed by Ralf, 1 converted to patch), 9 patch findings (all applied —
+  see the story file's Review Findings and Change Log), 0 deferred, 3 dismissed. Highlight:
+  EveHomeXlsxParser broke immediately after emitting the first row at the watermark boundary,
+  silently losing a second DST-fold-duplicate row sharing the exact same IntervalStart (AC #7
+  unreachable for Eve Home) — fixed and covered by a new regression test. Also moved the AD-22
+  correction + its audit record into AddAsync's own transaction (previously committed
+  independently before AddAsync ran). Full regression suite re-run against real Postgres AND SQL
+  Server: 466/466 green (was 456/456; +10 new tests).
+2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to done (adversarial code
+  review, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 0 decision-needed, 6
+  patch findings (all applied — see the story file's Review Findings and Change Log), 4 deferred
+  (logged in deferred-work.md), 6 dismissed. Highlights: `useSmartPlugImportJob`'s upload fired
+  from a mount-only effect with no guard against React StrictMode's dev double-invocation, so
+  every local-dev file selection silently created two backend jobs for one file (only the second
+  survived UI polling) — fixed via an AbortController aborted on cleanup, React's own documented
+  fix for this class of bug; the shared "parsing in the background" note stayed pinned on even
+  after every queued item had already finished (old single-file panel correctly gated it on
+  `processing` state) — fixed by lifting each item's active/processing status up via a stable
+  callback into an `activeIds` set; the deleted `queuedNote` copy left the new "Waiting" badge
+  with no explanation — restored per-item; a new concurrency test resolved 3 files to one shared
+  hardcoded jobId with no matching `/api/jobs/{id}` mock case, only passing because fake timers
+  never advanced far enough to expose it — fixed with distinct per-file jobIds and matching mocks;
+  no test exercised the drag-and-drop path despite AC #4/#6 explicitly naming it — added; the new
+  dedicated page did no focus management on mount — fixed by focusing the heading. Applying the
+  fix for the asyncNote finding initially introduced a real render-loop bug (an inline per-item
+  callback in a `useEffect` dependency array caused the active-tracking set to oscillate every
+  parent render), caught by a hung `vitest run` during post-patch verification and fixed by
+  passing the parent's stable `useCallback`'d dispatcher straight through instead. Full frontend
+  suite green after patches: 196/196, tsc/oxlint/vite build clean. Backend untouched by this
+  story or its patches (frontend-only diff, unchanged from the review's own confirmation).
+2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to review (dev-story
+  implementation complete — frontend-only, no backend files touched). Task 2's rewrite extracted
+  Story 3.1's inline single-file upload+poll+state-machine logic into a new
+  useSmartPlugImportJob(file) hook, one instance per queue item, so several files selected in one
+  action upload concurrently and poll independently with no shared state (AC #4/#5 fall out of
+  the per-instance closure, no explicit Promise.allSettled orchestration needed). AC #6's
+  "Waiting or Processing indicator" reuses Story 3.1's existing 404-while-polling-means-queued
+  client-side flag exactly per this story's own Dev Notes — no BackgroundJobStatus.Queued/backend
+  change (that's Story 3.6/FR-32's job). Old smart-plug-import-panel.tsx deleted outright (full
+  rewrite, not a patch) along with its test file, replaced by smart-plug-import-page.tsx (new
+  dedicated Dashboard-launched screen, no NavChrome slot, same shape as Story 2.8's
+  MeterReadingHistoryPage) + smart-plug-import-page.test.tsx. Settings no longer renders the
+  panel (new settings-page.test.tsx guards the negative assertion). Dashboard gained its first
+  topbar (previously just a bare <h1>) housing the new 40x40 icon entry point, reusing
+  nav-chrome-active-bg/-foreground tokens verbatim (UX-DR20). Trend History's own entry point
+  deferred to whichever Epic 4 story first builds that screen (deferred-work.md entry added, per
+  this story's own Dev Notes instruction) — the shared SmartPlugImportPage destination is already
+  in place and needs only a second button wired to it. 192 frontend tests green (17 new in the
+  rewritten queue test file, 1 new in dashboard-page.test.tsx, 1 new settings-page.test.tsx),
+  tsc/oxlint clean, dotnet build clean, SmartPlugImportEndpointsTests.cs re-run standalone
+  (16/16 green) confirming zero backend regression from this frontend-only diff.
+2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing moved to in-progress (dev-story
+  activation).
+2026-08-27: story 3-5-dual-entry-points-multi-file-import-queuing drafted (create-story) -
+  status set to ready-for-dev. Scoped down from the epic's literal two-entry-point AC to
+  Dashboard-only for now: Trend History (Epic 4, still fully backlog) has no screen yet in this
+  codebase to attach an icon to, so that half is deferred to whichever Epic 4 story first builds
+  Trend History (tracked in deferred-work.md). The new dedicated SmartPlugImportPage this story
+  builds is structured so that future entry point needs zero rework, only a second button.
+  Confirmed the multi-file "queue appears immediately" AC needs no BackgroundJobStatus.Queued/
+  enqueue-time-row backend work (that's Story 3.6/FR-32's job per AD-6's own invariants-rules.md
+  note) - reuses Story 3.1's existing 404-while-polling-means-queued idiom per queue item instead.
+2026-08-27: stories 3-5-dual-entry-points-multi-file-import-queuing and
+  3-6-smart-plug-import-job-status-history added to backlog under epic-3 (sprint-planning
+  refresh); epic-3 reopened from done to in-progress since not all its stories are done.
+2026-08-23: epic-3-retrospective completed — 4/4 stories reviewed (3.1-3.4), plus orphaned
+  stories 1.10/2.7/2.8 (added after their own epics' retros already closed). 0 production
+  incidents, deployed and verified live on Azure by Ralf. Significant discovery: Epic 4's
+  Story 4.3 is stale against Story 2.8's shipped History page — Ralf's decision: consolidate,
+  don't duplicate. Story 4.1 (Trend History) absorbs 2.8's Meter Reading History functionality
+  as its single surface; 4.3 keeps its ACs exactly as specified (edit via that merged surface,
+  AD-4 409 + AD-11 audit-trail already built and reusable from 2.8, net-new: forward-recompute-
+  through-present); Dashboard's standalone "History" text-link gets removed once merged. Flagged
+  as a required Epic 4 definition update, blocking Story 4.1 drafting. Also decided: fix the
+  concurrent-RecomputeAsync race (deferred since 2.4, re-confirmed in 3.3/3.4) before Epic 4
+  starts — Trend History will read StatusSnapshot directly, turning a silent audit-trail gap
+  into a visibly wrong trend line. Epic 1 action item #1 (deploy-environment verification AC)
+  closed as superseded by Epic 2's Auth0-test-user/live-Chrome capability. 6 action items
+  recorded, 2 closed same-session. See epic-3-retro-2026-08-23.md.
+2026-08-23: story 2-7-status-calculation-detail moved to review (dev-story implementation
+  complete — new CurrentStatusResult fields (ElapsedDays, TrendingThresholdKwh,
+  DaysSinceLastReading, LowConfidenceGapDaysThreshold) extend GetCurrentStatus.ExecuteAsync's
+  existing single live-computation seam (AD-7), no new calculation path; new GET
+  /api/status/detail endpoint, purely additive alongside the untouched /api/status route
+  (AC #6); new StatusDetailDialog reuses the existing Dialog/GLASS_MODAL_CLASSNAME shell (no
+  mockup exists for this story, added post-UX-freeze); computeStatusDifference extracted from
+  status-card.tsx into a shared web/src/lib/status-difference.ts so the Story 2.5 pace/baseline
+  sign-boundary fix can't silently regress via a second copy. Full backend suite green: 319
+  tests (166 Application + 34 Infrastructure + 3 Architecture + 116 Api.Tests via Testcontainers
+  Postgres+SqlServer), dotnet build clean in Debug and Release. 166 frontend tests green (16
+  new), tsc/oxlint/vite build clean. No docs/*.md changes.
+2026-08-23: story 2-7-status-calculation-detail moved to in-progress (dev-story activation)
+2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle created (create-story) -
+  status set to ready-for-dev. Pure frontend change, zero backend surface (GET /api/rooms|
+  power-points|devices already return archived rows unfiltered per Story 1.9). The one
+  non-obvious design problem: an archived Room/Power Point can still have non-archived children
+  nested under it (Story 1.9's archive never cascades), so hiding an archived item can't just
+  filter the top-level array - the story spells out a three-way per-node render rule (fully
+  absent / present-with-own-row-suppressed-but-children-visible / present-normally) to satisfy
+  the epic's "hiding a parent does not cascade-hide its non-archived children" AC without
+  silently dropping live data from view. Two follow-up questions asked of Ralf during creation
+  (the epic's own open question, plus one more that surfaced from it): (1) no persistence -
+  confirmed, component-local state only, resets every visit; (2) the toggle's default flips from
+  "show archived" to "hide archived" - this reverses the epic's originally-drafted AC #1 text
+  ("does not change the underlying default"). The epic file's AC text was updated in place to
+  match (same commit) - both documents now agree on both points, and
+  flags three existing tests in tagging-scaffold-manager.test.tsx (archive-then-assert-badge,
+  lines 93/204/288) that will start failing under the new default and need a toggle-on step
+  added, not just new tests alongside them.
+2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle implemented (dev-story) -
+  status set to review. Hide-by-default toggle with three-way cascade-safe rendering (fully
+  absent / own-row-suppressed-but-children-visible / present-normally) at both Room-PowerPoint
+  and PowerPoint-Device level; new i18n keys; Move destination pickers left untouched by design.
+  147/147 frontend tests pass (22/22 in the modified file); dotnet build clean (no backend files
+  touched). Also fixed one pre-existing test not flagged in the story's own Task 4 callout -
+  "still offers a valid destination when the Power Point's current Room has since been archived"
+  - whose archived Room now has its own row suppressed by the new default, so it needed to click
+  the still-reachable Power Point directly instead of the no-longer-rendered Room summary.
+2026-08-23: story 1-10-structure-editor-archived-item-visibility-toggle moved to done (adversarial
+  code review of commit d2c79f0, 3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor).
+  All three independently found the same real AC #5 violation: roomHasVisibleChildren checked
+  only each direct Power Point's own archivedAt, never recursing into powerPointHasVisibleChildren
+  - so an archived Room whose only Power Point was also archived but had a live Device underneath
+  was dropped from the tree entirely with the toggle at its default, silently hiding that Device.
+  Fixed by recursing the same way the sibling render-time filter already did, with a regression
+  test. 3 more patch findings fixed: story/sprint-status docs' false claim that the epic file was
+  left unedited (it was, same commit); a duplicated Tailwind class string extracted to a shared
+  constant; missing Power-Point/Device-level round-trip toggle tests Task 4 asked for. 1 item
+  deferred (pre-existing, not introduced by this diff): no test exercises the German toggle
+  strings specifically. 150/150 frontend tests pass after fixes.
+2026-08-23: story 3-4-incremental-smart-plug-import moved to done (adversarial code review
+  complete, 3 review layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). 13 findings
+  after triage (10 patch, 3 decision-needed resolved with Ralf), 1 dismissed as noise. Ralf's
+  calls: DST fall-back collision (SmartPlugReading unique index rejects a second reading sharing
+  a local wall-clock IntervalStart) = detect-and-log with deterministic keep-first, not a schema
+  change; unbounded per-row fallback on a large first-time import = pre-filter known conflicts
+  before the bulk write, so a fresh Power Point/Household never even runs the per-key check.
+  Verifying the third call (cancellation mid per-row fallback = rely on watermark-based re-run)
+  surfaced a real bug beyond the original finding: the queue-redelivered SmartPlugImportId is
+  fixed across retries, so a cancelled fallback's already-committed SmartPlugImport row collided
+  on retry and cascaded into an unhandled exception instead of resuming - fixed by deleting the
+  partial row on cancellation, restoring the "no row survives cancellation" invariant
+  ProcessSmartPlugImport already assumed. Also added: a 20k-row synthetic-workbook test for AC
+  #5/#7 (Task 6's own required test was checked off but never written), an Eve Home end-to-end
+  incremental-reimport regression test (only Meross had one), a monotonic-RowIndex sanity check
+  in the streaming parser, a migration dedup tiebreaker, and narrowed/logged conflict-tolerant
+  exception handling. One finding (EF model drift on the PowerPointId-IS-NULL partial index) was
+  resolved as an explicit comment instead of a `HasFilter` call - that filter predicate is raw
+  dialect SQL and SmartPlugReadingConfiguration is shared across both provider migration
+  projects, so a single filter string would be syntactically wrong for one of them. Full backend
+  suite green: 308 tests (165 Application, 3 Architecture, 29 Infrastructure via Testcontainers
+  Postgres+SqlServer, 111 Api.Tests via Testcontainers), dotnet build clean in Debug and Release.
+2026-08-23: story 3-4-incremental-smart-plug-import re-reviewed (round 2, adversarial code
+  review before commit - same 3 layers). 16 findings after triage (7 patch, 2 decision-needed
+  resolved with Ralf, 3 defer, 5 dismissed as noise/false positives - e.g. the migration dedup's
+  orphan-row concern can't happen given SmartPlugImportId's required+Restrict FK). Ralf's calls:
+  cross-vendor watermark mixing (Eve Home vs Meross granularity on one Power Point) = defer as a
+  known limitation, no vendor-swap use case exists today; corrupt-vs-empty incremental re-import
+  ambiguity = fix now, add a RawDataRowsRead signal to ISmartPlugParser.Parse's return so a
+  truly-empty file body still gets FlaggedForReview instead of being indistinguishable from a
+  legitimate nothing-new re-import. Patches applied: the per-row conflict-tolerant fallback now
+  cleans up on any exception (not just cancellation), closing a path where a genuine
+  DbUpdateException left a partial import that then collided with the Failed-import retry write;
+  DeletePartiallyPersistedImportAsync now swallows/logs its own cleanup failures instead of
+  masking the original exception; EveHomeXlsxParser.ReadDeviceTag now validates row order (had
+  none) and reads through row 2 per Task 2's original text; the RowIndex monotonic guard now
+  fails closed instead of silently skipping when RowIndex is absent; added a 2,000-row scale test
+  for the conflict pre-check query. Full backend suite green: 314 tests (166 Application, 3
+  Architecture, 34 Infrastructure via Testcontainers Postgres+SqlServer, 111 Api.Tests via
+  Testcontainers), dotnet build clean.
+2026-08-22: story 3-4-incremental-smart-plug-import moved to review (dev-story implementation
+  complete). Open Design Questions confirmed with Ralf during activation: (1) ISmartPlugParser
+  shape = recommended default (ReadDeviceTag header-only method + watermark parameter on Parse);
+  (2) AddAsync insert-conflict handling = Option A (per-row fallback: SmartPlugImport saved alone
+  first, then a per-reading try/save/catch-and-skip loop); (3) Postgres NULL-uniqueness gap =
+  Ralf chose "fix it now" (not the recommended "document as known limitation" default); (4)
+  UpdateMappingAsync's own unique-constraint exposure = Ralf also chose "fix it now" (not the
+  recommended "flag as known non-goal" default). Two real bugs found and fixed while
+  implementing the two "fix it now" choices: (a) scaffolding the migration via
+  `dotnet ef migrations add` empirically corrected Open Question #3's own premise - EF Core's
+  SqlServer provider auto-filters a unique index over a nullable column to
+  `WHERE [PowerPointId] IS NOT NULL`, so the NULL-uniqueness gap is symmetric across both
+  providers, not Postgres-only, closed via a second `(HouseholdId, IntervalStart) WHERE
+  PowerPointId IS NULL` partial unique index on both; (b) that fix's first version, keyed on
+  IntervalStart alone (no HouseholdId), collided different Households' unmapped readings sharing
+  a timestamp and hung the shared background job loop in SmartPlugImportEndpointsTests (caught
+  via the full Api.Tests suite, not the new unit test alone - 7 failures traced to every
+  "no Power Point match" Eve Home upload after the first). UpdateMappingAsync's fallback needed
+  its own fix too: ExecuteUpdateAsync bypasses SaveChangesAsync's DbUpdateException wrapping
+  entirely, so the portable System.Data.Common.DbException base type had to be caught alongside
+  it (confirmed empirically, not assumed). Full backend suite green: 306 tests (165 Application,
+  3 Architecture, 28 Infrastructure via Testcontainers Postgres+SqlServer, 110 Api.Tests via
+  Testcontainers), dotnet build clean in Debug and Release. No frontend changes.
+2026-08-22: story 3-4-incremental-smart-plug-import created (create-story) - status set to
+  ready-for-dev. Drafted directly against the epic's own already-fully-specified ACs (written
+  during the 2026-08-22 correct-course/architecture-planning session with Ralf/Winston — see
+  sprint-change-proposal-2026-08-22.md). This story's ACs describe behavior (watermark filtering,
+  early-stop vs. filter per vendor, DB uniqueness) but not the exact interface/algorithm shape, so
+  the story proposes concrete recommended defaults (flagged as Open Design Questions for Ralf,
+  same "propose -> confirm" pattern as 2.4/3.2/3.3): (1) ISmartPlugParser gains a header-only
+  ReadDeviceTag method plus a watermark parameter on Parse; (2) insert-time unique-constraint
+  conflicts are handled via a fast-path-then-per-row-fallback pattern, not a new upsert dependency
+  or provider-specific SQL; (3) a genuine cross-provider gap is flagged and NOT silently patched -
+  Postgres never treats NULL as equal to NULL in a composite unique index, so AwaitingPowerPointMapping
+  rows (PowerPointId IS NULL) aren't protected by the new (PowerPointId, IntervalStart) constraint
+  on Postgres the way they are on SQL Server; (4) UpdateMappingAsync's (Story 3.2) own new exposure
+  to this same constraint is flagged as an explicit known non-goal, not fixed speculatively.
+  Also flagged: a real interaction with Story 3.3's AC #7 - "zero rows parsed" now has two causes
+  (a genuinely empty file vs. a successful incremental re-import with nothing new), which must not
+  both be treated as FlaggedForReview. Large-file memory/perf claims (AC #5/#7) can't be verified
+  in CI against the real dated Eve Home HiFi samples (gitignored personal data) - story recommends
+  a synthetic in-test fixture instead.
+2026-08-22: story 3-4-incremental-smart-plug-import validated by an independent fresh-context
+  reviewer against the epic/source code before dev-story activation - 3 fixes applied: (1) Dev
+  Notes Option A's insert-conflict fallback made explicit about ordering - the SmartPlugImport row
+  must be SaveChangesAsync'd alone before the per-reading retry loop starts, or the first colliding
+  reading's failed save would roll back the still-pending import insert too, silently losing the
+  whole import on one collision (worse than the bug this story fixes); (2) Task 6 gained a missing
+  test for that exact fallback path (previously unverified by any listed test); (3) Task 2's
+  ReadDeviceTag guidance made explicit that it must reuse the same streaming OpenXmlReader, never
+  worksheetPart.Worksheet, which would silently force a full-DOM load regardless of rows read. Two
+  other reviewer findings (AC #6 wording, the dropped-OrderBy trade-off note) were already present
+  in the file and required no change.
+2026-08-20: story 3-3-smart-plug-import-gap-handling-baseline-sharpening moved to done
+  (bmad-code-review, second pass) - all decision-needed and patch findings resolved; 2 items
+  deferred (concurrent-import race, negative-average guard), both pre-existing-root-cause
+  tradeoffs. Full backend + frontend test suites re-run green (289 backend, 142 frontend).
+2026-08-20: story 3-3-smart-plug-import-gap-handling-baseline-sharpening moved to review
+  (dev-story implementation complete — new SmartPlugImportGap entity + FlaggedForReview status +
+  migration (both providers); SmartPlugGapDetector domain calculation; CompleteSmartPlugImportProcessing
+  wires gap detection + IStatusRecomputeService into BOTH AD-7 completion paths
+  (ProcessSmartPlugImport direct-match, MapSmartPlugImportToPowerPoint mapping); ISmartPlugCoverageSignal
+  softens GetCurrentStatus's IsLowConfidence only, never the pace/baseline figures (AD-14 guard test
+  passes unmodified); GET /api/jobs/{id} now surfaces a Gaps list; new frontend GapCard component +
+  flaggedForReview panel state. Notable implementation discovery: a literal reading of Task 2's gap-fill
+  rule ("at least one of 7 preceding days has data -> Estimated") makes Missing mathematically
+  unreachable, since a detected gap's immediately-preceding day always has data by construction -
+  implemented instead as "a genuine full preceding week must have elapsed since the Power Point's
+  earliest-ever reading", which is reachable/testable and matches AC #6's "no preceding week" wording.
+  Live-verified end to end in a real Chrome browser against the real local stack (dotnet API +
+  Vite + real Postgres, after Ralf approved resetting a stale Docker volume from an earlier
+  session): uploaded three crafted Meross CSVs through the actual Settings UI and confirmed all
+  three SmartPlugImportGapTreatment values render correctly (Estimated/Missing/FlaggedForReview),
+  cross-checked directly against Postgres rows - exact match. 286 backend tests green (20 new),
+  142 frontend tests green (9 new), dotnet build clean in Debug and Release, tsc/oxlint/vite
+  build clean.
+2026-08-20: story 3-3-smart-plug-import-gap-handling-baseline-sharpening moved to in-progress
+  (dev-story activation). Open Questions confirmed with Ralf: (1) sharpening mechanism = soften
+  IsLowConfidence only via new ISmartPlugCoverageSignal port, never touch PaceToDateKwh/
+  BaselineToDateKwh/Trending; (2) gap-fill "no preceding history" check scoped per-Power-Point,
+  not per-household; (3) AC #7 reuses ProcessSmartPlugImport's existing readings.Count==0 check
+  as the FlaggedForReview trigger, no new date-range signal needed.
+2026-08-20: story 3-2-import-to-power-point-mapping moved to done (code review complete: 0
+  decision-needed, 8 patch findings fixed, 3 deferred, 8 dismissed. Highlights: the dialog's Close
+  (X) button was rendered but non-functional (no onOpenChange wired) and a load failure had no
+  retry, permanently trapping the user; a Power Point created after a failed mapping call never
+  appeared in the "map to existing" list, contradicting the story's own documented recovery
+  guarantee; the new mapping endpoint omitted the TryGetHouseholdId/403 guard every sibling
+  endpoint uses. Deferred (pre-existing, codebase-wide gaps not introduced by this diff): no
+  optimistic-concurrency protection on the mapping use case, the mapping endpoint isn't
+  idempotent on retry, and ListReadingsByImportIdAsync/UpdateMappingAsync are unpaged. 273
+  backend tests green (unchanged), 135 frontend tests green (4 new for the review-fix behavior),
+  dotnet build / tsc / oxlint / vite build all clean.
+2026-08-20: story 3-2-import-to-power-point-mapping moved to review (dev-story implementation
+  complete - 273 backend tests green (148 Application + 3 Architecture + 16 Infrastructure + 106
+  Api.Tests via Testcontainers), 131 frontend tests green (16 new: 7 dialog, 2 panel, 9 api),
+  dotnet build clean in Debug and Release, tsc/oxlint/vite build clean. Live-verified end to end
+  in a real Chrome browser against the real local stack (dotnet API + Vite + real Postgres): both
+  the create-new-Power-Point and map-to-existing-Power-Point paths confirmed working, readings
+  correctly attributed per AD-10 (verified directly in Postgres).)
+2026-08-20: story 3-2-import-to-power-point-mapping moved to in-progress (dev-story activation)
+2026-08-20: story 3-1-smart-plug-file-upload-async-parsing moved to done (code review complete: 1 decision-needed
+  resolved (became a patch — AwaitingPowerPointMapping now surfaced via GET /api/jobs/{id} and given its own
+  frontend badge, rather than deferred to 3.2), 14 patch findings fixed (incl. the promoted decision), 0 deferred,
+  7 dismissed. Highlights: SmartPlugReading.KwhValue precision was silently truncating virtually all Eve Home
+  readings to 0.00 (scale 2 -> 6, regenerated both providers' migrations); ProcessSmartPlugImport's Power Point
+  match now excludes archived Power Points and treats a same-name match across two different Rooms as ambiguous
+  (AwaitingPowerPointMapping) instead of picking one arbitrarily; AzureStorageQueueJobQueue redelivery no longer
+  PK-violation-crashes on BackgroundJob insert (optimistic insert + catch-DbUpdateException reconciliation, not
+  check-then-act — kept the common path to one DB round trip after an initial FindAsync-based version broke a
+  Testcontainers test's race-sensitive first poll). 264 backend tests green (4 new, incl. regression coverage
+  for the precision fix and the ambiguous/archived-match cases), 115 frontend tests green (2 new), tsc/oxlint/
+  vite build clean, dotnet build clean in Debug and Release.
+2026-08-18: story 3-1-smart-plug-file-upload-async-parsing moved to review (dev-story implementation complete —
+  260 backend tests green (Testcontainers Postgres+SqlServer migration verification incl.), 113 frontend tests
+  green (10 new), tsc/oxlint/vite build clean, dotnet build clean in Debug and Release. Swapped ClosedXML for
+  DocumentFormat.OpenXml for the Eve Home .xlsx parser — ClosedXML 0.104.2/0.105.1 both fail to load the real
+  sample files' ISO-8601 date cell type. Parser tests placed in Infrastructure.Tests, not the story's literal
+  Application.Tests path, per project-context.md's layer-mirroring convention.)
+2026-08-18: story 3-1-smart-plug-file-upload-async-parsing moved to in-progress (dev-story activation)
+2026-08-18: story 3-1-smart-plug-file-upload-async-parsing created (create-story) - status set to ready-for-dev; epic-3 moved to in-progress (first story). Greenfield infra story: stands up AD-6's job queue (IBackgroundJobQueue, InProcessChannelJobQueue/AzureStorageQueueJobQueue) and AD-9's ISmartPlugParser port (EveHomeXlsxParser, MerossCsvParser) from scratch — none of it exists yet. Infra (storage queue, JobQueue__* env vars) was already provisioned ahead of time in infra/main.bicep; story only needs to read the config. Real Eve Home/Meross sample fixtures found at sample-data/ — their exact byte-level layout was verified directly and corrects a stale cell-reference detail in the PRD addendum.
+2026-08-17: story 2-6-room-power-point-device-re-parenting moved to done (code review complete: 2 findings fixed — noDestinations check misfired when a Power Point/Device's current parent was archived (ArchiveRoom/ArchivePowerPoint don't cascade), and duplicated destination-list IIFEs consolidated into a shared MoveDestinationList component; 103 frontend tests green, tsc/oxlint/vite build clean, zero backend files touched by the fix)
+2026-08-17: story 2-6-room-power-point-device-re-parenting moved to review (dev-story implementation complete — 238 backend tests green (141 Application + 92 Api.Tests via Testcontainers + 5 Infrastructure/Architecture), 102 frontend tests green (17 in tagging-scaffold-manager.test.tsx), dotnet build clean in Debug and Release, tsc/oxlint/vite build clean, zero docs/*.md changes)
+2026-08-17: story 2-6-room-power-point-device-re-parenting moved to in-progress (dev-story activation)
+2026-08-17: story 2-6-room-power-point-device-re-parenting created (create-story) - status set to ready-for-dev
+2026-08-17: story 2-5-dashboard-status-display moved to done (code review complete: 3 decision-needed resolved (all became patches), 7 patch findings fixed (relocated InviteGeneratePanel to Settings, added NavChrome to Settings, empty-state-shaped skeleton, fixed entrance-animation replay + aria-live remount + rounding-boundary badge/sentence mismatch, dropped unused currency prop), 1 deferred, 9 dismissed — 98 frontend tests green, tsc/oxlint/vite build clean, zero backend files touched)
+2026-08-17: story 2-5-dashboard-status-display moved to review (dev-story implementation complete — 94 frontend tests green (15 files, 6 new), tsc/oxlint/vite build clean, zero backend files touched)
+2026-08-17: story 2-5-dashboard-status-display moved to in-progress (dev-story activation)
+2026-08-17: story 2-5-dashboard-status-display created (create-story) - status set to ready-for-dev
+2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to done (code review complete: 4 decision-needed resolved (2 confirmed as-is, 2 became patches), 5 patch findings fixed (7 total incl. promoted decisions), 4 deferred, 3 dismissed — 219 backend tests green, dotnet build clean in Debug and Release)
+2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to review (dev-story implementation complete — 210 backend tests green (119 Application + 86 Api.Tests via Testcontainers + 2 Infrastructure migration + 3 Architecture), dotnet build clean in Debug and Release, both Postgres and SqlServer migrations verified; no frontend changes)
+2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation moved to in-progress (dev-story activation)
+2026-08-17: story 2-4-gap-tolerant-rolling-baseline-status-computation created (create-story) - status set to ready-for-dev
+2026-08-16: story 2-3-meter-reading-regression-detection-classification moved to done (code review complete: 0 decision-needed, 11 patch findings fixed, 0 deferred, 5 dismissed — 91 Application + 81 Api.Tests + 65 frontend tests green, dotnet build/tsc/oxlint/vite build clean)
+2026-08-16: story 2-3-meter-reading-regression-detection-classification moved to review (dev-story implementation complete — 172 backend tests + 63 frontend tests green, tsc/oxlint/build clean, real-Postgres API integration suite via Testcontainers)
+2026-08-16: story 2-3-meter-reading-regression-detection-classification moved to in-progress (dev-story activation; Task 6 amended per sprint-change-proposal-2026-08-16.md Section 4.2 to consume Story 2.2b's glass design system)
+2026-08-16: story 2-2b-design-system-foundation moved to done (code review complete: 3 decision-needed resolved, 8 patch findings fixed, 1 deferred, 14 dismissed — 54 frontend tests green, tsc/oxlint/build clean)
+2026-08-16: story 2-2b-design-system-foundation moved to review (dev-story implementation complete, 52 frontend tests green — 10 new — tsc/oxlint/build clean, no backend files touched)
+2026-08-16: story 2-2b-design-system-foundation moved to in-progress (dev-story activation)
+2026-08-16: story 2-2b-design-system-foundation inserted ahead of 2.3 (sprint-change-proposal-2026-08-16.md)
+  — closes the glass-panel component gap Stories 2.2/2.3 both deferred; retrofits Epic 1 + 2.1/2.2 screens
+2026-08-15: story 2.3 created (create-story) - status set to ready-for-dev
+2026-08-15: story 2.2 moved to done (code review complete, 4 patch findings fixed, 4 deferred)
+2026-08-15: story 2.2 moved to review (dev-story implementation complete, 146 .NET + 42 frontend tests green)
+2026-08-15: story 2.2 moved to in-progress (dev-story activation)
+2026-08-15: story 2.2 created (create-story) - status set to ready-for-dev
+2026-08-15: story 2.1 moved to in-progress (dev-story activation)
+2026-08-15: story 2.1 moved to done (code review complete, 8 patch findings fixed, 1 deferred)
+2026-08-15: the two Sally/Amelia token-wiring action items are marked done
+on a deliberately narrowed scope — only the shadcn vars DESIGN.md claims as
+its brand delta (background/foreground/primary/ring/font) were wired.
+surface-glass, status-badge colors, and the rounded.* scale are scoped to
+not-yet-built Epic 2+ components (Status card, Trend chart, etc.) and were
+NOT wired; see spec-design-token-wiring.md's Design Notes for the reasoning.
+2026-08-18: epic-2-retrospective completed — 7/7 stories reviewed (2.1-2.6 + inserted 2.2b),
+  0 production incidents, 43 patch findings fixed / 11 deferred, live-verified on Azure by Ralf.
+  3 action items recorded (Auth0 test user for local live-verification, shadcn CLI alias-bug
+  root-cause, deferred-work.md Story 2.4 items flagged for Story 3.3's author). See
+  epic-2-retro-2026-08-18.md.
+2026-08-27: story 3-6-smart-plug-import-job-status-history moved to in-progress (dev-story
+  activation).
+2026-08-28: story 3-6-smart-plug-import-job-status-history moved to review (dev-story
+  implementation complete). All 6 tasks: BackgroundJobStatus.Queued appended (not inserted)
+  + BackgroundJobEnqueueRecorder (new shared singleton) persists a Queued BackgroundJob row
+  synchronously before the 202 response, so GET /api/jobs/{id} never 404s for a freshly-queued
+  job anymore; BackgroundJobProcessor.ProcessAsync became a lookup+transition instead of a blind
+  insert. HouseholdMember.DisplayName captured from the OIDC name claim at household-creation/
+  invite-acceptance time; ICurrentHouseholdAccessor gained HouseholdMemberId. SmartPlugReading.
+  SmartPlugImportId made nullable with an ON DELETE SET NULL FK (verified directly against both
+  real engines) so the new lazy 30-day sweep (piggybacked on ListSmartPlugImportJobs's own query
+  path, no IHostedService) can delete SmartPlugImport/BackgroundJob/SmartPlugImportGap audit rows
+  while every SmartPlugReading survives, detached. New GET /api/smart-plug-import-jobs endpoint
+  + JobHistoryList frontend component render the six-state (Waiting/Processing/Success/Error/
+  Needs Mapping/Flagged for Review) household-wide list below the existing upload queue on the
+  same screen. Two real bugs caught by the test suite, not by inspection: a Postgres-incompatible
+  ValueTuple LINQ projection in CurrentHouseholdAccessor that 500'd every authenticated request
+  (Npgsql can't read a server-side tuple projection as a composite "record" type), and a missing
+  unmounted-component guard in JobHistoryList that caused a genuine flaky test only when the full
+  frontend suite ran together. Two interactions discovered and deliberately left unfixed (logged
+  in deferred-work.md instead): adding the Queued row pre-empts use-smart-plug-import-job.ts's
+  existing 404-means-queued heuristic, degrading the per-session queue's "Waiting" badge to
+  always "Processing" (cosmetic only, and that file is explicitly out of scope per this story's
+  own Known Non-Goals); and the OIDC name-claim mapping was verified only against this repo's
+  TestAuthHandler test double, not a live Auth0 session (no Chrome/Auth0 access in this automated
+  run). Full backend suite green: 403 tests (199 Application, 73 Infrastructure via Testcontainers
+  Postgres+SqlServer, 128 Api.Tests via Testcontainers, 3 Architecture), dotnet build clean. Full
+  frontend suite green: 205 tests, tsc/oxlint/vite build clean.
