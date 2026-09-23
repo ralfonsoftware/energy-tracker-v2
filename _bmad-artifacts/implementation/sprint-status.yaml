@@ -1558,8 +1558,8 @@ action_items:
   - epic: 6
     action: "When the Claude-in-Chrome extension reports 'not connected' during dev-story's live-verification step, raise it immediately and pause for the user to start/connect Chrome, then resume — don't check the task off and let code review catch the skip later"
     owner: "story authors/dev-story workflow"
-    status: open
-    note: "2026-09-21 epic-6 retro. Story 6.2's Task 7 (live verification, AC #5 empty state) was checked off complete on a component test alone, contradicting its own 'does not defer' instruction — caught in code review, not before. Ralf: catch it earlier, at the 'not connected' moment itself, as a hard dev-story-time gate."
+    status: done
+    note: "2026-09-21 epic-6 retro. Story 6.2's Task 7 (live verification, AC #5 empty state) was checked off complete on a component test alone, contradicting its own 'does not defer' instruction — caught in code review, not before. Ralf: catch it earlier, at the 'not connected' moment itself, as a hard dev-story-time gate. Verified 2026-09-23 already closed by a durable mechanism, same pattern as the two epic-4-retro process-gate items above: project-context.md's Critical Don't-Miss Rules > Process gates (hard, no exceptions) states this exact rule verbatim — auto-loaded persistent_fact for bmad-dev-story and bmad-code-review, so it's enforced at dev-story time, not left to review to catch."
   - epic: 6
     action: "Decide the real AI backend for Wattage Plausibility (Azure AI Foundry vs. self-hosted LMStudio vs. cloud API) — cost/latency/privacy tradeoffs are still fully open; only the no-op-when-unconfigured path has ever been verified live"
     owner: "Ralf/Winston"
