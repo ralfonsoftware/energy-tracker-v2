@@ -18,17 +18,29 @@ public interface IHouseholdExportReader
 // bearer credential, not data) and BackgroundJob/SmartPlugImport/SmartPlugImportGap (transient
 // job-queue metadata with its own 30-day lifecycle) — see docs/data-export-format.md's "Entity
 // scope" section for the full disclosed rationale.
+//
+// Household/MainMeter stay single, eagerly-fetched values (tiny, always needed up front — the
+// filename and format-version metadata depend on neither being deferred). Every other collection
+// is an IAsyncEnumerable<T>, keyset-paginated by the adapter (spec-household-export-oom-fix.md)
+// so a large household's export never materializes a whole collection in memory at once.
+//
+// Contract for every IAsyncEnumerable<T> field here: enumerate each one exactly once, and never two
+// of them concurrently — they're backed by paged queries against a single scoped DbContext, which
+// EF Core does not support running more than one operation on at a time. Re-enumerating one re-runs
+// its paged query from scratch rather than replaying prior results. HouseholdExportEndpoints'
+// sequential `await foreach` per collection (never two enumerated at once) is the only intended
+// consumption pattern.
 public record HouseholdExportData(
     Household Household,
-    IReadOnlyList<HouseholdMember> HouseholdMembers,
+    IAsyncEnumerable<HouseholdMember> HouseholdMembers,
     MainMeter? MainMeter,
-    IReadOnlyList<MeterReading> MeterReadings,
-    IReadOnlyList<MeterRegressionPrompt> MeterRegressionPrompts,
-    IReadOnlyList<Tariff> Tariffs,
-    IReadOnlyList<Event> Events,
-    IReadOnlyList<Room> Rooms,
-    IReadOnlyList<PowerPoint> PowerPoints,
-    IReadOnlyList<Device> Devices,
-    IReadOnlyList<SmartPlugReading> SmartPlugReadings,
-    IReadOnlyList<StatusSnapshot> StatusSnapshots,
-    IReadOnlyList<AuditCorrection> AuditCorrections);
+    IAsyncEnumerable<MeterReading> MeterReadings,
+    IAsyncEnumerable<MeterRegressionPrompt> MeterRegressionPrompts,
+    IAsyncEnumerable<Tariff> Tariffs,
+    IAsyncEnumerable<Event> Events,
+    IAsyncEnumerable<Room> Rooms,
+    IAsyncEnumerable<PowerPoint> PowerPoints,
+    IAsyncEnumerable<Device> Devices,
+    IAsyncEnumerable<SmartPlugReading> SmartPlugReadings,
+    IAsyncEnumerable<StatusSnapshot> StatusSnapshots,
+    IAsyncEnumerable<AuditCorrection> AuditCorrections);

@@ -3,31 +3,43 @@ using EnergyTracker.Domain;
 
 namespace EnergyTracker.Application;
 
-/// <summary>Builds the caller's Household's full "v2" export document — a raw copy of every in-scope entity, zero derivation/recomputation (AC #1, #2, #3, #4; AD-14).</summary>
+/// <summary>Builds the caller's Household's full "v2" export document — a raw copy of every in-scope entity, zero derivation/recomputation (AC #1, #2, #3, #4; AD-14). Streamed: <see cref="HouseholdExportStream"/>'s collections are lazily mapped per-item from the reader's own paged reads, so the caller (HouseholdExportEndpoints) can write each row as it arrives instead of buffering the whole export (spec-household-export-oom-fix.md).</summary>
 public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibilityBackendOptions aiPlausibilityBackendOptions)
 {
     public const string FormatVersion = "v2";
 
-    public async Task<HouseholdExportResult> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
+    public async Task<HouseholdExportStream> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {
         var data = await exportReader.GetExportDataAsync(householdId, cancellationToken);
 
-        return new HouseholdExportResult(
+        return new HouseholdExportStream(
             FormatVersion: FormatVersion,
             ExportedAtUtc: DateTimeOffset.UtcNow,
             Household: ToDto(data.Household),
-            HouseholdMembers: data.HouseholdMembers.Select(ToDto).ToList(),
+            HouseholdMembers: MapAsync(data.HouseholdMembers, ToDto),
             MainMeter: data.MainMeter is { } mainMeter ? ToDto(mainMeter) : null,
-            MeterReadings: data.MeterReadings.Select(ToDto).ToList(),
-            MeterRegressionPrompts: data.MeterRegressionPrompts.Select(ToDto).ToList(),
-            Tariffs: data.Tariffs.Select(ToDto).ToList(),
-            Events: data.Events.Select(ToDto).ToList(),
-            Rooms: data.Rooms.Select(ToDto).ToList(),
-            PowerPoints: data.PowerPoints.Select(ToDto).ToList(),
-            Devices: data.Devices.Select(ToDto).ToList(),
-            SmartPlugReadings: data.SmartPlugReadings.Select(ToDto).ToList(),
-            StatusSnapshots: data.StatusSnapshots.Select(ToDto).ToList(),
-            AuditCorrections: data.AuditCorrections.Select(ToDto).ToList());
+            MeterReadings: MapAsync(data.MeterReadings, ToDto),
+            MeterRegressionPrompts: MapAsync(data.MeterRegressionPrompts, ToDto),
+            Tariffs: MapAsync(data.Tariffs, ToDto),
+            Events: MapAsync(data.Events, ToDto),
+            Rooms: MapAsync(data.Rooms, ToDto),
+            PowerPoints: MapAsync(data.PowerPoints, ToDto),
+            Devices: MapAsync(data.Devices, ToDto),
+            SmartPlugReadings: MapAsync(data.SmartPlugReadings, ToDto),
+            StatusSnapshots: MapAsync(data.StatusSnapshots, ToDto),
+            AuditCorrections: MapAsync(data.AuditCorrections, ToDto));
+    }
+
+    // Hand-rolled IAsyncEnumerable<TSource> -> IAsyncEnumerable<TDto> projection (no
+    // System.Linq.Async dependency needed for a 4-line map) — keeps every collection's DTO
+    // mapping lazy/per-item so a large household's export never materializes a whole mapped list,
+    // matching the reader's own per-page streaming.
+    private static async IAsyncEnumerable<TDto> MapAsync<TSource, TDto>(IAsyncEnumerable<TSource> source, Func<TSource, TDto> map)
+    {
+        await foreach (var item in source)
+        {
+            yield return map(item);
+        }
     }
 
     // AiPlausibilityBackendOptions.Model/BaseUrl/ApiKey are deployment secrets (AD-19) — never
@@ -110,6 +122,13 @@ public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibi
         correction.Id, correction.EntityType, correction.EntityId, correction.FieldName, correction.OldValue, correction.NewValue, correction.CorrectedAtUtc);
 }
 
+// The deserializable "v2" wire-format contract — used only by the IMPORT/RESTORE side
+// (ValidateHouseholdImport, RestoreHouseholdData, HouseholdImportEndpoints.BuildSummary), which
+// is explicitly out of scope for spec-household-export-oom-fix.md and stays untouched: plain
+// IReadOnlyList<T> collections, because System.Text.Json can only deserialize a JSON array into a
+// materialized collection, never into an IAsyncEnumerable<T>. The EXPORT (write) side uses the
+// separate HouseholdExportStream record below instead — same field names/JSON shape, but
+// IAsyncEnumerable<T> collections so a large household's export is never fully buffered in memory.
 public record HouseholdExportResult(
     string FormatVersion,
     DateTimeOffset ExportedAtUtc,
@@ -126,6 +145,27 @@ public record HouseholdExportResult(
     IReadOnlyList<SmartPlugReadingExportDto> SmartPlugReadings,
     IReadOnlyList<StatusSnapshotExportDto> StatusSnapshots,
     IReadOnlyList<AuditCorrectionExportDto> AuditCorrections);
+
+// The streaming counterpart of HouseholdExportResult, produced only by
+// ExportHouseholdData.ExecuteAsync and consumed only by HouseholdExportEndpoints' Utf8JsonWriter
+// write loop — never deserialized, so IAsyncEnumerable<T> collections are safe here (unlike
+// HouseholdExportResult above).
+public record HouseholdExportStream(
+    string FormatVersion,
+    DateTimeOffset ExportedAtUtc,
+    HouseholdSettingsExportDto Household,
+    IAsyncEnumerable<HouseholdMemberExportDto> HouseholdMembers,
+    MainMeterExportDto? MainMeter,
+    IAsyncEnumerable<MeterReadingExportDto> MeterReadings,
+    IAsyncEnumerable<MeterRegressionPromptExportDto> MeterRegressionPrompts,
+    IAsyncEnumerable<TariffExportDto> Tariffs,
+    IAsyncEnumerable<EventExportDto> Events,
+    IAsyncEnumerable<RoomExportDto> Rooms,
+    IAsyncEnumerable<PowerPointExportDto> PowerPoints,
+    IAsyncEnumerable<DeviceExportDto> Devices,
+    IAsyncEnumerable<SmartPlugReadingExportDto> SmartPlugReadings,
+    IAsyncEnumerable<StatusSnapshotExportDto> StatusSnapshots,
+    IAsyncEnumerable<AuditCorrectionExportDto> AuditCorrections);
 
 public record HouseholdSettingsExportDto(
     Guid Id,

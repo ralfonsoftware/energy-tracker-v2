@@ -32,6 +32,22 @@ public abstract class HouseholdExportReaderTestsBase
         YearlyBaselineKwh = 3500m,
     };
 
+    // HouseholdExportReader's keyset pagination (spec-household-export-oom-fix.md) pages at 500
+    // rows internally — must exceed that to actually exercise a page boundary rather than a single
+    // round trip.
+    private const int RowCountExceedingOnePage = 640;
+
+    private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source)
+    {
+        var list = new List<T>();
+        await foreach (var item in source)
+        {
+            list.Add(item);
+        }
+
+        return list;
+    }
+
     [Fact]
     public async Task Returns_the_Households_own_data_across_every_entity_category()
     {
@@ -122,19 +138,174 @@ public abstract class HouseholdExportReaderTestsBase
         var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
 
         result.Household.Id.ShouldBe(householdId);
-        result.HouseholdMembers.Single().Id.ShouldBe(member.Id);
+        (await ToListAsync(result.HouseholdMembers)).Single().Id.ShouldBe(member.Id);
         result.MainMeter.ShouldNotBeNull();
         result.MainMeter!.Id.ShouldBe(mainMeter.Id);
-        result.Rooms.Single().Id.ShouldBe(room.Id);
-        result.PowerPoints.Single().Id.ShouldBe(powerPoint.Id);
-        result.PowerPoints.Single().ArchivedAt.ShouldNotBeNull();
-        result.Devices.Single().Id.ShouldBe(device.Id);
-        result.MeterReadings.Single().Id.ShouldBe(reading.Id);
-        result.Tariffs.Single().Id.ShouldBe(tariff.Id);
-        result.Events.Single().Id.ShouldBe(@event.Id);
-        result.SmartPlugReadings.Single().Id.ShouldBe(smartPlugReading.Id);
-        result.StatusSnapshots.Single().Id.ShouldBe(snapshot.Id);
-        result.AuditCorrections.Single().Id.ShouldBe(correction.Id);
+        (await ToListAsync(result.Rooms)).Single().Id.ShouldBe(room.Id);
+        var powerPoints = await ToListAsync(result.PowerPoints);
+        powerPoints.Single().Id.ShouldBe(powerPoint.Id);
+        powerPoints.Single().ArchivedAt.ShouldNotBeNull();
+        (await ToListAsync(result.Devices)).Single().Id.ShouldBe(device.Id);
+        (await ToListAsync(result.MeterReadings)).Single().Id.ShouldBe(reading.Id);
+        (await ToListAsync(result.Tariffs)).Single().Id.ShouldBe(tariff.Id);
+        (await ToListAsync(result.Events)).Single().Id.ShouldBe(@event.Id);
+        (await ToListAsync(result.SmartPlugReadings)).Single().Id.ShouldBe(smartPlugReading.Id);
+        (await ToListAsync(result.StatusSnapshots)).Single().Id.ShouldBe(snapshot.Id);
+        (await ToListAsync(result.AuditCorrections)).Single().Id.ShouldBe(correction.Id);
+    }
+
+    // AC #2 (paged rewrite vs. today's unbounded read, set-equal): proves the keyset loop actually
+    // spans multiple round trips (RowCountExceedingOnePage > the reader's internal page size) and
+    // returns every row exactly once, in both directions (no drops, no duplicates).
+    [Fact]
+    public async Task Pages_across_multiple_pages_without_losing_or_duplicating_rows()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(NewHousehold(householdId));
+        var mainMeter = new MainMeter { Id = Guid.NewGuid(), HouseholdId = householdId, CreatedAtUtc = DateTimeOffset.UtcNow };
+        dbContext.MainMeters.Add(mainMeter);
+        var expectedIds = new List<Guid>();
+        for (var i = 0; i < RowCountExceedingOnePage; i++)
+        {
+            var reading = new MeterReading
+            {
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                MainMeterId = mainMeter.Id,
+                KwhValue = i,
+                ReadingTimestamp = DateTimeOffset.UtcNow.AddMinutes(-i),
+                IdempotencyKey = Guid.NewGuid(),
+                CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-i),
+            };
+            expectedIds.Add(reading.Id);
+            dbContext.MeterReadings.Add(reading);
+        }
+
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var reader = new HouseholdExportReader(dbContext);
+
+        var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
+        var meterReadings = await ToListAsync(result.MeterReadings);
+
+        meterReadings.Count.ShouldBe(RowCountExceedingOnePage);
+        meterReadings.Select(r => r.Id).ShouldBe(expectedIds, ignoreOrder: true);
+        meterReadings.Select(r => r.Id).Distinct().Count().ShouldBe(RowCountExceedingOnePage);
+    }
+
+    // I/O matrix "Page-boundary duplicates": two SmartPlugReadings sharing an IntervalStart must
+    // both survive — the Id tiebreaker (not IntervalStart alone) is what makes the cursor unique
+    // and stable across page boundaries.
+    [Fact]
+    public async Task SmartPlugReadings_sharing_the_same_IntervalStart_are_not_skipped_or_duplicated()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(NewHousehold(householdId));
+        // Two DIFFERENT (non-null) PowerPointIds — SmartPlugReadingConfiguration's
+        // (PowerPointId, IntervalStart) unique index (Story 3.4 AD-20) forbids two MATCHED readings
+        // on the SAME Power Point from sharing an IntervalStart, but two readings on different Power
+        // Points legitimately can (that's the real-world case this test's scenario models).
+        var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = DateTimeOffset.UtcNow };
+        dbContext.Rooms.Add(room);
+        var powerPointA = new PowerPoint
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Outlet A", CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        var powerPointB = new PowerPoint
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Outlet B", CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        dbContext.PowerPoints.AddRange(powerPointA, powerPointB);
+        var sharedIntervalStart = DateTimeOffset.UtcNow.AddHours(-1);
+        var first = new SmartPlugReading
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            PowerPointId = powerPointA.Id,
+            RoomName = "Kitchen",
+            PowerPointName = "Outlet A",
+            DeviceName = "Kettle",
+            IntervalStart = sharedIntervalStart,
+            IntervalEnd = sharedIntervalStart.AddMinutes(15),
+            KwhValue = 0.1m,
+        };
+        var second = new SmartPlugReading
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            PowerPointId = powerPointB.Id,
+            RoomName = "Kitchen",
+            PowerPointName = "Outlet B",
+            DeviceName = "Toaster",
+            IntervalStart = sharedIntervalStart,
+            IntervalEnd = sharedIntervalStart.AddMinutes(15),
+            KwhValue = 0.2m,
+        };
+        dbContext.SmartPlugReadings.AddRange(first, second);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var reader = new HouseholdExportReader(dbContext);
+
+        var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
+        var smartPlugReadings = await ToListAsync(result.SmartPlugReadings);
+
+        smartPlugReadings.Select(r => r.Id).ShouldBe([first.Id, second.Id], ignoreOrder: true);
+    }
+
+    // Events pages by a three-column cursor tuple (OccurredAt, CreatedAtUtc, Id) — the most
+    // structurally complex of every paged entity here (spec Design Notes: reuses the existing
+    // (HouseholdId, OccurredAt, CreatedAtUtc) index rather than a new one, with Id as an extra
+    // in-memory tiebreaker) — so it's the case most likely to hide an off-by-one/comparison bug.
+    // Exercises both a multi-page span AND two Events sharing the exact same (OccurredAt,
+    // CreatedAtUtc) pair, which only the Id tiebreaker can keep from being skipped or duplicated.
+    [Fact]
+    public async Task Events_page_correctly_across_multiple_pages_including_a_full_cursor_tuple_tie()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(NewHousehold(householdId));
+        var expectedIds = new List<Guid>();
+        var tiedOccurredAt = DateTimeOffset.UtcNow.AddDays(-1);
+        var tiedCreatedAt = DateTimeOffset.UtcNow;
+        for (var i = 0; i < RowCountExceedingOnePage; i++)
+        {
+            var @event = new Event
+            {
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                Description = $"event-{i}",
+                OccurredAt = DateTimeOffset.UtcNow.AddMinutes(-i),
+                CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-i),
+            };
+            expectedIds.Add(@event.Id);
+            dbContext.Events.Add(@event);
+        }
+
+        // Two Events sharing the exact same (OccurredAt, CreatedAtUtc) pair — only the Id tiebreaker
+        // (not the tuple alone) keeps the cursor unique and stable across a page boundary.
+        var tiedFirst = new Event
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, Description = "tied-first",
+            OccurredAt = tiedOccurredAt, CreatedAtUtc = tiedCreatedAt,
+        };
+        var tiedSecond = new Event
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, Description = "tied-second",
+            OccurredAt = tiedOccurredAt, CreatedAtUtc = tiedCreatedAt,
+        };
+        dbContext.Events.AddRange(tiedFirst, tiedSecond);
+        expectedIds.Add(tiedFirst.Id);
+        expectedIds.Add(tiedSecond.Id);
+
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var reader = new HouseholdExportReader(dbContext);
+
+        var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
+        var events = await ToListAsync(result.Events);
+
+        events.Count.ShouldBe(expectedIds.Count);
+        events.Select(e => e.Id).ShouldBe(expectedIds, ignoreOrder: true);
+        events.Select(e => e.Id).Distinct().Count().ShouldBe(expectedIds.Count);
     }
 
     // AC #3: the entire correctness of tenant isolation here rests on the AD-3 global query filter
@@ -243,18 +414,18 @@ public abstract class HouseholdExportReaderTestsBase
 
         var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
 
-        result.HouseholdMembers.ShouldBeEmpty();
-        result.Rooms.ShouldBeEmpty();
-        result.PowerPoints.ShouldBeEmpty();
-        result.Devices.ShouldBeEmpty();
+        (await ToListAsync(result.HouseholdMembers)).ShouldBeEmpty();
+        (await ToListAsync(result.Rooms)).ShouldBeEmpty();
+        (await ToListAsync(result.PowerPoints)).ShouldBeEmpty();
+        (await ToListAsync(result.Devices)).ShouldBeEmpty();
         result.MainMeter.ShouldBeNull();
-        result.MeterReadings.ShouldBeEmpty();
-        result.MeterRegressionPrompts.ShouldBeEmpty();
-        result.Tariffs.ShouldBeEmpty();
-        result.Events.ShouldBeEmpty();
-        result.SmartPlugReadings.ShouldBeEmpty();
-        result.StatusSnapshots.ShouldBeEmpty();
-        result.AuditCorrections.ShouldBeEmpty();
+        (await ToListAsync(result.MeterReadings)).ShouldBeEmpty();
+        (await ToListAsync(result.MeterRegressionPrompts)).ShouldBeEmpty();
+        (await ToListAsync(result.Tariffs)).ShouldBeEmpty();
+        (await ToListAsync(result.Events)).ShouldBeEmpty();
+        (await ToListAsync(result.SmartPlugReadings)).ShouldBeEmpty();
+        (await ToListAsync(result.StatusSnapshots)).ShouldBeEmpty();
+        (await ToListAsync(result.AuditCorrections)).ShouldBeEmpty();
     }
 }
 
