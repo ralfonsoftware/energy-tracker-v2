@@ -67,7 +67,13 @@ export function ProfileMenu({ email, householdId, supportsFederatedLogout }: Pro
               visibly present, non-interactive row rather than a silent no-op onClick (open
               question, noted in Completion Notes for a future story). */}
           <DropdownMenuItem disabled>{t('profileMenu.profile')}</DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={openLogoffDialog}>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={(event) => {
+              event.preventDefault()
+              requestAnimationFrame(openLogoffDialog)
+            }}
+          >
             <LogOut aria-hidden="true" />
             {t('settings.logoff.trigger')}
           </DropdownMenuItem>

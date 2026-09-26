@@ -69,7 +69,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
         <DataExportPanel />
         <DataImportPanel />
 
-        <Button variant="outline" className="self-start" onClick={openLogoffDialog}>
+        <Button variant="outline" className="wide:hidden self-start" onClick={openLogoffDialog}>
           <LogOut aria-hidden="true" />
           {t('settings.logoff.trigger')}
         </Button>

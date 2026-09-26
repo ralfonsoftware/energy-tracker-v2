@@ -169,6 +169,45 @@ describe('DashboardPage', () => {
     expect(onSettingsClick).toHaveBeenCalledOnce()
   })
 
+  it('renders the top nav chrome variant through the real page prop chain, and its Settings tap also calls onSettingsClick (Story 8.1)', async () => {
+    // Regression guard: every other test in this file resolves the ambiguous duplicate nav
+    // buttons via getAllByRole(...)[0], which is always the bottom-tab-bar instance — the
+    // wide:flex top-nav variant (index [1]) was previously only exercised by nav-chrome.test.tsx's
+    // isolated unit test with mocked callbacks, never through a real page's prop chain.
+    const user = userEvent.setup()
+    const onSettingsClick = vi.fn()
+    render(
+      <DashboardPage
+        household={household}
+        supportsFederatedLogout={true}
+        email="member@example.com"
+        status={null}
+        statusLoading={false}
+        tariffCheck={null}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        logEventOpen={false}
+        onLogEventOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={onSettingsClick}
+        onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
+        onSmartPlugImportClick={noop}
+      />,
+    )
+
+    const settingsButtons = screen.getAllByRole('button', { name: 'Settings' })
+    expect(settingsButtons).toHaveLength(2)
+    await user.click(settingsButtons[1])
+    expect(onSettingsClick).toHaveBeenCalledOnce()
+
+    await user.click(screen.getByRole('button', { name: 'Account menu' }))
+    expect(await screen.findByText('member@example.com')).toBeInTheDocument()
+  })
+
   it('tapping Trend History in the nav chrome calls onTrendHistoryClick (Story 4.1 — the standalone History trigger it replaces was removed)', async () => {
     const user = userEvent.setup()
     const onTrendHistoryClick = vi.fn()
