@@ -27,18 +27,41 @@ public class ExportHouseholdDataTests
 
     private static HouseholdExportData EmptyExportData(Household household) => new(
         household,
-        HouseholdMembers: [],
+        HouseholdMembers: ToAsyncEnumerable<HouseholdMember>([]),
         MainMeter: null,
-        MeterReadings: [],
-        MeterRegressionPrompts: [],
-        Tariffs: [],
-        Events: [],
-        Rooms: [],
-        PowerPoints: [],
-        Devices: [],
-        SmartPlugReadings: [],
-        StatusSnapshots: [],
-        AuditCorrections: []);
+        MeterReadings: ToAsyncEnumerable<MeterReading>([]),
+        MeterRegressionPrompts: ToAsyncEnumerable<MeterRegressionPrompt>([]),
+        Tariffs: ToAsyncEnumerable<Tariff>([]),
+        Events: ToAsyncEnumerable<Event>([]),
+        Rooms: ToAsyncEnumerable<Room>([]),
+        PowerPoints: ToAsyncEnumerable<PowerPoint>([]),
+        Devices: ToAsyncEnumerable<Device>([]),
+        SmartPlugReadings: ToAsyncEnumerable<SmartPlugReading>([]),
+        StatusSnapshots: ToAsyncEnumerable<StatusSnapshot>([]),
+        AuditCorrections: ToAsyncEnumerable<AuditCorrection>([]));
+
+    // HouseholdExportData's collections are IAsyncEnumerable<T> (spec-household-export-oom-fix.md)
+    // — these two helpers bridge test fixtures (plain in-memory lists) to/from that shape without
+    // adding a System.Linq.Async package dependency for a couple of 4-line iterators.
+    private static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(IEnumerable<T> source)
+    {
+        await Task.Yield();
+        foreach (var item in source)
+        {
+            yield return item;
+        }
+    }
+
+    private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source)
+    {
+        var list = new List<T>();
+        await foreach (var item in source)
+        {
+            list.Add(item);
+        }
+
+        return list;
+    }
 
     [Fact]
     public async Task Sets_the_v2_formatVersion_and_a_fresh_exportedAtUtc_timestamp()
@@ -203,35 +226,35 @@ public class ExportHouseholdDataTests
         };
         var data = new HouseholdExportData(
             household,
-            [member],
+            ToAsyncEnumerable([member]),
             mainMeter,
-            [reading],
-            [prompt],
-            [tariff],
-            [@event],
-            [room],
-            [powerPoint],
-            [device],
-            [smartPlugReading],
-            [snapshot],
-            [correction]);
+            ToAsyncEnumerable([reading]),
+            ToAsyncEnumerable([prompt]),
+            ToAsyncEnumerable([tariff]),
+            ToAsyncEnumerable([@event]),
+            ToAsyncEnumerable([room]),
+            ToAsyncEnumerable([powerPoint]),
+            ToAsyncEnumerable([device]),
+            ToAsyncEnumerable([smartPlugReading]),
+            ToAsyncEnumerable([snapshot]),
+            ToAsyncEnumerable([correction]));
         _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
-        result.HouseholdMembers.Single().Id.ShouldBe(member.Id);
+        (await ToListAsync(result.HouseholdMembers)).Single().Id.ShouldBe(member.Id);
         result.MainMeter.ShouldNotBeNull();
         result.MainMeter!.Id.ShouldBe(mainMeter.Id);
-        result.MeterReadings.Single().Id.ShouldBe(reading.Id);
-        result.MeterRegressionPrompts.Single().Id.ShouldBe(prompt.Id);
-        result.Tariffs.Single().Id.ShouldBe(tariff.Id);
-        result.Events.Single().Id.ShouldBe(@event.Id);
-        result.Rooms.Single().Id.ShouldBe(room.Id);
-        result.PowerPoints.Single().Id.ShouldBe(powerPoint.Id);
-        result.Devices.Single().Id.ShouldBe(device.Id);
-        result.SmartPlugReadings.Single().Id.ShouldBe(smartPlugReading.Id);
-        result.StatusSnapshots.Single().Id.ShouldBe(snapshot.Id);
-        result.AuditCorrections.Single().Id.ShouldBe(correction.Id);
+        (await ToListAsync(result.MeterReadings)).Single().Id.ShouldBe(reading.Id);
+        (await ToListAsync(result.MeterRegressionPrompts)).Single().Id.ShouldBe(prompt.Id);
+        (await ToListAsync(result.Tariffs)).Single().Id.ShouldBe(tariff.Id);
+        (await ToListAsync(result.Events)).Single().Id.ShouldBe(@event.Id);
+        (await ToListAsync(result.Rooms)).Single().Id.ShouldBe(room.Id);
+        (await ToListAsync(result.PowerPoints)).Single().Id.ShouldBe(powerPoint.Id);
+        (await ToListAsync(result.Devices)).Single().Id.ShouldBe(device.Id);
+        (await ToListAsync(result.SmartPlugReadings)).Single().Id.ShouldBe(smartPlugReading.Id);
+        (await ToListAsync(result.StatusSnapshots)).Single().Id.ShouldBe(snapshot.Id);
+        (await ToListAsync(result.AuditCorrections)).Single().Id.ShouldBe(correction.Id);
     }
 
     [Fact]
@@ -267,12 +290,12 @@ public class ExportHouseholdDataTests
             CorrelationDirection = "Bump",
             CorrelationComputedAtUtc = computedAt,
         };
-        var data = EmptyExportData(household) with { Events = [@event] };
+        var data = EmptyExportData(household) with { Events = ToAsyncEnumerable([@event]) };
         _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
-        var exported = result.Events.Single();
+        var exported = (await ToListAsync(result.Events)).Single();
         exported.TaggedEntityType.ShouldBe("Room");
         exported.TaggedEntityId.ShouldBe(@event.TaggedEntityId);
         exported.TaggedEntityName.ShouldBe("Kitchen (archived name at write time)");
@@ -297,12 +320,12 @@ public class ExportHouseholdDataTests
             CreatedAtUtc = DateTimeOffset.UtcNow,
             Classification = MeterRegressionClassification.Rollover,
         };
-        var data = EmptyExportData(household) with { MeterRegressionPrompts = [prompt] };
+        var data = EmptyExportData(household) with { MeterRegressionPrompts = ToAsyncEnumerable([prompt]) };
         _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
-        result.MeterRegressionPrompts.Single().Classification.ShouldBe("rollover");
+        (await ToListAsync(result.MeterRegressionPrompts)).Single().Classification.ShouldBe("rollover");
     }
 
     [Fact]
@@ -319,12 +342,12 @@ public class ExportHouseholdDataTests
             PreviousMeterReadingId = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
-        var data = EmptyExportData(household) with { MeterRegressionPrompts = [prompt] };
+        var data = EmptyExportData(household) with { MeterRegressionPrompts = ToAsyncEnumerable([prompt]) };
         _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
-        result.MeterRegressionPrompts.Single().Classification.ShouldBeNull();
+        (await ToListAsync(result.MeterRegressionPrompts)).Single().Classification.ShouldBeNull();
     }
 
     [Fact]
@@ -342,12 +365,12 @@ public class ExportHouseholdDataTests
             IsLowConfidence = false,
             ComputedAtUtc = DateTimeOffset.UtcNow,
         };
-        var data = EmptyExportData(household) with { StatusSnapshots = [snapshot] };
+        var data = EmptyExportData(household) with { StatusSnapshots = ToAsyncEnumerable([snapshot]) };
         _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
-        result.StatusSnapshots.Single().Status.ShouldBe("trending");
+        (await ToListAsync(result.StatusSnapshots)).Single().Status.ShouldBe("trending");
     }
 
     // SmartPlugImport is out of export scope — SmartPlugImportId must never appear on the DTO.

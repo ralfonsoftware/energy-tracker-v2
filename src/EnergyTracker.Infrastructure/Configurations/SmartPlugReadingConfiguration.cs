@@ -57,6 +57,11 @@ public class SmartPlugReadingConfiguration : IEntityTypeConfiguration<SmartPlugR
         // AD-3's query filter runs on every SmartPlugReading query — index the column it filters on.
         builder.HasIndex(r => r.HouseholdId);
 
+        // Supports HouseholdExportReader's keyset-paginated export read (spec-household-export-oom-fix.md):
+        // pages are ordered by (IntervalStart, Id) within one Household, so this composite index
+        // lets each page execute as an index seek rather than a scan even at large data volumes.
+        builder.HasIndex(r => new { r.HouseholdId, r.IntervalStart, r.Id });
+
         // Story 3.2/3.3 will read "all readings for one import" repeatedly.
         builder.HasIndex(r => r.SmartPlugImportId);
 

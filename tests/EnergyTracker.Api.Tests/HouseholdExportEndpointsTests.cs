@@ -2,6 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Application;
+using EnergyTracker.Application.Ports;
+using EnergyTracker.Domain;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 
 namespace EnergyTracker.Api.Tests;
@@ -13,6 +19,14 @@ public class HouseholdExportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
         await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
         return client;
+    }
+
+    private static async Task<(HttpClient Client, Guid HouseholdId)> CreateClientWithHouseholdIdAsync(EnergyTrackerApiFactory factory, string subject)
+    {
+        var client = factory.CreateAuthenticatedClient(subject);
+        var response = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var household = await response.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        return (client, household!.Id);
     }
 
     [Fact]
@@ -111,5 +125,112 @@ public class HouseholdExportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         rawJson.ShouldNotContain("PrivateEvent");
         using var body = JsonDocument.Parse(rawJson);
         body.RootElement.GetProperty("tariffs").GetArrayLength().ShouldBe(0);
+    }
+
+    // A1 (test-design P0, "must not be skipped"): a stand-in for the 2026-09-25 production
+    // incident's SmartPlugReadings volume — large enough to force HouseholdExportReader's keyset
+    // pagination through many page round trips (PageSize is 500 internally), not just a single one.
+    // Measuring actual peak working-set isn't reliable from an in-process WebApplicationFactory
+    // test (the handler can run on a different pooled thread than GC.GetAllocatedBytesForCurrentThread
+    // would observe, and the TestServer transport has no container-style memory ceiling to trip
+    // regardless of implementation) — so the regression guard here is completion + full-row-count
+    // correctness at volume, which is what would actually fail if the old unbounded-read
+    // implementation regressed back in.
+    private const int IncidentVolumeSmartPlugReadingCount = 5_000;
+
+    [Fact]
+    public async Task GET_household_export_completes_and_returns_every_row_at_incident_calibrated_volume()
+    {
+        var (client, householdId) = await CreateClientWithHouseholdIdAsync(factory, Guid.NewGuid().ToString());
+        await factory.SeedSmartPlugReadingsAsync(householdId, IncidentVolumeSmartPlugReadingCount);
+
+        var response = await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        body.GetProperty("smartPlugReadings").GetArrayLength().ShouldBe(IncidentVolumeSmartPlugReadingCount);
+    }
+
+    // A2 (test-design P0, score-9 BLOCK finding R-001): a mid-export DB fault must never present as
+    // a clean, complete 200 — verified end to end through the real endpoint by substituting a
+    // reader that yields one row and then throws, standing in for a DB read failing partway through
+    // paging. Swaps IHouseholdExportReader via WithWebHostBuilder (a fresh factory derived from the
+    // shared one, same Testcontainers Postgres connection — no second container needed) rather than
+    // touching the shared fixture's DI, since IClassFixture shares that instance across every other
+    // test in this class.
+    [Fact]
+    public async Task GET_household_export_never_completes_as_a_clean_200_when_a_mid_export_fault_occurs()
+    {
+        var subject = Guid.NewGuid().ToString();
+        var (setupClient, householdId) = await CreateClientWithHouseholdIdAsync(factory, subject);
+        _ = setupClient;
+
+        await using var faultyFactory = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddScoped<IHouseholdExportReader>(_ => new FaultingHouseholdExportReader())));
+        var faultyClient = faultyFactory.CreateClient();
+        faultyClient.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, subject);
+        faultyClient.DefaultRequestHeaders.Add(TestAuthHandler.IssuerHeader, TestAuthHandler.DefaultIssuer);
+
+        var response = await faultyClient.GetAsync(
+            "/api/household-export", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+
+        // Headers/status are already committed by the time the fault hits (the first array,
+        // householdMembers, flushes before meterReadings — where the fault is injected — even
+        // starts), so the client sees a normal 200 here; the fault must show up when reading the
+        // body instead.
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await Should.ThrowAsync<Exception>(async () => await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    private sealed class FaultingHouseholdExportReader : IHouseholdExportReader
+    {
+        public Task<HouseholdExportData> GetExportDataAsync(Guid householdId, CancellationToken cancellationToken)
+        {
+            var household = new Household
+            {
+                Id = householdId,
+                Locale = "de-DE",
+                Currency = "EUR",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            };
+
+            return Task.FromResult(new HouseholdExportData(
+                household,
+                Empty<HouseholdMember>(),
+                null,
+                FaultingMeterReadings(householdId),
+                Empty<MeterRegressionPrompt>(),
+                Empty<Tariff>(),
+                Empty<Event>(),
+                Empty<Room>(),
+                Empty<PowerPoint>(),
+                Empty<Device>(),
+                Empty<SmartPlugReading>(),
+                Empty<StatusSnapshot>(),
+                Empty<AuditCorrection>()));
+        }
+
+        private static async IAsyncEnumerable<T> Empty<T>()
+        {
+            await Task.Yield();
+            yield break;
+        }
+
+        private static async IAsyncEnumerable<MeterReading> FaultingMeterReadings(Guid householdId)
+        {
+            yield return new MeterReading
+            {
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                MainMeterId = Guid.NewGuid(),
+                KwhValue = 1m,
+                ReadingTimestamp = DateTimeOffset.UtcNow,
+                IdempotencyKey = Guid.NewGuid(),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            await Task.Yield();
+            throw new InvalidOperationException("Simulated mid-export database fault (test double for a DB read failing partway through paging).");
+        }
     }
 }
