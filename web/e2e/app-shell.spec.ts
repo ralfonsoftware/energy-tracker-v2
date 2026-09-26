@@ -213,17 +213,24 @@ test('the Trend History content column, Import label, and Meter Readings table d
   expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
   expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
 
-  // Task 3: no large blank gap between the Timestamp cell and the Edit button's cell, at any width
-  // (this fix is unconditional, not wide:-gated — contrast with the column/label assertions above).
+  // Task 3: no large blank gap between the rendered Timestamp text and the Edit button, at any
+  // width (this fix is unconditional, not wide:-gated — contrast with the column/label assertions
+  // above). Measured against the Timestamp *text*'s own rect (via a DOM Range, not the padded
+  // <td> box) and the Edit *button*'s own rect (not its cell) — comparing the two cells' boundary
+  // boxes instead would always read ~0px regardless of whether the w-px fix is present, since
+  // adjacent table cells in the same row are always contiguous.
   await page.getByText('Meter Readings — 1 logged').click()
   const editButton = page.getByRole('button', { name: /Edit reading from/ })
   await expect(editButton).toBeVisible()
   const row = page.locator('tr', { has: editButton })
-  const cells = row.locator('td')
-  const timestampCellBox = await cells.nth(1).boundingBox()
-  const editCellBox = await cells.nth(2).boundingBox()
-  expect(timestampCellBox).not.toBeNull()
-  expect(editCellBox).not.toBeNull()
-  const gap = editCellBox!.x - (timestampCellBox!.x + timestampCellBox!.width)
+  const timestampCell = row.locator('td').nth(1)
+  const timestampTextRect = await timestampCell.evaluate((td) => {
+    const range = document.createRange()
+    range.selectNodeContents(td)
+    return range.getBoundingClientRect().right
+  })
+  const editButtonBox = await editButton.boundingBox()
+  expect(editButtonBox).not.toBeNull()
+  const gap = editButtonBox!.x - timestampTextRect
   expect(gap).toBeLessThan(40)
 })

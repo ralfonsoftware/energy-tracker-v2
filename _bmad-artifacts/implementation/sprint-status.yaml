@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-26 (story 8.3 in review)
+# last_updated: 2026-09-26 (story 8.3 code review complete, marked done)
 # Dated change history prior to 2026-09-23 archived to sprint-status-history.md (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
@@ -113,7 +113,7 @@ development_status:
   epic-8: in-progress
   8-1-responsive-nav-chrome-profile-menu: done
   8-2-dashboard-desktop-tablet-layout: done
-  8-3-trend-history-desktop-tablet-layout: review
+  8-3-trend-history-desktop-tablet-layout: done
   8-4-tariff-radar-desktop-tablet-layout: backlog
   8-5-settings-desktop-tablet-layout: backlog
   epic-8-retrospective: optional

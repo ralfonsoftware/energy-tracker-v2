@@ -436,3 +436,18 @@
 - source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
   summary: No automated (unit or e2e) regression coverage for AC #2's CTA-adjacency claim ("Log reading" renders directly following the cards, not floating).
   evidence: Acknowledged gap in the story's own Debug Log/Completion Notes — a fully populated `StatusCard` state (needed to exercise the real `showPopulated` branch) wasn't reachable in the dev sandbox. Raised by the Acceptance Auditor during code review. [web/src/components/dashboard/dashboard-page.tsx]
+
+## Deferred from: code review of story-8.3 (2026-09-26)
+
+- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
+  summary: No automated check ties the translated `shortLabel` to being a case-insensitive substring of the translated `entryPointLabel` (WCAG 2.5.3, Label in Name) — holds for the current en-US/de-DE strings (manually verified in Story 8.2) but nothing would catch a future locale or copy edit that breaks the relationship.
+  evidence: Pre-existing pattern from Story 8.2, not introduced fresh here. Raised by adversarial review (Blind Hunter) during code review. [web/src/locales/en-US/translation.json, web/src/locales/de-DE/translation.json]
+- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
+  summary: All new/extended tests for this story (unit and e2e) exercise only English copy — no coverage proves the Import label or the 660px column survive a longer translated string (e.g. German) without overflow at the `wide:` breakpoint.
+  evidence: Same gap already present since Story 8.2's identical Import-button pattern, not specific to this diff. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/trend-history-page.test.tsx, web/e2e/app-shell.spec.ts]
+- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
+  summary: `MeterReadingsCard`'s trailing action-column `<TableHead />` remains unlabeled (no accessible column name for screen readers) — this diff only added `w-px` to it.
+  evidence: Missing label predates this story; pre-existing gap not caused by this change. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/meter-reading/meter-readings-card.tsx:97]
+- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
+  summary: No visual-regression/screenshot testing exists anywhere in this repo to actually verify the claimed visual outcomes (Meter Readings dead-space elimination, quiet-vs-glass tier flattening) — automated coverage only checks class names and bounding-box numbers, never a rendered comparison.
+  evidence: Repo-wide tooling gap, not something one story should introduce alone. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/per-plug-data-card.tsx, web/src/components/meter-reading/meter-readings-card.tsx]
