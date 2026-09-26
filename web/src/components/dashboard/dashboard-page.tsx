@@ -141,7 +141,7 @@ export function DashboardPage({
                   type="button"
                   aria-label={t('event.entryPointLabel')}
                   title={t('event.entryPointLabel')}
-                  className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center gap-1.5 rounded-xl wide:size-auto wide:justify-start wide:px-3 wide:py-2"
+                  className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl wide:size-auto wide:justify-start wide:gap-1.5 wide:px-3 wide:py-2"
                 >
                   <NotebookPen className="size-4" aria-hidden="true" />
                   <span className="hidden wide:inline wide:text-xs wide:font-semibold">{t('event.shortLabel')}</span>
@@ -156,7 +156,7 @@ export function DashboardPage({
               onClick={onSmartPlugImportClick}
               aria-label={t('smartPlugImport.entryPointLabel')}
               title={t('smartPlugImport.entryPointLabel')}
-              className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center gap-1.5 rounded-xl wide:size-auto wide:justify-start wide:px-3 wide:py-2"
+              className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl wide:size-auto wide:justify-start wide:gap-1.5 wide:px-3 wide:py-2"
             >
               <Upload className="size-4" aria-hidden="true" />
               <span className="hidden wide:inline wide:text-xs wide:font-semibold">{t('smartPlugImport.shortLabel')}</span>

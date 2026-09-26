@@ -94,7 +94,9 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
 
   const eventButton = page.getByRole('button', { name: 'Log an Event' })
   const importButton = page.getByRole('button', { name: 'Import Smart Plug data' })
-  const contentColumn = page.locator('[data-slot="dashboard-content"]')
+  // Tag-qualified so this locator can never collide with strict mode if `data-slot` is ever
+  // reused on a different element (matches the sibling `nav[data-slot=...]` locators above).
+  const contentColumn = page.locator('div[data-slot="dashboard-content"]')
   // The label spans are always in the DOM (just `hidden` below the breakpoint) — a textContent
   // check like toContainText wouldn't catch that, so assert visibility instead.
   const eventLabel = eventButton.getByText('Event')
@@ -111,9 +113,21 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
   const narrowColumnBox = await contentColumn.boundingBox()
   expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 660px
 
+  // Exact-boundary check: `wide:` is a `min-width: 660px` variant, so 659px must still be the
+  // narrow/icon-only layout and 660px must already be the wide/labeled one — otherwise an
+  // off-by-one drift in `--breakpoint-wide` or the `max-w-[660px]` literal would go undetected.
+  await page.setViewportSize({ width: 659, height: 800 })
+  await expect(eventLabel).toBeHidden()
+  await expect(importLabel).toBeHidden()
+
+  await page.setViewportSize({ width: 660, height: 800 })
+  await expect(eventLabel).toBeVisible()
+  await expect(importLabel).toBeVisible()
+
   await page.setViewportSize({ width: 1000, height: 800 })
   await expect(eventLabel).toBeVisible()
   await expect(importLabel).toBeVisible()
   const wideColumnBox = await contentColumn.boundingBox()
+  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
   expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
 })

@@ -31,7 +31,8 @@ interface LogEventSheetProps {
   onOpenChange: (open: boolean) => void
   // The saved Event is handed back so the host can render its own confirmation where the layout
   // allows one — this component deliberately renders none, because its trigger lives in the
-  // Dashboard's fixed-height topbar icon row.
+  // Dashboard's header row (a fixed-height icon-only square below 660px, an auto-width labeled
+  // pill at ≥660px — either way too cramped for an inline confirmation).
   onSaved?: (event: EventDto) => void
 }
 
