@@ -276,6 +276,10 @@
       "settings": "Einstellungen"
     }
   },
+  "profileMenu": {
+    "avatarLabel": "Konto-Menü",
+    "profile": "Profil"
+  },
   "trendHistory": {
     "emptyState": "Noch nicht genug Verlaufsdaten für einen Trend.",
     "chartLoadError": "Der Trendverlauf konnte nicht geladen werden — bitte versuche es erneut.",

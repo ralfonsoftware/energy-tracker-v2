@@ -20,6 +20,8 @@ interface DashboardHousehold {
 
 interface DashboardPageProps {
   household: DashboardHousehold
+  supportsFederatedLogout: boolean
+  email: string | null
   status: StatusDto | null
   statusLoading: boolean
   tariffCheck: TariffCheckReminderDto | null
@@ -45,6 +47,8 @@ interface DashboardPageProps {
 // it stops competing with the Status card for visual weight (AC #10).
 export function DashboardPage({
   household,
+  supportsFederatedLogout,
+  email,
   status,
   statusLoading,
   tariffCheck,
@@ -179,6 +183,9 @@ export function DashboardPage({
         onTrendHistoryClick={onTrendHistoryClick}
         onTariffRadarClick={onTariffRadarClick}
         onSettingsClick={onSettingsClick}
+        householdId={household.id}
+        supportsFederatedLogout={supportsFederatedLogout}
+        email={email}
       />
 
       <MeterRegressionPromptDialog prompt={openRegressionPrompt} onResolved={onRegressionResolved} />

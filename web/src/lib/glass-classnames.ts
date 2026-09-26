@@ -17,3 +17,12 @@ export const GLASS_SHEET_CLASSNAME =
   'backdrop-blur-[20px] backdrop-saturate-[1.4] ' +
   'dark:border-[rgba(210,235,220,0.16)] dark:bg-[rgba(20,32,26,0.92)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] ' +
   'dark:backdrop-blur-[28px] dark:backdrop-saturate-[1.6]'
+
+// Story 8.1's Profile dropdown — GLASS_MODAL_CLASSNAME's exact border/background/blur values,
+// with only its radius swapped from --radius-glass-lg (28px, full-screen modals) to
+// --radius-glass-sm (14px), matching the mockup's own compact-menu radius (.profile-dropdown).
+export const GLASS_DROPDOWN_CLASSNAME =
+  'rounded-glass-sm border border-[rgba(40,70,50,0.14)] bg-[rgba(255,255,255,0.92)] shadow-[0_20px_40px_rgba(40,70,30,0.16)] ring-0 ' +
+  'backdrop-blur-[20px] backdrop-saturate-[1.4] ' +
+  'dark:border-[rgba(210,235,220,0.18)] dark:bg-[rgba(24,38,31,0.94)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.55)] ' +
+  'dark:backdrop-blur-[24px] dark:backdrop-saturate-[1.5]'

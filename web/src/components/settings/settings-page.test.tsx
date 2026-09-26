@@ -39,6 +39,7 @@ function renderSettingsPage(supportsFederatedLogout: boolean) {
     <SettingsPage
       householdId={householdId}
       supportsFederatedLogout={supportsFederatedLogout}
+      email={null}
       onBack={() => {}}
       onTrendHistoryClick={() => {}}
       onTariffRadarClick={() => {}}
@@ -91,13 +92,14 @@ describe('SettingsPage', () => {
       <SettingsPage
         householdId={householdId}
         supportsFederatedLogout={true}
+        email={null}
         onBack={() => {}}
         onTrendHistoryClick={onTrendHistoryClick}
         onTariffRadarClick={() => {}}
       />,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Trend History' }))
+    await user.click((await screen.findAllByRole('button', { name: 'Trend History' }))[0])
     expect(onTrendHistoryClick).toHaveBeenCalledOnce()
   })
 

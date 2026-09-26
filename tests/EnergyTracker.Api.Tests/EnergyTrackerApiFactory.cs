@@ -47,7 +47,7 @@ public class EnergyTrackerApiFactory : WebApplicationFactory<Program>, IAsyncLif
         });
     }
 
-    public HttpClient CreateAuthenticatedClient(string subject, string? issuer = null, string? name = null)
+    public HttpClient CreateAuthenticatedClient(string subject, string? issuer = null, string? name = null, string? email = null)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, subject);
@@ -55,6 +55,10 @@ public class EnergyTrackerApiFactory : WebApplicationFactory<Program>, IAsyncLif
         if (name is not null)
         {
             client.DefaultRequestHeaders.Add(TestAuthHandler.NameHeader, name);
+        }
+        if (email is not null)
+        {
+            client.DefaultRequestHeaders.Add(TestAuthHandler.EmailHeader, email);
         }
 
         return client;
