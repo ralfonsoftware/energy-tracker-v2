@@ -38,7 +38,8 @@ public class ExportHouseholdDataTests
         Devices: ToAsyncEnumerable<Device>([]),
         SmartPlugReadings: ToAsyncEnumerable<SmartPlugReading>([]),
         StatusSnapshots: ToAsyncEnumerable<StatusSnapshot>([]),
-        AuditCorrections: ToAsyncEnumerable<AuditCorrection>([]));
+        AuditCorrections: ToAsyncEnumerable<AuditCorrection>([]),
+        Stats: new HouseholdExportStats([]));
 
     // HouseholdExportData's collections are IAsyncEnumerable<T> (spec-household-export-oom-fix.md)
     // — these two helpers bridge test fixtures (plain in-memory lists) to/from that shape without
@@ -237,7 +238,8 @@ public class ExportHouseholdDataTests
             ToAsyncEnumerable([device]),
             ToAsyncEnumerable([smartPlugReading]),
             ToAsyncEnumerable([snapshot]),
-            ToAsyncEnumerable([correction]));
+            ToAsyncEnumerable([correction]),
+            new HouseholdExportStats([]));
         _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
@@ -255,6 +257,24 @@ public class ExportHouseholdDataTests
         (await ToListAsync(result.SmartPlugReadings)).Single().Id.ShouldBe(smartPlugReading.Id);
         (await ToListAsync(result.StatusSnapshots)).Single().Id.ShouldBe(snapshot.Id);
         (await ToListAsync(result.AuditCorrections)).Single().Id.ShouldBe(correction.Id);
+    }
+
+    // spec-household-export-observability.md: the reader's own Stats accumulator must reach the
+    // caller unchanged -- ExecuteAsync forwards it, it never rebuilds or discards it.
+    [Fact]
+    public async Task Forwards_the_readers_Stats_object_onto_the_returned_stream_unchanged()
+    {
+        var householdId = Guid.NewGuid();
+        var household = NewHousehold(householdId);
+        var stats = new HouseholdExportStats(["rooms"]);
+        stats.RecordPage("rooms", 3);
+        var data = EmptyExportData(household) with { Stats = stats };
+        _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
+
+        var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.Stats.ShouldBeSameAs(stats);
+        result.Stats.Snapshot()["rooms"].ShouldBe((RowCount: 3, PageCount: 1));
     }
 
     [Fact]

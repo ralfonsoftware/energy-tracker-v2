@@ -208,7 +208,8 @@ public class HouseholdExportEndpointsTests(EnergyTrackerApiFactory factory) : IC
                 Empty<Device>(),
                 Empty<SmartPlugReading>(),
                 Empty<StatusSnapshot>(),
-                Empty<AuditCorrection>()));
+                Empty<AuditCorrection>(),
+                new HouseholdExportStats([])));
         }
 
         private static async IAsyncEnumerable<T> Empty<T>()

@@ -40,20 +40,29 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             .Where(m => m.HouseholdId == householdId)
             .SingleOrDefaultAsync(cancellationToken);
 
+        // Names match HouseholdExportEndpoints.WriteArrayAsync's own JSON property-name literals
+        // exactly (spec-household-export-observability.md) — the success log's stats map keys
+        // line up 1:1 with the wire property a reader would look at.
+        var stats = new HouseholdExportStats([
+            "householdMembers", "meterReadings", "meterRegressionPrompts", "tariffs", "events",
+            "rooms", "powerPoints", "devices", "smartPlugReadings", "statusSnapshots", "auditCorrections",
+        ]);
+
         return new HouseholdExportData(
             household,
-            GetHouseholdMembersAsync(householdId, cancellationToken),
+            GetHouseholdMembersAsync(householdId, stats, cancellationToken),
             mainMeter,
-            GetMeterReadingsAsync(mainMeter, cancellationToken),
-            GetMeterRegressionPromptsAsync(householdId, cancellationToken),
-            GetTariffsAsync(householdId, cancellationToken),
-            GetEventsAsync(householdId, cancellationToken),
-            GetRoomsAsync(householdId, cancellationToken),
-            GetPowerPointsAsync(householdId, cancellationToken),
-            GetDevicesAsync(householdId, cancellationToken),
-            GetSmartPlugReadingsAsync(householdId, cancellationToken),
-            GetStatusSnapshotsAsync(householdId, cancellationToken),
-            GetAuditCorrectionsAsync(householdId, cancellationToken));
+            GetMeterReadingsAsync(mainMeter, stats, cancellationToken),
+            GetMeterRegressionPromptsAsync(householdId, stats, cancellationToken),
+            GetTariffsAsync(householdId, stats, cancellationToken),
+            GetEventsAsync(householdId, stats, cancellationToken),
+            GetRoomsAsync(householdId, stats, cancellationToken),
+            GetPowerPointsAsync(householdId, stats, cancellationToken),
+            GetDevicesAsync(householdId, stats, cancellationToken),
+            GetSmartPlugReadingsAsync(householdId, stats, cancellationToken),
+            GetStatusSnapshotsAsync(householdId, stats, cancellationToken),
+            GetAuditCorrectionsAsync(householdId, stats, cancellationToken),
+            stats);
     }
 
     // Shared keyset-pagination loop: repeatedly asks `pageQuery` for the next page after the
@@ -61,10 +70,14 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
     // returned. Stops as soon as a page comes back short of PageSize (the only way to know
     // there's no next page without an extra round trip). Entity-specific ordering/filtering stays
     // in each entity's own `pageQuery` delegate below — this only owns the loop/cursor mechanics.
+    // Records one HouseholdExportStats page every round trip (spec-household-export-observability.md)
+    // — including a short/empty page, since the query itself still ran.
     private static async IAsyncEnumerable<T> PageAsync<T, TCursor>(
         Func<(TCursor Cursor, Guid Id)?, IQueryable<T>> pageQuery,
         Func<T, TCursor> cursorSelector,
         Func<T, Guid> idSelector,
+        string collectionName,
+        HouseholdExportStats stats,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         (TCursor Cursor, Guid Id)? cursor = null;
@@ -72,6 +85,7 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
         while (true)
         {
             var page = await pageQuery(cursor).ToListAsync(cancellationToken);
+            stats.RecordPage(collectionName, page.Count);
             if (page.Count == 0)
             {
                 yield break;
@@ -92,7 +106,7 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
         }
     }
 
-    private IAsyncEnumerable<HouseholdMember> GetHouseholdMembersAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<HouseholdMember> GetHouseholdMembersAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<HouseholdMember, DateTimeOffset>(
             cursor =>
             {
@@ -106,15 +120,19 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             m => m.CreatedAtUtc,
             m => m.Id,
+            "householdMembers",
+            stats,
             cancellationToken);
 
     // Pages by MainMeterId, not HouseholdId — reuses the existing (MainMeterId, ReadingTimestamp)
     // index (spec Design Notes) rather than needing a new composite index. The AD-3 global query
     // filter on MeterReading still applies automatically underneath this filter, so tenant
     // isolation holds regardless. No MainMeter (a Household that hasn't set one up yet) means no
-    // MeterReading can exist for it via the FK — yield nothing rather than querying.
+    // MeterReading can exist for it via the FK — yield nothing rather than querying (stats stay at
+    // their pre-seeded zero for "meterReadings" in that case, spec-household-export-observability.md).
     private async IAsyncEnumerable<MeterReading> GetMeterReadingsAsync(
         MainMeter? mainMeter,
+        HouseholdExportStats stats,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (mainMeter is null)
@@ -135,13 +153,15 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             r => r.ReadingTimestamp,
             r => r.Id,
+            "meterReadings",
+            stats,
             cancellationToken))
         {
             yield return reading;
         }
     }
 
-    private IAsyncEnumerable<MeterRegressionPrompt> GetMeterRegressionPromptsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<MeterRegressionPrompt> GetMeterRegressionPromptsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<MeterRegressionPrompt, DateTimeOffset>(
             cursor =>
             {
@@ -155,9 +175,11 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             p => p.CreatedAtUtc,
             p => p.Id,
+            "meterRegressionPrompts",
+            stats,
             cancellationToken);
 
-    private IAsyncEnumerable<Tariff> GetTariffsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<Tariff> GetTariffsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<Tariff, DateTimeOffset>(
             cursor =>
             {
@@ -171,13 +193,15 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             t => t.CreatedAtUtc,
             t => t.Id,
+            "tariffs",
+            stats,
             cancellationToken);
 
     // Cursor is the existing (HouseholdId, OccurredAt, CreatedAtUtc) index's own trailing columns
     // — no new index needed (spec Design Notes). Id is only an in-memory final tiebreaker for the
     // vanishingly rare case two Events share both OccurredAt and CreatedAtUtc; it isn't part of
     // the index.
-    private IAsyncEnumerable<Event> GetEventsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<Event> GetEventsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<Event, (DateTimeOffset OccurredAt, DateTimeOffset CreatedAtUtc)>(
             cursor =>
             {
@@ -194,11 +218,13 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             e => (e.OccurredAt, e.CreatedAtUtc),
             e => e.Id,
+            "events",
+            stats,
             cancellationToken);
 
     // Archived rows included deliberately (AD-10 history integrity) — a restore that dropped
     // them would corrupt the by-value snapshots SmartPlugReading/Event already carry.
-    private IAsyncEnumerable<Room> GetRoomsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<Room> GetRoomsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<Room, DateTimeOffset>(
             cursor =>
             {
@@ -212,9 +238,11 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             r => r.CreatedAtUtc,
             r => r.Id,
+            "rooms",
+            stats,
             cancellationToken);
 
-    private IAsyncEnumerable<PowerPoint> GetPowerPointsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<PowerPoint> GetPowerPointsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<PowerPoint, DateTimeOffset>(
             cursor =>
             {
@@ -228,9 +256,11 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             p => p.CreatedAtUtc,
             p => p.Id,
+            "powerPoints",
+            stats,
             cancellationToken);
 
-    private IAsyncEnumerable<Device> GetDevicesAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<Device> GetDevicesAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<Device, DateTimeOffset>(
             cursor =>
             {
@@ -244,13 +274,15 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             d => d.CreatedAtUtc,
             d => d.Id,
+            "devices",
+            stats,
             cancellationToken);
 
     // Cursor is (HouseholdId, IntervalStart, Id) — backed by the new composite index added in
     // SmartPlugReadingConfiguration (unlike the other paged entities, this one needed a new
     // index; spec Design Notes). Id is load-bearing here, not just a formality: two readings can
     // legitimately share IntervalStart (I/O matrix "Page-boundary duplicates").
-    private IAsyncEnumerable<SmartPlugReading> GetSmartPlugReadingsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<SmartPlugReading> GetSmartPlugReadingsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<SmartPlugReading, DateTimeOffset>(
             cursor =>
             {
@@ -264,9 +296,11 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             r => r.IntervalStart,
             r => r.Id,
+            "smartPlugReadings",
+            stats,
             cancellationToken);
 
-    private IAsyncEnumerable<StatusSnapshot> GetStatusSnapshotsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<StatusSnapshot> GetStatusSnapshotsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<StatusSnapshot, DateTimeOffset>(
             cursor =>
             {
@@ -280,9 +314,11 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             s => s.ComputedAtUtc,
             s => s.Id,
+            "statusSnapshots",
+            stats,
             cancellationToken);
 
-    private IAsyncEnumerable<AuditCorrection> GetAuditCorrectionsAsync(Guid householdId, CancellationToken cancellationToken) =>
+    private IAsyncEnumerable<AuditCorrection> GetAuditCorrectionsAsync(Guid householdId, HouseholdExportStats stats, CancellationToken cancellationToken) =>
         PageAsync<AuditCorrection, DateTimeOffset>(
             cursor =>
             {
@@ -296,5 +332,7 @@ public class HouseholdExportReader(EnergyTrackerDbContext dbContext) : IHousehol
             },
             ac => ac.CorrectedAtUtc,
             ac => ac.Id,
+            "auditCorrections",
+            stats,
             cancellationToken);
 }

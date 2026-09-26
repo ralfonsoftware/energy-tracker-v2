@@ -191,6 +191,52 @@ public abstract class HouseholdExportReaderTestsBase
         meterReadings.Count.ShouldBe(RowCountExceedingOnePage);
         meterReadings.Select(r => r.Id).ShouldBe(expectedIds, ignoreOrder: true);
         meterReadings.Select(r => r.Id).Distinct().Count().ShouldBe(RowCountExceedingOnePage);
+
+        // spec-household-export-observability.md: 640 rows / PageSize 500 -> 2 round trips (a full
+        // 500-row page, then a short 140-row page), with the row count summed across both.
+        var meterReadingStats = result.Stats.Snapshot()["meterReadings"];
+        meterReadingStats.RowCount.ShouldBe(RowCountExceedingOnePage);
+        meterReadingStats.PageCount.ShouldBe(2);
+    }
+
+    // spec-household-export-observability.md: an empty collection still runs exactly one query
+    // (which comes back short of PageSize and stops the loop) -- that's one page round trip
+    // recorded against zero rows, not zero round trips.
+    [Fact]
+    public async Task Stats_record_one_page_round_trip_for_an_empty_collection()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(NewHousehold(householdId));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var reader = new HouseholdExportReader(dbContext);
+
+        var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
+        await ToListAsync(result.Rooms);
+
+        var roomStats = result.Stats.Snapshot()["rooms"];
+        roomStats.RowCount.ShouldBe(0);
+        roomStats.PageCount.ShouldBe(1);
+    }
+
+    // spec-household-export-observability.md: a Household with no MainMeter never runs a
+    // MeterReadings query at all (existing short-circuit) -- the collection must still appear in
+    // the stats map, pre-seeded at zero, rather than being silently absent.
+    [Fact]
+    public async Task Stats_pre_seed_MeterReadings_at_zero_when_no_MainMeter_exists()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        dbContext.Households.Add(NewHousehold(householdId));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var reader = new HouseholdExportReader(dbContext);
+
+        var result = await reader.GetExportDataAsync(householdId, TestContext.Current.CancellationToken);
+        await ToListAsync(result.MeterReadings);
+
+        var meterReadingStats = result.Stats.Snapshot()["meterReadings"];
+        meterReadingStats.RowCount.ShouldBe(0);
+        meterReadingStats.PageCount.ShouldBe(0);
     }
 
     // I/O matrix "Page-boundary duplicates": two SmartPlugReadings sharing an IntervalStart must
