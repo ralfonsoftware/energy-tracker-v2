@@ -1,6 +1,7 @@
 using System.IO.Pipelines;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Application;
+using EnergyTracker.Application.Ports;
 using Shouldly;
 
 namespace EnergyTracker.Api.Tests;
@@ -51,7 +52,8 @@ public class HouseholdExportEndpointsWriteTests
         Devices: Empty<DeviceExportDto>(),
         SmartPlugReadings: smartPlugReadings,
         StatusSnapshots: Empty<StatusSnapshotExportDto>(),
-        AuditCorrections: Empty<AuditCorrectionExportDto>());
+        AuditCorrections: Empty<AuditCorrectionExportDto>(),
+        Stats: new HouseholdExportStats([]));
 
     [Fact]
     public async Task WriteExportAsync_applies_backpressure_instead_of_buffering_a_whole_large_collection_before_flushing()

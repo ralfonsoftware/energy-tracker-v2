@@ -27,7 +27,8 @@ public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibi
             Devices: MapAsync(data.Devices, ToDto),
             SmartPlugReadings: MapAsync(data.SmartPlugReadings, ToDto),
             StatusSnapshots: MapAsync(data.StatusSnapshots, ToDto),
-            AuditCorrections: MapAsync(data.AuditCorrections, ToDto));
+            AuditCorrections: MapAsync(data.AuditCorrections, ToDto),
+            Stats: data.Stats);
     }
 
     // Hand-rolled IAsyncEnumerable<TSource> -> IAsyncEnumerable<TDto> projection (no
@@ -165,7 +166,8 @@ public record HouseholdExportStream(
     IAsyncEnumerable<DeviceExportDto> Devices,
     IAsyncEnumerable<SmartPlugReadingExportDto> SmartPlugReadings,
     IAsyncEnumerable<StatusSnapshotExportDto> StatusSnapshots,
-    IAsyncEnumerable<AuditCorrectionExportDto> AuditCorrections);
+    IAsyncEnumerable<AuditCorrectionExportDto> AuditCorrections,
+    HouseholdExportStats Stats);
 
 public record HouseholdSettingsExportDto(
     Guid Id,

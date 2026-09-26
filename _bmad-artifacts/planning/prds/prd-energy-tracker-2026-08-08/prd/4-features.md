@@ -235,6 +235,7 @@ The system gives a logged Event a rough plausibility correlation against the con
 - Two Events logged in the same window as one observed deviation both receive the correlation — the mapping is many-to-one, not first-match-wins.
 - This feature is optional and gracefully degradable: the rest of the product functions fully with it disabled (see §Constraints and Guardrails).
 - The AI backend is a Household-level configuration choice: a locally hosted model (e.g. via LMStudio) or a cloud/external API. Which mode is active — and therefore whether Event data ever leaves the deployment — is always visible and under the household's control, consistent with the Constraints privacy stance.
+- This configuration choice was fully plumbed (adapter, toggle, graceful degradation) in Epic 6, but no real backend has ever actually been configured in any environment — only the no-op/degraded path has run live. Deciding and standing up a real backend (self-hosted and cloud/Azure paths) is Epic 9's scope, added 2026-09-26; see Open Question 5.
 
 ### FR-18: Proactive Weekly Recap
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Text.Json;
 using EnergyTracker.Application;
@@ -47,6 +48,10 @@ public static class HouseholdExportEndpoints
                 return forbidden;
             }
 
+            // spec-household-export-observability.md (Epic 7 retro action item #1): spans the
+            // whole request, not just the write — a slow reader-side query is as much a "danger
+            // zone" signal as a slow write.
+            var stopwatch = Stopwatch.StartNew();
             var export = await exportHouseholdData.ExecuteAsync(householdId, cancellationToken);
 
             // Derived from the export's own ExportedAtUtc, not a fresh DateTimeOffset.UtcNow call —
@@ -63,6 +68,14 @@ public static class HouseholdExportEndpoints
             try
             {
                 await WriteExportAsync(context.Response.BodyWriter, export, cancellationToken);
+
+                // Success path only (spec-household-export-observability.md) — a mid-export fault
+                // falls through to the catch block below and its own existing log calls instead;
+                // this line never fires for a truncated/aborted response.
+                stopwatch.Stop();
+                logger.LogInformation(
+                    "Household export succeeded for household {HouseholdId} in {DurationMs}ms: {@CollectionStats}",
+                    householdId, stopwatch.ElapsedMilliseconds, export.Stats.Snapshot());
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

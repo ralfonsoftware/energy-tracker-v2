@@ -33,6 +33,10 @@ Every existing frontend surface (Dashboard, Trend History, Tariff Radar, Setting
 **FRs covered:** none (no new FR) — additive touch on FR-33 (Story 1.12, done) only
 **UX-DRs covered:** UX-DR9 (amended), UX-DR19 (amended), UX-DR23, UX-DR24, UX-DR25, UX-DR26, UX-DR27
 
+## Epic 9: Wattage Plausibility AI Backend Decision
+Decides and stands up the real AI backend behind Wattage Plausibility Correlation (FR-17) — Epic 6 built the full plumbing (port, adapter, Household toggle, background job, graceful degradation — AD-8) but only its no-op path has ever run in any environment. Two research-only stories (spike narrowing Azure AI Foundry vs. self-hosted LMStudio vs. a plain cloud API, then deeper production-rollout/self-hosting research) precede two production-implementation stories (Azure-hosted, then self-hosted). Escalated from Epic 6 Retro Action Item #2 (open across Epics 6–8 with no decision) at Epic 7's retrospective (2026-09-26), at Ralf's explicit direction, from a lingering action item to its own epic.
+**FRs covered:** none (no new FR) — operationalizes FR-17's already-specified household-level backend choice and NFR14's cost constraint; no product-facing behavior change beyond the correlation actually firing instead of always degrading.
+
 **Deferred — not decomposed into an epic:**
 - FR-19 (Custom Event/Plausibility Rules) — Could-have, explicitly out of MVP scope per PRD §6.2; no rule engine designed yet
 - FR-20 (Generic Data-Source Column Mapping) — Could-have, explicitly out of MVP scope per PRD §6.2; PRD itself flags as low-confidence pending a feasibility spike (Open Question 1)
