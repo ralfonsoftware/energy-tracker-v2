@@ -129,7 +129,7 @@ action_items:
   - epic: 7
     action: "Add observability to the household-export success path (duration, per-collection row counts, page round trips) — the OOM incident went undetected until it actually crashed; nothing today would show a future household trending toward the same danger zone before it repeats"
     owner: "Winston/Amelia"
-    status: open
+    status: done
     note: "2026-09-26 epic-7 retro, Epic 8 kickoff check. Traces to spec-household-export-oom-fix.md's own deferred-work entry (production OOM incident 2026-09-25, PR #70)."
   - epic: 7
     action: "Define a new epic for the Wattage Plausibility AI backend decision, sequenced: (1) spike narrowing Azure AI Foundry vs. self-hosted vs. cloud API, (2) deeper research/evaluation of production rollout + self-hosting options, (3) production implementation (Azure-hosted), (4) production implementation (self-hosting)"
