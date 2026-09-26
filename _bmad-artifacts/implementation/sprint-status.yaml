@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-25
+# last_updated: 2026-09-26
 # Dated change history prior to 2026-09-23 archived to sprint-status-history.md (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-09-25
+last_updated: 2026-09-26
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -108,7 +108,7 @@ development_status:
   epic-7: in-progress
   7-1-full-data-export: done
   7-2-full-data-import-restore-migration: done
-  epic-7-retrospective: optional
+  epic-7-retrospective: done
 
   epic-8: backlog
   8-1-responsive-nav-chrome-profile-menu: backlog
@@ -118,7 +118,24 @@ development_status:
   8-5-settings-desktop-tablet-layout: backlog
   epic-8-retrospective: optional
 
+  epic-9: backlog
+  9-1-ai-backend-spike: backlog
+  9-2-production-rollout-self-hosting-research: backlog
+  9-3-production-implementation-azure-hosted: backlog
+  9-4-production-implementation-self-hosting: backlog
+  epic-9-retrospective: optional
+
 action_items:
+  - epic: 7
+    action: "Add observability to the household-export success path (duration, per-collection row counts, page round trips) — the OOM incident went undetected until it actually crashed; nothing today would show a future household trending toward the same danger zone before it repeats"
+    owner: "Winston/Amelia"
+    status: open
+    note: "2026-09-26 epic-7 retro, Epic 8 kickoff check. Traces to spec-household-export-oom-fix.md's own deferred-work entry (production OOM incident 2026-09-25, PR #70)."
+  - epic: 7
+    action: "Define a new epic for the Wattage Plausibility AI backend decision, sequenced: (1) spike narrowing Azure AI Foundry vs. self-hosted vs. cloud API, (2) deeper research/evaluation of production rollout + self-hosting options, (3) production implementation (Azure-hosted), (4) production implementation (self-hosting)"
+    owner: "John (epic definition)/Ralf"
+    status: done
+    note: "2026-09-26 epic-7 retro. Escalated from Epic 6 Action Item #2 (open 2 epics without a decision) at Ralf's explicit direction — no longer tracked as a lingering action item, promoted to its own epic before Epic 8 sequencing locks in. Closed same day (John): epics/epic-9-wattage-plausibility-ai-backend-decision.md created (4 stories as sequenced), epic-list.md/requirements-inventory.md cross-referenced, PRD updated (FR-17 consequence note + Open Question 5), sprint-status.yaml epic-9 backlog added. Backend choice itself remains open pending Story 9.1's spike — tracked there, not here."
   - epic: 4
     action: "No fix to already-shipped code merges without a linked spec/story doc, regardless of size or urgency — hard gate at PR merge, no exceptions"
     owner: "PR authors/reviewers"
