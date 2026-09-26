@@ -176,6 +176,7 @@
   },
   "event": {
     "entryPointLabel": "Ereignis erfassen",
+    "shortLabel": "Ereignis",
     "sheetTitle": "Ereignis erfassen",
     "sheetDescription": "Notiere etwas nicht Messbares, das eine Verbrauchsänderung erklären könnte.",
     "descriptionLabel": "Was ist passiert",
@@ -321,6 +322,7 @@
   "smartPlugImport": {
     "heading": "Smart-Plug-Import",
     "entryPointLabel": "Smart-Plug-Daten importieren",
+    "shortLabel": "Import",
     "backToApp": "Zu Energy Tracker",
     "dropHint": "Datei hierher ziehen oder eine Datei auswählen.",
     "addMoreFiles": "Weitere Dateien hinzufügen",

@@ -126,56 +126,65 @@ export function DashboardPage({
 
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">{t('app.title')}</h1>
-        <div className="flex items-center gap-2">
-          <LogEventSheet
-            trigger={
-              <button
-                type="button"
-                aria-label={t('event.entryPointLabel')}
-                title={t('event.entryPointLabel')}
-                className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
-              >
-                <NotebookPen className="size-4" aria-hidden="true" />
-              </button>
-            }
-            open={logEventOpen}
-            onOpenChange={onLogEventOpenChange}
-            onSaved={(event) => setEventConfirmation(event.description)}
-          />
-          <button
-            type="button"
-            onClick={onSmartPlugImportClick}
-            aria-label={t('smartPlugImport.entryPointLabel')}
-            title={t('smartPlugImport.entryPointLabel')}
-            className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
-          >
-            <Upload className="size-4" aria-hidden="true" />
-          </button>
+      {/* Story 8.2/Task 1: constrains the page's own content — header row, event confirmation,
+          Status/Tariff-Check cards, and the Log Reading CTA — to a centered 660px column at
+          >=660px (UX-DR19). NavChrome and the regression dialog are deliberately outside this
+          wrapper (see story Dev Notes): NavChrome's top-nav variant is full-width by design
+          (Story 8.1), and the dialog is an overlay with its own sizing. */}
+      <div data-slot="dashboard-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[660px]">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold">{t('app.title')}</h1>
+          <div className="flex items-center gap-2">
+            <LogEventSheet
+              trigger={
+                <button
+                  type="button"
+                  aria-label={t('event.entryPointLabel')}
+                  title={t('event.entryPointLabel')}
+                  className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl wide:size-auto wide:justify-start wide:gap-1.5 wide:px-3 wide:py-2"
+                >
+                  <NotebookPen className="size-4" aria-hidden="true" />
+                  <span className="hidden wide:inline wide:text-xs wide:font-semibold">{t('event.shortLabel')}</span>
+                </button>
+              }
+              open={logEventOpen}
+              onOpenChange={onLogEventOpenChange}
+              onSaved={(event) => setEventConfirmation(event.description)}
+            />
+            <button
+              type="button"
+              onClick={onSmartPlugImportClick}
+              aria-label={t('smartPlugImport.entryPointLabel')}
+              title={t('smartPlugImport.entryPointLabel')}
+              className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl wide:size-auto wide:justify-start wide:gap-1.5 wide:px-3 wide:py-2"
+            >
+              <Upload className="size-4" aria-hidden="true" />
+              <span className="hidden wide:inline wide:text-xs wide:font-semibold">{t('smartPlugImport.shortLabel')}</span>
+            </button>
+          </div>
         </div>
+
+        {eventConfirmation && (
+          // Rendered in the page body, not beside the topbar icons — an Event description runs to 500
+          // characters and would otherwise distort the fixed-height header row.
+          <p role="status" className="text-muted-foreground text-sm">
+            {t('event.savedConfirmation', { description: eventConfirmation })}
+          </p>
+        )}
+
+        <StatusCard
+          status={status}
+          loading={statusLoading}
+          locale={household.locale}
+          playEntranceAnimation={playStatusEntranceAnimation}
+          emptyStateAction={showEmptyState ? logReadingSheet : undefined}
+          detailTrigger={detailTrigger}
+        />
+
+        <TariffCheckCard reminder={tariffCheck} locale={household.locale} onClick={onTariffRadarClick} />
+
+        {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}
       </div>
-
-      {eventConfirmation && (
-        // Rendered in the page body, not beside the topbar icons — an Event description runs to 500
-        // characters and would otherwise distort the fixed-height header row.
-        <p role="status" className="text-muted-foreground text-sm">
-          {t('event.savedConfirmation', { description: eventConfirmation })}
-        </p>
-      )}
-
-      <StatusCard
-        status={status}
-        loading={statusLoading}
-        locale={household.locale}
-        playEntranceAnimation={playStatusEntranceAnimation}
-        emptyStateAction={showEmptyState ? logReadingSheet : undefined}
-        detailTrigger={detailTrigger}
-      />
-
-      <TariffCheckCard reminder={tariffCheck} locale={household.locale} onClick={onTariffRadarClick} />
-
-      {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}
 
       <NavChrome
         active="dashboard"

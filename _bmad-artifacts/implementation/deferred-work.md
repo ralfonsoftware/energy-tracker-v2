@@ -421,3 +421,18 @@
 - source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
   summary: Completion Notes claim "no new architecture-test assertion was needed... existing tests already enforce structurally" the `Application/Ports`/`Infrastructure/Adapters` placement convention for the new port/adapter — no `EnergyTracker.Architecture.Tests` file actually does; the four existing ones cover unrelated concerns (Domain isolation, frontend auth tokens, Pattern Detective data isolation, Eve Home parser convention).
   evidence: Documentation-accuracy nit only, not a functional gap — Task 2's phrasing was conditional ("if... needs a new architecture-test assertion... add it"), so skipping this isn't a requirement violation. Raised by the Acceptance Auditor during code review.
+
+## Deferred from: code review of story-8.2 (2026-09-26)
+
+- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
+  summary: Cross-surface inconsistency — `trend-history-page.tsx`'s identical Smart Plug Import button stays icon-only/unlabeled while the Dashboard's version now shows a visible "Import" label, until Story 8.3 reuses the same `smartPlugImport.shortLabel` i18n key.
+  evidence: Deliberate per this story's own Dev Notes (the key was placed for Story 8.3 to reuse), but no in-code comment on `trend-history-page.tsx` flags the asymmetry as time-boxed. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/trend-history-page.tsx:82-86]
+- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
+  summary: `shrink-0` retained unconditionally on the header-icon buttons now that they become auto-width pills at ≥660px — no wrap/truncation fallback if header content grows (a longer future locale string, an added icon).
+  evidence: Pre-existing shape convention extended rather than introduced fresh; currently unreached since both labels are short in both locales. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/dashboard/dashboard-page.tsx:143,158]
+- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
+  summary: New Playwright locators hardcode English translation strings (`'Log an Event'`, `'Import Smart Plug data'`), coupling a layout/breakpoint regression test to content text — any future copy change unrelated to layout would break it.
+  evidence: Same fragility pattern already present in the nav-chrome spec this test is modeled on, propagated rather than fixed. Raised by adversarial review (Blind Hunter) during code review. [web/e2e/app-shell.spec.ts]
+- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
+  summary: No automated (unit or e2e) regression coverage for AC #2's CTA-adjacency claim ("Log reading" renders directly following the cards, not floating).
+  evidence: Acknowledged gap in the story's own Debug Log/Completion Notes — a fully populated `StatusCard` state (needed to exercise the real `showPopulated` branch) wasn't reachable in the dev sandbox. Raised by the Acceptance Auditor during code review. [web/src/components/dashboard/dashboard-page.tsx]
