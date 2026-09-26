@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from './dashboard-page'
@@ -269,6 +269,75 @@ describe('DashboardPage', () => {
     expect(trigger).toBeInTheDocument()
     await user.click(trigger)
     expect(onSmartPlugImportClick).toHaveBeenCalledOnce()
+  })
+
+  it('renders visible short-word labels on both header icon buttons at the wide breakpoint, alongside their unchanged aria-label/title (AC #3, #4)', () => {
+    render(
+      <DashboardPage
+        household={household}
+        supportsFederatedLogout={true}
+        email={null}
+        status={null}
+        statusLoading={false}
+        tariffCheck={null}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        logEventOpen={false}
+        onLogEventOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
+        onSmartPlugImportClick={noop}
+      />,
+    )
+
+    const eventButton = screen.getByRole('button', { name: 'Log an Event' })
+    const importButton = screen.getByRole('button', { name: 'Import Smart Plug data' })
+
+    const eventLabel = within(eventButton).getByText('Event')
+    expect(eventLabel).toHaveClass('hidden', 'wide:inline')
+    const importLabel = within(importButton).getByText('Import')
+    expect(importLabel).toHaveClass('hidden', 'wide:inline')
+  })
+
+  it('constrains the page content to a centered 660px column at the wide breakpoint (AC #1)', () => {
+    const status: StatusDto = { status: 'withinRange', paceToDateKwh: 1000, baselineToDateKwh: 1000, isLowConfidence: false }
+    render(
+      <DashboardPage
+        household={household}
+        supportsFederatedLogout={true}
+        email={null}
+        status={status}
+        statusLoading={false}
+        tariffCheck={null}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        logEventOpen={false}
+        onLogEventOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
+        onSmartPlugImportClick={noop}
+      />,
+    )
+
+    const heading = screen.getByRole('heading', { name: 'Energy Tracker' })
+    const logReadingButton = screen.getByRole('button', { name: /Log reading/ })
+    // data-slot is a stable, visibility-independent hook (same convention as nav-chrome.tsx's
+    // data-slot="nav-chrome-bottom"/"nav-chrome-top") for both this test and the e2e viewport spec.
+    const wrapper = document.querySelector('[data-slot="dashboard-content"]')
+    expect(wrapper).not.toBeNull()
+    expect(wrapper).toHaveClass('wide:mx-auto', 'wide:w-full', 'wide:max-w-[660px]')
+    expect(wrapper).toContainElement(heading)
+    expect(wrapper).toContainElement(logReadingButton)
   })
 
   it('does not render the invite-generation panel — relocated to Settings so it never competes with the Status card for visual weight (AC #10)', () => {

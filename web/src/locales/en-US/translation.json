@@ -176,6 +176,7 @@
   },
   "event": {
     "entryPointLabel": "Log an Event",
+    "shortLabel": "Event",
     "sheetTitle": "Log an Event",
     "sheetDescription": "Note something unmeasurable that might explain a consumption change.",
     "descriptionLabel": "What happened",
@@ -321,6 +322,7 @@
   "smartPlugImport": {
     "heading": "Smart Plug Import",
     "entryPointLabel": "Import Smart Plug data",
+    "shortLabel": "Import",
     "backToApp": "Go to Energy Tracker",
     "dropHint": "Drop a file here, or choose one to upload.",
     "addMoreFiles": "Add more files",
