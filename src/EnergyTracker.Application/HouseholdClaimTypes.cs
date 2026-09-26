@@ -31,4 +31,17 @@ public static class HouseholdClaimTypes
             : user.FindFirst(ClaimTypes.Name)?.Value is { Length: > 0 } mappedName
                 ? mappedName
                 : null;
+
+    /// <summary>
+    /// Resolves the account email from the OIDC <c>email</c> claim (Story 8.1, Task 5), mirroring
+    /// <see cref="ResolveDisplayName"/>'s raw-claim-first / <see cref="ClaimTypes.Email"/>-fallback /
+    /// empty-string-as-absent shape — the same raw-JSON-key-vs-mapped-claim gap Story 3.6 found for
+    /// <c>name</c> applies identically to <c>email</c> against this app's Auth0 config.
+    /// </summary>
+    public static string? ResolveEmail(ClaimsPrincipal user) =>
+        user.FindFirst("email")?.Value is { Length: > 0 } rawEmail
+            ? rawEmail
+            : user.FindFirst(ClaimTypes.Email)?.Value is { Length: > 0 } mappedEmail
+                ? mappedEmail
+                : null;
 }

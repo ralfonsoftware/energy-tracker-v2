@@ -32,6 +32,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -58,6 +60,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -83,6 +87,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={null}
         statusLoading={false}
         tariffCheck={null}
@@ -109,6 +115,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={null}
         statusLoading={true}
         tariffCheck={null}
@@ -136,6 +144,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={null}
         statusLoading={false}
         tariffCheck={null}
@@ -154,8 +164,8 @@ describe('DashboardPage', () => {
       />,
     )
 
-    expect(screen.getByText('Trend History')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.getAllByText('Trend History').length).toBeGreaterThan(0)
+    await user.click(screen.getAllByRole('button', { name: 'Settings' })[0])
     expect(onSettingsClick).toHaveBeenCalledOnce()
   })
 
@@ -165,6 +175,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={null}
         statusLoading={false}
         tariffCheck={null}
@@ -184,7 +196,7 @@ describe('DashboardPage', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'View reading history' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Trend History' }))
+    await user.click(screen.getAllByRole('button', { name: 'Trend History' })[0])
     expect(onTrendHistoryClick).toHaveBeenCalledOnce()
   })
 
@@ -194,6 +206,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={null}
         statusLoading={false}
         tariffCheck={null}
@@ -223,6 +237,8 @@ describe('DashboardPage', () => {
     render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -269,6 +285,8 @@ describe('DashboardPage', () => {
     const { rerender } = render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -293,6 +311,8 @@ describe('DashboardPage', () => {
     rerender(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -339,6 +359,8 @@ describe('DashboardPage', () => {
     const { rerender } = render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -364,6 +386,8 @@ describe('DashboardPage', () => {
     rerender(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={null}
         statusLoading={false}
         tariffCheck={null}
@@ -388,6 +412,8 @@ describe('DashboardPage', () => {
     rerender(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}
@@ -414,6 +440,8 @@ describe('DashboardPage', () => {
     const { rerender } = render(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={{ isDue: true, gateOpensAtUtc: '2026-06-01T00:00:00+00:00' }}
@@ -441,6 +469,8 @@ describe('DashboardPage', () => {
     rerender(
       <DashboardPage
         household={household}
+        supportsFederatedLogout={true}
+        email={null}
         status={status}
         statusLoading={false}
         tariffCheck={null}

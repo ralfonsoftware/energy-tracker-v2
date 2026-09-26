@@ -223,6 +223,13 @@ if (oidcConfigured)
         options.ClientId = oidcClientId;
         options.ClientSecret = oidcClientSecret;
         options.ResponseType = "code";
+        // Story 8.1/AC #3, found via live Auth0 verification: the handler's default Scope
+        // (openid, profile) never included "email" — HouseholdClaimTypes.ResolveEmail's raw-
+        // claim-first/ClaimTypes.Email-fallback logic is correct, but Auth0 (per the OIDC spec)
+        // omits the email claim entirely from both the ID token and the userinfo response unless
+        // this scope is explicitly requested, so /api/session's Email came back null regardless
+        // of claim-key handling. Distinct root cause from Story 3.6's ClaimTypes.Name mapping gap.
+        options.Scope.Add("email");
         options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         // Identity lives in the server-side cookie only — never persist provider tokens where
         // anything client-readable could reach them (AC #3).

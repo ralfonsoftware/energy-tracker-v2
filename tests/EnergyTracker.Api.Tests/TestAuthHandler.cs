@@ -21,6 +21,7 @@ public class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> option
     public const string IssuerHeader = "X-Test-Issuer";
     public const string SubjectHeader = "X-Test-Subject";
     public const string NameHeader = "X-Test-Name";
+    public const string EmailHeader = "X-Test-Email";
     public const string DefaultIssuer = "https://test-issuer.example";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -51,6 +52,14 @@ public class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> option
         if (Request.Headers.TryGetValue(NameHeader, out var nameValues))
         {
             claims.Add(new Claim("name", nameValues.ToString()));
+        }
+
+        // Story 8.1/AC #3: mirrors the `name` claim's raw-JSON-key shape (review-round-2 patch
+        // above) — Auth0's userinfo-sourced `email` keeps its raw key too, never remapped to
+        // ClaimTypes.Email. Absent by default, same as a provider that returns no email claim.
+        if (Request.Headers.TryGetValue(EmailHeader, out var emailValues))
+        {
+            claims.Add(new Claim("email", emailValues.ToString()));
         }
 
         var identity = new ClaimsIdentity(claims, SchemeName);

@@ -11,6 +11,9 @@ import { PerPlugDataCard } from './per-plug-data-card'
 
 interface TrendHistoryPageProps {
   locale: string
+  householdId: string
+  supportsFederatedLogout: boolean
+  email: string | null
   onBack: () => void
   onSettingsClick: () => void
   onTariffRadarClick: () => void
@@ -23,7 +26,16 @@ interface TrendHistoryPageProps {
 // as a pair. Events comes next (Story 6.2) — a persistent list is a better host for Story 6.3's
 // "inline with the Event" correlation than the transient Log Event sheet. The Room -> Power Point
 // -> Device tree (PerPlugDataCard) is a structurally different Smart Plug signal and stays last.
-export function TrendHistoryPage({ locale, onBack, onSettingsClick, onTariffRadarClick, onSmartPlugImportClick }: TrendHistoryPageProps) {
+export function TrendHistoryPage({
+  locale,
+  householdId,
+  supportsFederatedLogout,
+  email,
+  onBack,
+  onSettingsClick,
+  onTariffRadarClick,
+  onSmartPlugImportClick,
+}: TrendHistoryPageProps) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<StatusHistoryEntryDto[]>([])
   // Distinguishes "genuinely no history yet" from "the fetch failed" — without this a transient
@@ -97,6 +109,9 @@ export function TrendHistoryPage({ locale, onBack, onSettingsClick, onTariffRada
         onTrendHistoryClick={() => {}}
         onTariffRadarClick={onTariffRadarClick}
         onSettingsClick={onSettingsClick}
+        householdId={householdId}
+        supportsFederatedLogout={supportsFederatedLogout}
+        email={email}
       />
     </main>
   )

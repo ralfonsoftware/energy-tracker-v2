@@ -5,6 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    /* Epic 8's shared desktop/tablet breakpoint (Story 8.1) — generates the `wide:` variant
+       (`@media (min-width: 660px)`) reused by every Epic 8 layout story. */
+    --breakpoint-wide: 660px;
     --font-heading: var(--font-sans);
     --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);

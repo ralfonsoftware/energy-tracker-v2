@@ -45,6 +45,46 @@ public class HouseholdClaimTypesTests
         HouseholdClaimTypes.ResolveDisplayName(user).ShouldBeNull();
     }
 
+    [Fact]
+    public void ResolveEmail_prefers_the_raw_email_claim_over_ClaimTypes_Email()
+    {
+        var user = PrincipalWithClaims(("email", "raw@example.com"), (ClaimTypes.Email, "mapped@example.com"));
+
+        HouseholdClaimTypes.ResolveEmail(user).ShouldBe("raw@example.com");
+    }
+
+    [Fact]
+    public void ResolveEmail_falls_back_to_ClaimTypes_Email_when_the_raw_email_claim_is_absent()
+    {
+        var user = PrincipalWithClaims((ClaimTypes.Email, "mapped@example.com"));
+
+        HouseholdClaimTypes.ResolveEmail(user).ShouldBe("mapped@example.com");
+    }
+
+    [Fact]
+    public void ResolveEmail_falls_back_to_ClaimTypes_Email_when_the_raw_email_claim_is_an_empty_string()
+    {
+        var user = PrincipalWithClaims(("email", string.Empty), (ClaimTypes.Email, "mapped@example.com"));
+
+        HouseholdClaimTypes.ResolveEmail(user).ShouldBe("mapped@example.com");
+    }
+
+    [Fact]
+    public void ResolveEmail_returns_null_when_neither_claim_is_present()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity());
+
+        HouseholdClaimTypes.ResolveEmail(user).ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResolveEmail_returns_null_when_both_claims_are_empty_strings()
+    {
+        var user = PrincipalWithClaims(("email", string.Empty), (ClaimTypes.Email, string.Empty));
+
+        HouseholdClaimTypes.ResolveEmail(user).ShouldBeNull();
+    }
+
     private static ClaimsPrincipal PrincipalWithClaims(params (string Type, string Value)[] claims)
     {
         var identity = new ClaimsIdentity(claims.Select(c => new Claim(c.Type, c.Value)));

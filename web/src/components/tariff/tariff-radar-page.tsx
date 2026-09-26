@@ -11,6 +11,9 @@ import { TariffHistoryList } from './tariff-history-list'
 interface TariffRadarPageProps {
   locale: string
   householdCurrency: string
+  householdId: string
+  supportsFederatedLogout: boolean
+  email: string | null
   tariffCheck: TariffCheckReminderDto | null
   onTariffCheckChanged: () => void
   onBack: () => void
@@ -23,6 +26,9 @@ interface TariffRadarPageProps {
 export function TariffRadarPage({
   locale,
   householdCurrency,
+  householdId,
+  supportsFederatedLogout,
+  email,
   tariffCheck,
   onTariffCheckChanged,
   onBack,
@@ -82,6 +88,9 @@ export function TariffRadarPage({
         onTrendHistoryClick={onTrendHistoryClick}
         onSettingsClick={onSettingsClick}
         onTariffRadarClick={() => {}}
+        householdId={householdId}
+        supportsFederatedLogout={supportsFederatedLogout}
+        email={email}
       />
     </main>
   )

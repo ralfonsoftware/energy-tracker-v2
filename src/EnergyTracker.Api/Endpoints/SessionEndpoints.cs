@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Infrastructure;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -15,6 +17,7 @@ public static class SessionEndpoints
         // Sits behind the /api group's auth requirement, so an unauthenticated call 401s; the SPA's
         // response to that 401 is what triggers navigation to /login (AC #1).
         api.MapGet("/session", async (
+            ClaimsPrincipal user,
             ICurrentHouseholdAccessor householdAccessor,
             EnergyTrackerDbContext dbContext,
             IOptionsMonitor<OpenIdConnectOptions> oidcOptionsMonitor,
@@ -22,15 +25,18 @@ public static class SessionEndpoints
         {
             var oidcOptions = oidcOptionsMonitor.Get(OpenIdConnectDefaults.AuthenticationScheme);
             var supportsFederatedLogout = await ResolveSupportsFederatedLogoutAsync(oidcOptions, cancellationToken);
+            // Story 8.1/AC #3: read from claims at request time, never persisted — the same
+            // "don't duplicate identity" discipline ResolveDisplayName already follows.
+            var email = HouseholdClaimTypes.ResolveEmail(user);
 
             var householdId = householdAccessor.HouseholdId;
             if (householdId is null)
             {
-                return Results.Ok(new SessionResponse(HasHousehold: false, HouseholdId: null, Locale: null, Currency: null, supportsFederatedLogout));
+                return Results.Ok(new SessionResponse(HasHousehold: false, HouseholdId: null, Locale: null, Currency: null, supportsFederatedLogout, email));
             }
 
             var household = await dbContext.Households.SingleAsync(h => h.Id == householdId, cancellationToken);
-            return Results.Ok(new SessionResponse(HasHousehold: true, household.Id, household.Locale, household.Currency, supportsFederatedLogout));
+            return Results.Ok(new SessionResponse(HasHousehold: true, household.Id, household.Locale, household.Currency, supportsFederatedLogout, email));
         });
 
         return api;
@@ -66,4 +72,4 @@ public static class SessionEndpoints
     }
 }
 
-public record SessionResponse(bool HasHousehold, Guid? HouseholdId, string? Locale, string? Currency, bool SupportsFederatedLogout);
+public record SessionResponse(bool HasHousehold, Guid? HouseholdId, string? Locale, string? Currency, bool SupportsFederatedLogout, string? Email);

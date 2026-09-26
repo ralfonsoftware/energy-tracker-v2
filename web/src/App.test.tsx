@@ -221,7 +221,7 @@ describe('App', () => {
 
       render(<App />)
 
-      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.click((await screen.findAllByRole('button', { name: 'Settings' }))[0])
       expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
       expect(window.location.pathname).toBe('/')
 
@@ -244,13 +244,13 @@ describe('App', () => {
 
       render(<App />)
 
-      await user.click(await screen.findByRole('button', { name: 'Trend History' }))
+      await user.click((await screen.findAllByRole('button', { name: 'Trend History' }))[0])
       expect(await screen.findByRole('heading', { name: 'Trend History' })).toBeInTheDocument()
       expect(await screen.findByText('Not enough history yet to show a trend.')).toBeInTheDocument()
       expect(await screen.findByText('Meter Readings — 0 logged')).toBeInTheDocument()
       expect(window.location.pathname).toBe('/')
 
-      await user.click(screen.getByRole('button', { name: 'Dashboard' }))
+      await user.click(screen.getAllByRole('button', { name: 'Dashboard' })[0])
       expect(await screen.findByRole('heading', { name: 'Energy Tracker' })).toBeInTheDocument()
     })
 
@@ -268,7 +268,7 @@ describe('App', () => {
 
       render(<App />)
 
-      await user.click(await screen.findByRole('button', { name: 'Trend History' }))
+      await user.click((await screen.findAllByRole('button', { name: 'Trend History' }))[0])
       await screen.findByRole('heading', { name: 'Trend History' })
 
       await user.click(screen.getByRole('button', { name: 'Import Smart Plug data' }))
@@ -311,7 +311,7 @@ describe('App', () => {
 
       render(<App />)
 
-      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.click((await screen.findAllByRole('button', { name: 'Settings' }))[0])
 
       const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
       await user.click(generateButton)
@@ -339,7 +339,7 @@ describe('App', () => {
 
       render(<App />)
 
-      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.click((await screen.findAllByRole('button', { name: 'Settings' }))[0])
 
       const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
       await user.click(generateButton)

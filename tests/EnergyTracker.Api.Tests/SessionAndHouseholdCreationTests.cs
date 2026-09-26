@@ -31,6 +31,38 @@ public class SessionAndHouseholdCreationTests(EnergyTrackerApiFactory factory) :
         session!.SupportsFederatedLogout.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task GET_api_session_returns_the_email_claim_even_before_a_Household_exists()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString(), email: "ralf@example.com");
+
+        var session = await client.GetFromJsonAsync<SessionResponse>("/api/session", TestContext.Current.CancellationToken);
+
+        session!.Email.ShouldBe("ralf@example.com");
+    }
+
+    [Fact]
+    public async Task GET_api_session_returns_a_null_Email_when_the_principal_has_no_email_claim()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var session = await client.GetFromJsonAsync<SessionResponse>("/api/session", TestContext.Current.CancellationToken);
+
+        session!.Email.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GET_api_session_still_returns_the_email_claim_once_a_Household_exists()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString(), email: "ralf@example.com");
+        await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+
+        var session = await client.GetFromJsonAsync<SessionResponse>("/api/session", TestContext.Current.CancellationToken);
+
+        session!.HasHousehold.ShouldBeTrue();
+        session.Email.ShouldBe("ralf@example.com");
+    }
+
     [Theory]
     [InlineData("de-DE", "EUR")]
     [InlineData("en-US", "USD")]

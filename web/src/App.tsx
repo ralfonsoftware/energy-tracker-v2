@@ -18,6 +18,7 @@ interface SessionResponse {
   locale: string | null
   currency: string | null
   supportsFederatedLogout: boolean
+  email: string | null
 }
 
 type SessionState =
@@ -39,6 +40,9 @@ function App() {
   // yet — Story 1.12's logoff control only becomes reachable once 'ready', but the signal itself
   // doesn't depend on household state, so it lives outside the SessionState union.
   const [supportsFederatedLogout, setSupportsFederatedLogout] = useState(false)
+  // Story 8.1/AC #3: read from claims at request time, same "set once from the initial session
+  // fetch" lifetime as supportsFederatedLogout above — the ProfileMenu is the first consumer.
+  const [email, setEmail] = useState<string | null>(null)
   // Local view state, not a URL route — Story 1.9's Settings surface is the first thing reachable
   // via a button rather than a bookmarkable path, matching Story 1.5's "no react-router yet"
   // precedent (see invite-accept-form.tsx's /join/{token} handling for the one existing exception,
@@ -164,6 +168,7 @@ function App() {
         }
 
         setSupportsFederatedLogout(session.supportsFederatedLogout)
+        setEmail(session.email)
         setState(
           session.hasHousehold
             ? {
@@ -284,6 +289,7 @@ function App() {
       <SettingsPage
         householdId={state.household.id}
         supportsFederatedLogout={supportsFederatedLogout}
+        email={email}
         onBack={() => setView('dashboard')}
         onTrendHistoryClick={() => setView('trendHistory')}
         onTariffRadarClick={() => setView('tariffRadar')}
@@ -295,6 +301,9 @@ function App() {
     return (
       <TrendHistoryPage
         locale={state.household.locale}
+        householdId={state.household.id}
+        supportsFederatedLogout={supportsFederatedLogout}
+        email={email}
         onBack={() => setView('dashboard')}
         onSettingsClick={() => setView('settings')}
         onTariffRadarClick={() => setView('tariffRadar')}
@@ -311,6 +320,9 @@ function App() {
       <TariffRadarPage
         locale={state.household.locale}
         householdCurrency={state.household.currency}
+        householdId={state.household.id}
+        supportsFederatedLogout={supportsFederatedLogout}
+        email={email}
         tariffCheck={tariffCheck}
         onTariffCheckChanged={refreshTariffCheck}
         onBack={() => setView('dashboard')}
@@ -327,6 +339,8 @@ function App() {
   return (
     <DashboardPage
       household={state.household}
+      supportsFederatedLogout={supportsFederatedLogout}
+      email={email}
       status={status}
       statusLoading={statusLoading}
       tariffCheck={tariffCheck}
