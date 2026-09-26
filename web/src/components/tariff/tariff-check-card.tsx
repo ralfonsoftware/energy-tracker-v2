@@ -23,7 +23,7 @@ export function TariffCheckCard({ reminder, locale, onClick }: TariffCheckCardPr
     ? t('tariffCheck.due')
     : t('tariffCheck.notDue', { date: dateFormat.format(new Date(reminder.gateOpensAtUtc)) })
 
-  const className = 'w-full rounded-2xl border bg-tariff-check-card-bg border-tariff-check-card-border p-4 text-left text-sm text-muted-foreground'
+  const className = 'w-full rounded-2xl border bg-surface-quiet border-surface-quiet-border p-4 text-left text-sm text-muted-foreground'
 
   if (onClick) {
     return (

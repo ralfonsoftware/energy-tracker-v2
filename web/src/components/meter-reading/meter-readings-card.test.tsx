@@ -58,6 +58,22 @@ describe('MeterReadingsCard', () => {
     expect(await screen.findByText('4,821.5 kWh')).toBeInTheDocument()
   })
 
+  it('tightens the Timestamp and action columns and right-aligns the Edit button, eliminating dead space (AC #2)', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page()))))
+
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    await screen.findByText('4,821.5 kWh')
+    expect(screen.getByRole('columnheader', { name: 'Date & time' })).toHaveClass('w-px')
+    const columnHeaders = screen.getAllByRole('columnheader')
+    expect(columnHeaders[columnHeaders.length - 1]).toHaveClass('w-px')
+
+    const editButton = screen.getByRole('button', { name: /Edit reading from/ })
+    expect(editButton.closest('td')).toHaveClass('text-right')
+  })
+
   it('renders the empty state when totalCount is 0', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page({ items: [], totalCount: 0 })))))

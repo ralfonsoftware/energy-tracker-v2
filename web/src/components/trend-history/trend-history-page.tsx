@@ -74,33 +74,40 @@ export function TrendHistoryPage({
 
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">{t('dashboard.nav.trendHistory')}</h1>
-        <button
-          type="button"
-          onClick={onSmartPlugImportClick}
-          aria-label={t('smartPlugImport.entryPointLabel')}
-          title={t('smartPlugImport.entryPointLabel')}
-          className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl"
-        >
-          <Upload className="size-4" aria-hidden="true" />
-        </button>
-      </div>
+      {/* Story 8.3/Task 1: constrains the page's own content — header row and the card stack — to
+          a centered 660px column at >=660px (UX-DR19), mirroring dashboard-page.tsx's Story 8.2
+          wrapper verbatim. NavChrome is deliberately outside this wrapper: its top-nav variant is
+          full-width by design (Story 8.1). */}
+      <div data-slot="trend-history-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[660px]">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold">{t('dashboard.nav.trendHistory')}</h1>
+          <button
+            type="button"
+            onClick={onSmartPlugImportClick}
+            aria-label={t('smartPlugImport.entryPointLabel')}
+            title={t('smartPlugImport.entryPointLabel')}
+            className="bg-nav-chrome-active-bg text-nav-chrome-active-foreground flex size-10 shrink-0 items-center justify-center rounded-xl wide:size-auto wide:justify-start wide:gap-1.5 wide:px-3 wide:py-2"
+          >
+            <Upload className="size-4" aria-hidden="true" />
+            <span className="hidden wide:inline wide:text-xs wide:font-semibold">{t('smartPlugImport.shortLabel')}</span>
+          </button>
+        </div>
 
-      <div className="flex flex-col gap-[var(--spacing-card-gap)]">
-        <GlassCard>
-          {chartLoadError ? (
-            <p className="text-destructive text-sm">{t('trendHistory.chartLoadError')}</p>
-          ) : (
-            <TrendChart entries={entries} locale={locale} />
-          )}
-        </GlassCard>
+        <div className="flex flex-col gap-[var(--spacing-card-gap)]">
+          <GlassCard>
+            {chartLoadError ? (
+              <p className="text-destructive text-sm">{t('trendHistory.chartLoadError')}</p>
+            ) : (
+              <TrendChart entries={entries} locale={locale} />
+            )}
+          </GlassCard>
 
-        <MeterReadingsCard locale={locale} onReadingCorrected={loadStatusHistory} />
+          <MeterReadingsCard locale={locale} onReadingCorrected={loadStatusHistory} />
 
-        <EventsCard locale={locale} />
+          <EventsCard locale={locale} />
 
-        <PerPlugDataCard locale={locale} />
+          <PerPlugDataCard locale={locale} />
+        </div>
       </div>
 
       <NavChrome

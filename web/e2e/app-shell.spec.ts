@@ -131,3 +131,99 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
   expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
   expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
 })
+
+// Story 8.3/Task 5: same jsdom limitation as above — trend-history-page.test.tsx can only prove
+// the wide:max-w-[660px] wrapper class and Import label span exist in markup. This also proves the
+// Task 3 table dead-space fix with a precise gap measurement (getBoundingClientRect, not a
+// visual-only class-presence check), per Story 8.2's code-review-driven precedent (AC #1, #2).
+test('the Trend History content column, Import label, and Meter Readings table dead-space fix behave correctly at the 660px breakpoint', async ({ page }) => {
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId: '11111111-1111-1111-1111-111111111111',
+        locale: 'en-US',
+        currency: 'USD',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+  await page.route('**/api/status/history', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
+  // Seed one reading so the table actually renders, not the empty state (Task 5's own instruction).
+  await page.route('**/api/meter-readings?*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            kwhValue: 100,
+            readingTimestamp: '2026-08-15T14:32:00+00:00',
+            version: 0,
+            isPendingRegression: false,
+            correctedFromKwhValue: null,
+            correctedAtUtc: null,
+          },
+        ],
+        totalCount: 1,
+        page: 1,
+        pageSize: 20,
+      }),
+    }),
+  )
+  await page.route('**/api/events?*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], totalCount: 0, page: 1, pageSize: 20 }) }),
+  )
+  await page.route('**/api/smart-plug-readings', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
+
+  const contentColumn = page.locator('div[data-slot="trend-history-content"]')
+
+  await page.setViewportSize({ width: 500, height: 800 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
+  await page.getByRole('button', { name: 'Trend History' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Trend History' })).toBeVisible()
+
+  const importButton = page.getByRole('button', { name: 'Import Smart Plug data' })
+  const importLabel = importButton.getByText('Import')
+
+  await expect(importLabel).toBeHidden()
+  const narrowColumnBox = await contentColumn.boundingBox()
+  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 660px
+
+  // Exact-boundary check, same as the Dashboard case above: 659px stays icon-only, 660px is labeled.
+  await page.setViewportSize({ width: 659, height: 800 })
+  await expect(importLabel).toBeHidden()
+
+  await page.setViewportSize({ width: 660, height: 800 })
+  await expect(importLabel).toBeVisible()
+
+  await page.setViewportSize({ width: 1000, height: 800 })
+  await expect(importLabel).toBeVisible()
+  const wideColumnBox = await contentColumn.boundingBox()
+  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+
+  // Task 3: no large blank gap between the Timestamp cell and the Edit button's cell, at any width
+  // (this fix is unconditional, not wide:-gated — contrast with the column/label assertions above).
+  await page.getByText('Meter Readings — 1 logged').click()
+  const editButton = page.getByRole('button', { name: /Edit reading from/ })
+  await expect(editButton).toBeVisible()
+  const row = page.locator('tr', { has: editButton })
+  const cells = row.locator('td')
+  const timestampCellBox = await cells.nth(1).boundingBox()
+  const editCellBox = await cells.nth(2).boundingBox()
+  expect(timestampCellBox).not.toBeNull()
+  expect(editCellBox).not.toBeNull()
+  const gap = editCellBox!.x - (timestampCellBox!.x + timestampCellBox!.width)
+  expect(gap).toBeLessThan(40)
+})

@@ -85,7 +85,7 @@ export function EventsCard({ locale }: EventsCardProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('trendHistory.eventsCard.descriptionColumn')}</TableHead>
-                    <TableHead>{t('trendHistory.eventsCard.timestampColumn')}</TableHead>
+                    <TableHead className="w-px">{t('trendHistory.eventsCard.timestampColumn')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
