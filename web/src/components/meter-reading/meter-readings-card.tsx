@@ -96,8 +96,8 @@ export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsC
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('meterReadingHistory.valueColumn')}</TableHead>
-                    <TableHead>{t('meterReadingHistory.timestampColumn')}</TableHead>
-                    <TableHead />
+                    <TableHead className="w-px">{t('meterReadingHistory.timestampColumn')}</TableHead>
+                    <TableHead className="w-px" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -119,7 +119,7 @@ export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsC
                         </div>
                       </TableCell>
                       <TableCell>{dateTimeFormat.format(new Date(item.readingTimestamp))}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="outline"
                           size="sm"

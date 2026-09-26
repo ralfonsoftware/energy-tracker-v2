@@ -13,7 +13,7 @@ const CSS_SOURCE = readFileSync(path.join(import.meta.dirname, 'index.css'), 'ut
 // Epic 5 retro action item #4 (escalated after three retro cycles deferring this as
 // "pre-existing" — 2.2b, 5.3, 5.4): an automated WCAG AA (4.5:1, normal-size text) contrast check
 // for every --color-* token pair that has actually been hand-verified in a story so far — the
-// Status triad (2.5), --attractiveness-* (5.3), --tariff-check-card-* (5.4). Reads index.css
+// Status triad (2.5), --attractiveness-* (5.3), --surface-quiet* (5.4/Epic 8). Reads index.css
 // directly (not copied literal values) so a future token edit is caught here instead of silently
 // reintroducing the exact gap this action item exists to close.
 //
@@ -137,10 +137,10 @@ describe.each(THEMES)('$name theme color-token contrast (WCAG AA, 4.5:1)', ({ to
     })
   })
 
-  describe('Tariff check card (tariff-check-card.tsx, deliberately plain — no GlassCard)', () => {
+  describe('Quiet surface tier (surface-quiet, tariff-check-card.tsx, deliberately plain — no GlassCard)', () => {
     it('text-muted-foreground clears AA against the card bg tint over the bare page background', () => {
       const textColor = color(tokens, 'muted-foreground')
-      const bgColor = compositeStack(tokens, [...PLAIN_PAGE_BACKDROP, 'tariff-check-card-bg'])
+      const bgColor = compositeStack(tokens, [...PLAIN_PAGE_BACKDROP, 'surface-quiet'])
       expect(contrastAgainstBg(textColor, bgColor)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
     })
   })
