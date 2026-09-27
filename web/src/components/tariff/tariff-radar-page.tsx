@@ -59,27 +59,34 @@ export function TariffRadarPage({
 
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
-      <h1 className="text-lg font-bold">{t('dashboard.nav.tariffRadar')}</h1>
+      {/* Story 8.4/Task 1: constrains the page's own content — header, Tariff Check card, and
+          the card stack — to a centered 660px column at >=660px (UX-DR19), mirroring
+          dashboard-content (Story 8.2) and trend-history-content (Story 8.3). NavChrome is
+          deliberately outside this wrapper — its top-nav variant is full-width by design
+          (Story 8.1/8.2/8.3 precedent). */}
+      <div data-slot="tariff-radar-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[660px]">
+        <h1 className="text-lg font-bold">{t('dashboard.nav.tariffRadar')}</h1>
 
-      <TariffCheckCard reminder={tariffCheck} locale={locale} />
+        <TariffCheckCard reminder={tariffCheck} locale={locale} />
 
-      <div className="flex flex-col gap-[var(--spacing-card-gap)]">
-        <TariffConfigurationForm
-          householdCurrency={householdCurrency}
-          onCreated={() => {
-            setRefreshNonce((n) => n + 1)
-            onTariffCheckChanged()
-          }}
-        />
+        <div className="flex flex-col gap-[var(--spacing-card-gap)]">
+          <TariffConfigurationForm
+            householdCurrency={householdCurrency}
+            onCreated={() => {
+              setRefreshNonce((n) => n + 1)
+              onTariffCheckChanged()
+            }}
+          />
 
-        <TariffHistoryList
-          locale={locale}
-          refreshNonce={refreshNonce}
-          onLoaded={handleHistoryLoaded}
-          onTariffMutated={onTariffCheckChanged}
-        />
+          <TariffHistoryList
+            locale={locale}
+            refreshNonce={refreshNonce}
+            onLoaded={handleHistoryLoaded}
+            onTariffMutated={onTariffCheckChanged}
+          />
 
-        {currentTariffCurrency && <TariffComparisonForm currency={currentTariffCurrency} locale={locale} />}
+          {currentTariffCurrency && <TariffComparisonForm currency={currentTariffCurrency} locale={locale} />}
+        </div>
       </div>
 
       <NavChrome
