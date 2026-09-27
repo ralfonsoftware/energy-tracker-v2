@@ -129,6 +129,17 @@ describe('EventsCard', () => {
     expect(await screen.findByText('No Events logged yet.')).toBeInTheDocument()
   })
 
+  it('tightens the Timestamp column to its content width, for consistency with MeterReadingsCard (AC #2)', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(page()))))
+
+    render(<EventsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    await screen.findByText('cooked 2h')
+    expect(screen.getByRole('columnheader', { name: 'Date & time' })).toHaveClass('w-px')
+  })
+
   it('renders an error state when the fetch fails', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ detail: 'boom' }), { status: 500 }))))

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GlassCard } from '@/components/ui/glass-card'
+import { QuietCard } from '@/components/ui/quiet-card'
 import { fetchPerPlugMeasuredData, type RoomMeasuredDataDto } from '@/lib/smart-plug-reading-api'
 
 interface PerPlugDataCardProps {
@@ -52,7 +52,7 @@ export function PerPlugDataCard({ locale }: PerPlugDataCardProps) {
   const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 })
 
   return (
-    <GlassCard>
+    <QuietCard>
       <h3 className="text-sm font-semibold">{t('trendHistory.perPlugCard.heading')}</h3>
 
       <div className="mt-3" aria-live="polite">
@@ -108,6 +108,6 @@ export function PerPlugDataCard({ locale }: PerPlugDataCardProps) {
       <p className="text-muted-foreground mt-3 border-t border-border/50 pt-2 text-xs">
         {t('trendHistory.perPlugCard.caveat')}
       </p>
-    </GlassCard>
+    </QuietCard>
   )
 }

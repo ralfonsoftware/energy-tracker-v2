@@ -74,12 +74,14 @@
     /* Nav chrome active-tab tokens (Story 2.5) — brand-accent-tinted, never a status color */
     --color-nav-chrome-active-bg: var(--nav-chrome-active-bg);
     --color-nav-chrome-active-foreground: var(--nav-chrome-active-foreground);
-    /* Story 5.4 FR-15 Tariff Check prompt card — near-transparent surface only, deliberately no
-       glass-blur/glow/border-emphasis (components.md) so this card reads at lower visual weight
-       than every other card. Text uses the existing --color-muted-foreground (verified >=4.5:1
-       against both composited backgrounds below, so no dedicated text token is needed here). */
-    --color-tariff-check-card-bg: var(--tariff-check-card-bg);
-    --color-tariff-check-card-border: var(--tariff-check-card-border);
+    /* Epic 8 UX-DR24 "quiet" surface tier — near-transparent surface only, deliberately no
+       glass-blur/glow/border-emphasis (components.md), for pure-reference-display cards that read
+       at lower visual weight than glass-tier cards with interactive controls. Formalized from the
+       Story 5.4 Tariff Check card's private tokens (now also used by PerPlugDataCard, Task 4).
+       Text uses the existing --color-muted-foreground (verified >=4.5:1 against both composited
+       backgrounds below, so no dedicated text token is needed here). */
+    --color-surface-quiet: var(--surface-quiet);
+    --color-surface-quiet-border: var(--surface-quiet-border);
     --radius-glass-sm: 14px;
     --radius-glass-md: 18px;
     --radius-glass-lg: 28px;
@@ -208,11 +210,10 @@
        comment as a direct reuse of the already-confirmed brand-accent badge tokens */
     --nav-chrome-active-bg: rgba(30, 122, 97, 0.14);
     --nav-chrome-active-foreground: #1E7A61;
-    /* Story 5.4 — verbatim from mockups/key-dashboard.html line 226 (.theme.light .tariff-quiet).
-       Unlike key-tariff-radar.html, this mockup file renders both themes, so no independent
-       derivation is needed here (see Task 6/Dev Notes' "Previous Story Intelligence"). */
-    --tariff-check-card-bg: rgba(255, 255, 255, 0.4);
-    --tariff-check-card-border: rgba(40, 70, 50, 0.08);
+    /* Epic 8 UX-DR24 "quiet" surface tier — values carried forward verbatim from Story 5.4's
+       Tariff Check card (mockups/key-dashboard.html line 226, .theme.light .tariff-quiet). */
+    --surface-quiet: rgba(255, 255, 255, 0.4);
+    --surface-quiet-border: rgba(40, 70, 50, 0.08);
 }
 
 .dark {
@@ -286,9 +287,10 @@
        comment (identical to the brand-accent badge-bg / existing link color already used) */
     --nav-chrome-active-bg: rgba(47, 179, 151, 0.16);
     --nav-chrome-active-foreground: #6FD1B1;
-    /* Story 5.4 — verbatim from mockups/key-dashboard.html line 191 (.theme.dark .tariff-quiet). */
-    --tariff-check-card-bg: rgba(220, 245, 230, 0.03);
-    --tariff-check-card-border: rgba(210, 235, 220, 0.05);
+    /* Epic 8 UX-DR24 "quiet" surface tier — values carried forward verbatim from Story 5.4's
+       Tariff Check card (mockups/key-dashboard.html line 191, .theme.dark .tariff-quiet). */
+    --surface-quiet: rgba(220, 245, 230, 0.03);
+    --surface-quiet-border: rgba(210, 235, 220, 0.05);
 }
 
 @layer base {

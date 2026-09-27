@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TrendHistoryPage } from './trend-history-page'
@@ -58,6 +58,30 @@ describe('TrendHistoryPage', () => {
     const trigger = screen.getByRole('button', { name: 'Import Smart Plug data' })
     await user.click(trigger)
     expect(onSmartPlugImportClick).toHaveBeenCalledOnce()
+  })
+
+  it('renders a visible "Import" label on the Import button at the wide breakpoint, alongside its unchanged aria-label/title (Task 2)', async () => {
+    mockRoutes([])
+
+    render(<TrendHistoryPage locale="en-US" householdId="11111111-1111-1111-1111-111111111111" supportsFederatedLogout={true} email={null} onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
+
+    const importButton = await screen.findByRole('button', { name: 'Import Smart Plug data' })
+    const importLabel = within(importButton).getByText('Import')
+    expect(importLabel).toHaveClass('hidden', 'wide:inline')
+  })
+
+  it('constrains the page content to a centered 660px column at the wide breakpoint (AC #1)', async () => {
+    mockRoutes([])
+
+    render(<TrendHistoryPage locale="en-US" householdId="11111111-1111-1111-1111-111111111111" supportsFederatedLogout={true} email={null} onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
+
+    const heading = await screen.findByRole('heading', { name: 'Trend History' })
+    // data-slot is a stable, visibility-independent hook (same convention as dashboard-page.tsx's
+    // data-slot="dashboard-content", Story 8.2) for both this test and the e2e viewport spec.
+    const wrapper = document.querySelector('[data-slot="trend-history-content"]')
+    expect(wrapper).not.toBeNull()
+    expect(wrapper).toHaveClass('wide:mx-auto', 'wide:w-full', 'wide:max-w-[660px]')
+    expect(wrapper).toContainElement(heading)
   })
 
   it('renders NavChrome with active="trendHistory" and Dashboard tap calls onBack', async () => {
