@@ -116,6 +116,10 @@ development_status:
   8-3-trend-history-desktop-tablet-layout: done
   8-4-tariff-radar-desktop-tablet-layout: done
   8-5-settings-desktop-tablet-layout: done
+  8-6-wide-column-increase-across-all-surfaces: backlog
+  8-7-meter-readings-events-tariff-history-entry-grid: backlog
+  8-8-settings-rooms-power-points-grid-with-expand-section-pairing: backlog
+  8-9-tariff-comparison-side-by-side-summary: backlog
   epic-8-retrospective: optional
 
   epic-9: backlog

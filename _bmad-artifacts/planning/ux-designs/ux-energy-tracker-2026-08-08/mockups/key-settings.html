@@ -3,426 +3,464 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Key Screen — Settings (Green Eco, Dark + Light)</title>
+<title>Key Screen — Settings, desktop/tablet (Green Eco, Dark + Light)</title>
 <style>
 /*
-  KEY SCREEN — SETTINGS (Story 1.9, Story 2.1, Story 2.6, FR-2, FR-27, FR-28)
-  ==========================================================================
-  Direct response to the pasted screenshot of the current implementation:
-  a flat, unstyled list of plain shadcn Buttons for every room/power-point/
-  device row (every node rendered as a full-width solid-bordered button,
-  no hierarchy signal beyond indentation and a triangle glyph, no card
-  surface, no spacing discipline). DESIGN.md -> Components -> "Everything
-  else" says this surface inherits shadcn's defaults UNMODIFIED except for
-  the brand-layer deltas this document names -- but "unmodified" still
-  means using shadcn's actual list/accordion/ghost-button primitives with
-  DESIGN.md's spacing and surface tokens, not literally one <Button> per
-  row at every depth. This mock renders what that restraint looks like:
-  a {rounded.md} glass card list, {rounded.sm} pill preset chips for the
-  Yearly Baseline, and quiet icon-only actions that surface on the
-  expanded/selected node rather than as permanent full-width buttons.
+  KEY SCREEN — SETTINGS, PROMOTED TO THE CORRECTED DESKTOP/TABLET STATE
+  ===============================================================================
+  Promotes this file from its pre-Epic-8 mobile-phone-frame state (320px,
+  no nav chrome at all) to the full corrected desktop/tablet composition,
+  folding in BOTH rounds of correction that were designed but never promoted
+  into this specific file:
 
-  Governing spine sections: EXPERIENCE.md -> Information Architecture
-  ("Settings"), Component Patterns ("Everything else" = standard shadcn).
-  DESIGN.md -> Layout & Spacing ({spacing.card-padding}, {spacing.card-gap}),
-  Shapes ({rounded.sm} inputs/pills, {rounded.md} drill-down cards),
-  Colors (brand-accent for the active preset pill and section links only --
-  never a status-triad color, since nothing on this screen is a Pattern
-  Detective Status).
+  1. Epic 8 (2026-09-23, see critique-desktop-breakpoint-2026-09-23.html
+     Sections 5-7): top-nav chrome + Profile menu (replacing the bottom tab
+     bar this file never actually showed), Settings grouped into labeled
+     sections (Yearly Baseline / AI Plausibility Check / Household / Rooms,
+     Power Points & Devices / Daten), "Mitglied einladen" moved into the
+     Household section as a normal row, Room/Power-Point tree using
+     chevron+count summary rows.
+  2. The 2026-09-28 follow-up (see wide-settings-tariff-2026-09-28.html):
+     900px column (up from 660px), AI Plausibility Check + Household paired
+     side by side, Rooms/Power Points grid-with-expand (Device rows stay a
+     plain list -- Story 2.6's drag-reorder handle fails the "no manual-
+     reorder affordance" test the grid pattern requires).
 
-  Yearly Baseline card directly renders Story 2.1's AC: "household-size
-  presets... offered as starting suggestions, never silently applied as a
-  default" -- so the custom field is editable independent of the pills, and
-  no pill is force-selected on load if the stored value doesn't exactly
-  match one (shown here with 1700 kWh entered as a custom value, no preset
-  highlighted, matching the screenshot's own 1700 value which sits between
-  the 1-person and 2-person presets).
+  Content matches Ralf's own screenshot of the shipped page: Küche (9
+  Steckdosen) expanded with "Schrank rechts" (5 Geräte) expanded to its five
+  devices (Aquara Präsenzsensor, LED Küchenschrank, HomePod rechts, Hue Light
+  Bars, Abzugshaube); Boiler/Kaffee Ecke/Schrank links/Kochfeld/Licht/
+  Geschirrspüler/Tür/Waschmaschine as sibling Power Points; Flur/Bad/
+  Schlafzimmer/Wohnzimmer as sibling Rooms.
 
-  Room/Power Point/Device tree renders one room (Wohnzimmer) expanded, one
-  power point (Tür) within it expanded to its devices, matching the
-  screenshot's own expansion state -- collapsed rooms/power-points show
-  only a name + child count + chevron, no actions. The expanded Tür row's
-  three devices (Ventilator, Schreibtisch, Drucker) each get a quiet
-  rename/delete icon pair and the "Move to..." action from Story 2.6
-  ("exposed as an additive action on the existing management UI rather
-  than a new standalone surface"), rendered as a third icon rather than a
-  fourth full-width green button.
+  Nav chrome and Profile menu tokens are the resolved values from
+  DESIGN/components.md -> Nav chrome / Profile menu (not re-derived here):
+  dark active-bg rgba(47,179,151,0.16) / active-fg #6FD1B1; light active-bg
+  rgba(30,122,97,0.14) / active-fg #1E7A61. Profile dropdown panel reuses the
+  modal-card glass tokens already established in key-trend-history.html.
 
-  Dark-only in this file, consistent with key-tariff-radar.html /
-  key-smart-plug-import.html precedent (Settings-area surfaces validated
-  dark-only this pass) -- EXCEPT this file also renders Light, because the
-  screenshot that motivated this whole file was taken in Light mode and
-  the point is to show this exact screen looking intentional there too.
+  Not touched by this promotion: the "Daten" section (export/import) and the
+  Settings-page Logoff control -- unaffected by either correction round,
+  shown briefly for page completeness only.
 */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: #E4EBDA;
-  color: #1E2A1C;
   min-height: 100vh;
-  padding: 48px 24px 80px;
+  padding: 48px 24px 88px;
 }
-.wrap { max-width: 1280px; margin: 0 auto; }
+.wrap { max-width: 2040px; margin: 0 auto; }
 h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
-.intro { max-width: 840px; font-size: 14.5px; line-height: 1.6; color: rgba(30,42,28,0.75); margin-bottom: 40px; }
-.intro code { color: #16210F; }
+.intro { max-width: 940px; font-size: 14.5px; line-height: 1.6; margin-bottom: 40px; }
+.intro code { font-weight: 600; }
 
-.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
-.theme { flex: 1 1 340px; border-radius: 28px; padding: 36px 28px 44px; min-width: 320px; }
-.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 24px; }
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; margin-bottom: 48px; }
+.theme { flex: 1 1 780px; border-radius: 28px; padding: 32px 26px 40px; min-width: 700px; max-width: 980px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 20px; }
 
-.phone { width: 320px; margin: 0 auto; border-radius: 52px; padding: 11px; }
-.screen { border-radius: 41px; height: 780px; overflow-y: auto; padding: 26px 19px 24px; }
-.screen::-webkit-scrollbar { display: none; }
+.appframe { border-radius: 20px; padding: 10px; }
+.chrome-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 10px; }
+.chrome-dot { width: 8px; height: 8px; border-radius: 50%; }
+.screen { border-radius: 14px; overflow: hidden; }
 
-.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.crumb { font-size: 12px; text-decoration: none; }
-.date { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
-.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 18px; }
+/* ---------- nav chrome (top-nav variant, >=660px — DESIGN.md -> Components -> Nav chrome) ---------- */
+.top-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 28px; }
+.wordmark-row { display: flex; align-items: center; gap: 9px; }
+.mark { width: 20px; height: 20px; border-radius: 7px; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); flex: 0 0 auto; }
+.wordmark { font-size: 13.5px; font-weight: 700; }
+.nav-links { display: flex; align-items: center; gap: 4px; }
+.nav-link { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 10px; }
+.nav-link svg { width: 14px; height: 14px; }
+.top-nav-right { display: flex; align-items: center; gap: 8px; }
+.profile-btn { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; }
+.profile-avatar { width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #06120D; }
+.profile-chevron { font-size: 8px; }
 
-.section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; margin: 20px 0 8px; }
+/* ---------- page body (centered {spacing.content-max-wide} column) ---------- */
+.page-body { padding: 24px 28px 32px; }
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 20px; }
+.section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; margin: 22px 0 8px; }
 .section-label:first-of-type { margin-top: 0; }
 
-/* ---------- generic glass card ---------- */
-.card { border-radius: 18px; padding: 18px 16px 16px; margin-bottom: 4px; }
-.card p.help { font-size: 12px; line-height: 1.55; margin-bottom: 14px; }
+.card { border-radius: 18px; padding: 20px 22px 18px; margin-bottom: 4px; }
+.card p.help { font-size: 12.5px; line-height: 1.55; margin-bottom: 16px; }
 
-/* ---------- household-size presets (2026-08-16 redesign) ----------
-   Was 4 full-text pills ("1 person ≈1500 kWh"...) that wrapped to two rows
-   at phone width. Replaced with a compact single-row icon strip — tap a
-   household size to load its typical kWh straight into the field below;
-   the pill's own former wording moves into a tiny caption under the icon,
-   and the field stays the single source of truth (Story 2.1: presets are
-   "starting suggestions, never silently applied" — nothing here writes to
-   the field without a tap, and the field is still freely editable after). */
-.hh-preset-row { display: flex; gap: 8px; margin-bottom: 14px; }
-.hh-preset { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px 9px; border-radius: 14px; font-family: inherit; }
-.hh-preset-icon { position: relative; width: 22px; height: 22px; }
-.hh-preset-icon svg { width: 100%; height: 100%; }
-.hh-preset-count {
-  position: absolute; top: -5px; right: -7px;
-  min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px;
-  font-size: 8.5px; font-weight: 700; line-height: 14px; text-align: center;
-}
-.hh-preset-kwh { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* ---------- section-pairing row (2026-09-28) ---------- */
+.section-pair-row { display: flex; gap: 14px; }
+.section-pair-row > .card { flex: 1 1 0; margin-bottom: 0; }
 
+/* ---------- Yearly Baseline (unaffected by either correction round) ---------- */
+.preset-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.preset-tile { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; border-radius: 14px; padding: 10px 4px 9px; }
+.preset-tile svg { width: 18px; height: 18px; }
+.preset-count { font-size: 10px; font-weight: 700; }
+.preset-kwh { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .field-label { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 6px; display: block; }
+.kwh-input-wrap { display: flex; align-items: baseline; gap: 8px; border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; max-width: 260px; }
+.kwh-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; background: transparent; border: none; width: 100%; }
+.unit { font-size: 12px; font-weight: 600; }
+.save-btn { display: inline-block; font-family: inherit; font-size: 12.5px; font-weight: 700; border: none; border-radius: 999px; padding: 12px 22px; }
 
-/* ---------- unit-inside-field pattern (2026-08-16) ----------
-   Was a separate "kWh" label sitting outside the input, side by side —
-   two elements that could wrap independently at narrow widths. Now one
-   bordered field contains both, same composed-field pattern as the Log
-   Reading sheet's kWh entry (key-log-reading-flow.html's
-   .kwh-input-wrap) — the unit reads as part of the value, not a second
-   floating label, and can never wrap onto its own line. */
-.baseline-input-wrap { display: flex; align-items: baseline; gap: 6px; border-radius: 14px; padding: 11px 14px; margin-bottom: 14px; }
-.baseline-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; background: transparent; border: none; padding: 0; width: 100%; }
-.unit { font-size: 12px; font-weight: 600; flex: 0 0 auto; }
-.save-btn { display: inline-block; font-family: inherit; font-size: 12.5px; font-weight: 700; border: none; border-radius: 999px; padding: 12px 20px; } /* a11y fix 2026-08-16: vertical padding 9px->12px, was ~33px tall */
-
-/* ---------- simple settings rows (household/export/etc) ---------- */
-.settings-list { border-radius: 18px; overflow: hidden; margin-bottom: 4px; }
-.settings-row { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; font-size: 13px; }
+/* ---------- toggle + settings rows ---------- */
+.toggle { width: 38px; height: 22px; border-radius: 999px; position: relative; flex: 0 0 auto; }
+.toggle::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 3px; left: 3px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toggle-row .sub { font-size: 11px; margin-top: 3px; }
+.settings-list { border-radius: 18px; overflow: hidden; }
+.settings-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; font-size: 13px; font-weight: 600; }
 .settings-row:not(:last-child) { border-bottom: 1px solid; }
 .settings-row .arrow { font-size: 12px; }
-.crumb { display: inline-block; padding: 10px 4px; margin: -10px 0 -10px -4px; } /* a11y fix 2026-08-16: crumb link had no padding, ~14px hit area */
 
-/* ---------- room/power point/device tree ---------- */
-.tree-card { border-radius: 18px; overflow: hidden; }
-.tree-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-size: 13px; font-weight: 600; cursor: default; }
-.tree-row:not(:last-child) { border-bottom: 1px solid; }
-.tree-row .left { display: flex; align-items: center; gap: 9px; }
-.chevron { font-size: 9px; transition: none; }
-.chevron.down { transform: rotate(90deg); }
-.count { font-size: 11px; font-weight: 500; }
-
-.tree-children { padding: 0 0 4px; }
-.pp-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 10px 30px; font-size: 12.5px; font-weight: 600; }
-.pp-row:not(:last-child) { border-bottom: 1px solid; }
-.pp-row .left { display: flex; align-items: center; gap: 8px; }
-
-.device-children { padding: 2px 0 8px; }
-.device-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 8px 46px; font-size: 12px; }
-.device-row .left { display: flex; align-items: center; gap: 8px; }
-.dot { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto; }
-.device-actions { display: flex; align-items: center; gap: 8px; } /* a11y fix 2026-08-16: gap 2px->8px, was multiplying mis-tap risk between adjacent icon buttons */
-.icon-btn { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; } /* a11y fix 2026-08-16: was 24x24px, under the ~44px tap-target floor */
-.icon-btn svg { width: 15px; height: 15px; }
-.add-row { display: flex; align-items: center; gap: 6px; padding: 10px 14px 12px 46px; font-size: 11.5px; font-weight: 700; }
-
-.footer-note { font-size: 11px; line-height: 1.5; margin-top: 16px; }
+/* ---------- Rooms/Power Points grid-with-expand (2026-09-28) ---------- */
+.tree-toolbar { margin-bottom: 12px; }
+.add-btn { font-family: inherit; font-size: 12px; font-weight: 700; padding: 9px 18px; border-radius: 999px; border: none; }
+.room-grid, .pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.room-tile, .pp-tile { border-radius: 14px; padding: 12px 14px; }
+.room-tile.open, .pp-tile.open { grid-column: 1 / -1; }
+.tile-summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; }
+.pp-tile .tile-summary { font-size: 12.5px; font-weight: 600; }
+.tile-summary::-webkit-details-marker { display: none; }
+.tile-summary .count { font-weight: 400; font-size: 11.5px; }
+.tile-actions { display: flex; gap: 6px; margin: 10px 0 4px; }
+.icon-btn { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; }
+.icon-btn svg { width: 13px; height: 13px; }
+.pp-nested { margin-top: 10px; }
+.add-link { display: inline-block; font-size: 11.5px; font-weight: 700; margin-top: 10px; }
+.device-list { display: flex; flex-direction: column; gap: 1px; margin-top: 10px; }
+.device-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; font-size: 12.5px; }
+.device-row .device-actions { display: flex; gap: 4px; }
 
 /* ============ DARK THEME ============ */
+body.page-dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; }
 .theme.dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
 .theme.dark .theme-label { color: rgba(234,245,238,0.4); }
-.theme.dark .phone { background: linear-gradient(160deg, #1C2C24, #0F1A15); box-shadow: 0 40px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.08); }
+.theme.dark .intro { color: rgba(234,245,238,0.62); }
+.theme.dark .appframe { background: linear-gradient(160deg, #1C2C24, #0F1A15); border: 1px solid rgba(210,235,220,0.08); box-shadow: 0 30px 70px rgba(0,0,0,0.5); }
+.theme.dark .chrome-dot { background: rgba(234,245,238,0.14); }
 .theme.dark .screen { background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); }
-.theme.dark .crumb { color: #6FD1B1; }
-.theme.dark .date { color: rgba(234,245,238,0.55); }
+.theme.dark .top-nav { border-bottom: 1px solid rgba(210,235,220,0.08); background: rgba(8,16,12,0.35); }
+.theme.dark .wordmark { color: #EAF5EE; }
+.theme.dark .nav-link { color: rgba(234,245,238,0.55); }
+.theme.dark .nav-link svg { stroke: rgba(234,245,238,0.5); }
+.theme.dark .nav-link.active { background: rgba(47,179,151,0.16); color: #6FD1B1; }
+.theme.dark .nav-link.active svg { stroke: #6FD1B1; }
+.theme.dark .profile-btn { background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.14); }
+.theme.dark .profile-chevron { color: rgba(234,245,238,0.45); }
 .theme.dark .page-title { color: #F3FBF5; }
 .theme.dark .section-label { color: rgba(234,245,238,0.4); }
-.theme.dark .card { background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.14); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); }
+.theme.dark .card, .theme.dark .settings-list, .theme.dark .room-tile, .theme.dark .pp-tile { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.13); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); }
 .theme.dark .card p.help { color: rgba(234,245,238,0.55); }
-.theme.dark .hh-preset { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.14); }
-.theme.dark .hh-preset-icon svg { stroke: rgba(234,245,238,0.55); }
-.theme.dark .hh-preset-count { color: rgba(234,245,238,0.65); background: rgba(8,16,12,0.65); }
-.theme.dark .hh-preset-kwh { color: rgba(234,245,238,0.6); }
-.theme.dark .hh-preset.active { background: rgba(159,187,138,0.16); border-color: rgba(159,187,138,0.4); }
-.theme.dark .hh-preset.active .hh-preset-icon svg { stroke: #C7DCBB; }
-.theme.dark .hh-preset.active .hh-preset-count { color: #16210F; background: #C7DCBB; }
-.theme.dark .hh-preset.active .hh-preset-kwh { color: #C7DCBB; }
-.theme.dark .field-label { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.45 (~3.56:1 against .card), fails AA */
-.theme.dark .baseline-input-wrap { background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.18); }
-.theme.dark .baseline-input { color: #EAF5EE; }
-.theme.dark .unit { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.5 (~4.06:1 against .card, borderline) */
+.theme.dark .preset-tile { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.14); }
+.theme.dark .preset-tile svg { stroke: rgba(234,245,238,0.55); }
+.theme.dark .preset-count, .theme.dark .preset-kwh { color: rgba(234,245,238,0.6); }
+.theme.dark .field-label { color: rgba(234,245,238,0.6); }
+.theme.dark .kwh-input-wrap { background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.2); }
+.theme.dark .kwh-input { color: #EAF5EE; }
+.theme.dark .unit { color: rgba(234,245,238,0.6); }
 .theme.dark .save-btn { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; }
-.theme.dark .settings-list, .theme.dark .tree-card { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.12); }
-.theme.dark .settings-row { color: rgba(234,245,238,0.8); border-color: rgba(210,235,220,0.08) !important; }
-.theme.dark .settings-row .arrow { color: rgba(234,245,238,0.5); } /* a11y fix 2026-08-16: was 0.3 (~2.5:1), fails AA */
-.theme.dark .tree-row { color: #EAF5EE; border-color: rgba(210,235,220,0.1) !important; }
-.theme.dark .tree-row.expanded { background: rgba(220,245,230,0.04); }
-.theme.dark .chevron { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.4 (~3.4:1 against tree-card), fails AA */
-.theme.dark .count { color: rgba(234,245,238,0.6); } /* a11y fix 2026-08-16: was 0.4 */
-.theme.dark .pp-row { color: rgba(234,245,238,0.85); border-color: rgba(210,235,220,0.08) !important; }
-.theme.dark .pp-row.expanded { background: rgba(220,245,230,0.03); }
-.theme.dark .device-row { color: rgba(234,245,238,0.72); }
-.theme.dark .dot { background: rgba(234,245,238,0.3); }
-.theme.dark .icon-btn svg { stroke: rgba(234,245,238,0.42); }
-.theme.dark .icon-btn:hover svg { stroke: #9FBB8A; }
-.theme.dark .add-row { color: #6FD1B1; }
-.theme.dark .footer-note { color: rgba(234,245,238,0.5); }
+.theme.dark .toggle { background: rgba(220,245,230,0.1); }
+.theme.dark .toggle::after { background: rgba(234,245,238,0.6); }
+.theme.dark .toggle-row .sub { color: rgba(234,245,238,0.45); }
+.theme.dark .settings-row { color: #EAF5EE; border-color: rgba(210,235,220,0.08) !important; }
+.theme.dark .settings-row .arrow { color: rgba(234,245,238,0.5); }
+.theme.dark .add-btn { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; }
+.theme.dark .room-tile.open, .theme.dark .pp-tile.open { background: rgba(220,245,230,0.09); }
+.theme.dark .tile-summary { color: #EAF5EE; }
+.theme.dark .tile-summary .count { color: rgba(234,245,238,0.45); }
+.theme.dark .icon-btn { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.16); }
+.theme.dark .icon-btn svg { stroke: rgba(234,245,238,0.7); }
+.theme.dark .add-link { color: #6FD1B1; }
+.theme.dark .device-row { color: rgba(234,245,238,0.72); border-bottom: 1px solid rgba(210,235,220,0.06); }
 
 /* ============ LIGHT THEME ============ */
+body.page-light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; }
 .theme.light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; box-shadow: 0 24px 60px rgba(40,70,30,0.14); border: 1px solid rgba(255,255,255,0.6); }
 .theme.light .theme-label { color: rgba(30,42,28,0.46); }
-.theme.light .phone { background: linear-gradient(160deg, #FFFFFA, #E3EDD8); box-shadow: 0 30px 60px rgba(40,70,30,0.22), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.14); }
+.theme.light .intro { color: rgba(30,42,28,0.68); }
+.theme.light .appframe { background: linear-gradient(160deg, #FFFFFA, #E3EDD8); border: 1px solid rgba(40,70,50,0.14); box-shadow: 0 30px 60px rgba(40,70,30,0.22); }
+.theme.light .chrome-dot { background: rgba(30,42,28,0.16); }
 .theme.light .screen { background: radial-gradient(130% 60% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
-.theme.light .crumb { color: #1E7A61; }
-.theme.light .date { color: rgba(30,42,28,0.65); }
+.theme.light .top-nav { border-bottom: 1px solid rgba(40,70,50,0.1); background: rgba(255,255,255,0.35); }
+.theme.light .wordmark { color: #16210F; }
+.theme.light .nav-link { color: rgba(30,42,28,0.6); }
+.theme.light .nav-link svg { stroke: rgba(30,42,28,0.55); }
+.theme.light .nav-link.active { background: rgba(30,122,97,0.14); color: #1E7A61; }
+.theme.light .nav-link.active svg { stroke: #1E7A61; }
+.theme.light .profile-btn { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.16); }
+.theme.light .profile-chevron { color: rgba(30,42,28,0.5); }
 .theme.light .page-title { color: #16210F; }
 .theme.light .section-label { color: rgba(30,42,28,0.5); }
-.theme.light .card { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); }
+.theme.light .card, .theme.light .settings-list, .theme.light .room-tile, .theme.light .pp-tile { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); }
 .theme.light .card p.help { color: rgba(30,42,28,0.62); }
-.theme.light .hh-preset { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.14); }
-.theme.light .hh-preset-icon svg { stroke: rgba(30,42,28,0.6); }
-.theme.light .hh-preset-count { color: rgba(30,42,28,0.7); background: rgba(255,255,255,0.85); }
-.theme.light .hh-preset-kwh { color: rgba(30,42,28,0.65); }
-.theme.light .hh-preset.active { background: rgba(107,134,86,0.16); border-color: rgba(107,134,86,0.4); }
-.theme.light .hh-preset.active .hh-preset-icon svg { stroke: #41603A; }
-.theme.light .hh-preset.active .hh-preset-count { color: #FFFFFF; background: #41603A; }
-.theme.light .hh-preset.active .hh-preset-kwh { color: #41603A; }
-.theme.light .field-label { color: rgba(30,42,28,0.62); } /* a11y fix 2026-08-16: was 0.5 (~3.07:1 against .card), fails AA */
-.theme.light .baseline-input-wrap { background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.16); }
-.theme.light .baseline-input { color: #1E2A1C; }
-.theme.light .unit { color: rgba(30,42,28,0.62); } /* a11y fix 2026-08-16: was 0.55 */
-.theme.light .save-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; } /* a11y fix 2026-08-16: darkened gradient, was ~3.4:1 at lighter stop against white text */
-.theme.light .settings-list, .theme.light .tree-card { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.1); }
-.theme.light .settings-row { color: rgba(30,42,28,0.85); border-color: rgba(40,70,50,0.08) !important; }
-.theme.light .settings-row .arrow { color: rgba(30,42,28,0.55); } /* a11y fix 2026-08-16: was 0.32 (~2.1:1), fails AA */
-.theme.light .tree-row { color: #16210F; border-color: rgba(40,70,50,0.09) !important; }
-.theme.light .tree-row.expanded { background: rgba(255,255,255,0.4); }
-.theme.light .chevron { color: rgba(30,42,28,0.68); } /* a11y fix 2026-08-16: was 0.42 (~2.5:1 against tree-card), fails AA */
-.theme.light .count { color: rgba(30,42,28,0.68); } /* a11y fix 2026-08-16: was 0.42 */
-.theme.light .pp-row { color: rgba(30,42,28,0.88); border-color: rgba(40,70,50,0.08) !important; }
-.theme.light .pp-row.expanded { background: rgba(255,255,255,0.3); }
-.theme.light .device-row { color: rgba(30,42,28,0.75); }
-.theme.light .dot { background: rgba(30,42,28,0.3); }
-.theme.light .icon-btn svg { stroke: rgba(30,42,28,0.42); }
-.theme.light .icon-btn:hover svg { stroke: #6B8656; }
-.theme.light .add-row { color: #1E7A61; }
-.theme.light .footer-note { color: rgba(30,42,28,0.55); }
+.theme.light .preset-tile { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.14); }
+.theme.light .preset-tile svg { stroke: rgba(30,42,28,0.6); }
+.theme.light .preset-count, .theme.light .preset-kwh { color: rgba(30,42,28,0.65); }
+.theme.light .field-label { color: rgba(30,42,28,0.62); }
+.theme.light .kwh-input-wrap { background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.16); }
+.theme.light .kwh-input { color: #1E2A1C; }
+.theme.light .unit { color: rgba(30,42,28,0.62); }
+.theme.light .save-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; }
+.theme.light .toggle { background: rgba(40,70,50,0.14); }
+.theme.light .toggle::after { background: #FFFFFF; }
+.theme.light .toggle-row .sub { color: rgba(30,42,28,0.55); }
+.theme.light .settings-row { color: #16210F; border-color: rgba(40,70,50,0.08) !important; }
+.theme.light .settings-row .arrow { color: rgba(30,42,28,0.55); }
+.theme.light .add-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; }
+.theme.light .room-tile.open, .theme.light .pp-tile.open { background: rgba(255,255,255,0.8); }
+.theme.light .tile-summary { color: #16210F; }
+.theme.light .tile-summary .count { color: rgba(30,42,28,0.5); }
+.theme.light .icon-btn { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.18); }
+.theme.light .icon-btn svg { stroke: rgba(30,42,28,0.7); }
+.theme.light .add-link { color: #1E7A61; }
+.theme.light .device-row { color: rgba(30,42,28,0.78); border-bottom: 1px solid rgba(40,70,50,0.07); }
+
+/* ---------- profile dropdown (open, shown once below — modal-card tokens from key-trend-history.html) ---------- */
+.profile-dropdown { position: absolute; top: 54px; right: 28px; width: 220px; border-radius: 14px; padding: 8px; z-index: 5; }
+.profile-dropdown.dark { background: rgba(24,38,31,0.98); border: 1px solid rgba(210,235,220,0.18); backdrop-filter: blur(24px) saturate(150%); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+.profile-dropdown.light { background: rgba(255,255,255,0.98); border: 1px solid rgba(40,70,50,0.16); backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 20px 50px rgba(40,70,30,0.22); }
+.pd-email { font-size: 12px; font-weight: 600; padding: 8px 10px 10px; margin-bottom: 4px; }
+.profile-dropdown.dark .pd-email { color: rgba(234,245,238,0.85); border-bottom: 1px solid rgba(210,235,220,0.1); }
+.profile-dropdown.light .pd-email { color: rgba(30,42,28,0.85); border-bottom: 1px solid rgba(40,70,50,0.12); }
+.pd-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; font-size: 12.5px; }
+.profile-dropdown.dark .pd-item { color: rgba(234,245,238,0.8); }
+.profile-dropdown.light .pd-item { color: rgba(30,42,28,0.82); }
+.pd-item.danger { color: #EB958C; }
 </style>
 </head>
-<body>
+<body class="page-dark">
 <div class="wrap">
-  <h1>Settings — Key Screen</h1>
+  <h1>Settings — desktop/tablet, promoted 2026-09-28</h1>
   <p class="intro">
-    Direct answer to the current implementation screenshot: same content (Yearly Baseline presets +
-    custom value; Room → Power Point → Device tree with Wohnzimmer / Tür expanded, same three devices),
-    rendered as a spaced, hierarchical glass-card list instead of one identical bordered button per row
-    at every depth. <code>Story 2.1</code>, <code>Story 1.9</code>, <code>Story 2.6</code>.
+    Promotes this file from its pre-Epic-8 320px phone-only state to the corrected desktop/tablet
+    composition — top-nav chrome, labeled sections, 900px column, AI Plausibility Check + Household
+    paired side by side, and the Rooms/Power Points grid-with-expand pattern. Content matches Ralf's
+    own screenshot (Küche/Schrank rechts/5 devices; Boiler through Waschmaschine; Flur/Bad/
+    Schlafzimmer/Wohnzimmer).
   </p>
+
   <div class="theme-row">
 
+    <!-- ================= DARK ================= -->
     <section class="theme dark">
       <div class="theme-label">Dark</div>
-      <div class="phone">
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
         <div class="screen">
-          <div class="topbar"><a class="crumb" href="#">← Dashboard</a><span class="date">Sun, Aug 16</span></div>
-          <div class="page-title">Settings</div>
-
-          <div class="section-label">Yearly Baseline</div>
-          <div class="card">
-            <p class="help">How much electricity your household expects to use in a year. Pattern Detective measures your pace against it. Changing it only affects future readings.</p>
-            <div class="hh-preset-row">
-              <button class="hh-preset" aria-label="1 person, about 1500 kWh per year">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">1</span></span>
-                <span class="hh-preset-kwh">1500</span>
-              </button>
-              <button class="hh-preset active" aria-label="2 people, about 2500 kWh per year, currently selected">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">2</span></span>
-                <span class="hh-preset-kwh">2500</span>
-              </button>
-              <button class="hh-preset" aria-label="3 people, about 3500 kWh per year">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">3</span></span>
-                <span class="hh-preset-kwh">3500</span>
-              </button>
-              <button class="hh-preset" aria-label="4 people, about 4250 kWh per year">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">4</span></span>
-                <span class="hh-preset-kwh">4250</span>
-              </button>
+          <div class="top-nav">
+            <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+            <div class="nav-links">
+              <div class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg>Dashboard</div>
+              <div class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M12 19V5M20 19v-7"/></svg>Verlauf</div>
+              <div class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Tarifradar</div>
+              <div class="nav-link active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>Einstellungen</div>
             </div>
-            <span class="field-label">Yearly Baseline (kWh)</span>
-            <div class="baseline-input-wrap">
-              <input class="baseline-input" value="2500">
-              <span class="unit">kWh</span>
-            </div>
-            <span class="save-btn">Save</span>
+            <div class="top-nav-right"><div class="profile-btn"><span class="profile-avatar">R</span><span class="profile-chevron">▾</span></div></div>
           </div>
+          <div class="page-body">
+            <div class="page-title">Einstellungen</div>
 
-          <div class="section-label">Household</div>
-          <div class="settings-list">
-            <div class="settings-row"><span>Invite a member</span><span class="arrow" aria-hidden="true">→</span></div>
-            <div class="settings-row"><span>Tariff Radar</span><span class="arrow" aria-hidden="true">→</span></div>
-            <div class="settings-row"><span>Smart Plug import</span><span class="arrow" aria-hidden="true">→</span></div>
-            <div class="settings-row"><span>Data export &amp; import</span><span class="arrow" aria-hidden="true">→</span></div>
-          </div>
-
-          <div class="section-label">Rooms, Power Points &amp; Devices</div>
-          <div class="tree-card">
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Küche</span></div><span class="count">2 power points</span></div>
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Flur</span></div><span class="count">1 power point</span></div>
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Bad</span></div><span class="count">1 power point</span></div>
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Schlafzimmer</span></div><span class="count">2 power points</span></div>
-            <div class="tree-row expanded"><div class="left"><span class="chevron down">›</span><span>Wohnzimmer</span></div><span class="count">5 power points</span></div>
-            <div class="tree-children">
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Schreibtisch</span></div><span class="count">2 devices</span></div>
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Couch</span></div><span class="count">1 device</span></div>
-              <div class="pp-row expanded"><div class="left"><span class="chevron down">›</span><span>Tür</span></div><span class="count">3 devices</span></div>
-              <div class="device-children">
-                <div class="device-row"><div class="left"><span class="dot"></span><span>Ventilator</span></div>
-                  <div class="device-actions">
-                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                </div>
-                <div class="device-row"><div class="left"><span class="dot"></span><span>Schreibtisch</span></div>
-                  <div class="device-actions">
-                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                </div>
-                <div class="device-row"><div class="left"><span class="dot"></span><span>Drucker</span></div>
-                  <div class="device-actions">
-                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                </div>
-                <div class="add-row">+ Add device to Tür</div>
+            <div class="section-label">Jahresbasiswert</div>
+            <div class="card">
+              <p class="help">Wie viel Strom dein Haushalt voraussichtlich in einem Jahr verbraucht.</p>
+              <div class="preset-row">
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">1</span><span class="preset-kwh">1500</span></div>
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">2</span><span class="preset-kwh">2500</span></div>
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">3</span><span class="preset-kwh">3500</span></div>
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">4</span><span class="preset-kwh">4250</span></div>
               </div>
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Wand PC-Ecke</span></div><span class="count">1 device</span></div>
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>HiFi</span></div><span class="count">2 devices</span></div>
+              <span class="field-label">Jahresbasiswert (kWh)</span>
+              <div class="kwh-input-wrap"><input class="kwh-input" value="1700"><span class="unit">kWh</span></div>
+              <span class="save-btn">Speichern</span>
+            </div>
+
+            <div class="section-label">&nbsp;</div>
+            <div class="section-pair-row">
+              <div class="card">
+                <h3 style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; opacity:.7;">KI-Plausibilitätsprüfung</h3>
+                <p class="help">Wenn aktiviert, kann die Beschreibung eines protokollierten Ereignisses an das konfigurierte KI-Backend gesendet werden.</p>
+                <div class="toggle-row"><div><div style="font-size:12.5px; font-weight:600;">Ereignisse für KI-Abgleich senden</div><div class="sub">Für diese Bereitstellung ist kein KI-Backend konfiguriert.</div></div><div class="toggle"></div></div>
+              </div>
+              <div class="card">
+                <h3 style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; opacity:.7;">Haushalt</h3>
+                <div class="settings-list">
+                  <div class="settings-row"><span>Mitglied einladen</span><span class="arrow">→</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-label">Räume, Steckdosen &amp; Geräte</div>
+            <div class="card">
+              <div class="tree-toolbar"><button class="add-btn">Raum hinzufügen</button></div>
+              <div class="room-grid">
+                <details class="room-tile open" open>
+                  <summary class="tile-summary"><span>Küche</span><span class="count">9 Steckdosen</span></summary>
+                  <div class="pp-nested">
+                    <div class="pp-grid">
+                      <details class="pp-tile open" open>
+                        <summary class="tile-summary"><span>Schrank rechts</span><span class="count">5 Geräte</span></summary>
+                        <div class="device-list">
+                          <div class="device-row"><span>Aquara Präsenzsensor</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>LED Küchenschrank</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>HomePod rechts</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>Hue Light Bars</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>Abzugshaube</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        </div>
+                        <a class="add-link" href="#">Gerät hinzufügen</a>
+                      </details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Boiler</span><span class="count">1 Gerät</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Kaffee Ecke</span><span class="count">4 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Schrank links</span><span class="count">2 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Kochfeld</span><span class="count">2 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Licht</span><span class="count">3 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Geschirrspüler</span><span class="count">1 Gerät</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Tür</span><span class="count">1 Gerät</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Waschmaschine</span><span class="count">1 Gerät</span></summary></details>
+                    </div>
+                    <a class="add-link" href="#">Steckdose hinzufügen</a>
+                  </div>
+                </details>
+                <details class="room-tile"><summary class="tile-summary"><span>Flur</span><span class="count">1 Steckdose</span></summary></details>
+                <details class="room-tile"><summary class="tile-summary"><span>Bad</span><span class="count">1 Steckdose</span></summary></details>
+                <details class="room-tile"><summary class="tile-summary"><span>Schlafzimmer</span><span class="count">3 Steckdosen</span></summary></details>
+                <details class="room-tile"><summary class="tile-summary"><span>Wohnzimmer</span><span class="count">5 Steckdosen</span></summary></details>
+              </div>
+            </div>
+
+            <div class="section-label">Daten</div>
+            <div class="settings-list">
+              <div class="settings-row"><span>Daten exportieren</span><span class="arrow">→</span></div>
+              <div class="settings-row"><span>Daten importieren</span><span class="arrow">→</span></div>
+              <div class="settings-row"><span>Abmelden</span><span class="arrow">→</span></div>
             </div>
           </div>
-          <p class="footer-note">+ Add room</p>
-
         </div>
       </div>
     </section>
 
+    <!-- ================= LIGHT ================= -->
     <section class="theme light">
       <div class="theme-label">Light</div>
-      <div class="phone">
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
         <div class="screen">
-          <div class="topbar"><a class="crumb" href="#">← Dashboard</a><span class="date">Sun, Aug 16</span></div>
-          <div class="page-title">Settings</div>
-
-          <div class="section-label">Yearly Baseline</div>
-          <div class="card">
-            <p class="help">How much electricity your household expects to use in a year. Pattern Detective measures your pace against it. Changing it only affects future readings.</p>
-            <div class="hh-preset-row">
-              <button class="hh-preset" aria-label="1 person, about 1500 kWh per year">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">1</span></span>
-                <span class="hh-preset-kwh">1500</span>
-              </button>
-              <button class="hh-preset active" aria-label="2 people, about 2500 kWh per year, currently selected">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">2</span></span>
-                <span class="hh-preset-kwh">2500</span>
-              </button>
-              <button class="hh-preset" aria-label="3 people, about 3500 kWh per year">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">3</span></span>
-                <span class="hh-preset-kwh">3500</span>
-              </button>
-              <button class="hh-preset" aria-label="4 people, about 4250 kWh per year">
-                <span class="hh-preset-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="hh-preset-count">4</span></span>
-                <span class="hh-preset-kwh">4250</span>
-              </button>
+          <div class="top-nav">
+            <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+            <div class="nav-links">
+              <div class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg>Dashboard</div>
+              <div class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M12 19V5M20 19v-7"/></svg>Verlauf</div>
+              <div class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Tarifradar</div>
+              <div class="nav-link active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>Einstellungen</div>
             </div>
-            <span class="field-label">Yearly Baseline (kWh)</span>
-            <div class="baseline-input-wrap">
-              <input class="baseline-input" value="2500">
-              <span class="unit">kWh</span>
-            </div>
-            <span class="save-btn">Save</span>
+            <div class="top-nav-right"><div class="profile-btn"><span class="profile-avatar">R</span><span class="profile-chevron">▾</span></div></div>
           </div>
+          <div class="page-body">
+            <div class="page-title">Einstellungen</div>
 
-          <div class="section-label">Household</div>
-          <div class="settings-list">
-            <div class="settings-row"><span>Invite a member</span><span class="arrow" aria-hidden="true">→</span></div>
-            <div class="settings-row"><span>Tariff Radar</span><span class="arrow" aria-hidden="true">→</span></div>
-            <div class="settings-row"><span>Smart Plug import</span><span class="arrow" aria-hidden="true">→</span></div>
-            <div class="settings-row"><span>Data export &amp; import</span><span class="arrow" aria-hidden="true">→</span></div>
-          </div>
-
-          <div class="section-label">Rooms, Power Points &amp; Devices</div>
-          <div class="tree-card">
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Küche</span></div><span class="count">2 power points</span></div>
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Flur</span></div><span class="count">1 power point</span></div>
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Bad</span></div><span class="count">1 power point</span></div>
-            <div class="tree-row"><div class="left"><span class="chevron">›</span><span>Schlafzimmer</span></div><span class="count">2 power points</span></div>
-            <div class="tree-row expanded"><div class="left"><span class="chevron down">›</span><span>Wohnzimmer</span></div><span class="count">5 power points</span></div>
-            <div class="tree-children">
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Schreibtisch</span></div><span class="count">2 devices</span></div>
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Couch</span></div><span class="count">1 device</span></div>
-              <div class="pp-row expanded"><div class="left"><span class="chevron down">›</span><span>Tür</span></div><span class="count">3 devices</span></div>
-              <div class="device-children">
-                <div class="device-row"><div class="left"><span class="dot"></span><span>Ventilator</span></div>
-                  <div class="device-actions">
-                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                </div>
-                <div class="device-row"><div class="left"><span class="dot"></span><span>Schreibtisch</span></div>
-                  <div class="device-actions">
-                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                </div>
-                <div class="device-row"><div class="left"><span class="dot"></span><span>Drucker</span></div>
-                  <div class="device-actions">
-                    <button class="icon-btn" title="Move to…" aria-label="Move to…"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-                    <button class="icon-btn" title="Rename" aria-label="Rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-                    <button class="icon-btn" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                </div>
-                <div class="add-row">+ Add device to Tür</div>
+            <div class="section-label">Jahresbasiswert</div>
+            <div class="card">
+              <p class="help">Wie viel Strom dein Haushalt voraussichtlich in einem Jahr verbraucht.</p>
+              <div class="preset-row">
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">1</span><span class="preset-kwh">1500</span></div>
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">2</span><span class="preset-kwh">2500</span></div>
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">3</span><span class="preset-kwh">3500</span></div>
+                <div class="preset-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="preset-count">4</span><span class="preset-kwh">4250</span></div>
               </div>
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>Wand PC-Ecke</span></div><span class="count">1 device</span></div>
-              <div class="pp-row"><div class="left"><span class="chevron">›</span><span>HiFi</span></div><span class="count">2 devices</span></div>
+              <span class="field-label">Jahresbasiswert (kWh)</span>
+              <div class="kwh-input-wrap"><input class="kwh-input" value="1700"><span class="unit">kWh</span></div>
+              <span class="save-btn">Speichern</span>
+            </div>
+
+            <div class="section-label">&nbsp;</div>
+            <div class="section-pair-row">
+              <div class="card">
+                <h3 style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; opacity:.7;">KI-Plausibilitätsprüfung</h3>
+                <p class="help">Wenn aktiviert, kann die Beschreibung eines protokollierten Ereignisses an das konfigurierte KI-Backend gesendet werden.</p>
+                <div class="toggle-row"><div><div style="font-size:12.5px; font-weight:600;">Ereignisse für KI-Abgleich senden</div><div class="sub">Für diese Bereitstellung ist kein KI-Backend konfiguriert.</div></div><div class="toggle"></div></div>
+              </div>
+              <div class="card">
+                <h3 style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; opacity:.7;">Haushalt</h3>
+                <div class="settings-list">
+                  <div class="settings-row"><span>Mitglied einladen</span><span class="arrow">→</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-label">Räume, Steckdosen &amp; Geräte</div>
+            <div class="card">
+              <div class="tree-toolbar"><button class="add-btn">Raum hinzufügen</button></div>
+              <div class="room-grid">
+                <details class="room-tile open" open>
+                  <summary class="tile-summary"><span>Küche</span><span class="count">9 Steckdosen</span></summary>
+                  <div class="pp-nested">
+                    <div class="pp-grid">
+                      <details class="pp-tile open" open>
+                        <summary class="tile-summary"><span>Schrank rechts</span><span class="count">5 Geräte</span></summary>
+                        <div class="device-list">
+                          <div class="device-row"><span>Aquara Präsenzsensor</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>LED Küchenschrank</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>HomePod rechts</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>Hue Light Bars</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                          <div class="device-row"><span>Abzugshaube</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        </div>
+                        <a class="add-link" href="#">Gerät hinzufügen</a>
+                      </details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Boiler</span><span class="count">1 Gerät</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Kaffee Ecke</span><span class="count">4 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Schrank links</span><span class="count">2 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Kochfeld</span><span class="count">2 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Licht</span><span class="count">3 Geräte</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Geschirrspüler</span><span class="count">1 Gerät</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Tür</span><span class="count">1 Gerät</span></summary></details>
+                      <details class="pp-tile"><summary class="tile-summary"><span>Waschmaschine</span><span class="count">1 Gerät</span></summary></details>
+                    </div>
+                    <a class="add-link" href="#">Steckdose hinzufügen</a>
+                  </div>
+                </details>
+                <details class="room-tile"><summary class="tile-summary"><span>Flur</span><span class="count">1 Steckdose</span></summary></details>
+                <details class="room-tile"><summary class="tile-summary"><span>Bad</span><span class="count">1 Steckdose</span></summary></details>
+                <details class="room-tile"><summary class="tile-summary"><span>Schlafzimmer</span><span class="count">3 Steckdosen</span></summary></details>
+                <details class="room-tile"><summary class="tile-summary"><span>Wohnzimmer</span><span class="count">5 Steckdosen</span></summary></details>
+              </div>
+            </div>
+
+            <div class="section-label">Daten</div>
+            <div class="settings-list">
+              <div class="settings-row"><span>Daten exportieren</span><span class="arrow">→</span></div>
+              <div class="settings-row"><span>Daten importieren</span><span class="arrow">→</span></div>
+              <div class="settings-row"><span>Abmelden</span><span class="arrow">→</span></div>
             </div>
           </div>
-          <p class="footer-note">+ Add room</p>
-
         </div>
       </div>
     </section>
 
   </div>
+
+  <h1 style="margin-top:8px;">Profile menu — reused verbatim from Epic 8, shown open here</h1>
+  <p class="intro" style="margin-bottom:24px;">
+    Not new to this promotion — carried over from <code>critique-desktop-breakpoint-2026-09-23.html</code>
+    Section 7, shown here anchored to this file's actual top-nav for the first time.
+  </p>
+  <section class="theme dark" style="max-width: 640px; min-width: 0; position: relative;">
+    <div class="theme-label">Dark</div>
+    <div class="appframe">
+      <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+      <div class="screen" style="position: relative; min-height: 220px;">
+        <div class="top-nav">
+          <div class="wordmark-row"><span class="mark"></span><span class="wordmark">Energy Tracker</span></div>
+          <div class="nav-links">
+            <div class="nav-link active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>Einstellungen</div>
+          </div>
+          <div class="top-nav-right"><div class="profile-btn"><span class="profile-avatar">R</span><span class="profile-chevron">▾</span></div></div>
+        </div>
+        <div class="profile-dropdown dark">
+          <div class="pd-email">coding@ralfonsoftware.de</div>
+          <div class="pd-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>Profil</div>
+          <div class="pd-item danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>Abmelden</div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 </body>
 </html>

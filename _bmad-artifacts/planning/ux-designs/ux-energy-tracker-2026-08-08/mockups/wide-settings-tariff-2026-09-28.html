@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wide-column follow-up — Settings' Rooms grid + section pairing, Tariff Radar's history grid + side-by-side comparison (Green Eco, Dark + Light)</title>
+<style>
+/*
+  WIDE-COLUMN FOLLOW-UP (2026-09-28, part 2) — Settings + Tariff Radar
+  ===============================================================================
+  Same session as mockups/key-trend-history.html's 660px -> 900px column update
+  and Meter Readings/Events entry-grid pattern. Ralf's follow-up, after seeing
+  that mock: Settings' Rooms/Power Points/Devices tree is a long single-column
+  list of mostly one-line collapsed rows (see his second screenshot — Küche,
+  Boiler, Kaffee Ecke, Kochfeld... Flur, Bad, Schlafzimmer, Wohnzimmer, each
+  barely using the width before wrapping) and asked whether a "columned
+  spacing" could help there, plus whether Tariff Radar could use the extra
+  width too.
+
+  THREE new patterns, all documented in DESIGN/layout-spacing.md,
+  DESIGN/components.md, and EXPERIENCE.md:
+
+  1. Rooms/Power Points grid-with-expand-in-place (Settings, NEW).
+     Collapsed Room and Power Point summary rows sit in the same
+     repeat(auto-fill, minmax(...)) grid as the entry-grid pattern. Opening one
+     spans that tile to the full grid width (grid-column: 1 / -1) and reveals
+     its children inline below the summary row -- same accordion interaction
+     as today, just reflowed into a grid when collapsed. Device rows (the leaf
+     level) are DELIBERATELY EXCLUDED -- they carry a drag handle for manual
+     reordering (Story 2.6), and dragging to reorder is a materially more
+     ambiguous gesture in a 2D grid than in a vertical list. Devices stay a
+     plain list at every width.
+
+  2. Section pairing (Settings, NEW). AI Plausibility Check and Household are
+     each a short, self-contained, UNRELATED block that was sitting alone in a
+     mostly-empty full-width card. Paired side by side at the wide breakpoint.
+     Yearly Baseline is NOT paired with anything -- its own preset-icon row
+     already uses the width, and the Rooms/Power Points/Devices card stays
+     full width (it's the one card that actually needs the room).
+
+  3. Tariff Radar (NEW). TariffHistoryList (period / base fee / price / Edit,
+     no drag handle) is structurally identical to Meter Readings/Events --
+     same entry-grid treatment, verbatim. TariffComparisonForm's current-vs-
+     candidate summary panels currently stack vertically even though they're a
+     natural side-by-side comparison -- placed in two columns at the wide
+     breakpoint; the verdict card stays full width below as the shared
+     conclusion (it's the payoff both panels feed into, not a third comparison
+     panel).
+
+  Everything else (Tariff Check card, Add-Tariff/Compare-Tariff form field
+  pairing, nav chrome, Profile menu) is unchanged from the Epic 8
+  (2026-09-23) state -- see critique-desktop-breakpoint-2026-09-23.html.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  padding: 48px 24px 88px;
+}
+.wrap { max-width: 2040px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+h2.section-h { font-size: 16px; font-weight: 700; margin: 0 0 16px; }
+.intro { max-width: 940px; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px; }
+.intro code { font-weight: 600; }
+.decision-note { max-width: 980px; font-size: 13px; line-height: 1.6; margin-bottom: 40px; padding: 14px 18px; border-radius: 14px; }
+.decision-note ul { margin: 8px 0 0 18px; }
+.decision-note li { margin-bottom: 4px; }
+
+.theme-row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; margin-bottom: 48px; }
+.theme { flex: 1 1 780px; border-radius: 28px; padding: 32px 26px 40px; min-width: 700px; max-width: 980px; }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 20px; }
+
+.appframe { border-radius: 20px; padding: 10px; }
+.chrome-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 10px; }
+.chrome-dot { width: 8px; height: 8px; border-radius: 50%; }
+.screen { border-radius: 14px; padding: 24px 28px 28px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.crumb { font-size: 12px; text-decoration: none; }
+.page-title { font-size: 19px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 18px; }
+
+.card { border-radius: 18px; padding: 20px 22px 18px; margin-bottom: 14px; }
+.card h3 { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.plain-line { font-size: 12.5px; line-height: 1.55; }
+
+/* ---------- section-pairing row (NEW) ---------- */
+.section-pair-row { display: flex; flex-direction: column; gap: 14px; }
+.section-pair-row.wide-sim { flex-direction: row; }
+.section-pair-row.wide-sim > .card { flex: 1 1 0; margin-bottom: 0; }
+
+/* ---------- Yearly Baseline (unaffected, shown for context) ---------- */
+.preset-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.preset-pill { flex: 1; border-radius: 12px; padding: 8px 4px; text-align: center; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kwh-input-wrap { display: flex; align-items: baseline; gap: 8px; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; max-width: 260px; }
+.kwh-input { flex: 1 1 auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 700; background: transparent; border: none; width: 100%; }
+.save-btn { font-family: inherit; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 999px; border: none; }
+.toggle { width: 38px; height: 22px; border-radius: 999px; position: relative; flex: 0 0 auto; }
+.toggle::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 3px; left: 3px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.invite-row { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 13.5px; }
+
+/* ---------- Rooms/Power Points grid-with-expand (NEW) ---------- */
+.tree-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.add-btn { font-family: inherit; font-size: 12px; font-weight: 700; padding: 8px 16px; border-radius: 999px; border: none; }
+.room-grid, .pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.room-tile, .pp-tile { border-radius: 14px; padding: 12px 14px; }
+.room-tile.open, .pp-tile.open { grid-column: 1 / -1; }
+.tile-summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; }
+.pp-tile .tile-summary { font-size: 12.5px; font-weight: 600; }
+.tile-summary::-webkit-details-marker { display: none; }
+.tile-summary .count { font-weight: 400; font-size: 11.5px; }
+.tile-actions { display: flex; gap: 6px; margin: 10px 0 4px; }
+.icon-btn { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.icon-btn svg { width: 13px; height: 13px; }
+.pp-nested { margin-top: 10px; }
+.add-link { display: inline-block; font-size: 11.5px; font-weight: 700; margin-top: 10px; }
+.device-list { display: flex; flex-direction: column; gap: 1px; margin-top: 10px; }
+.device-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; font-size: 12.5px; }
+.device-row .device-actions { display: flex; gap: 4px; }
+
+/* ---------- Tariff Check + forms (unaffected, shown briefly for context) ---------- */
+.field-row { display: flex; gap: 12px; margin-bottom: 10px; }
+.field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 11px; font-weight: 600; }
+.field .input-box { border-radius: 12px; padding: 9px 11px; font-size: 13px; }
+
+/* ---------- Tariff History entry-grid (reuses the pattern verbatim) ---------- */
+.entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 4px; }
+.entry-tile { border-radius: 14px; padding: 13px 15px 12px; display: flex; flex-direction: column; gap: 3px; }
+.entry-primary { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.entry-secondary { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.entry-meta { font-size: 10.5px; margin-top: 2px; }
+.entry-actions { margin-top: 8px; display: flex; justify-content: flex-end; }
+.current-badge { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
+.edit-btn { font-family: inherit; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
+.pager-row { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 14px; }
+.pager-btn { font-family: inherit; font-size: 11.5px; font-weight: 700; padding: 7px 13px; border-radius: 999px; }
+
+/* ---------- Tariff Comparison — side-by-side summary panels (NEW) ---------- */
+.compare-summary-row { display: flex; flex-direction: column; gap: 14px; }
+.compare-summary-row.wide-sim { flex-direction: row; }
+.compare-summary-row.wide-sim > .quiet-card { flex: 1 1 0; }
+.quiet-card { border-radius: 16px; padding: 16px 18px; }
+.quiet-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.summary-row { display: flex; justify-content: space-between; font-size: 12.5px; font-variant-numeric: tabular-nums; padding: 3px 0; }
+.verdict-card { border-radius: 18px; padding: 18px 20px; margin-top: 14px; text-align: center; }
+.verdict-card .verdict-headline { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.verdict-card .verdict-sub { font-size: 12px; }
+
+/* ============ DARK THEME ============ */
+body.page-dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; }
+.theme.dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
+.theme.dark .theme-label { color: rgba(234,245,238,0.4); }
+.theme.dark .intro, .theme.dark .decision-note { color: rgba(234,245,238,0.62); }
+.decision-note.dark { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.12); }
+.theme.dark .appframe { background: linear-gradient(160deg, #1C2C24, #0F1A15); border: 1px solid rgba(210,235,220,0.08); box-shadow: 0 30px 70px rgba(0,0,0,0.5); }
+.theme.dark .chrome-dot { background: rgba(234,245,238,0.14); }
+.theme.dark .screen { background: radial-gradient(130% 60% at 25% 0%, #1A2A21 0%, #12201A 55%, #0C1611 100%); }
+.theme.dark .crumb { color: #6FD1B1; }
+.theme.dark .page-title, .theme.dark h2.section-h { color: #F3FBF5; }
+.theme.dark .card, .theme.dark .quiet-card { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.13); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); }
+.theme.dark .card h3 { color: rgba(234,245,238,0.45); }
+.theme.dark .plain-line { color: rgba(234,245,238,0.55); }
+.theme.dark .preset-pill { background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.14); color: rgba(234,245,238,0.7); }
+.theme.dark .kwh-input-wrap { background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.2); }
+.theme.dark .kwh-input { color: #EAF5EE; }
+.theme.dark .save-btn { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; }
+.theme.dark .toggle { background: rgba(220,245,230,0.1); }
+.theme.dark .toggle::after { background: rgba(234,245,238,0.6); }
+.theme.dark .invite-row { color: #EAF5EE; }
+.theme.dark .add-btn { background: linear-gradient(160deg, #6FE3C4, #2FB397 70%); color: #06120D; }
+.theme.dark .room-tile, .theme.dark .pp-tile { background: rgba(220,245,230,0.045); border: 1px solid rgba(210,235,220,0.12); }
+.theme.dark .room-tile.open, .theme.dark .pp-tile.open { background: rgba(220,245,230,0.07); }
+.theme.dark .tile-summary { color: #EAF5EE; }
+.theme.dark .tile-summary .count { color: rgba(234,245,238,0.45); }
+.theme.dark .icon-btn { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.16); }
+.theme.dark .icon-btn svg { stroke: rgba(234,245,238,0.7); }
+.theme.dark .add-link { color: #6FD1B1; }
+.theme.dark .device-row { color: rgba(234,245,238,0.7); border-bottom: 1px solid rgba(210,235,220,0.06); }
+.theme.dark .device-row .icon-btn { background: transparent; border: none; }
+.theme.dark .field label { color: rgba(234,245,238,0.55); }
+.theme.dark .field .input-box { background: rgba(8,16,12,0.4); border: 1px solid rgba(210,235,220,0.2); color: #EAF5EE; }
+.theme.dark .entry-tile { background: rgba(220,245,230,0.045); border: 1px solid rgba(210,235,220,0.12); }
+.theme.dark .entry-primary { color: #EAF5EE; }
+.theme.dark .entry-secondary { color: rgba(234,245,238,0.6); }
+.theme.dark .entry-meta { color: rgba(234,245,238,0.4); }
+.theme.dark .current-badge { color: rgba(234,245,238,0.75); background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.24); }
+.theme.dark .edit-btn { color: rgba(234,245,238,0.85); background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.2); }
+.theme.dark .pager-btn { color: rgba(234,245,238,0.75); background: rgba(220,245,230,0.05); border: 1px solid rgba(210,235,220,0.18); }
+.theme.dark .quiet-card h4 { color: rgba(234,245,238,0.5); }
+.theme.dark .summary-row { color: rgba(234,245,238,0.75); border-bottom: 1px solid rgba(210,235,220,0.07); }
+.theme.dark .verdict-card { background: rgba(220,245,230,0.08); border: 1px solid rgba(210,235,220,0.16); }
+.theme.dark .verdict-headline { color: #6FD1B1; }
+.theme.dark .verdict-sub { color: rgba(234,245,238,0.55); }
+
+/* ============ LIGHT THEME ============ */
+body.page-light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; }
+.theme.light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; box-shadow: 0 24px 60px rgba(40,70,30,0.14); border: 1px solid rgba(255,255,255,0.6); }
+.theme.light .theme-label { color: rgba(30,42,28,0.46); }
+.theme.light .intro, .theme.light .decision-note { color: rgba(30,42,28,0.68); }
+.decision-note.light { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.12); }
+.theme.light .appframe { background: linear-gradient(160deg, #FFFFFA, #E3EDD8); border: 1px solid rgba(40,70,50,0.14); box-shadow: 0 30px 60px rgba(40,70,30,0.22); }
+.theme.light .chrome-dot { background: rgba(30,42,28,0.16); }
+.theme.light .screen { background: radial-gradient(130% 60% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
+.theme.light .crumb { color: #1E7A61; }
+.theme.light .page-title, .theme.light h2.section-h { color: #16210F; }
+.theme.light .card, .theme.light .quiet-card { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); }
+.theme.light .card h3 { color: rgba(30,42,28,0.55); }
+.theme.light .plain-line { color: rgba(30,42,28,0.65); }
+.theme.light .preset-pill { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.16); color: rgba(30,42,28,0.75); }
+.theme.light .kwh-input-wrap { background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.18); }
+.theme.light .kwh-input { color: #1E2A1C; }
+.theme.light .save-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; }
+.theme.light .toggle { background: rgba(40,70,50,0.14); }
+.theme.light .toggle::after { background: #FFFFFF; }
+.theme.light .invite-row { color: #16210F; }
+.theme.light .add-btn { background: linear-gradient(160deg, #227A61, #145A47 70%); color: #FFFFFF; }
+.theme.light .room-tile, .theme.light .pp-tile { background: rgba(255,255,255,0.5); border: 1px solid rgba(40,70,50,0.13); }
+.theme.light .room-tile.open, .theme.light .pp-tile.open { background: rgba(255,255,255,0.72); }
+.theme.light .tile-summary { color: #16210F; }
+.theme.light .tile-summary .count { color: rgba(30,42,28,0.5); }
+.theme.light .icon-btn { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.18); }
+.theme.light .icon-btn svg { stroke: rgba(30,42,28,0.7); }
+.theme.light .add-link { color: #1E7A61; }
+.theme.light .device-row { color: rgba(30,42,28,0.78); border-bottom: 1px solid rgba(40,70,50,0.07); }
+.theme.light .device-row .icon-btn { background: transparent; border: none; }
+.theme.light .field label { color: rgba(30,42,28,0.6); }
+.theme.light .field .input-box { background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.18); color: #1E2A1C; }
+.theme.light .entry-tile { background: rgba(255,255,255,0.55); border: 1px solid rgba(40,70,50,0.13); }
+.theme.light .entry-primary { color: #16210F; }
+.theme.light .entry-secondary { color: rgba(30,42,28,0.65); }
+.theme.light .entry-meta { color: rgba(30,42,28,0.48); }
+.theme.light .current-badge { color: rgba(30,42,28,0.78); background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.28); }
+.theme.light .edit-btn { color: rgba(30,42,28,0.85); background: rgba(255,255,255,0.7); border: 1px solid rgba(40,70,50,0.2); }
+.theme.light .pager-btn { color: rgba(30,42,28,0.78); background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.18); }
+.theme.light .quiet-card h4 { color: rgba(30,42,28,0.55); }
+.theme.light .summary-row { color: rgba(30,42,28,0.78); border-bottom: 1px solid rgba(40,70,50,0.08); }
+.theme.light .verdict-card { background: rgba(255,255,255,0.65); border: 1px solid rgba(40,70,50,0.16); }
+.theme.light .verdict-headline { color: #1E7A61; }
+.theme.light .verdict-sub { color: rgba(30,42,28,0.6); }
+</style>
+</head>
+<body class="page-dark">
+<div class="wrap">
+  <h1>Settings + Tariff Radar — wide-column follow-up (2026-09-28)</h1>
+  <p class="intro">
+    Follow-up to <code>key-trend-history.html</code>'s 660px → 900px column update. Ralf's
+    screenshot of Settings' Rooms/Power Points/Devices tree showed a long single-column list of
+    mostly one-line collapsed rows; this file answers "how do we use 900px better" for Settings
+    and, per the same question, for Tariff Radar.
+  </p>
+  <div class="decision-note dark">
+    <strong>New patterns this session:</strong>
+    <ul>
+      <li><strong>Rooms/Power Points grid-with-expand:</strong> collapsed Room/Power Point rows sit in a <code>repeat(auto-fill, minmax(220px,1fr))</code> grid; opening one spans it to full width (<code>grid-column: 1 / -1</code>) and reveals its children below — same accordion interaction, just reflowed. Device rows stay a plain list (they carry a drag-reorder handle — a 2D grid makes "move" ambiguous).</li>
+      <li><strong>Section pairing:</strong> AI Plausibility Check + Household sit side by side (both short, unrelated, previously alone on a wide row). Yearly Baseline and the Rooms card stay full width.</li>
+      <li><strong>Tariff Radar:</strong> the Tariff History list (no drag handle) gets the identical entry-grid treatment as Meter Readings/Events. The Compare form's current-vs-candidate summary panels move from stacked to side by side; the verdict card stays full width below as the shared conclusion.</li>
+    </ul>
+  </div>
+
+  <h2 class="section-h" style="font-size:18px; margin-bottom: 4px;">Settings</h2>
+  <div class="theme-row">
+
+    <!-- ================= SETTINGS — DARK ================= -->
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+          <div class="page-title">Einstellungen</div>
+
+          <div class="card">
+            <h3>Jahresbasiswert</h3>
+            <div class="preset-row">
+              <div class="preset-pill">1500</div><div class="preset-pill">2500</div><div class="preset-pill">3500</div><div class="preset-pill">4250</div>
+            </div>
+            <div class="kwh-input-wrap"><input class="kwh-input" value="1700"><span>kWh</span></div>
+            <button class="save-btn">Speichern</button>
+          </div>
+
+          <div class="section-pair-row wide-sim">
+            <div class="card">
+              <h3>KI-Plausibilitätsprüfung</h3>
+              <p class="plain-line">Wenn aktiviert, kann die Beschreibung eines protokollierten Ereignisses an das konfigurierte KI-Backend gesendet werden.</p>
+              <div class="toggle-row"><span style="font-size:12.5px; font-weight:600;">Ereignisse für KI-Abgleich senden</span><div class="toggle"></div></div>
+            </div>
+            <div class="card">
+              <h3>Haushalt</h3>
+              <div class="invite-row">Mitglied einladen <span>→</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Räume, Steckdosen &amp; Geräte</h3>
+            <div class="tree-toolbar"><button class="add-btn">Raum hinzufügen</button></div>
+            <div class="room-grid">
+              <details class="room-tile open" open>
+                <summary class="tile-summary"><span>Küche</span><span class="count">9 Steckdosen</span></summary>
+                <div class="tile-actions">
+                  <div class="icon-btn" title="Bearbeiten"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></div>
+                  <div class="icon-btn" title="Löschen"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></div>
+                </div>
+                <div class="pp-nested">
+                  <div class="pp-grid">
+                    <details class="pp-tile open" open>
+                      <summary class="tile-summary"><span>Schrank rechts</span><span class="count">5 Geräte</span></summary>
+                      <div class="device-list">
+                        <div class="device-row"><span>Aquara Präsenzsensor</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>LED Küchenschrank</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>HomePod rechts</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>Hue Light Bars</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>Abzugshaube</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                      </div>
+                      <a class="add-link" href="#">Gerät hinzufügen</a>
+                    </details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Boiler</span><span class="count">1 Gerät</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Kaffee Ecke</span><span class="count">4 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Schrank links</span><span class="count">2 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Kochfeld</span><span class="count">2 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Licht</span><span class="count">3 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Geschirrspüler</span><span class="count">1 Gerät</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Tür</span><span class="count">1 Gerät</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Waschmaschine</span><span class="count">1 Gerät</span></summary></details>
+                  </div>
+                  <a class="add-link" href="#">Steckdose hinzufügen</a>
+                </div>
+              </details>
+              <details class="room-tile"><summary class="tile-summary"><span>Flur</span><span class="count">1 Steckdose</span></summary></details>
+              <details class="room-tile"><summary class="tile-summary"><span>Bad</span><span class="count">1 Steckdose</span></summary></details>
+              <details class="room-tile"><summary class="tile-summary"><span>Schlafzimmer</span><span class="count">3 Steckdosen</span></summary></details>
+              <details class="room-tile"><summary class="tile-summary"><span>Wohnzimmer</span><span class="count">5 Steckdosen</span></summary></details>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS — LIGHT ================= -->
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+          <div class="page-title">Einstellungen</div>
+
+          <div class="card">
+            <h3>Jahresbasiswert</h3>
+            <div class="preset-row">
+              <div class="preset-pill">1500</div><div class="preset-pill">2500</div><div class="preset-pill">3500</div><div class="preset-pill">4250</div>
+            </div>
+            <div class="kwh-input-wrap"><input class="kwh-input" value="1700"><span>kWh</span></div>
+            <button class="save-btn">Speichern</button>
+          </div>
+
+          <div class="section-pair-row wide-sim">
+            <div class="card">
+              <h3>KI-Plausibilitätsprüfung</h3>
+              <p class="plain-line">Wenn aktiviert, kann die Beschreibung eines protokollierten Ereignisses an das konfigurierte KI-Backend gesendet werden.</p>
+              <div class="toggle-row"><span style="font-size:12.5px; font-weight:600;">Ereignisse für KI-Abgleich senden</span><div class="toggle"></div></div>
+            </div>
+            <div class="card">
+              <h3>Haushalt</h3>
+              <div class="invite-row">Mitglied einladen <span>→</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Räume, Steckdosen &amp; Geräte</h3>
+            <div class="tree-toolbar"><button class="add-btn">Raum hinzufügen</button></div>
+            <div class="room-grid">
+              <details class="room-tile open" open>
+                <summary class="tile-summary"><span>Küche</span><span class="count">9 Steckdosen</span></summary>
+                <div class="tile-actions">
+                  <div class="icon-btn" title="Bearbeiten"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></div>
+                  <div class="icon-btn" title="Löschen"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></div>
+                </div>
+                <div class="pp-nested">
+                  <div class="pp-grid">
+                    <details class="pp-tile open" open>
+                      <summary class="tile-summary"><span>Schrank rechts</span><span class="count">5 Geräte</span></summary>
+                      <div class="device-list">
+                        <div class="device-row"><span>Aquara Präsenzsensor</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>LED Küchenschrank</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>HomePod rechts</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>Hue Light Bars</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                        <div class="device-row"><span>Abzugshaube</span><span class="device-actions"><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span><span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></span></span></div>
+                      </div>
+                      <a class="add-link" href="#">Gerät hinzufügen</a>
+                    </details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Boiler</span><span class="count">1 Gerät</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Kaffee Ecke</span><span class="count">4 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Schrank links</span><span class="count">2 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Kochfeld</span><span class="count">2 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Licht</span><span class="count">3 Geräte</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Geschirrspüler</span><span class="count">1 Gerät</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Tür</span><span class="count">1 Gerät</span></summary></details>
+                    <details class="pp-tile"><summary class="tile-summary"><span>Waschmaschine</span><span class="count">1 Gerät</span></summary></details>
+                  </div>
+                  <a class="add-link" href="#">Steckdose hinzufügen</a>
+                </div>
+              </details>
+              <details class="room-tile"><summary class="tile-summary"><span>Flur</span><span class="count">1 Steckdose</span></summary></details>
+              <details class="room-tile"><summary class="tile-summary"><span>Bad</span><span class="count">1 Steckdose</span></summary></details>
+              <details class="room-tile"><summary class="tile-summary"><span>Schlafzimmer</span><span class="count">3 Steckdosen</span></summary></details>
+              <details class="room-tile"><summary class="tile-summary"><span>Wohnzimmer</span><span class="count">5 Steckdosen</span></summary></details>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <h2 class="section-h" style="font-size:18px; margin-bottom: 4px;">Tariff Radar</h2>
+  <div class="theme-row">
+
+    <!-- ================= TARIFF RADAR — DARK ================= -->
+    <section class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+          <div class="page-title">Tarifradar</div>
+
+          <div class="card">
+            <h3>Tarifverlauf</h3>
+            <div class="entry-grid">
+              <div class="entry-tile">
+                <div class="entry-primary">01.01.2026 – laufend <span class="current-badge">Aktuell</span></div>
+                <div class="entry-secondary">28,50 € / Monat</div>
+                <div class="entry-secondary">0,342 €/kWh</div>
+                <div class="entry-actions"><button class="edit-btn">Bearbeiten</button></div>
+              </div>
+              <div class="entry-tile">
+                <div class="entry-primary">01.06.2025 – 31.12.2025</div>
+                <div class="entry-secondary">26,90 € / Monat</div>
+                <div class="entry-secondary">0,318 €/kWh</div>
+                <div class="entry-actions"><button class="edit-btn">Bearbeiten</button></div>
+              </div>
+              <div class="entry-tile">
+                <div class="entry-primary">01.01.2024 – 31.05.2025</div>
+                <div class="entry-secondary">24,50 € / Monat</div>
+                <div class="entry-secondary">0,289 €/kWh</div>
+                <div class="entry-actions"><button class="edit-btn">Bearbeiten</button></div>
+              </div>
+            </div>
+            <div class="pager-row"><button class="pager-btn" disabled>Zurück</button><span style="font-size:11px;">Seite 1 von 1</span><button class="pager-btn" disabled>Weiter</button></div>
+          </div>
+
+          <div class="card">
+            <h3>Vergleich</h3>
+            <div class="field-row">
+              <div class="field"><label>Grundgebühr</label><div class="input-box">29,90 €</div></div>
+              <div class="field"><label>Preis/kWh</label><div class="input-box">0,321 €</div></div>
+            </div>
+            <p class="plain-line" style="margin-bottom:14px;">Vergleichsergebnis (aktueller Tarif vs. Kandidat):</p>
+            <div class="compare-summary-row wide-sim">
+              <div class="quiet-card">
+                <h4>Aktueller Tarif</h4>
+                <div class="summary-row"><span>Grundgebühr</span><span>28,50 €</span></div>
+                <div class="summary-row"><span>Preis/kWh</span><span>0,342 €</span></div>
+              </div>
+              <div class="quiet-card">
+                <h4>Kandidat</h4>
+                <div class="summary-row"><span>Grundgebühr</span><span>29,90 €</span></div>
+                <div class="summary-row"><span>Preis/kWh</span><span>0,321 €</span></div>
+              </div>
+            </div>
+            <div class="verdict-card">
+              <div class="verdict-headline">Wechsel lohnt sich</div>
+              <div class="verdict-sub">Ersparnis von ca. 62 € im ersten Jahr, inkl. Wechselbonus.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TARIFF RADAR — LIGHT ================= -->
+    <section class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="appframe">
+        <div class="chrome-bar"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span></div>
+        <div class="screen">
+          <div class="topbar"><a class="crumb" href="#">← Dashboard</a></div>
+          <div class="page-title">Tarifradar</div>
+
+          <div class="card">
+            <h3>Tarifverlauf</h3>
+            <div class="entry-grid">
+              <div class="entry-tile">
+                <div class="entry-primary">01.01.2026 – laufend <span class="current-badge">Aktuell</span></div>
+                <div class="entry-secondary">28,50 € / Monat</div>
+                <div class="entry-secondary">0,342 €/kWh</div>
+                <div class="entry-actions"><button class="edit-btn">Bearbeiten</button></div>
+              </div>
+              <div class="entry-tile">
+                <div class="entry-primary">01.06.2025 – 31.12.2025</div>
+                <div class="entry-secondary">26,90 € / Monat</div>
+                <div class="entry-secondary">0,318 €/kWh</div>
+                <div class="entry-actions"><button class="edit-btn">Bearbeiten</button></div>
+              </div>
+              <div class="entry-tile">
+                <div class="entry-primary">01.01.2024 – 31.05.2025</div>
+                <div class="entry-secondary">24,50 € / Monat</div>
+                <div class="entry-secondary">0,289 €/kWh</div>
+                <div class="entry-actions"><button class="edit-btn">Bearbeiten</button></div>
+              </div>
+            </div>
+            <div class="pager-row"><button class="pager-btn" disabled>Zurück</button><span style="font-size:11px;">Seite 1 von 1</span><button class="pager-btn" disabled>Weiter</button></div>
+          </div>
+
+          <div class="card">
+            <h3>Vergleich</h3>
+            <div class="field-row">
+              <div class="field"><label>Grundgebühr</label><div class="input-box">29,90 €</div></div>
+              <div class="field"><label>Preis/kWh</label><div class="input-box">0,321 €</div></div>
+            </div>
+            <p class="plain-line" style="margin-bottom:14px;">Vergleichsergebnis (aktueller Tarif vs. Kandidat):</p>
+            <div class="compare-summary-row wide-sim">
+              <div class="quiet-card">
+                <h4>Aktueller Tarif</h4>
+                <div class="summary-row"><span>Grundgebühr</span><span>28,50 €</span></div>
+                <div class="summary-row"><span>Preis/kWh</span><span>0,342 €</span></div>
+              </div>
+              <div class="quiet-card">
+                <h4>Kandidat</h4>
+                <div class="summary-row"><span>Grundgebühr</span><span>29,90 €</span></div>
+                <div class="summary-row"><span>Preis/kWh</span><span>0,321 €</span></div>
+              </div>
+            </div>
+            <div class="verdict-card">
+              <div class="verdict-headline">Wechsel lohnt sich</div>
+              <div class="verdict-sub">Ersparnis von ca. 62 € im ersten Jahr, inkl. Wechselbonus.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>
