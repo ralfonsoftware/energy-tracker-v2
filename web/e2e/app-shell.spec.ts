@@ -371,13 +371,10 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
 
   const quietCards = page.locator('[data-slot="quiet-card"]')
   await expect(quietCards).toHaveCount(2)
-  // The outer form-wrapping GlassCard also contains this text (it wraps the whole comparison
-  // form including the verdict panel) — `.last()` picks the innermost, nested match (the verdict
-  // panel itself), since a child element is always later in document order than its ancestor.
+  // Explicit test id on the verdict card (not a `.last()` document-order heuristic) so this
+  // assertion can't silently pick up the outer form-wrapping GlassCard instead.
   const glassCardBackdrop = await page
-    .locator('[data-slot="glass-card"]')
-    .filter({ hasText: 'Is it worth switching?' })
-    .last()
+    .getByTestId('tariff-compare-verdict-card')
     .evaluate((el) => getComputedStyle(el).backdropFilter)
   const quietCardBackdrops = await quietCards.evaluateAll((els) => els.map((el) => getComputedStyle(el).backdropFilter))
 

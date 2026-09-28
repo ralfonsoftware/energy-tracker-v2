@@ -79,7 +79,7 @@ export function TariffConfigurationForm({ householdCurrency, onCreated }: Tariff
       <p className="text-muted-foreground text-sm">{t('tariff.form.description')}</p>
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <div className="flex flex-col gap-4 wide:flex-row wide:gap-4">
+        <div className="flex flex-col gap-4 wide:flex-row">
           <div className="flex flex-col gap-2 wide:flex-1">
             <Label htmlFor="tariff-monthly-base-fee">{t('tariff.form.monthlyBaseFeeLabel')}</Label>
             <UnitInput

@@ -451,3 +451,18 @@
 - source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
   summary: No visual-regression/screenshot testing exists anywhere in this repo to actually verify the claimed visual outcomes (Meter Readings dead-space elimination, quiet-vs-glass tier flattening) — automated coverage only checks class names and bounding-box numbers, never a rendered comparison.
   evidence: Repo-wide tooling gap, not something one story should introduce alone. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/per-plug-data-card.tsx, web/src/components/meter-reading/meter-readings-card.tsx]
+
+## Deferred from: code review of story-8.4 (2026-09-28)
+
+- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
+  summary: The new e2e case only asserts `tariff-radar-content`'s width is bounded (`>600px` and `<=660px`), never that the column is actually centered (`wide:mx-auto`) — an accidental `mr-auto`/removed `mx-auto` leaving it capped-but-left-aligned would still pass.
+  evidence: Pre-existing pattern — `dashboard-content`/`trend-history-content`'s own e2e assertions (Story 8.2/8.3) have the identical width-only gap. Raised by adversarial review (Blind Hunter) during code review. [web/e2e/app-shell.spec.ts]
+- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
+  summary: All new/extended tests for this story (unit and e2e) exercise only English copy and short EUR/USD-style currency codes — no coverage proves the paired `wide:flex-1` fields survive a longer localized label/unit (e.g. German "Wechselbonus") without wrapping or clipping right at the 660px boundary.
+  evidence: Same gap Story 8.3's own Review Findings already deferred for its Import label/660px column, not specific to this diff. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/tariff/tariff-configuration-form.test.tsx, web/src/components/tariff/tariff-comparison-form.test.tsx, web/e2e/app-shell.spec.ts]
+- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
+  summary: The new Tariff Radar e2e case is one 150-line `test()` covering five unrelated concerns (narrow stacking, exact-boundary check, wide pairing, column width, post-submit card-tier/backdropFilter) with no checkpoints — an early failure prevents every later assertion, including the fully independent AC #3 card-tier check, from running in that CI pass.
+  evidence: Pre-existing structure inherited verbatim from the Dashboard/Trend History cases (Stories 8.2/8.3) this one mirrors, not introduced fresh here. Raised by adversarial review (Blind Hunter) during code review. [web/e2e/app-shell.spec.ts]
+- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
+  summary: Nothing in this diff or its tests confirms keyboard tab order survived wrapping previously-sibling field divs in new intermediate row-wrapper divs at ≥660px.
+  evidence: No story in this codebase tests keyboard tab order anywhere; a repo-wide gap, not something one story should introduce alone. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/tariff/tariff-configuration-form.tsx, web/src/components/tariff/tariff-comparison-form.tsx]

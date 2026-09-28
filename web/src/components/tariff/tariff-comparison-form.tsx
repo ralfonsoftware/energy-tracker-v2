@@ -134,7 +134,7 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
       <p className="text-muted-foreground text-sm">{t('tariff.compare.description')}</p>
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <div className="flex flex-col gap-4 wide:flex-row wide:gap-4">
+        <div className="flex flex-col gap-4 wide:flex-row">
           <div className="flex flex-col gap-2 wide:flex-1">
             <Label htmlFor="tariff-compare-monthly-base-fee">{t('tariff.compare.candidateMonthlyBaseFeeLabel')}</Label>
             <UnitInput
@@ -168,7 +168,7 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 wide:flex-row wide:gap-4">
+        <div className="flex flex-col gap-4 wide:flex-row">
           <div className="flex flex-col gap-2 wide:flex-1">
             <Label htmlFor="tariff-compare-switching-bonus">{t('tariff.compare.candidateSwitchingBonusLabel')}</Label>
             <UnitInput
@@ -183,7 +183,7 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
               onChange={(event) => setCandidateSwitchingBonus(event.target.value)}
             />
           </div>
-          <div className="wide:flex-1" aria-hidden="true" />
+          <div className="hidden wide:block wide:flex-1" aria-hidden="true" />
         </div>
 
         {error && <p className="text-destructive text-sm">{error}</p>}
@@ -239,7 +239,7 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
           {/* AC #1, #2, #3: both rows shown together, always — never toggled. Each row's
               color/badge is driven independently by its own verdict flag (server-computed,
               never re-derived from raw sign-of-savings in the frontend). */}
-          <GlassCard className="flex flex-col gap-3">
+          <GlassCard data-testid="tariff-compare-verdict-card" className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold">{t('tariff.compare.signal.heading')}</h3>
 
             <SignalRow
