@@ -151,7 +151,7 @@ export function AiPlausibilityForm({ householdId }: AiPlausibilityFormProps) {
 
   return (
     <GlassCard className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold">{t('settings.aiPlausibility.heading')}</h2>
+      <h2 className="wide:hidden text-lg font-semibold">{t('settings.aiPlausibility.heading')}</h2>
       <p className="text-muted-foreground text-sm">{t('settings.aiPlausibility.description')}</p>
 
       <div className="flex items-center justify-between gap-4">

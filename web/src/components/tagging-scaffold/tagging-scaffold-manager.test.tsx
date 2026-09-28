@@ -105,7 +105,10 @@ describe('TaggingScaffoldManager', () => {
     render(<TaggingScaffoldManager />)
     await user.click(await screen.findByText('Kitchen', { exact: false }))
 
-    expect(screen.getByRole('button', { name: 'Add Power Point' })).toBeInTheDocument()
+    // Story 8.5 Task 4 dual-renders a wide:hidden filled button + a hidden wide:inline-flex text
+    // link with the identical accessible name — jsdom applies neither `hidden` class, so both are
+    // simultaneously queryable; take the first (the narrow-mode filled button).
+    expect(screen.getAllByRole('button', { name: 'Add Power Point' })[0]).toBeInTheDocument()
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[0])
@@ -166,7 +169,7 @@ describe('TaggingScaffoldManager', () => {
     render(<TaggingScaffoldManager />)
     await user.click(await screen.findByText('Kitchen', { exact: false }))
 
-    await user.click(screen.getByRole('button', { name: 'Add Power Point' }))
+    await user.click(screen.getAllByRole('button', { name: 'Add Power Point' })[0])
     await user.type(screen.getByLabelText('Name'), 'Counter outlet')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -220,7 +223,10 @@ describe('TaggingScaffoldManager', () => {
     await user.click(await screen.findByText('Kitchen', { exact: false }))
     await user.click(await screen.findByText('Counter outlet', { exact: false }))
 
-    expect(screen.getByRole('button', { name: 'Add Device' })).toBeInTheDocument()
+    // Story 8.5 Task 4 dual-renders a wide:hidden filled button + a hidden wide:inline-flex text
+    // link with the identical accessible name — jsdom applies neither `hidden` class, so both are
+    // simultaneously queryable; take the first (the narrow-mode filled button).
+    expect(screen.getAllByRole('button', { name: 'Add Device' })[0]).toBeInTheDocument()
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[1])
@@ -253,7 +259,7 @@ describe('TaggingScaffoldManager', () => {
     await user.click(await screen.findByText('Kitchen', { exact: false }))
     await user.click(await screen.findByText('Counter outlet', { exact: false }))
 
-    await user.click(screen.getByRole('button', { name: 'Add Device' }))
+    await user.click(screen.getAllByRole('button', { name: 'Add Device' })[0])
     await user.type(screen.getByLabelText('Name'), 'Kettle')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -350,7 +356,7 @@ describe('TaggingScaffoldManager', () => {
     render(<TaggingScaffoldManager />)
     await user.click(await screen.findByText('Kitchen', { exact: false }))
 
-    await user.click(screen.getByRole('button', { name: 'Add Power Point' }))
+    await user.click(screen.getAllByRole('button', { name: 'Add Power Point' })[0])
     await user.type(screen.getByLabelText('Name'), 'Counter outlet')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -714,5 +720,82 @@ describe('TaggingScaffoldManager', () => {
 
     await user.click(screen.getByRole('button', { name: 'Hide archived items' }))
     expect(screen.queryByText('Old toaster', { exact: false })).not.toBeInTheDocument()
+  })
+
+  describe('Item counts and text-link Add controls (Story 8.5 Task 4, AC #3)', () => {
+    it('shows the visible Power Point/Device counts next to a Room/Power Point name', async () => {
+      mockFetchRoutes([
+        {
+          method: 'GET',
+          url: '/api/rooms',
+          respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]),
+        },
+        {
+          method: 'GET',
+          url: '/api/power-points',
+          respond: () =>
+            jsonResponse([
+              { id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null },
+              { id: 'p2', roomId: 'r1', name: 'Wall outlet', archivedAt: null },
+            ]),
+        },
+        {
+          method: 'GET',
+          url: '/api/devices',
+          respond: () =>
+            jsonResponse([
+              { id: 'd1', powerPointId: 'p1', name: 'Kettle', archivedAt: null },
+              { id: 'd2', powerPointId: 'p1', name: 'Toaster', archivedAt: null },
+              { id: 'd3', powerPointId: 'p1', name: 'Microwave', archivedAt: null },
+            ]),
+        },
+      ])
+
+      render(<TaggingScaffoldManager />)
+
+      // The count sits in the <summary> — visible whether expanded or collapsed, no click needed.
+      expect(await screen.findByText(/2 Power Points/)).toBeInTheDocument()
+      expect(screen.getByText(/3 Devices/)).toBeInTheDocument()
+    })
+
+    it('renders the singular count form for exactly one visible child, not the plural', async () => {
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+        {
+          method: 'GET',
+          url: '/api/power-points',
+          respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]),
+        },
+        { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+      ])
+
+      render(<TaggingScaffoldManager />)
+
+      expect(await screen.findByText(/1 Power Point\b/)).toBeInTheDocument()
+      expect(screen.queryByText(/1 Power Points/)).not.toBeInTheDocument()
+    })
+
+    it('renders both the wide:hidden filled button and the hidden wide:inline-flex text link for "Add Power Point"/"Add Device"', async () => {
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+        {
+          method: 'GET',
+          url: '/api/power-points',
+          respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: null }]),
+        },
+        { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+      ])
+      const user = userEvent.setup()
+
+      render(<TaggingScaffoldManager />)
+      await user.click(await screen.findByText('Kitchen', { exact: false }))
+      await user.click(await screen.findByText('Counter outlet', { exact: false }))
+
+      // jsdom applies neither `wide:hidden` nor `hidden wide:inline-flex` — both matches are
+      // simultaneously queryable, exactly two per label (the narrow-mode filled button and the
+      // wide-mode text link).
+      expect(screen.getAllByRole('button', { name: 'Add Power Point' })).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: 'Add Device' })).toHaveLength(2)
+    })
   })
 })

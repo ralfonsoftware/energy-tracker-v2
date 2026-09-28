@@ -30,4 +30,18 @@ describe('HouseholdSizePresetRow', () => {
       expect(button).toHaveAttribute('type', 'button')
     }
   })
+
+  // Story 8.5 Task 3 Scope Reality Check: the epic AC's "oversized boxes" description matches a
+  // stale mockup reconstruction, not this already-shipped component — it already uses the compact
+  // `hh-preset` sizing (rounded-glass-sm = 14px border-radius, px-1 py-2.5 = 4px/10px padding).
+  // This is a verified no-op, not an unmodified assumption.
+  it('already renders at the compact hh-preset sizing (Story 8.5 Task 3 — verified no-op)', () => {
+    render(<HouseholdSizePresetRow presets={PRESETS} selectedKwh={null} onSelect={() => {}} />)
+
+    for (const button of screen.getAllByRole('button')) {
+      expect(button).toHaveClass('rounded-glass-sm')
+      expect(button).toHaveClass('px-1')
+      expect(button).toHaveClass('py-2.5')
+    }
+  })
 })

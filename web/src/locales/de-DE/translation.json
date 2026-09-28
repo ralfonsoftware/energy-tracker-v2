@@ -40,6 +40,11 @@
   "settings": {
     "heading": "Einstellungen",
     "backToApp": "Zu Energy Tracker",
+    "sections": {
+      "aiPlausibilityCheck": "KI-Plausibilitätsprüfung",
+      "household": "Haushalt",
+      "data": "Daten"
+    },
     "logoff": {
       "trigger": "Abmelden",
       "confirmTitle": "Abmelden?",
@@ -144,7 +149,11 @@
     "currentBadge": "Aktuell",
     "noDestinations": "Kein anderes Ziel verfügbar.",
     "hideArchivedToggle": "Archivierte Elemente ausblenden",
-    "showArchivedToggle": "Archivierte Elemente einblenden"
+    "showArchivedToggle": "Archivierte Elemente einblenden",
+    "powerPointCount_one": "{{count}} Steckdose",
+    "powerPointCount_other": "{{count}} Steckdosen",
+    "deviceCount_one": "{{count}} Gerät",
+    "deviceCount_other": "{{count}} Geräte"
   },
   "yearlyBaseline": {
     "heading": "Jahresbasiswert",

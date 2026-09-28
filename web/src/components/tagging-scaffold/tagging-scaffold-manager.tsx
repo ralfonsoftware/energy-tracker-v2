@@ -475,7 +475,7 @@ export function TaggingScaffoldManager() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t('taggingScaffold.heading')}</h2>
+        <h2 className="wide:hidden text-lg font-semibold">{t('taggingScaffold.heading')}</h2>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -577,6 +577,9 @@ export function TaggingScaffoldManager() {
                           <span className="flex items-center gap-2">
                             <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/pp:rotate-90 motion-reduce:transition-none" />
                             <span>{powerPoint.name}</span>
+                            <span className="hidden wide:inline text-muted-foreground font-normal">
+                              — {t('taggingScaffold.deviceCount', { count: visibleDevices.length })}
+                            </span>
                           </span>
                           {powerPoint.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
                         </summary>
@@ -607,13 +610,23 @@ export function TaggingScaffoldManager() {
                             <Move aria-hidden="true" />
                           </Button>
                           {!powerPoint.archivedAt && (
-                            <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
+                            <Button size="sm" variant="glass-primary" className="wide:hidden" onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}>
                               {t('taggingScaffold.addDevice')}
                             </Button>
                           )}
                         </div>
 
                         {deviceList}
+
+                        {!powerPoint.archivedAt && (
+                          <button
+                            type="button"
+                            className="text-primary hidden wide:inline-flex px-3.5 pb-2 text-xs font-semibold"
+                            onClick={() => openDialog({ kind: 'create-device', powerPointId: powerPoint.id })}
+                          >
+                            {t('taggingScaffold.addDevice')}
+                          </button>
+                        )}
                       </details>
                     )
                   })}
@@ -640,6 +653,9 @@ export function TaggingScaffoldManager() {
                     <span className="flex items-center gap-2">
                       <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/room:rotate-90 motion-reduce:transition-none" />
                       <span>{room.name}</span>
+                      <span className="hidden wide:inline text-muted-foreground font-normal">
+                        — {t('taggingScaffold.powerPointCount', { count: visiblePowerPoints.length })}
+                      </span>
                     </span>
                     {room.archivedAt && <ArchivedBadge label={archivedBadgeLabel} />}
                   </summary>
@@ -662,13 +678,23 @@ export function TaggingScaffoldManager() {
                       <Trash2 aria-hidden="true" />
                     </Button>
                     {!room.archivedAt && (
-                      <Button size="sm" variant="glass-primary" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
+                      <Button size="sm" variant="glass-primary" className="wide:hidden" onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}>
                         {t('taggingScaffold.addPowerPoint')}
                       </Button>
                     )}
                   </div>
 
                   {powerPointsList}
+
+                  {!room.archivedAt && (
+                    <button
+                      type="button"
+                      className="text-primary hidden wide:inline-flex px-3.5 pb-2 text-xs font-semibold"
+                      onClick={() => openDialog({ kind: 'create-power-point', roomId: room.id })}
+                    >
+                      {t('taggingScaffold.addPowerPoint')}
+                    </button>
+                  )}
                 </details>
               )
             })}

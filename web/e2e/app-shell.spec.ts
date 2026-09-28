@@ -383,3 +383,151 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
     expect(backdrop).toBe('none')
   }
 })
+
+// Story 8.5/Task 5: same jsdom limitation as above — settings-page.test.tsx and
+// tagging-scaffold-manager.test.tsx can only prove the wide:max-w-[660px] wrapper class, the
+// section-label headings, and the dual Add-button markup all exist, never which one a real
+// browser actually renders at a given viewport width, nor the wide:order-N visual-reorder
+// sequence (AC #1, #2, #3).
+test('the Settings content column, labeled sections, and Room/Power Point tree controls behave correctly at the 660px breakpoint', async ({ page }) => {
+  const householdId = '11111111-1111-1111-1111-111111111111'
+
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId,
+        locale: 'en-US',
+        currency: 'USD',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+  await page.route('**/api/rooms', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ id: 'r1', name: 'Living Room', archivedAt: null }]),
+    }),
+  )
+  await page.route('**/api/power-points', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ id: 'p1', roomId: 'r1', name: 'Wall outlet', archivedAt: null }]),
+    }),
+  )
+  await page.route('**/api/devices', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        { id: 'd1', powerPointId: 'p1', name: 'Kettle', archivedAt: null },
+        { id: 'd2', powerPointId: 'p1', name: 'Toaster', archivedAt: null },
+      ]),
+    }),
+  )
+  await page.route(`**/api/households/${householdId}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: householdId, locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }),
+    }),
+  )
+  await page.route(`**/api/households/${householdId}/ai-plausibility`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ enabled: false, backendConfigured: false, backendLabel: null, version: 0 }),
+    }),
+  )
+
+  const contentColumn = page.locator('div[data-slot="settings-content"]')
+
+  await page.setViewportSize({ width: 500, height: 800 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
+  await page.getByRole('button', { name: 'Settings' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+
+  const householdSectionLabel = page.getByRole('heading', { name: 'Household', level: 2 })
+
+  // Below 660px: content tracks the viewport (not capped), no section labels, flat layout.
+  const narrowColumnBox = await contentColumn.boundingBox()
+  expect(narrowColumnBox?.width).toBeGreaterThan(400)
+  await expect(householdSectionLabel).toBeHidden()
+
+  // Exact-boundary check, same precedent as Dashboard/Trend History/Tariff Radar.
+  await page.setViewportSize({ width: 659, height: 800 })
+  await expect(householdSectionLabel).toBeHidden()
+
+  await page.setViewportSize({ width: 660, height: 800 })
+  await expect(householdSectionLabel).toBeVisible()
+
+  await page.setViewportSize({ width: 1000, height: 800 })
+
+  const wideColumnBox = await contentColumn.boundingBox()
+  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+  // Centered: roughly equal left/right gaps against the viewport.
+  const leftGap = wideColumnBox!.x
+  const rightGap = 1000 - (wideColumnBox!.x + wideColumnBox!.width)
+  expect(Math.abs(leftGap - rightGap)).toBeLessThan(4)
+
+  // All 5 section-label headings are visible, in the correct top-to-bottom visual order — the
+  // wide:order-N mechanism is exactly the kind of thing a class-presence-only check would miss a
+  // regression in, so this compares actual y-positions.
+  const yearlyBaselineLabel = page.getByRole('heading', { name: 'Yearly Baseline', level: 2 })
+  const aiPlausibilityLabel = page.getByRole('heading', { name: 'AI Plausibility Check', level: 2 })
+  const roomsLabel = page.getByRole('heading', { name: 'Rooms, Power Points & Devices', level: 2 })
+  // exact: true — "Data" would otherwise substring-match DataExportPanel's "Data Export" and
+  // DataImportPanel's "Data Import / Restore" headings.
+  const dataLabel = page.getByRole('heading', { name: 'Data', level: 2, exact: true })
+
+  await expect(yearlyBaselineLabel).toBeVisible()
+  await expect(aiPlausibilityLabel).toBeVisible()
+  await expect(householdSectionLabel).toBeVisible()
+  await expect(roomsLabel).toBeVisible()
+  await expect(dataLabel).toBeVisible()
+
+  const yPositions = await Promise.all(
+    [yearlyBaselineLabel, aiPlausibilityLabel, householdSectionLabel, roomsLabel, dataLabel].map(
+      async (label) => (await label.boundingBox())!.y,
+    ),
+  )
+  expect(yPositions).toEqual([...yPositions].sort((a, b) => a - b))
+
+  // "Invite a member" opens a working invite-generation dialog from inside the Household section.
+  await page.route('**/api/household-invites', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }),
+    }),
+  )
+  await page.getByRole('button', { name: 'Invite a member' }).last().click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Invite a member' }).click()
+  await expect(page.getByLabel('Invite link')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // Expand the seeded Room and Power Point; the count text and text-link Add controls are the
+  // visible ones at this width (not the filled buttons).
+  await page.getByText('Living Room', { exact: false }).click()
+  await expect(page.getByText(/1 Power Point\b/)).toBeVisible()
+  const addPowerPointLink = page.getByRole('button', { name: 'Add Power Point' }).last()
+  await expect(addPowerPointLink).toBeVisible()
+
+  await page.getByText('Wall outlet', { exact: false }).click()
+  await expect(page.getByText(/2 Devices/)).toBeVisible()
+  const addDeviceLink = page.getByRole('button', { name: 'Add Device' }).last()
+  await expect(addDeviceLink).toBeVisible()
+})
