@@ -313,7 +313,10 @@ describe('App', () => {
 
       await user.click((await screen.findAllByRole('button', { name: 'Settings' }))[0])
 
-      const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
+      // Story 8.5 dual-renders a narrow-mode InviteGeneratePanel and a wide-mode InviteMemberRow
+      // trigger, both labeled "Invite a member" — jsdom applies neither's `wide:`/`hidden` class,
+      // so both are simultaneously queryable. Take the narrow-mode one (index 0).
+      const generateButton = (await screen.findAllByRole('button', { name: 'Invite a member' }))[0]
       await user.click(generateButton)
 
       const linkInput = await screen.findByLabelText('Invite link')
@@ -341,7 +344,7 @@ describe('App', () => {
 
       await user.click((await screen.findAllByRole('button', { name: 'Settings' }))[0])
 
-      const generateButton = await screen.findByRole('button', { name: 'Invite a member' })
+      const generateButton = (await screen.findAllByRole('button', { name: 'Invite a member' }))[0]
       await user.click(generateButton)
 
       const copyButton = await screen.findByRole('button', { name: 'Copy link' })

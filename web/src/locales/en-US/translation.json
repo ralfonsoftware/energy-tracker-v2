@@ -40,6 +40,11 @@
   "settings": {
     "heading": "Settings",
     "backToApp": "Go to Energy Tracker",
+    "sections": {
+      "aiPlausibilityCheck": "AI Plausibility Check",
+      "household": "Household",
+      "data": "Data"
+    },
     "logoff": {
       "trigger": "Log off",
       "confirmTitle": "Log off?",
@@ -56,7 +61,7 @@
       "federatedWarningProceed": "Continue"
     },
     "aiPlausibility": {
-      "heading": "AI Wattage Plausibility",
+      "heading": "AI Plausibility Check",
       "description": "When turned on, a logged Event's description may be sent to this deployment's configured AI backend to check for a rough match against any consumption change Pattern Detective noticed around that time.",
       "toggleLabel": "Send Events for AI correlation",
       "backendConfigured": "Backend: {{label}}",
@@ -144,7 +149,11 @@
     "currentBadge": "Current",
     "noDestinations": "No other option is available to move to.",
     "hideArchivedToggle": "Hide archived items",
-    "showArchivedToggle": "Show archived items"
+    "showArchivedToggle": "Show archived items",
+    "powerPointCount_one": "{{count}} Power Point",
+    "powerPointCount_other": "{{count}} Power Points",
+    "deviceCount_one": "{{count}} Device",
+    "deviceCount_other": "{{count}} Devices"
   },
   "yearlyBaseline": {
     "heading": "Yearly Baseline",

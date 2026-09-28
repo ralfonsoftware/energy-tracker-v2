@@ -15,9 +15,10 @@ import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline
 import { AiPlausibilityForm } from '@/components/ai-plausibility/ai-plausibility-form'
 import { DataExportPanel } from '@/components/data-export/data-export-panel'
 import { DataImportPanel } from '@/components/data-import/data-import-panel'
-import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
+import { InviteMemberRow } from '@/components/household-invite/invite-member-row'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 import { useLogoff } from '@/hooks/use-logoff'
+import { SectionLabel } from './section-label'
 
 interface SettingsPageProps {
   householdId: string
@@ -54,25 +55,42 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
 
   return (
     <main className="flex min-h-svh flex-col gap-6 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t('settings.heading')}</h1>
-        <Button variant="outline" onClick={onBack}>
-          {t('settings.backToApp')}
-        </Button>
-      </div>
+      <div data-slot="settings-content" className="flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[660px]">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{t('settings.heading')}</h1>
+          <Button variant="outline" onClick={onBack}>
+            {t('settings.backToApp')}
+          </Button>
+        </div>
 
-      <div className="flex flex-col gap-[var(--spacing-card-gap)]">
-        <YearlyBaselineForm householdId={householdId} />
-        <AiPlausibilityForm householdId={householdId} />
-        <TaggingScaffoldManager />
-        <InviteGeneratePanel />
-        <DataExportPanel />
-        <DataImportPanel />
+        <div className="flex flex-col gap-[var(--spacing-card-gap)]">
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-1">
+            <SectionLabel>{t('yearlyBaseline.heading')}</SectionLabel>
+            <YearlyBaselineForm householdId={householdId} />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-2">
+            <SectionLabel>{t('settings.sections.aiPlausibilityCheck')}</SectionLabel>
+            <AiPlausibilityForm householdId={householdId} />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-3">
+            <SectionLabel>{t('settings.sections.household')}</SectionLabel>
+            <InviteMemberRow />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-4">
+            <SectionLabel>{t('taggingScaffold.heading')}</SectionLabel>
+            <TaggingScaffoldManager />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-5">
+            <SectionLabel>{t('settings.sections.data')}</SectionLabel>
+            <DataExportPanel />
+            <DataImportPanel />
+          </div>
 
-        <Button variant="outline" className="wide:hidden self-start" onClick={openLogoffDialog}>
-          <LogOut aria-hidden="true" />
-          {t('settings.logoff.trigger')}
-        </Button>
+          <Button variant="outline" className="wide:hidden self-start" onClick={openLogoffDialog}>
+            <LogOut aria-hidden="true" />
+            {t('settings.logoff.trigger')}
+          </Button>
+        </div>
       </div>
 
       <Dialog open={logoffStep !== 'closed'} onOpenChange={(open) => !open && closeLogoffDialog()}>

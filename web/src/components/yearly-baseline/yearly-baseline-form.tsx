@@ -163,7 +163,7 @@ export function YearlyBaselineForm({ householdId }: YearlyBaselineFormProps) {
 
   return (
     <GlassCard className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold">{t('yearlyBaseline.heading')}</h2>
+      <h2 className="wide:hidden text-lg font-semibold">{t('yearlyBaseline.heading')}</h2>
       <p className="text-muted-foreground text-sm">{t('yearlyBaseline.description')}</p>
 
       <HouseholdSizePresetRow

@@ -68,6 +68,46 @@ describe('SettingsPage', () => {
     expect(screen.queryByText('Drop a file here, or choose one to upload.')).not.toBeInTheDocument()
   })
 
+  describe('660px column and labeled sections (Story 8.5 Tasks 1-2, AC #1)', () => {
+    it('wraps the header and card stack in a data-slot="settings-content" wrapper', async () => {
+      stubFetch()
+
+      renderSettingsPage(true)
+
+      expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+      expect(document.querySelector('[data-slot="settings-content"]')).toBeInTheDocument()
+    })
+
+    it('renders all 5 section-label headings', async () => {
+      stubFetch()
+
+      renderSettingsPage(true)
+
+      // "Yearly Baseline" appears both as YearlyBaselineForm's own now-wide:hidden <h2> and the
+      // new SectionLabel's hidden wide:block <h2> — jsdom applies neither `hidden` class, so both
+      // are simultaneously queryable, exactly like this file's existing findAllByRole(...)[0]
+      // dual-nav-match workaround above. Same for "AI Plausibility Check" (AiPlausibilityForm's
+      // own heading was aligned to this exact wording during code review) and "Rooms, Power
+      // Points & Devices" (TaggingScaffoldManager's own heading, reused verbatim by its SectionLabel).
+      expect((await screen.findAllByRole('heading', { name: 'Yearly Baseline', level: 2 }))[0]).toBeInTheDocument()
+      expect((await screen.findAllByRole('heading', { name: 'AI Plausibility Check', level: 2 }))[0]).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Household', level: 2 })).toBeInTheDocument()
+      expect((await screen.findAllByRole('heading', { name: 'Rooms, Power Points & Devices', level: 2 }))[0]).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Data', level: 2 })).toBeInTheDocument()
+    })
+
+    it('renders "Invite a member" as a row inside the Household section, not a standalone unheaded button', async () => {
+      stubFetch()
+
+      renderSettingsPage(true)
+
+      // Story 8.5's InviteMemberRow dual-renders — two matches (narrow-mode standalone panel's
+      // own button, wide-mode row's own label), same accessible name.
+      expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Invite a member' })).toHaveLength(2)
+    })
+  })
+
   it('threads onTrendHistoryClick through to the NavChrome Trend History tab (Story 4.1)', async () => {
     const user = userEvent.setup()
     const onTrendHistoryClick = vi.fn()
