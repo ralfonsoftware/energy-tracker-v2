@@ -253,6 +253,48 @@ describe('TariffComparisonForm', () => {
     ).toHaveLength(1)
   })
 
+  it('pairs the candidate fields in wide:flex-row rows, with a spacer beside the switching bonus (Story 8.4/UX-DR23)', () => {
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+
+    const monthlyBaseFeeWrap = screen.getByLabelText('Candidate monthly base fee').closest('[data-slot="unit-input-wrap"]')?.parentElement
+    const pricePerKwhWrap = screen.getByLabelText('Candidate price per kWh').closest('[data-slot="unit-input-wrap"]')?.parentElement
+    const switchingBonusWrap = screen.getByLabelText('Switching bonus (optional)').closest('[data-slot="unit-input-wrap"]')?.parentElement
+
+    expect(monthlyBaseFeeWrap).toHaveClass('wide:flex-1')
+    expect(pricePerKwhWrap).toHaveClass('wide:flex-1')
+    expect(switchingBonusWrap).toHaveClass('wide:flex-1')
+
+    const firstRow = monthlyBaseFeeWrap?.parentElement
+    expect(firstRow).toHaveClass('wide:flex-row')
+    expect(firstRow).toBe(pricePerKwhWrap?.parentElement)
+
+    const secondRow = switchingBonusWrap?.parentElement
+    expect(secondRow).toHaveClass('wide:flex-row')
+    expect(secondRow).not.toBe(firstRow)
+
+    const spacer = secondRow?.querySelector('[aria-hidden="true"]')
+    expect(spacer).toHaveClass('wide:flex-1')
+  })
+
+  it('the current/candidate summary panels use the quiet card tier while the verdict panel keeps glass (AC #3)', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(mockupWorkedExample))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    const currentHeading = await screen.findByText('Your current tariff')
+    const candidateHeading = screen.getByText('Candidate tariff')
+    const verdictHeading = screen.getByText('Is it worth switching?')
+
+    expect(currentHeading.closest('[data-slot="quiet-card"]')).not.toBeNull()
+    expect(candidateHeading.closest('[data-slot="quiet-card"]')).not.toBeNull()
+    expect(verdictHeading.closest('[data-slot="glass-card"]')).not.toBeNull()
+    expect(verdictHeading.closest('[data-slot="quiet-card"]')).toBeNull()
+  })
+
   it('the Compare button stays disabled until the required fields are filled', () => {
     render(<TariffComparisonForm currency="EUR" locale="en-US" />)
 

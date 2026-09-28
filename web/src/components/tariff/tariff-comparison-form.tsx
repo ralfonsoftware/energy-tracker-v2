@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Label } from '@/components/ui/label'
+import { QuietCard } from '@/components/ui/quiet-card'
 import { UnitInput } from '@/components/ui/unit-input'
 import { cn } from '@/lib/utils'
 import { ApiError, compareTariff, type TariffComparisonDto } from '@/lib/tariff-api'
@@ -133,51 +134,56 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
       <p className="text-muted-foreground text-sm">{t('tariff.compare.description')}</p>
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="tariff-compare-monthly-base-fee">{t('tariff.compare.candidateMonthlyBaseFeeLabel')}</Label>
-          <UnitInput
-            id="tariff-compare-monthly-base-fee"
-            type="number"
-            inputMode="decimal"
-            unit={currency}
-            min="0"
-            step="0.01"
-            value={candidateMonthlyBaseFee}
-            disabled={submitting}
-            onChange={(event) => setCandidateMonthlyBaseFee(event.target.value)}
-            required
-          />
+        <div className="flex flex-col gap-4 wide:flex-row">
+          <div className="flex flex-col gap-2 wide:flex-1">
+            <Label htmlFor="tariff-compare-monthly-base-fee">{t('tariff.compare.candidateMonthlyBaseFeeLabel')}</Label>
+            <UnitInput
+              id="tariff-compare-monthly-base-fee"
+              type="number"
+              inputMode="decimal"
+              unit={currency}
+              min="0"
+              step="0.01"
+              value={candidateMonthlyBaseFee}
+              disabled={submitting}
+              onChange={(event) => setCandidateMonthlyBaseFee(event.target.value)}
+              required
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 wide:flex-1">
+            <Label htmlFor="tariff-compare-price-per-kwh">{t('tariff.compare.candidatePricePerKwhLabel')}</Label>
+            <UnitInput
+              id="tariff-compare-price-per-kwh"
+              type="number"
+              inputMode="decimal"
+              unit={`${currency}/kWh`}
+              min="0.0001"
+              step="0.0001"
+              value={candidatePricePerKwh}
+              disabled={submitting}
+              onChange={(event) => setCandidatePricePerKwh(event.target.value)}
+              required
+            />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="tariff-compare-price-per-kwh">{t('tariff.compare.candidatePricePerKwhLabel')}</Label>
-          <UnitInput
-            id="tariff-compare-price-per-kwh"
-            type="number"
-            inputMode="decimal"
-            unit={`${currency}/kWh`}
-            min="0.0001"
-            step="0.0001"
-            value={candidatePricePerKwh}
-            disabled={submitting}
-            onChange={(event) => setCandidatePricePerKwh(event.target.value)}
-            required
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="tariff-compare-switching-bonus">{t('tariff.compare.candidateSwitchingBonusLabel')}</Label>
-          <UnitInput
-            id="tariff-compare-switching-bonus"
-            type="number"
-            inputMode="decimal"
-            unit={currency}
-            min="0"
-            step="0.01"
-            value={candidateSwitchingBonus}
-            disabled={submitting}
-            onChange={(event) => setCandidateSwitchingBonus(event.target.value)}
-          />
+        <div className="flex flex-col gap-4 wide:flex-row">
+          <div className="flex flex-col gap-2 wide:flex-1">
+            <Label htmlFor="tariff-compare-switching-bonus">{t('tariff.compare.candidateSwitchingBonusLabel')}</Label>
+            <UnitInput
+              id="tariff-compare-switching-bonus"
+              type="number"
+              inputMode="decimal"
+              unit={currency}
+              min="0"
+              step="0.01"
+              value={candidateSwitchingBonus}
+              disabled={submitting}
+              onChange={(event) => setCandidateSwitchingBonus(event.target.value)}
+            />
+          </div>
+          <div className="hidden wide:block wide:flex-1" aria-hidden="true" />
         </div>
 
         {error && <p className="text-destructive text-sm">{error}</p>}
@@ -201,16 +207,16 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
           {/* AC #4: current-vs-candidate tariff summary — stacked glass panels, tabular-nums
               label/value rows (status-detail-dialog.tsx's convention). No tariff names — Tariff.cs
               has no name/label field, so generic headings are used instead of a per-entry name. */}
-          <GlassCard className="flex flex-col gap-2">
+          <QuietCard className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">{t('tariff.compare.summary.currentHeading')}</h3>
             <SummaryRow label={t('tariff.form.monthlyBaseFeeLabel')} value={`${moneyFormat.format(result.currentMonthlyBaseFee)} ${result.currency}`} />
             <SummaryRow
               label={t('tariff.form.pricePerKwhLabel')}
               value={`${moneyFormat.format(result.currentPricePerKwh)} ${result.currency}/kWh`}
             />
-          </GlassCard>
+          </QuietCard>
 
-          <GlassCard className="flex flex-col gap-2">
+          <QuietCard className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">{t('tariff.compare.summary.candidateHeading')}</h3>
             <SummaryRow
               label={t('tariff.compare.candidateMonthlyBaseFeeLabel')}
@@ -228,12 +234,12 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
                 value={`${moneyFormat.format(result.candidateSwitchingBonus)} ${result.currency}`}
               />
             )}
-          </GlassCard>
+          </QuietCard>
 
           {/* AC #1, #2, #3: both rows shown together, always — never toggled. Each row's
               color/badge is driven independently by its own verdict flag (server-computed,
               never re-derived from raw sign-of-savings in the frontend). */}
-          <GlassCard className="flex flex-col gap-3">
+          <GlassCard data-testid="tariff-compare-verdict-card" className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold">{t('tariff.compare.signal.heading')}</h3>
 
             <SignalRow

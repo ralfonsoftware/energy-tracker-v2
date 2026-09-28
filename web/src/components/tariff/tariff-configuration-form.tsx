@@ -79,36 +79,38 @@ export function TariffConfigurationForm({ householdCurrency, onCreated }: Tariff
       <p className="text-muted-foreground text-sm">{t('tariff.form.description')}</p>
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="tariff-monthly-base-fee">{t('tariff.form.monthlyBaseFeeLabel')}</Label>
-          <UnitInput
-            id="tariff-monthly-base-fee"
-            type="number"
-            inputMode="decimal"
-            unit={currency || t('tariff.form.currencyPlaceholder')}
-            min="0"
-            step="0.01"
-            value={monthlyBaseFee}
-            disabled={submitting}
-            onChange={(event) => setMonthlyBaseFee(event.target.value)}
-            required
-          />
-        </div>
+        <div className="flex flex-col gap-4 wide:flex-row">
+          <div className="flex flex-col gap-2 wide:flex-1">
+            <Label htmlFor="tariff-monthly-base-fee">{t('tariff.form.monthlyBaseFeeLabel')}</Label>
+            <UnitInput
+              id="tariff-monthly-base-fee"
+              type="number"
+              inputMode="decimal"
+              unit={currency || t('tariff.form.currencyPlaceholder')}
+              min="0"
+              step="0.01"
+              value={monthlyBaseFee}
+              disabled={submitting}
+              onChange={(event) => setMonthlyBaseFee(event.target.value)}
+              required
+            />
+          </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="tariff-price-per-kwh">{t('tariff.form.pricePerKwhLabel')}</Label>
-          <UnitInput
-            id="tariff-price-per-kwh"
-            type="number"
-            inputMode="decimal"
-            unit={`${currency || t('tariff.form.currencyPlaceholder')}/kWh`}
-            min="0.0001"
-            step="0.0001"
-            value={pricePerKwh}
-            disabled={submitting}
-            onChange={(event) => setPricePerKwh(event.target.value)}
-            required
-          />
+          <div className="flex flex-col gap-2 wide:flex-1">
+            <Label htmlFor="tariff-price-per-kwh">{t('tariff.form.pricePerKwhLabel')}</Label>
+            <UnitInput
+              id="tariff-price-per-kwh"
+              type="number"
+              inputMode="decimal"
+              unit={`${currency || t('tariff.form.currencyPlaceholder')}/kWh`}
+              min="0.0001"
+              step="0.0001"
+              value={pricePerKwh}
+              disabled={submitting}
+              onChange={(event) => setPricePerKwh(event.target.value)}
+              required
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">

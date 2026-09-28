@@ -59,6 +59,20 @@ describe('TariffConfigurationForm', () => {
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(created))
   })
 
+  it('pairs Monthly base fee and Price per kWh in a wide:flex-row wrapper (Story 8.4/UX-DR23)', () => {
+    render(<TariffConfigurationForm householdCurrency="EUR" onCreated={vi.fn()} />)
+
+    const monthlyBaseFeeWrap = screen.getByLabelText('Monthly base fee').closest('[data-slot="unit-input-wrap"]')?.parentElement
+    const pricePerKwhWrap = screen.getByLabelText('Price per kWh').closest('[data-slot="unit-input-wrap"]')?.parentElement
+
+    expect(monthlyBaseFeeWrap).toHaveClass('wide:flex-1')
+    expect(pricePerKwhWrap).toHaveClass('wide:flex-1')
+
+    const rowWrapper = monthlyBaseFeeWrap?.parentElement
+    expect(rowWrapper).toHaveClass('wide:flex-row')
+    expect(rowWrapper).toBe(pricePerKwhWrap?.parentElement)
+  })
+
   it('the Save button stays disabled until every required field is filled', () => {
     render(<TariffConfigurationForm householdCurrency="" onCreated={vi.fn()} />)
 

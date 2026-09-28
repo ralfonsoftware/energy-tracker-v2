@@ -234,3 +234,152 @@ test('the Trend History content column, Import label, and Meter Readings table d
   const gap = editButtonBox!.x - timestampTextRect
   expect(gap).toBeLessThan(40)
 })
+
+// Story 8.4/Task 5: same jsdom limitation as above — tariff-configuration-form.test.tsx and
+// tariff-comparison-form.test.tsx can only prove the wide:flex-row/wide:flex-1 wrapper classes and
+// data-slot="quiet-card"/"glass-card" markup exist, never which layout a real browser actually
+// renders at a given viewport width, nor the real backdrop-filter value (AC #1, #2, #3, #4).
+test('the Tariff Radar content column, paired form fields, and card tiers behave correctly at the 660px breakpoint', async ({ page }) => {
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId: '11111111-1111-1111-1111-111111111111',
+        locale: 'en-US',
+        currency: 'USD',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+  // Seed one current Tariff so TariffComparisonForm actually renders (tariff-radar-page.tsx's
+  // currentTariffCurrency gating).
+  await page.route('**/api/tariffs?*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            monthlyBaseFee: 12.5,
+            pricePerKwh: 0.32,
+            currency: 'EUR',
+            contractStartDate: '2026-01-15T00:00:00.000Z',
+            contractPeriodMonths: 12,
+            version: 0,
+            isCurrent: true,
+            effectiveUntil: null,
+            corrections: [],
+          },
+        ],
+        totalCount: 1,
+        page: 1,
+        pageSize: 20,
+      }),
+    }),
+  )
+  // mockupWorkedExample shape (tariff-comparison-form.test.tsx) — same worked example reused here.
+  await page.route('**/api/tariffs/compare', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        currentMonthlyBaseFee: 12.5,
+        currentPricePerKwh: 0.32,
+        currency: 'EUR',
+        candidateMonthlyBaseFee: 14.9,
+        candidatePricePerKwh: 0.315,
+        candidateSwitchingBonus: 350,
+        annualPaceKwh: 3200,
+        currentAnnualCost: 1174,
+        candidateAnnualCostBonusNormalized: 1186.8,
+        bonusNormalizedAnnualSavings: -12.8,
+        candidateAnnualCostBonusIncluded: 836.8,
+        bonusIncludedAnnualSavings: 337.2,
+        isBonusIncludedWorthSwitching: true,
+        isBonusNormalizedWorthSwitching: false,
+        isLowConfidence: false,
+      }),
+    }),
+  )
+
+  const contentColumn = page.locator('div[data-slot="tariff-radar-content"]')
+  const monthlyBaseFeeField = page.getByLabel('Monthly base fee', { exact: true })
+  const pricePerKwhField = page.getByLabel('Price per kWh', { exact: true })
+
+  await page.setViewportSize({ width: 500, height: 800 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
+  await page.getByRole('button', { name: 'Tariff Radar' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Tariff Radar' })).toBeVisible()
+
+  const narrowColumnBox = await contentColumn.boundingBox()
+  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 660px
+
+  // Below 660px: Monthly Base Fee/Price per kWh stack (same x, different y).
+  let baseFeeBox = await monthlyBaseFeeField.boundingBox()
+  let priceBox = await pricePerKwhField.boundingBox()
+  expect(baseFeeBox).not.toBeNull()
+  expect(priceBox).not.toBeNull()
+  expect(Math.abs(baseFeeBox!.x - priceBox!.x)).toBeLessThan(2)
+  expect(priceBox!.y).toBeGreaterThan(baseFeeBox!.y)
+
+  // Exact-boundary check, same precedent as Dashboard/Trend History: 659px still stacks.
+  await page.setViewportSize({ width: 659, height: 800 })
+  baseFeeBox = await monthlyBaseFeeField.boundingBox()
+  priceBox = await pricePerKwhField.boundingBox()
+  expect(Math.abs(baseFeeBox!.x - priceBox!.x)).toBeLessThan(2)
+
+  // At 660px: fields sit side by side (same y, different x, roughly equal width).
+  await page.setViewportSize({ width: 660, height: 800 })
+  baseFeeBox = await monthlyBaseFeeField.boundingBox()
+  priceBox = await pricePerKwhField.boundingBox()
+  expect(Math.abs(baseFeeBox!.y - priceBox!.y)).toBeLessThan(2)
+  expect(priceBox!.x).toBeGreaterThan(baseFeeBox!.x)
+  expect(Math.abs(baseFeeBox!.width - priceBox!.width)).toBeLessThan(baseFeeBox!.width * 0.2)
+
+  await page.setViewportSize({ width: 1000, height: 800 })
+  baseFeeBox = await monthlyBaseFeeField.boundingBox()
+  priceBox = await pricePerKwhField.boundingBox()
+  expect(Math.abs(baseFeeBox!.y - priceBox!.y)).toBeLessThan(2)
+  expect(priceBox!.x).toBeGreaterThan(baseFeeBox!.x)
+
+  const wideColumnBox = await contentColumn.boundingBox()
+  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+
+  // Submit the compare form and assert the candidate fields pair up + the card tiers (AC #2, #3).
+  await page.getByLabel('Candidate monthly base fee').fill('14.90')
+  await page.getByLabel('Candidate price per kWh').fill('0.3150')
+  await page.getByLabel('Switching bonus (optional)').fill('350')
+
+  const candidateBaseFeeBox = await page.getByLabel('Candidate monthly base fee').boundingBox()
+  const candidatePriceBox = await page.getByLabel('Candidate price per kWh').boundingBox()
+  expect(Math.abs(candidateBaseFeeBox!.y - candidatePriceBox!.y)).toBeLessThan(2)
+  expect(candidatePriceBox!.x).toBeGreaterThan(candidateBaseFeeBox!.x)
+
+  await page.getByRole('button', { name: 'Compare' }).click()
+  await expect(page.getByText('Is it worth switching?')).toBeVisible()
+
+  const quietCards = page.locator('[data-slot="quiet-card"]')
+  await expect(quietCards).toHaveCount(2)
+  // Explicit test id on the verdict card (not a `.last()` document-order heuristic) so this
+  // assertion can't silently pick up the outer form-wrapping GlassCard instead.
+  const glassCardBackdrop = await page
+    .getByTestId('tariff-compare-verdict-card')
+    .evaluate((el) => getComputedStyle(el).backdropFilter)
+  const quietCardBackdrops = await quietCards.evaluateAll((els) => els.map((el) => getComputedStyle(el).backdropFilter))
+
+  expect(glassCardBackdrop).not.toBe('none')
+  for (const backdrop of quietCardBackdrops) {
+    expect(backdrop).toBe('none')
+  }
+})
