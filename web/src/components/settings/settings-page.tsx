@@ -63,32 +63,34 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
           </Button>
         </div>
 
-        <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-1">
-          <SectionLabel>{t('yearlyBaseline.heading')}</SectionLabel>
-          <YearlyBaselineForm householdId={householdId} />
-        </div>
-        <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-2">
-          <SectionLabel>{t('settings.sections.aiPlausibilityCheck')}</SectionLabel>
-          <AiPlausibilityForm householdId={householdId} />
-        </div>
-        <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-3">
-          <SectionLabel>{t('settings.sections.household')}</SectionLabel>
-          <InviteMemberRow />
-        </div>
-        <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-4">
-          <SectionLabel>{t('taggingScaffold.heading')}</SectionLabel>
-          <TaggingScaffoldManager />
-        </div>
-        <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-5">
-          <SectionLabel>{t('settings.sections.data')}</SectionLabel>
-          <DataExportPanel />
-          <DataImportPanel />
-        </div>
+        <div className="flex flex-col gap-[var(--spacing-card-gap)]">
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-1">
+            <SectionLabel>{t('yearlyBaseline.heading')}</SectionLabel>
+            <YearlyBaselineForm householdId={householdId} />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-2">
+            <SectionLabel>{t('settings.sections.aiPlausibilityCheck')}</SectionLabel>
+            <AiPlausibilityForm householdId={householdId} />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-3">
+            <SectionLabel>{t('settings.sections.household')}</SectionLabel>
+            <InviteMemberRow />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-4">
+            <SectionLabel>{t('taggingScaffold.heading')}</SectionLabel>
+            <TaggingScaffoldManager />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-5">
+            <SectionLabel>{t('settings.sections.data')}</SectionLabel>
+            <DataExportPanel />
+            <DataImportPanel />
+          </div>
 
-        <Button variant="outline" className="wide:hidden self-start" onClick={openLogoffDialog}>
-          <LogOut aria-hidden="true" />
-          {t('settings.logoff.trigger')}
-        </Button>
+          <Button variant="outline" className="wide:hidden self-start" onClick={openLogoffDialog}>
+            <LogOut aria-hidden="true" />
+            {t('settings.logoff.trigger')}
+          </Button>
+        </div>
       </div>
 
       <Dialog open={logoffStep !== 'closed'} onOpenChange={(open) => !open && closeLogoffDialog()}>

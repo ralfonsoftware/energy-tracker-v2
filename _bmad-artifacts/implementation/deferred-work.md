@@ -1,3 +1,10 @@
+## Deferred from: code review of 8-5-settings-desktop-tablet-layout (2026-09-28)
+
+- Room/Power Point item-count summary renders "— 0 Power Points"/"— 0 Devices" with no zero-guard for an empty parent [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx:580-582,656-658] — deferred, cosmetic copy preference, not a functional defect; this exact case was already observed and accepted during Task 6's live verification ("HiFi — 0 Devices"). Raised by adversarial review (Blind Hunter).
+- `InviteMemberRow`'s `Dialog` doesn't auto-close when the viewport crosses back below 660px while open, and each width variant mounts its own independent `InviteGeneratePanel` state [web/src/components/household-invite/invite-member-row.tsx] — deferred, narrow reachability (most common tablet rotations don't cross 660px either direction) and low consequence (user just regenerates the link). Raised by the Edge Case Hunter.
+- `InviteGeneratePanel`'s `handleGenerate` has no abort-on-unmount guard for its in-flight `POST /api/household-invites`, so closing the wide-mode dialog mid-request discards the server-created invite token client-side [web/src/components/household-invite/invite-generate-panel.tsx:20-44] — deferred, pre-existing behavior of a component this story intentionally left unmodified; newly reachable via the new Dialog call site but low probability/consequence. Raised by the Edge Case Hunter.
+- Dual-render narrow/wide test assertions across this story's new/extended tests are disambiguated only by DOM-order indexing (`getAllByRole(...)[0]`/`.last()`) [web/src/components/settings/settings-page.test.tsx, web/src/components/household-invite/invite-member-row.test.tsx, web/src/components/tagging-scaffold/tagging-scaffold-manager.test.tsx, web/e2e/app-shell.spec.ts] — deferred, established codebase-wide convention (the `NavChrome` dual-render precedent) predating this diff; a project-wide fix is out of scope for a single story. Raised by adversarial review (Blind Hunter).
+
 ## Deferred from: code review of spec-household-export-oom-fix (2026-09-25)
 
 - source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`

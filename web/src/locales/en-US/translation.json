@@ -61,7 +61,7 @@
       "federatedWarningProceed": "Continue"
     },
     "aiPlausibility": {
-      "heading": "AI Wattage Plausibility",
+      "heading": "AI Plausibility Check",
       "description": "When turned on, a logged Event's description may be sent to this deployment's configured AI backend to check for a rough match against any consumption change Pattern Detective noticed around that time.",
       "toggleLabel": "Send Events for AI correlation",
       "backendConfigured": "Backend: {{label}}",

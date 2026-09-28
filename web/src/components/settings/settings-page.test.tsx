@@ -86,11 +86,11 @@ describe('SettingsPage', () => {
       // "Yearly Baseline" appears both as YearlyBaselineForm's own now-wide:hidden <h2> and the
       // new SectionLabel's hidden wide:block <h2> — jsdom applies neither `hidden` class, so both
       // are simultaneously queryable, exactly like this file's existing findAllByRole(...)[0]
-      // dual-nav-match workaround above. Same for "AI Wattage Plausibility" vs. the section's own
-      // "AI Plausibility Check" wording (distinct strings, no collision) and "Rooms, Power Points
-      // & Devices" (TaggingScaffoldManager's own heading, reused verbatim by its SectionLabel).
+      // dual-nav-match workaround above. Same for "AI Plausibility Check" (AiPlausibilityForm's
+      // own heading was aligned to this exact wording during code review) and "Rooms, Power
+      // Points & Devices" (TaggingScaffoldManager's own heading, reused verbatim by its SectionLabel).
       expect((await screen.findAllByRole('heading', { name: 'Yearly Baseline', level: 2 }))[0]).toBeInTheDocument()
-      expect(await screen.findByRole('heading', { name: 'AI Plausibility Check', level: 2 })).toBeInTheDocument()
+      expect((await screen.findAllByRole('heading', { name: 'AI Plausibility Check', level: 2 }))[0]).toBeInTheDocument()
       expect(await screen.findByRole('heading', { name: 'Household', level: 2 })).toBeInTheDocument()
       expect((await screen.findAllByRole('heading', { name: 'Rooms, Power Points & Devices', level: 2 }))[0]).toBeInTheDocument()
       expect(await screen.findByRole('heading', { name: 'Data', level: 2 })).toBeInTheDocument()

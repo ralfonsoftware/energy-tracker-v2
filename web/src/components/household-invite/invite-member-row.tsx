@@ -25,6 +25,7 @@ export function InviteMemberRow() {
         <GlassCard className="gap-0 p-0">
           <button
             type="button"
+            aria-haspopup="dialog"
             className="flex w-full items-center justify-between px-3.5 py-3 text-sm font-semibold"
             onClick={() => setOpen(true)}
           >
