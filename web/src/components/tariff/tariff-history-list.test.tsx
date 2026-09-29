@@ -267,6 +267,8 @@ describe('TariffHistoryList at >=660px (entry-grid)', () => {
     await screen.findByText('Current')
     const [currentTile, olderTile] = screen.getAllByRole('listitem')
     expect(within(currentTile).getByText('Current')).toBeInTheDocument()
+    expect(within(currentTile).getByText(/Jan 1, 2026/)).toBeInTheDocument()
+    expect(within(currentTile).getByText(/Ongoing/i)).toBeInTheDocument()
     expect(within(currentTile).getByText('Base fee originally 10.00')).toBeInTheDocument()
     expect(within(currentTile).getByText('Contract start date originally Dec 15, 2025')).toBeInTheDocument()
     expect(within(currentTile).getByText('12.50 EUR')).toBeInTheDocument()
@@ -298,11 +300,25 @@ describe('TariffHistoryList at >=660px (entry-grid)', () => {
     )
   })
 
-  it('still renders pagination below the grid', async () => {
-    stubFetch([current])
+  it('still renders and drives pagination below the grid', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn((input: string | URL | Request) =>
+      Promise.resolve(
+        String(input).includes('page=2')
+          ? jsonResponse({ items: [older], totalCount: 40, page: 2, pageSize: 20 })
+          : jsonResponse({ items: [current], totalCount: 40, page: 1, pageSize: 20 }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    stubWideViewport()
 
     render(<TariffHistoryList locale="en-US" refreshNonce={0} />)
 
-    expect(await screen.findByText('Page 1 of 1')).toBeInTheDocument()
+    expect(await screen.findByText('Page 1 of 2')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Page 2 of 2')).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
   })
 })

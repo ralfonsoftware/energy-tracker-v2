@@ -17,7 +17,7 @@ interface EntryTileProps {
 
 export function EntryTile({ children, actions }: EntryTileProps) {
   return (
-    <li className="rounded-glass-sm bg-surface-quiet border-surface-quiet-border flex flex-col gap-[3px] border px-[15px] pt-[13px] pb-[12px]">
+    <li className="min-w-0 rounded-glass-sm bg-surface-quiet break-words border-surface-quiet-border flex flex-col gap-[3px] border px-[15px] pt-[13px] pb-[12px]">
       {children}
       {actions && <div className="mt-2 flex justify-end">{actions}</div>}
     </li>

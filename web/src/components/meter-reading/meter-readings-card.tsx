@@ -106,7 +106,7 @@ export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsC
                           variant="outline"
                           size="sm"
                           onClick={() => setEditing(item)}
-                          aria-label={t('meterReadingHistory.editTriggerFor', { timestamp })}
+                          aria-label={t('meterReadingHistory.editTriggerFor', { timestamp, kwh: numberFormat.format(item.kwhValue) })}
                         >
                           {t('meterReadingHistory.editTrigger')}
                         </Button>
@@ -161,7 +161,7 @@ export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsC
                           variant="outline"
                           size="sm"
                           onClick={() => setEditing(item)}
-                          aria-label={t('meterReadingHistory.editTriggerFor', { timestamp: dateTimeFormat.format(new Date(item.readingTimestamp)) })}
+                          aria-label={t('meterReadingHistory.editTriggerFor', { timestamp: dateTimeFormat.format(new Date(item.readingTimestamp)), kwh: numberFormat.format(item.kwhValue) })}
                         >
                           {t('meterReadingHistory.editTrigger')}
                         </Button>

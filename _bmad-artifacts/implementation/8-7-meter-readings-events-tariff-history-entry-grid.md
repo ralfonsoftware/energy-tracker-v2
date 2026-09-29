@@ -4,7 +4,7 @@ baseline_commit: b7f971b
 
 # Story 8.7: Meter Readings, Events & Tariff History Entry-Grid
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -75,6 +75,20 @@ so that I can see more entries at a glance instead of scrolling through a narrow
 
 - [x] **Task 9: Verify against every AC**
   - [x] Walk AC #1–#3 individually in Completion Notes and state what proves each: code reference, unit test, e2e assertion, or live check (Task 8) — same AC-by-AC accounting as Stories 8.1–8.6.
+
+### Review Findings
+
+- [x] [Review][Decision] Task 8 live Chrome gate — MET (user confirmed in-tab manual resize 2026-09-29: table → 2 columns → 3 columns). Earlier automated live check: (live check run 2026-09-29, dev server on https://localhost:5173, real household with 5 readings / 3 events): Meter Readings Edit from a tile opened the dialog and Cancel closed it (no data changed); fresh mounts at 659px = 2 tables / 0 grids, 660px = 2 grids × 2 columns (tile 283px), 700px = 2 columns (303px), 1000px = 3 columns (275px). (Was open, now confirmed manually by the user:) a live in-tab swap across 660px. The automation window's `resize_window` does not change `innerWidth`; an iframe resized in the same document changed layout and `matchMedia` correctly but React did not swap because the tab reported `visibilityState: hidden` (no media-query change events dispatched). The swap is covered by the hook unit test and the Playwright in-page resize only. Also not done live: Light/Dark comparison against the mockups and a real dark scheme.
+- [x] [Review][Decision] Tile border token is about 2.4x fainter than the mockup (dark: 0.05 vs 0.12). The delta is documented; **Resolved 2a: keep `border-surface-quiet-border` as is.**
+- [x] [Review][Patch] Long unbroken text (free-text event descriptions) can stretch a tile or overflow the grid — add `min-w-0 break-words` to `EntryTile` [web/src/components/entry-grid/entry-grid.tsx:22]
+- [x] [Review][Patch] Meter Readings tile Edit aria-label uses only the minute-granularity timestamp, so two readings in the same minute get identical accessible names — include the kWh value [web/src/components/meter-reading/meter-readings-card.tsx:104]
+- [x] [Review][Patch] `stubWideViewport` ignores the query string and always returns `matches: true` — match on the real `(min-width: 660px)` query [web/src/test/wide-viewport.ts:5]
+- [x] [Review][Patch] Tariff pagination is not tested at >=660px (Task 6) — the test only asserts "Page 1 of 1"; add a Next click and a page-2 fetch [web/src/components/tariff/tariff-history-list.test.tsx]
+- [x] [Review][Patch] The Tariff Current tile's `periodRange` text is not asserted; e2e compares only `tileBoxes[1].width`, not `tileBoxes[2].width` [web/src/components/tariff/tariff-history-list.test.tsx, web/e2e/app-shell.spec.ts]
+- [x] [Review][Patch] AC #3 e2e assertion is not scoped to the Room → Power Point → Device tree card (page-wide count of 2 proves nothing about it) — assert the tree is open and contains no `entry-grid` [web/e2e/app-shell.spec.ts]
+- [x] [Review][Patch] e2e geometry is loose (y closeTo, x `>`) and nothing asserts the swap exactly at 660px vs 659px — assert exactly 3 columns at the wide viewport and table 0 / `entry-grid` present at 660px [web/e2e/app-shell.spec.ts]
+- [x] [Review][Defer] Empty `<ul>`/table when `totalCount > 0` but `items` is empty (page beyond last after a deletion) [web/src/components/meter-reading/meter-readings-card.tsx, web/src/components/event/events-card.tsx, web/src/components/tariff/tariff-history-list.tsx] — deferred, pre-existing (same gap in the table branch)
+- [x] [Review][Defer] `dateTimeFormat.format(new Date(item.occurredAt))` throws `RangeError` on an unparseable `occurredAt`, blanking the card [web/src/components/event/events-card.tsx] — deferred, pre-existing (table branch identical)
 
 ## Dev Notes
 

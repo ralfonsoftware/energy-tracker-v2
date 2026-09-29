@@ -255,6 +255,9 @@ test('the Trend History content column, Import label, and Meter Readings table d
 
   await page.setViewportSize({ width: 660, height: 800 })
   await expect(importLabel).toBeVisible()
+  // Exactly at 660px (min-width is inclusive) the disclosures already swap table -> grid.
+  await expect(page.getByRole('table')).toHaveCount(0)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(2)
 
   // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
   await page.setViewportSize({ width: 800, height: 800 })
@@ -275,12 +278,19 @@ test('the Trend History content column, Import label, and Meter Readings table d
     const tiles = grid.locator('li')
     await expect(tiles).toHaveCount(3)
     const boxes = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+    // Exactly one row of three: same y, strictly increasing x, equal widths, each >= the 260px minimum.
     expect(boxes[0].y).toBeCloseTo(boxes[1].y, 0)
     expect(boxes[1].y).toBeCloseTo(boxes[2].y, 0)
     expect(boxes[1].x).toBeGreaterThan(boxes[0].x)
     expect(boxes[2].x).toBeGreaterThan(boxes[1].x)
     expect(boxes[1].width).toBeCloseTo(boxes[0].width, 0)
     expect(boxes[2].width).toBeCloseTo(boxes[0].width, 0)
+    expect(boxes[0].width).toBeGreaterThanOrEqual(260)
+    // Tiles are separated by exactly the 12px gap (gap-3) and the row's right edge stays inside the column.
+    expect(boxes[1].x - (boxes[0].x + boxes[0].width)).toBeCloseTo(12, 0)
+    expect(boxes[2].x - (boxes[1].x + boxes[1].width)).toBeCloseTo(12, 0)
+    // A 4th tile would need >=4x260 + 3x12 = 1076px, more than the 900px column, so 3 is the exact count.
+    expect(boxes[2].x + boxes[2].width).toBeLessThanOrEqual(wideColumnBox!.x + wideColumnBox!.width)
   }
   // AC #3: nothing else on the page is gridded by this story.
   await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(2)
@@ -442,6 +452,10 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   expect(tileBoxes[1].x).toBeGreaterThan(tileBoxes[0].x)
   expect(tileBoxes[2].x).toBeGreaterThan(tileBoxes[1].x)
   expect(tileBoxes[1].width).toBeCloseTo(tileBoxes[0].width, 0)
+  expect(tileBoxes[2].width).toBeCloseTo(tileBoxes[0].width, 0)
+  expect(tileBoxes[0].width).toBeGreaterThanOrEqual(260)
+  // The current tile shows its period range (start date + ongoing) and the Current badge.
+  await expect(page.locator('[data-slot="entry-grid"] li').first()).toContainText('Current')
 
   // Submit the compare form and assert the candidate fields pair up + the card tiers (AC #2, #3).
   await page.getByLabel('Candidate monthly base fee').fill('14.90')
@@ -621,4 +635,9 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   await expect(page.getByText(/2 Devices/)).toBeVisible()
   const addDeviceLink = page.getByRole('button', { name: 'Add Device' }).last()
   await expect(addDeviceLink).toBeVisible()
+
+  // Story 8.7 (AC #3): with the Room -> Power Point -> Device tree fully expanded at a wide
+  // viewport, no entry-grid exists anywhere on the page — the tree is not gridded by this story.
+  expect((page.viewportSize()?.width ?? 0)).toBeGreaterThanOrEqual(660)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
 })
