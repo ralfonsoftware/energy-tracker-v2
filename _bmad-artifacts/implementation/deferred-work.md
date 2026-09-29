@@ -473,3 +473,9 @@
 - source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
   summary: Nothing in this diff or its tests confirms keyboard tab order survived wrapping previously-sibling field divs in new intermediate row-wrapper divs at ≥660px.
   evidence: No story in this codebase tests keyboard tab order anywhere; a repo-wide gap, not something one story should introduce alone. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/tariff/tariff-configuration-form.tsx, web/src/components/tariff/tariff-comparison-form.tsx]
+
+## Deferred from: code review of story-8-6-wide-column-increase-across-all-surfaces (2026-09-29)
+
+- source_story: `_bmad-artifacts/implementation/8-6-wide-column-increase-across-all-surfaces.md`
+  summary: Settings and Tariff Radar wrappers have no unit-level assertion of the `wide:max-w-[900px]` class (Tariff Radar has no page test file at all); the cap on those two pages is guarded only by e2e.
+  evidence: Pre-existing coverage gap noted in the story's Dev Notes. Raised by Edge Case Hunter during code review. [web/src/components/settings/settings-page.test.tsx, web/src/components/tariff/tariff-radar-page.tsx]

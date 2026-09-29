@@ -115,7 +115,8 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
 
   // Exact-boundary check: `wide:` is a `min-width: 660px` variant, so 659px must still be the
   // narrow/icon-only layout and 660px must already be the wide/labeled one — otherwise an
-  // off-by-one drift in `--breakpoint-wide` or the `max-w-[900px]` literal would go undetected.
+  // off-by-one drift in `--breakpoint-wide` would go undetected. (The `max-w-[900px]` cap is
+  // pinned separately by the 800px and 1000px column-width checks below.)
   await page.setViewportSize({ width: 659, height: 800 })
   await expect(eventLabel).toBeHidden()
   await expect(importLabel).toBeHidden()
@@ -127,15 +128,13 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
   // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
   await page.setViewportSize({ width: 800, height: 800 })
   const midColumnBox = await contentColumn.boundingBox()
-  expect(midColumnBox?.width).toBeGreaterThan(750)
-  expect(midColumnBox?.width).toBeLessThan(800)
+  expect(midColumnBox?.width).toBeCloseTo(768, 0) // 800px viewport minus 2x16px page padding
 
   await page.setViewportSize({ width: 1000, height: 800 })
   await expect(eventLabel).toBeVisible()
   await expect(importLabel).toBeVisible()
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
+  expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
 })
 
 // Story 8.3/Task 5: same jsdom limitation as above — trend-history-page.test.tsx can only prove
@@ -206,7 +205,8 @@ test('the Trend History content column, Import label, and Meter Readings table d
   const narrowColumnBox = await contentColumn.boundingBox()
   expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 900px
 
-  // Exact-boundary check, same as the Dashboard case above: 659px stays icon-only, 660px is labeled.
+  // Exact-boundary check, same as the Dashboard case above: 659px stays icon-only, 660px is labeled
+  // (breakpoint only; the 900px cap is pinned by the 800px/1000px column-width checks below).
   await page.setViewportSize({ width: 659, height: 800 })
   await expect(importLabel).toBeHidden()
 
@@ -216,14 +216,12 @@ test('the Trend History content column, Import label, and Meter Readings table d
   // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
   await page.setViewportSize({ width: 800, height: 800 })
   const midColumnBox = await contentColumn.boundingBox()
-  expect(midColumnBox?.width).toBeGreaterThan(750)
-  expect(midColumnBox?.width).toBeLessThan(800)
+  expect(midColumnBox?.width).toBeCloseTo(768, 0) // 800px viewport minus 2x16px page padding
 
   await page.setViewportSize({ width: 1000, height: 800 })
   await expect(importLabel).toBeVisible()
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
+  expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
 
   // Task 3: no large blank gap between the rendered Timestamp text and the Edit button, at any
   // width (this fix is unconditional, not wide:-gated — contrast with the column/label assertions
@@ -361,8 +359,7 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
   await page.setViewportSize({ width: 800, height: 800 })
   const midColumnBox = await contentColumn.boundingBox()
-  expect(midColumnBox?.width).toBeGreaterThan(750)
-  expect(midColumnBox?.width).toBeLessThan(800)
+  expect(midColumnBox?.width).toBeCloseTo(768, 0) // 800px viewport minus 2x16px page padding
 
   await page.setViewportSize({ width: 1000, height: 800 })
   baseFeeBox = await monthlyBaseFeeField.boundingBox()
@@ -371,8 +368,7 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   expect(priceBox!.x).toBeGreaterThan(baseFeeBox!.x)
 
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
+  expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
 
   // Submit the compare form and assert the candidate fields pair up + the card tiers (AC #2, #3).
   await page.getByLabel('Candidate monthly base fee').fill('14.90')
@@ -493,14 +489,12 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
   await page.setViewportSize({ width: 800, height: 800 })
   const midColumnBox = await contentColumn.boundingBox()
-  expect(midColumnBox?.width).toBeGreaterThan(750)
-  expect(midColumnBox?.width).toBeLessThan(800)
+  expect(midColumnBox?.width).toBeCloseTo(768, 0) // 800px viewport minus 2x16px page padding
 
   await page.setViewportSize({ width: 1000, height: 800 })
 
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
+  expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
   // Centered: roughly equal left/right gaps against the viewport.
   const leftGap = wideColumnBox!.x
   const rightGap = 1000 - (wideColumnBox!.x + wideColumnBox!.width)

@@ -4,7 +4,7 @@ baseline_commit: 91158e3217f46d828eeb8efe1b6c26441e718cc7
 
 # Story 8.6: Wide-Column Increase Across All Surfaces
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -57,6 +57,13 @@ so that a surface like Trend History's chart doesn't feel squeezed into a narrow
 
 - [x] **Task 5: Verify against every AC**
   - [x] Walk AC #1-#3 individually and state in Completion Notes exactly what proves each one — code reference, automated test, or live verification (Task 4) — following the same AC-by-AC accounting Stories 1.12/1.7/8.1-8.5 used.
+
+### Review Findings
+
+- [x] [Review][Decision] Resolved 2026-09-29 (re-ran live check, option 1): at exactly 659px on the dev server, `matchMedia('(min-width: 660px)')` is false, bottom tab bar is `display:flex`, top nav is `display:none`, header buttons are icon-only, column is 627px (659 − 2×16). The 660px live side was verified in the original dev session (a re-resize to 660 stuck at 659 again). — Task 4 "verify live at 659px" is checked off although it was not performed — Completion Notes admit the live 659px check produced 660px (resize quirk), so that side of the boundary is proven by Playwright only. Story rules say a missing live check blocks review→done rather than deferring. Options: (1) re-run the 659px live check in a fresh pre-sized tab, (2) explicitly accept the e2e proof for the 659px side and note the sign-off.
+- [x] [Review][Patch] Inaccurate e2e comment: the 659/660 exact-boundary check cannot detect drift in the `max-w-[900px]` literal — reword to cover only `--breakpoint-wide`, and point to the 800px/1000px checks for the cap [web/e2e/app-shell.spec.ts:116-118] (also Trend History comment at ~209)
+- [x] [Review][Patch] Loose column-width bounds in e2e: at 1000px viewport the column must be exactly 900px (`toBeCloseTo(900, 0)`, not `>800 && <=900`), and at 800px exactly 768px (not `>750 && <800`); otherwise a 850/880 cap or padding drift still passes [web/e2e/app-shell.spec.ts:137,225,374,502 and the four 800px blocks]
+- [x] [Review][Defer] Settings and Tariff Radar have no unit-level assertion of the `wide:max-w-[900px]` class [web/src/components/settings/settings-page.test.tsx] — deferred, pre-existing (spec Dev Notes: coverage gap predates this story; tariff-radar-page.test.tsx does not exist)
 
 ## Dev Notes
 
@@ -153,7 +160,7 @@ Claude Sonnet 5.5
 - AC #1: code (4 wrappers), unit class assertions, e2e 900px bound, live: all four surfaces measured 900px, x=100 (centered) at 1100px. Breakpoint unchanged: `index.css` untouched; live at 660px the top nav is active; e2e covers the 659/660 swap exactly.
 - AC #2: e2e 800px assertion and live at 800px (Dashboard, Trend History): column 768px = viewport minus 2x16px padding, no cap; Trend History chart spans the full width.
 - AC #3: Status card markup untouched; live screenshot at 1100px shows identical card internals in the wider column.
-- Deviation to flag: the live check at exactly 659px could not be produced (browser window resize quirk gave 660); that side of the boundary is proven by the Playwright test only.
+- Deviation to flag: the live check at exactly 659px could not be produced (browser window resize quirk gave 660); that side of the boundary is proven by the Playwright test only. **Update (code review, 2026-09-29):** the 659px live check was subsequently performed and passed — see Review Findings.
 
 ### File List
 
