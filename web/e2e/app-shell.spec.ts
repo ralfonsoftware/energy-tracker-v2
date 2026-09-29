@@ -483,6 +483,47 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   for (const backdrop of quietCardBackdrops) {
     expect(backdrop).toBe('none')
   }
+
+  // Story 8.9 (UX-DR31): the current/candidate summary panels pair side by side at >=660px and the
+  // verdict card stays full width below them. Geometry is derived from the measured wrapper, not
+  // hardcoded, so a changed padding token doesn't silently invalidate the exact-value checks.
+  const cardRects = () => quietCards.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+  const pairGap = 16 // gap-4
+  const verdictCard = page.getByTestId('tariff-compare-verdict-card')
+
+  let [currentRect, candidateRect] = await cardRects()
+  expect(candidateRect.y).toBeCloseTo(currentRect.y, 0)
+  expect(candidateRect.x).toBeGreaterThan(currentRect.x)
+  expect(candidateRect.width).toBeCloseTo(currentRect.width, 0)
+  expect(candidateRect.x).toBeCloseTo(currentRect.x + currentRect.width + pairGap, 0)
+  // Equal-height stretch: the candidate panel has the extra Switching Bonus row.
+  expect(candidateRect.height).toBeCloseTo(currentRect.height, 0)
+
+  const pairWidth = candidateRect.x + candidateRect.width - currentRect.x
+  const verdictBox = (await verdictCard.boundingBox())!
+  expect(verdictBox.y).toBeGreaterThanOrEqual(currentRect.y + currentRect.height)
+  expect(verdictBox.x).toBeCloseTo(currentRect.x, 0)
+  expect(verdictBox.width).toBeCloseTo(pairWidth, 0)
+
+  // ~800px (column 768px): still side by side, neither panel overflows the column.
+  await page.setViewportSize({ width: 800, height: 800 })
+  ;[currentRect, candidateRect] = await cardRects()
+  const midColumnRight = (await contentColumn.boundingBox())!
+  expect(candidateRect.y).toBeCloseTo(currentRect.y, 0)
+  expect(candidateRect.x).toBeGreaterThan(currentRect.x)
+  expect(candidateRect.x + candidateRect.width).toBeLessThanOrEqual(midColumnRight.x + midColumnRight.width)
+
+  // AC #3 exact boundary on the already-rendered result: 659px stacks, 660px pairs.
+  await page.setViewportSize({ width: 659, height: 800 })
+  ;[currentRect, candidateRect] = await cardRects()
+  expect(candidateRect.x).toBeCloseTo(currentRect.x, 0)
+  expect(candidateRect.y).toBeGreaterThanOrEqual(currentRect.y + currentRect.height)
+  expect(candidateRect.y).toBeCloseTo(currentRect.y + currentRect.height + pairGap, 0)
+
+  await page.setViewportSize({ width: 660, height: 800 })
+  ;[currentRect, candidateRect] = await cardRects()
+  expect(candidateRect.y).toBeCloseTo(currentRect.y, 0)
+  expect(candidateRect.x).toBeGreaterThan(currentRect.x)
 })
 
 // Story 8.5/Task 5: same jsdom limitation as above — settings-page.test.tsx and
