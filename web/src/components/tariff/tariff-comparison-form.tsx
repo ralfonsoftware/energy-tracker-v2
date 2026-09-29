@@ -204,37 +204,41 @@ export function TariffComparisonForm({ currency, locale }: TariffComparisonFormP
 
       {result && (
         <div className="flex flex-col gap-4">
-          {/* AC #4: current-vs-candidate tariff summary — stacked glass panels, tabular-nums
-              label/value rows (status-detail-dialog.tsx's convention). No tariff names — Tariff.cs
-              has no name/label field, so generic headings are used instead of a per-entry name. */}
-          <QuietCard className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">{t('tariff.compare.summary.currentHeading')}</h3>
-            <SummaryRow label={t('tariff.form.monthlyBaseFeeLabel')} value={`${moneyFormat.format(result.currentMonthlyBaseFee)} ${result.currency}`} />
-            <SummaryRow
-              label={t('tariff.form.pricePerKwhLabel')}
-              value={`${moneyFormat.format(result.currentPricePerKwh)} ${result.currency}/kWh`}
-            />
-          </QuietCard>
-
-          <QuietCard className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">{t('tariff.compare.summary.candidateHeading')}</h3>
-            <SummaryRow
-              label={t('tariff.compare.candidateMonthlyBaseFeeLabel')}
-              value={`${moneyFormat.format(result.candidateMonthlyBaseFee)} ${result.currency}`}
-            />
-            <SummaryRow
-              label={t('tariff.compare.candidatePricePerKwhLabel')}
-              value={`${moneyFormat.format(result.candidatePricePerKwh)} ${result.currency}/kWh`}
-            />
-            {/* Omitted entirely when 0 — showing "€0.00" implies a deliberate zero-bonus candidate
-                rather than "nothing was entered" (Task 4). */}
-            {result.candidateSwitchingBonus > 0 && (
+          {/* AC #4 / UX-DR31: current-vs-candidate tariff summary — quiet-tier panels, stacked below
+              660px and paired side by side at wide:. The verdict card below stays a full-width
+              sibling of this row (the shared conclusion both feed into). tabular-nums label/value
+              rows (status-detail-dialog.tsx's convention). No tariff names — Tariff.cs has no
+              name/label field, so generic headings are used instead of a per-entry name. */}
+          <div className="flex flex-col gap-4 wide:flex-row">
+            <QuietCard className="flex flex-col gap-2 wide:min-w-0 wide:flex-1 wide:basis-0">
+              <h3 className="text-sm font-semibold">{t('tariff.compare.summary.currentHeading')}</h3>
+              <SummaryRow label={t('tariff.form.monthlyBaseFeeLabel')} value={`${moneyFormat.format(result.currentMonthlyBaseFee)} ${result.currency}`} />
               <SummaryRow
-                label={t('tariff.compare.candidateSwitchingBonusLabel')}
-                value={`${moneyFormat.format(result.candidateSwitchingBonus)} ${result.currency}`}
+                label={t('tariff.form.pricePerKwhLabel')}
+                value={`${moneyFormat.format(result.currentPricePerKwh)} ${result.currency}/kWh`}
               />
-            )}
-          </QuietCard>
+            </QuietCard>
+
+            <QuietCard className="flex flex-col gap-2 wide:min-w-0 wide:flex-1 wide:basis-0">
+              <h3 className="text-sm font-semibold">{t('tariff.compare.summary.candidateHeading')}</h3>
+              <SummaryRow
+                label={t('tariff.compare.candidateMonthlyBaseFeeLabel')}
+                value={`${moneyFormat.format(result.candidateMonthlyBaseFee)} ${result.currency}`}
+              />
+              <SummaryRow
+                label={t('tariff.compare.candidatePricePerKwhLabel')}
+                value={`${moneyFormat.format(result.candidatePricePerKwh)} ${result.currency}/kWh`}
+              />
+              {/* Omitted entirely when 0 — showing "€0.00" implies a deliberate zero-bonus candidate
+                  rather than "nothing was entered" (Task 4). */}
+              {result.candidateSwitchingBonus > 0 && (
+                <SummaryRow
+                  label={t('tariff.compare.candidateSwitchingBonusLabel')}
+                  value={`${moneyFormat.format(result.candidateSwitchingBonus)} ${result.currency}`}
+                />
+              )}
+            </QuietCard>
+          </div>
 
           {/* AC #1, #2, #3: both rows shown together, always — never toggled. Each row's
               color/badge is driven independently by its own verdict flag (server-computed,

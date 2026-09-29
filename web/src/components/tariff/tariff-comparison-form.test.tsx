@@ -295,6 +295,41 @@ describe('TariffComparisonForm', () => {
     expect(verdictHeading.closest('[data-slot="quiet-card"]')).toBeNull()
   })
 
+  it('pairs the current/candidate panels in one wide:flex-row wrapper while the verdict card stays a full-width sibling (Story 8.9/UX-DR31)', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(mockupWorkedExample))))
+    const user = userEvent.setup()
+
+    render(<TariffComparisonForm currency="EUR" locale="en-US" />)
+    await user.type(screen.getByLabelText('Candidate monthly base fee'), '14.90')
+    await user.type(screen.getByLabelText('Candidate price per kWh'), '0.3150')
+    await user.click(screen.getByRole('button', { name: 'Compare' }))
+
+    const currentCard = (await screen.findByText('Your current tariff')).closest('[data-slot="quiet-card"]')
+    const candidateCard = screen.getByText('Candidate tariff').closest('[data-slot="quiet-card"]')
+    expect(currentCard).not.toBeNull()
+    expect(candidateCard).not.toBeNull()
+
+    // AC #1: one shared wrapper, stacked by default and a row at wide:, current first, candidate second.
+    const pairRow = currentCard!.parentElement
+    expect(pairRow).toBe(candidateCard!.parentElement)
+    expect(pairRow).toHaveClass('flex', 'flex-col', 'gap-4', 'wide:flex-row')
+    expect(pairRow!.children[0]).toBe(currentCard)
+    expect(pairRow!.children[1]).toBe(candidateCard)
+    expect(pairRow!.children).toHaveLength(2)
+    for (const card of [currentCard, candidateCard]) {
+      expect(card).toHaveClass('wide:flex-1', 'wide:basis-0', 'wide:min-w-0')
+    }
+
+    // AC #2: the verdict card is a following sibling of the wrapper, never a third column.
+    const verdictCard = screen.getByTestId('tariff-compare-verdict-card')
+    expect(pairRow).not.toContainElement(verdictCard)
+    // GlassCard wraps its card in a data-slot="glass-card-stack" element — that stack is the sibling.
+    const verdictStack = verdictCard.closest('[data-slot="glass-card-stack"]')
+    expect(verdictStack?.parentElement).toBe(pairRow!.parentElement)
+    expect(pairRow!.nextElementSibling).toBe(verdictStack)
+    expect(verdictCard.className).not.toMatch(/wide:(flex|basis|min-w|w-|col-|grid)/)
+  })
+
   it('the Compare button stays disabled until the required fields are filled', () => {
     render(<TariffComparisonForm currency="EUR" locale="en-US" />)
 
