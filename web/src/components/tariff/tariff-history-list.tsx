@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { EntryGrid, EntryTile } from '@/components/entry-grid/entry-grid'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useWideBreakpoint } from '@/hooks/use-wide-breakpoint'
 import { fetchTariffHistory, type TariffHistoryItemDto, type TariffHistoryPageDto } from '@/lib/tariff-api'
 import { EditTariffDialog } from './edit-tariff-dialog'
 
@@ -26,6 +28,7 @@ const PAGE_SIZE = 20
 // history surface (Scope Reality Check).
 export function TariffHistoryList({ locale, refreshNonce, onLoaded, onTariffMutated }: TariffHistoryListProps) {
   const { t } = useTranslation()
+  const isWide = useWideBreakpoint()
   const [page, setPage] = useState(1)
   const [data, setData] = useState<TariffHistoryPageDto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -120,7 +123,46 @@ export function TariffHistoryList({ locale, refreshNonce, onLoaded, onTariffMuta
           <p className="text-muted-foreground text-sm">{t('tariff.history.emptyState')}</p>
         )}
 
-        {!loading && !error && data && data.totalCount > 0 && (
+        {!loading && !error && data && data.totalCount > 0 && isWide && (
+          <EntryGrid>
+            {data.items.map((item) => (
+              <EntryTile
+                key={item.id}
+                actions={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing(item)}
+                    aria-label={t('tariff.history.editTriggerFor', {
+                      start: dateFormat.format(new Date(item.contractStartDate)),
+                    })}
+                  >
+                    {t('tariff.history.editTrigger')}
+                  </Button>
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">
+                    {t('tariff.history.periodRange', {
+                      start: dateFormat.format(new Date(item.contractStartDate)),
+                      end: item.effectiveUntil ? dateFormat.format(new Date(item.effectiveUntil)) : t('tariff.history.ongoing'),
+                    })}
+                  </span>
+                  {item.isCurrent && <Badge variant="outline">{t('tariff.history.currentBadge')}</Badge>}
+                </div>
+                {formatCorrection(item)}
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {baseFeeFormat.format(item.monthlyBaseFee)} {item.currency}
+                </span>
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {priceFormat.format(item.pricePerKwh)} {item.currency}/kWh
+                </span>
+              </EntryTile>
+            ))}
+          </EntryGrid>
+        )}
+
+        {!loading && !error && data && data.totalCount > 0 && !isWide && (
           <Table>
             <TableHeader>
               <TableRow>

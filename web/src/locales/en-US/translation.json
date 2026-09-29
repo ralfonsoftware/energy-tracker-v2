@@ -234,7 +234,7 @@
     "pendingBadge": "Pending",
     "correctedFrom": "Originally logged as {{kwh}} kWh",
     "editTrigger": "Edit",
-    "editTriggerFor": "Edit reading from {{timestamp}}",
+    "editTriggerFor": "Edit reading from {{timestamp}} ({{kwh}} kWh)",
     "editDialogTitle": "Edit Meter Reading",
     "save": "Save",
     "saving": "Saving…",

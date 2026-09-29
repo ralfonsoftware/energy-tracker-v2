@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TariffHistoryList } from './tariff-history-list'
+import { stubWideViewport } from '@/test/wide-viewport'
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
@@ -200,6 +201,124 @@ describe('TariffHistoryList', () => {
 
     expect(await screen.findByText('Page 1 of 1')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+  })
+})
+
+describe('TariffHistoryList at >=660px (entry-grid)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const base = {
+    monthlyBaseFee: 12.5,
+    pricePerKwh: 0.32,
+    currency: 'EUR',
+    contractPeriodMonths: 12,
+    version: 1,
+    corrections: [] as { fieldName: string; oldValue: string; newValue: string; correctedAtUtc: string }[],
+  }
+  const current = {
+    ...base,
+    id: 'c1',
+    contractStartDate: '2026-01-01T00:00:00+00:00',
+    isCurrent: true,
+    effectiveUntil: null,
+    corrections: [
+      { fieldName: 'MonthlyBaseFee', oldValue: '10', newValue: '12.5', correctedAtUtc: '2026-02-01T00:00:00+00:00' },
+      { fieldName: 'ContractStartDate', oldValue: '2025-12-15T00:00:00.0000000+00:00', newValue: '2026-01-01T00:00:00.0000000+00:00', correctedAtUtc: '2026-02-01T00:00:00+00:00' },
+    ],
+  }
+  const older = {
+    ...base,
+    id: 'o1',
+    monthlyBaseFee: 10,
+    pricePerKwh: 0.3,
+    contractStartDate: '2025-01-01T00:00:00+00:00',
+    isCurrent: false,
+    effectiveUntil: '2026-01-01T00:00:00+00:00',
+  }
+
+  function stubFetch(items: object[], extra?: (input: string, init?: RequestInit) => Response | null) {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const custom = extra?.(String(input), init)
+      return Promise.resolve(custom ?? jsonResponse({ items, totalCount: items.length, page: 1, pageSize: 20 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    stubWideViewport()
+    return fetchMock
+  }
+
+  it('renders entries as list-item tiles instead of a table', async () => {
+    stubFetch([current, older])
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} />)
+
+    await screen.findByText('Current')
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('shows period, Current badge, corrections, and fixed-decimal fee and price in the tile', async () => {
+    stubFetch([current, older])
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} />)
+
+    await screen.findByText('Current')
+    const [currentTile, olderTile] = screen.getAllByRole('listitem')
+    expect(within(currentTile).getByText('Current')).toBeInTheDocument()
+    expect(within(currentTile).getByText(/Jan 1, 2026/)).toBeInTheDocument()
+    expect(within(currentTile).getByText(/Ongoing/i)).toBeInTheDocument()
+    expect(within(currentTile).getByText('Base fee originally 10.00')).toBeInTheDocument()
+    expect(within(currentTile).getByText('Contract start date originally Dec 15, 2025')).toBeInTheDocument()
+    expect(within(currentTile).getByText('12.50 EUR')).toBeInTheDocument()
+    expect(within(currentTile).getByText('0.3200 EUR/kWh')).toBeInTheDocument()
+    expect(within(olderTile).queryByText('Current')).not.toBeInTheDocument()
+    expect(within(olderTile).getByText(/Jan 1, 2025/)).toBeInTheDocument()
+    expect(within(olderTile).getByText('10.00 EUR')).toBeInTheDocument()
+    expect(within(olderTile).getByText('0.3000 EUR/kWh')).toBeInTheDocument()
+  })
+
+  it('clicking a tile Edit opens the dialog; saving reloads and fires onTariffMutated', async () => {
+    const item = { ...current, corrections: [], contractStartDate: '2099-01-01T00:00:00+00:00' }
+    const fetchMock = stubFetch([item], (_url, init) =>
+      (init?.method ?? 'GET').toUpperCase() === 'PUT' ? jsonResponse({ ...item, version: 2 }) : null,
+    )
+    const onTariffMutated = vi.fn()
+    const user = userEvent.setup()
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} onTariffMutated={onTariffMutated} />)
+
+    await user.click(await screen.findByRole('button', { name: /Edit Tariff entry starting/ }))
+    expect(screen.getByRole('heading', { name: 'Edit Tariff entry' })).toBeInTheDocument()
+    const loadsBefore = fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'GET').length
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await vi.waitFor(() => expect(onTariffMutated).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'GET').length).toBeGreaterThan(loadsBefore),
+    )
+  })
+
+  it('still renders and drives pagination below the grid', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn((input: string | URL | Request) =>
+      Promise.resolve(
+        String(input).includes('page=2')
+          ? jsonResponse({ items: [older], totalCount: 40, page: 2, pageSize: 20 })
+          : jsonResponse({ items: [current], totalCount: 40, page: 1, pageSize: 20 }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    stubWideViewport()
+
+    render(<TariffHistoryList locale="en-US" refreshNonce={0} />)
+
+    expect(await screen.findByText('Page 1 of 2')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Page 2 of 2')).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
   })
 })

@@ -162,31 +162,46 @@ test('the Trend History content column, Import label, and Meter Readings table d
     route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
   )
   await page.route('**/api/status/history', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
-  // Seed one reading so the table actually renders, not the empty state (Task 5's own instruction).
+  // Seed three readings and three events so both the table (<660px) and a 3-column tile grid
+  // (>=660px) are observable, not the empty state.
   await page.route('**/api/meter-readings?*', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        items: [
-          {
-            id: '11111111-1111-1111-1111-111111111111',
-            kwhValue: 100,
-            readingTimestamp: '2026-08-15T14:32:00+00:00',
-            version: 0,
-            isPendingRegression: false,
-            correctedFromKwhValue: null,
-            correctedAtUtc: null,
-          },
-        ],
-        totalCount: 1,
+        items: [1, 2, 3].map((n) => ({
+          id: `11111111-1111-1111-1111-11111111111${n}`,
+          kwhValue: 100 * n,
+          readingTimestamp: `2026-08-1${n}T14:32:00+00:00`,
+          version: 0,
+          isPendingRegression: false,
+          correctedFromKwhValue: null,
+          correctedAtUtc: null,
+        })),
+        totalCount: 3,
         page: 1,
         pageSize: 20,
       }),
     }),
   )
   await page.route('**/api/events?*', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], totalCount: 0, page: 1, pageSize: 20 }) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [1, 2, 3].map((n) => ({
+          id: `22222222-2222-2222-2222-22222222222${n}`,
+          description: `event ${n}`,
+          occurredAt: `2026-08-1${n}T10:00:00+00:00`,
+          taggedEntityType: null,
+          taggedEntityName: null,
+          correlationDirection: null,
+        })),
+        totalCount: 3,
+        page: 1,
+        pageSize: 20,
+      }),
+    }),
   )
   await page.route('**/api/smart-plug-readings', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
 
@@ -210,27 +225,15 @@ test('the Trend History content column, Import label, and Meter Readings table d
   await page.setViewportSize({ width: 659, height: 800 })
   await expect(importLabel).toBeHidden()
 
-  await page.setViewportSize({ width: 660, height: 800 })
-  await expect(importLabel).toBeVisible()
-
-  // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
-  await page.setViewportSize({ width: 800, height: 800 })
-  const midColumnBox = await contentColumn.boundingBox()
-  expect(midColumnBox?.width).toBeCloseTo(768, 0) // 800px viewport minus 2x16px page padding
-
-  await page.setViewportSize({ width: 1000, height: 800 })
-  await expect(importLabel).toBeVisible()
-  const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
-
-  // Task 3: no large blank gap between the rendered Timestamp text and the Edit button, at any
+  // Task 3 (checked below 660px, where the table is still rendered — from 660px the same entries
+  // are tiles, see the entry-grid checks at 1000px): no large blank gap between the rendered Timestamp text and the Edit button, at any
   // width (this fix is unconditional, not wide:-gated — contrast with the column/label assertions
   // above). Measured against the Timestamp *text*'s own rect (via a DOM Range, not the padded
   // <td> box) and the Edit *button*'s own rect (not its cell) — comparing the two cells' boundary
   // boxes instead would always read ~0px regardless of whether the w-px fix is present, since
   // adjacent table cells in the same row are always contiguous.
-  await page.getByText('Meter Readings — 1 logged').click()
-  const editButton = page.getByRole('button', { name: /Edit reading from/ })
+  await page.getByText('Meter Readings — 3 logged').click()
+  const editButton = page.getByRole('button', { name: /Edit reading from/ }).first()
   await expect(editButton).toBeVisible()
   const row = page.locator('tr', { has: editButton })
   const timestampCell = row.locator('td').nth(1)
@@ -243,6 +246,59 @@ test('the Trend History content column, Import label, and Meter Readings table d
   expect(editButtonBox).not.toBeNull()
   const gap = editButtonBox!.x - timestampTextRect
   expect(gap).toBeLessThan(40)
+
+  // Story 8.7: below 660px the entries stay a table and no tile grid exists.
+  await expect(page.getByRole('table')).toHaveCount(1)
+  await page.getByText('Events — 3 logged').click()
+  await expect(page.getByRole('table')).toHaveCount(2)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 660, height: 800 })
+  await expect(importLabel).toBeVisible()
+  // Exactly at 660px (min-width is inclusive) the disclosures already swap table -> grid.
+  await expect(page.getByRole('table')).toHaveCount(0)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(2)
+
+  // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
+  await page.setViewportSize({ width: 800, height: 800 })
+  const midColumnBox = await contentColumn.boundingBox()
+  expect(midColumnBox?.width).toBeCloseTo(768, 0) // 800px viewport minus 2x16px page padding
+
+  await page.setViewportSize({ width: 1000, height: 800 })
+  await expect(importLabel).toBeVisible()
+  const wideColumnBox = await contentColumn.boundingBox()
+  expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
+
+  // Story 8.7 (AC #1): at >=660px both disclosures (still open across the resize) swap the table for
+  // a tile grid. Inside the 900px column, three 260px-min tiles fit per row (3x260 + 2x12 = 804px).
+  await expect(page.getByRole('table')).toHaveCount(0)
+  const grids = page.locator('[data-slot="entry-grid"]')
+  await expect(grids).toHaveCount(2)
+  for (const grid of await grids.all()) {
+    const tiles = grid.locator('li')
+    await expect(tiles).toHaveCount(3)
+    const boxes = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+    // Exactly one row of three: same y, strictly increasing x, equal widths, each >= the 260px minimum.
+    expect(boxes[0].y).toBeCloseTo(boxes[1].y, 0)
+    expect(boxes[1].y).toBeCloseTo(boxes[2].y, 0)
+    expect(boxes[1].x).toBeGreaterThan(boxes[0].x)
+    expect(boxes[2].x).toBeGreaterThan(boxes[1].x)
+    expect(boxes[1].width).toBeCloseTo(boxes[0].width, 0)
+    expect(boxes[2].width).toBeCloseTo(boxes[0].width, 0)
+    expect(boxes[0].width).toBeGreaterThanOrEqual(260)
+    // Tiles are separated by exactly the 12px gap (gap-3) and the row's right edge stays inside the column.
+    expect(boxes[1].x - (boxes[0].x + boxes[0].width)).toBeCloseTo(12, 0)
+    expect(boxes[2].x - (boxes[1].x + boxes[1].width)).toBeCloseTo(12, 0)
+    // A 4th tile would need >=4x260 + 3x12 = 1076px, more than the 900px column, so 3 is the exact count.
+    expect(boxes[2].x + boxes[2].width).toBeLessThanOrEqual(wideColumnBox!.x + wideColumnBox!.width)
+  }
+  // AC #3: nothing else on the page is gridded by this story.
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(2)
+
+  // Back across the boundary in the same page: the table returns without a reload.
+  await page.setViewportSize({ width: 659, height: 800 })
+  await expect(page.getByRole('table')).toHaveCount(2)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
 })
 
 // Story 8.4/Task 5: same jsdom limitation as above — tariff-configuration-form.test.tsx and
@@ -269,8 +325,8 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   await page.route('**/api/meter-regression-prompts/open', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
   )
-  // Seed one current Tariff so TariffComparisonForm actually renders (tariff-radar-page.tsx's
-  // currentTariffCurrency gating).
+  // Seed a current Tariff (so TariffComparisonForm actually renders — tariff-radar-page.tsx's
+  // currentTariffCurrency gating) plus two older ones so the history has 3 entries.
   await page.route('**/api/tariffs?*', (route) =>
     route.fulfill({
       status: 200,
@@ -289,8 +345,20 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
             effectiveUntil: null,
             corrections: [],
           },
+          ...[2, 3].map((n) => ({
+            id: `11111111-1111-1111-1111-11111111111${n}`,
+            monthlyBaseFee: 10 + n,
+            pricePerKwh: 0.3,
+            currency: 'EUR',
+            contractStartDate: `${2026 - n + 1}-01-15T00:00:00.000Z`,
+            contractPeriodMonths: 12,
+            version: 0,
+            isCurrent: false,
+            effectiveUntil: `${2026 - n + 2}-01-15T00:00:00.000Z`,
+            corrections: [],
+          })),
         ],
-        totalCount: 1,
+        totalCount: 3,
         page: 1,
         pageSize: 20,
       }),
@@ -342,6 +410,10 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   expect(Math.abs(baseFeeBox!.x - priceBox!.x)).toBeLessThan(2)
   expect(priceBox!.y).toBeGreaterThan(baseFeeBox!.y)
 
+  // Story 8.7: the Tariff History list is a table below 660px (no tile grid).
+  await expect(page.getByRole('table')).toHaveCount(1)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
+
   // Exact-boundary check, same precedent as Dashboard/Trend History: 659px still stacks.
   await page.setViewportSize({ width: 659, height: 800 })
   baseFeeBox = await monthlyBaseFeeField.boundingBox()
@@ -369,6 +441,21 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
 
   const wideColumnBox = await contentColumn.boundingBox()
   expect(wideColumnBox?.width).toBeCloseTo(900, 0) // 1000px viewport is past the cap, so exactly max-w-[900px]
+
+  // Story 8.7 (AC #1): at >=660px the history renders as a 3-column tile grid instead of a table.
+  await expect(page.getByRole('table')).toHaveCount(0)
+  const historyTiles = page.locator('[data-slot="entry-grid"] li')
+  await expect(historyTiles).toHaveCount(3)
+  const tileBoxes = await historyTiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+  expect(tileBoxes[0].y).toBeCloseTo(tileBoxes[1].y, 0)
+  expect(tileBoxes[1].y).toBeCloseTo(tileBoxes[2].y, 0)
+  expect(tileBoxes[1].x).toBeGreaterThan(tileBoxes[0].x)
+  expect(tileBoxes[2].x).toBeGreaterThan(tileBoxes[1].x)
+  expect(tileBoxes[1].width).toBeCloseTo(tileBoxes[0].width, 0)
+  expect(tileBoxes[2].width).toBeCloseTo(tileBoxes[0].width, 0)
+  expect(tileBoxes[0].width).toBeGreaterThanOrEqual(260)
+  // The current tile shows its period range (start date + ongoing) and the Current badge.
+  await expect(page.locator('[data-slot="entry-grid"] li').first()).toContainText('Current')
 
   // Submit the compare form and assert the candidate fields pair up + the card tiers (AC #2, #3).
   await page.getByLabel('Candidate monthly base fee').fill('14.90')
@@ -548,4 +635,9 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   await expect(page.getByText(/2 Devices/)).toBeVisible()
   const addDeviceLink = page.getByRole('button', { name: 'Add Device' }).last()
   await expect(addDeviceLink).toBeVisible()
+
+  // Story 8.7 (AC #3): with the Room -> Power Point -> Device tree fully expanded at a wide
+  // viewport, no entry-grid exists anywhere on the page — the tree is not gridded by this story.
+  expect((page.viewportSize()?.width ?? 0)).toBeGreaterThanOrEqual(660)
+  await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
 })

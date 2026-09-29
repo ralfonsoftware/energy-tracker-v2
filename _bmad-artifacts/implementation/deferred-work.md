@@ -479,3 +479,13 @@
 - source_story: `_bmad-artifacts/implementation/8-6-wide-column-increase-across-all-surfaces.md`
   summary: Settings and Tariff Radar wrappers have no unit-level assertion of the `wide:max-w-[900px]` class (Tariff Radar has no page test file at all); the cap on those two pages is guarded only by e2e.
   evidence: Pre-existing coverage gap noted in the story's Dev Notes. Raised by Edge Case Hunter during code review. [web/src/components/settings/settings-page.test.tsx, web/src/components/tariff/tariff-radar-page.tsx]
+
+## Deferred from: code review of story-8-7-meter-readings-events-tariff-history-entry-grid (2026-09-29)
+
+- source_story: `_bmad-artifacts/implementation/8-7-meter-readings-events-tariff-history-entry-grid.md`
+  summary: When `totalCount > 0` but `items` is empty (current page beyond the last after a deletion), Meter Readings, Events and Tariff History render an empty table/grid with no message.
+  evidence: Pre-existing in the table branch; the new grid branch copies the same guard. Raised by Edge Case Hunter during code review. [web/src/components/meter-reading/meter-readings-card.tsx, web/src/components/event/events-card.tsx, web/src/components/tariff/tariff-history-list.tsx]
+
+- source_story: `_bmad-artifacts/implementation/8-7-meter-readings-events-tariff-history-entry-grid.md`
+  summary: `Intl.DateTimeFormat.format(new Date(item.occurredAt))` throws `RangeError` on an unparseable `occurredAt`, which would blank the whole Events card.
+  evidence: Pre-existing in the table row; the tile branch repeats it. Raised by Edge Case Hunter during code review. [web/src/components/event/events-card.tsx]

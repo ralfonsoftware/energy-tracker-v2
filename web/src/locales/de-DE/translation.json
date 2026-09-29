@@ -234,7 +234,7 @@
     "pendingBadge": "Ausstehend",
     "correctedFrom": "Ursprünglich als {{kwh}} kWh erfasst",
     "editTrigger": "Bearbeiten",
-    "editTriggerFor": "Zählerstand vom {{timestamp}} bearbeiten",
+    "editTriggerFor": "Zählerstand vom {{timestamp}} ({{kwh}} kWh) bearbeiten",
     "editDialogTitle": "Zählerstand bearbeiten",
     "save": "Speichern",
     "saving": "Wird gespeichert…",
