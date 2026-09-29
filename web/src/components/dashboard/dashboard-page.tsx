@@ -127,11 +127,11 @@ export function DashboardPage({
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
       {/* Story 8.2/Task 1: constrains the page's own content — header row, event confirmation,
-          Status/Tariff-Check cards, and the Log Reading CTA — to a centered 660px column at
+          Status/Tariff-Check cards, and the Log Reading CTA — to a centered 900px column at
           >=660px (UX-DR19). NavChrome and the regression dialog are deliberately outside this
           wrapper (see story Dev Notes): NavChrome's top-nav variant is full-width by design
           (Story 8.1), and the dialog is an overlay with its own sizing. */}
-      <div data-slot="dashboard-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[660px]">
+      <div data-slot="dashboard-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">{t('app.title')}</h1>
           <div className="flex items-center gap-2">

@@ -60,11 +60,11 @@ export function TariffRadarPage({
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
       {/* Story 8.4/Task 1: constrains the page's own content — header, Tariff Check card, and
-          the card stack — to a centered 660px column at >=660px (UX-DR19), mirroring
+          the card stack — to a centered 900px column at >=660px (UX-DR19), mirroring
           dashboard-content (Story 8.2) and trend-history-content (Story 8.3). NavChrome is
           deliberately outside this wrapper — its top-nav variant is full-width by design
           (Story 8.1/8.2/8.3 precedent). */}
-      <div data-slot="tariff-radar-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[660px]">
+      <div data-slot="tariff-radar-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <h1 className="text-lg font-bold">{t('dashboard.nav.tariffRadar')}</h1>
 
         <TariffCheckCard reminder={tariffCheck} locale={locale} />
