@@ -4,7 +4,7 @@ baseline_commit: db0c640
 
 # Story 8.9: Tariff Comparison Side-by-Side Summary
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -54,6 +54,11 @@ so that I can compare them at a glance instead of scrolling between two stacked 
 
 - [x] **Task 5: Verify against every AC**
   - [x] Walk AC #1-#3 individually in Completion Notes and state what proves each (code reference, unit test, e2e assertion, or live check) — same AC-by-AC accounting as Stories 8.1–8.8.
+
+### Review Findings
+
+- [x] [Review][Patch] E2E pair geometry is circular and hardcoded: `pairWidth` is derived from the two cards, so the verdict-width assertion can't catch a wrong wrapper width; `pairGap = 16` is hardcoded despite the comment saying geometry is measured; the 800px check only bounds the candidate's right edge. Measure the wrapper (`currentCard.locator('..')`), read its computed `column-gap`, assert verdict width == wrapper width, and at 800px check both cards sit inside the column [web/e2e/app-shell.spec.ts:487-524]
+- [x] [Review][Patch] Unit test's negative class check on the verdict card only matches `wide:flex-(1|row)`; a stray `wide:basis-0`/`wide:min-w-0`/`wide:w-*` would slip through. Broaden the regex [web/src/components/tariff/tariff-comparison-form.test.tsx:330]
 
 ## Dev Notes
 

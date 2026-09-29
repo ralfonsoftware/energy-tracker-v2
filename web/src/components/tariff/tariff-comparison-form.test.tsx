@@ -327,7 +327,7 @@ describe('TariffComparisonForm', () => {
     const verdictStack = verdictCard.closest('[data-slot="glass-card-stack"]')
     expect(verdictStack?.parentElement).toBe(pairRow!.parentElement)
     expect(pairRow!.nextElementSibling).toBe(verdictStack)
-    expect(verdictCard.className).not.toMatch(/wide:flex-(1|row)/)
+    expect(verdictCard.className).not.toMatch(/wide:(flex|basis|min-w|w-|col-|grid)/)
   })
 
   it('the Compare button stays disabled until the required fields are filled', () => {
