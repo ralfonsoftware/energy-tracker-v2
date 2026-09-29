@@ -516,14 +516,31 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([{ id: 'r1', name: 'Living Room', archivedAt: null }]),
+      // Story 8.8: >=4 Rooms with DISTINCT Power Point counts (4/2/3/0) so the count text used by the
+      // locators below is unambiguous, and multi-column is observable.
+      body: JSON.stringify([
+        { id: 'r1', name: 'Living Room', archivedAt: null },
+        { id: 'r2', name: 'Bedroom', archivedAt: null },
+        { id: 'r3', name: 'Office', archivedAt: null },
+        { id: 'r4', name: 'Garage', archivedAt: null },
+      ]),
     }),
   )
   await page.route('**/api/power-points', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([{ id: 'p1', roomId: 'r1', name: 'Wall outlet', archivedAt: null }]),
+      body: JSON.stringify([
+        { id: 'p1', roomId: 'r1', name: 'Wall outlet', archivedAt: null },
+        { id: 'p1b', roomId: 'r1', name: 'TV outlet', archivedAt: null },
+        { id: 'p1c', roomId: 'r1', name: 'Lamp outlet', archivedAt: null },
+        { id: 'p1d', roomId: 'r1', name: 'Window outlet', archivedAt: null },
+        { id: 'p2a', roomId: 'r2', name: 'Bed outlet', archivedAt: null },
+        { id: 'p2b', roomId: 'r2', name: 'Desk outlet', archivedAt: null },
+        { id: 'p3a', roomId: 'r3', name: 'PC outlet', archivedAt: null },
+        { id: 'p3b', roomId: 'r3', name: 'Printer outlet', archivedAt: null },
+        { id: 'p3c', roomId: 'r3', name: 'Monitor outlet', archivedAt: null },
+      ]),
     }),
   )
   await page.route('**/api/devices', (route) =>
@@ -533,6 +550,7 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
       body: JSON.stringify([
         { id: 'd1', powerPointId: 'p1', name: 'Kettle', archivedAt: null },
         { id: 'd2', powerPointId: 'p1', name: 'Toaster', archivedAt: null },
+        { id: 'd3', powerPointId: 'p1', name: 'Blender', archivedAt: null },
       ]),
     }),
   )
@@ -610,6 +628,46 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   )
   expect(yPositions).toEqual([...yPositions].sort((a, b) => a - b))
 
+  // Story 8.8 (AC #4): at 1000px (column exactly 900px) AI Plausibility and Household sit side by
+  // side — same y, different x, together spanning the column — while Yearly Baseline and Rooms
+  // stay full width.
+  const columnBox = (await contentColumn.boundingBox())!
+  const aiBox = (await aiPlausibilityLabel.boundingBox())!
+  const householdBox = (await householdSectionLabel.boundingBox())!
+  expect(Math.abs(aiBox.y - householdBox.y)).toBeLessThan(1)
+  expect(householdBox.x).toBeGreaterThan(aiBox.x)
+  const aiCard = (await page.locator('div:has(> h2:text-is("AI Plausibility Check")):not(:has(h2:text-is("Household")))').last().boundingBox())!
+  const householdCard = (await page.locator('div:has(> h2:text-is("Household"))').last().boundingBox())!
+  expect(aiCard.x).toBeCloseTo(columnBox.x, 0)
+  expect(householdCard.x + householdCard.width).toBeCloseTo(columnBox.x + columnBox.width, 0)
+  expect(aiCard.width).toBeCloseTo(householdCard.width, 0)
+  expect(aiCard.width + householdCard.width + (householdCard.x - (aiCard.x + aiCard.width))).toBeCloseTo(columnBox.width, 0)
+  const baselineCard = (await page.locator('div:has(> h2:text-is("Yearly Baseline"))').last().boundingBox())!
+  const roomsSection = (await page.locator('div:has(> h2:text-is("Rooms, Power Points & Devices"))').last().boundingBox())!
+  expect(baselineCard.width).toBeCloseTo(columnBox.width, 0)
+  expect(roomsSection.width).toBeCloseTo(columnBox.width, 0)
+
+  // Story 8.8 (AC #1): collapsed Rooms flow into an auto-fill grid. Expected column count is derived
+  // from the grid container's real content width, not hard-coded.
+  const roomsGrid = page.locator('details', { hasText: 'Living Room' }).locator('xpath=..')
+  const gridMetrics = await roomsGrid.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+    return { display: cs.display, inner, gap: parseFloat(cs.columnGap) }
+  })
+  expect(gridMetrics.display).toBe('grid')
+  const expectedCols = Math.floor((gridMetrics.inner + gridMetrics.gap) / (220 + gridMetrics.gap))
+  const expectedTileWidth = (gridMetrics.inner - gridMetrics.gap * (expectedCols - 1)) / expectedCols
+  expect(expectedCols).toBeGreaterThanOrEqual(2)
+  const roomTiles = roomsGrid.locator('> details')
+  await expect(roomTiles).toHaveCount(4)
+  const tileBoxes = await Promise.all([0, 1, 2, 3].map(async (i) => (await roomTiles.nth(i).boundingBox())!))
+  const firstRowY = tileBoxes[0].y
+  const firstRow = tileBoxes.filter((b) => Math.abs(b.y - firstRowY) < 1)
+  expect(firstRow.length).toBe(Math.min(expectedCols, 4))
+  expect(new Set(firstRow.map((b) => Math.round(b.x))).size).toBe(firstRow.length)
+  for (const b of firstRow) expect(b.width).toBeCloseTo(expectedTileWidth, 0)
+
   // "Invite a member" opens a working invite-generation dialog from inside the Household section.
   await page.route('**/api/household-invites', (route) =>
     route.fulfill({
@@ -624,20 +682,69 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   await expect(page.getByLabel('Invite link')).toBeVisible()
   await page.keyboard.press('Escape')
 
-  // Expand the seeded Room and Power Point; the count text and text-link Add controls are the
-  // visible ones at this width (not the filled buttons).
-  await page.getByText('Living Room', { exact: false }).click()
-  await expect(page.getByText(/1 Power Point\b/)).toBeVisible()
-  const addPowerPointLink = page.getByRole('button', { name: 'Add Power Point' }).last()
+  // Expand the Living Room and its Wall outlet; the count text and text-link Add controls are the
+  // visible ones at this width (not the filled buttons). Locators are scoped to the Room's <details>
+  // because the richer Story 8.8 data makes page-wide text locators ambiguous.
+  const livingRoom = page.locator('details', { hasText: 'Living Room' })
+  await livingRoom.locator('> summary').click()
+  await expect(livingRoom.getByText(/4 Power Points/)).toBeVisible()
+  const addPowerPointLink = livingRoom.getByRole('button', { name: 'Add Power Point' }).last()
   await expect(addPowerPointLink).toBeVisible()
 
-  await page.getByText('Wall outlet', { exact: false }).click()
-  await expect(page.getByText(/2 Devices/)).toBeVisible()
-  const addDeviceLink = page.getByRole('button', { name: 'Add Device' }).last()
+  // Story 8.8 (AC #2): the open Room spans the whole grid row, alone on it; the next tile is below.
+  const roomsGridBox = (await roomsGrid.boundingBox())!
+  const openRoomBox = (await livingRoom.boundingBox())!
+  expect(openRoomBox.width).toBeCloseTo(gridMetrics.inner, 0)
+  const bedroomBox = (await roomTiles.nth(1).boundingBox())!
+  expect(bedroomBox.y).toBeGreaterThan(openRoomBox.y + openRoomBox.height - 1)
+  expect(roomsGridBox.width).toBeGreaterThan(openRoomBox.width)
+
+  // Nested Power Point grid (AC #1): collapsed Power Points inside the open Room tile are multi-column.
+  const ppGrid = livingRoom.locator('> div').filter({ has: page.locator('> details') })
+  const ppMetrics = await ppGrid.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+    return { display: cs.display, inner, gap: parseFloat(cs.columnGap) }
+  })
+  expect(ppMetrics.display).toBe('grid')
+  const expectedPpCols = Math.floor((ppMetrics.inner + ppMetrics.gap) / (220 + ppMetrics.gap))
+  const ppTiles = ppGrid.locator('> details')
+  await expect(ppTiles).toHaveCount(4)
+  const ppBoxes = await Promise.all([0, 1, 2, 3].map(async (i) => (await ppTiles.nth(i).boundingBox())!))
+  expect(ppBoxes.filter((b) => Math.abs(b.y - ppBoxes[0].y) < 1).length).toBe(Math.min(expectedPpCols, 4))
+
+  // Opening a Power Point: spans the nested grid width and shows a single-column Device list (AC #2, #3).
+  const wallOutlet = livingRoom.locator('details', { hasText: 'Wall outlet' })
+  await wallOutlet.locator('> summary').click()
+  await expect(wallOutlet.getByText(/3 Devices/)).toBeVisible()
+  const openPpBox = (await wallOutlet.boundingBox())!
+  expect(openPpBox.width).toBeCloseTo(ppMetrics.inner, 0)
+  const deviceBoxes = await Promise.all(
+    ['Kettle', 'Toaster', 'Blender'].map(async (name) => (await wallOutlet.getByText(name, { exact: true }).boundingBox())!),
+  )
+  expect(new Set(deviceBoxes.map((b) => Math.round(b.x))).size).toBe(1)
+  expect(deviceBoxes[0].y).toBeLessThan(deviceBoxes[1].y)
+  expect(deviceBoxes[1].y).toBeLessThan(deviceBoxes[2].y)
+  const addDeviceLink = wallOutlet.getByRole('button', { name: 'Add Device' }).last()
   await expect(addDeviceLink).toBeVisible()
 
   // Story 8.7 (AC #3): with the Room -> Power Point -> Device tree fully expanded at a wide
   // viewport, no entry-grid exists anywhere on the page — the tree is not gridded by this story.
   expect((page.viewportSize()?.width ?? 0)).toBeGreaterThanOrEqual(660)
   await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
+
+  // Story 8.8 (AC #5): at 659px the pair stacks and the tree is the flat Story 8.5 bordered-row list.
+  await page.setViewportSize({ width: 659, height: 800 })
+  await expect(householdSectionLabel).toBeHidden()
+  // The SectionLabel <h2>s (class `hidden`) are display:none here; their parent wrappers are the sections.
+  const aiNarrow = (await page.locator('h2.hidden', { hasText: 'AI Plausibility Check' }).locator('xpath=..').boundingBox())!
+  const householdNarrow = (await page.locator('h2.hidden', { hasText: 'Household' }).locator('xpath=..').boundingBox())!
+  expect(householdNarrow.y).toBeGreaterThan(aiNarrow.y)
+  expect(Math.abs(householdNarrow.x - aiNarrow.x)).toBeLessThan(1)
+  expect(Math.abs(householdNarrow.width - aiNarrow.width)).toBeLessThan(1)
+  expect(await roomsGrid.evaluate((el) => getComputedStyle(el).display)).not.toBe('grid')
+  expect(await ppGrid.evaluate((el) => getComputedStyle(el).display)).not.toBe('grid')
+  const narrowRooms = await Promise.all([0, 1, 2, 3].map(async (i) => (await roomTiles.nth(i).boundingBox())!))
+  expect(new Set(narrowRooms.map((b) => Math.round(b.x))).size).toBe(1)
+  for (let i = 1; i < narrowRooms.length; i++) expect(narrowRooms[i].y).toBeGreaterThan(narrowRooms[i - 1].y)
 })

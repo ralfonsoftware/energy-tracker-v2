@@ -108,6 +108,48 @@ describe('SettingsPage', () => {
     })
   })
 
+  describe('section pairing (Story 8.8 Task 1, AC #4, #5)', () => {
+    // Each section's SectionLabel is the first child of its section wrapper (`hidden wide:block` <h2>).
+    function sectionOf(name: string) {
+      const label = screen
+        .getAllByRole('heading', { name, level: 2 })
+        .find((h) => h.className.includes('wide:block'))
+      if (!label?.parentElement) throw new Error(`No SectionLabel for ${name}`)
+      return label.parentElement
+    }
+
+    it('places AI Plausibility and Household in one wide:flex-row wrapper; Baseline, Rooms and Data stay outside it', async () => {
+      stubFetch()
+      renderSettingsPage(true)
+      expect(await screen.findByRole('heading', { name: 'Household', level: 2 })).toBeInTheDocument()
+
+      const ai = sectionOf('AI Plausibility Check')
+      const household = sectionOf('Household')
+      const pair = ai.parentElement as HTMLElement
+
+      expect(pair).toBe(household.parentElement)
+      expect(pair.className).toContain('wide:flex-row')
+      expect(pair.className).toContain('flex-col')
+      expect(ai.className).toContain('wide:flex-1')
+      expect(household.className).toContain('wide:flex-1')
+
+      for (const name of ['Yearly Baseline', 'Rooms, Power Points & Devices', 'Data']) {
+        expect(pair.contains(sectionOf(name))).toBe(false)
+      }
+    })
+
+    it('keeps DOM order Baseline → AI → Household → Rooms → Data', async () => {
+      stubFetch()
+      renderSettingsPage(true)
+      expect(await screen.findByRole('heading', { name: 'Household', level: 2 })).toBeInTheDocument()
+
+      const sections = ['Yearly Baseline', 'AI Plausibility Check', 'Household', 'Rooms, Power Points & Devices', 'Data'].map(sectionOf)
+      for (let i = 0; i < sections.length - 1; i++) {
+        expect(sections[i].compareDocumentPosition(sections[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      }
+    })
+  })
+
   it('threads onTrendHistoryClick through to the NavChrome Trend History tab (Story 4.1)', async () => {
     const user = userEvent.setup()
     const onTrendHistoryClick = vi.fn()

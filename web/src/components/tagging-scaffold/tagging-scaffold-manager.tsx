@@ -72,6 +72,14 @@ async function toApiError(response: Response): Promise<ApiError> {
 // two branches can't visually drift apart independently.
 const ROOM_ROW_BORDER_CLASS = 'border-b border-[rgba(40,70,50,0.09)] last:border-b-0 dark:border-[rgba(210,235,220,0.1)]'
 
+// At >=660px collapsed Rooms/Power Points become tiles in an auto-fill grid and an open one spans the
+// whole row (UX-DR29). `wide:border` re-asserts all four sides (the row classes only set one) and the
+// `wide:dark:` colour beats the row's `dark:border-[...]`. Never add `grid-auto-flow: dense` — it would
+// reorder tiles relative to DOM/tab order.
+const WIDE_TILE_CLASS =
+  'wide:open:col-span-full wide:rounded-glass-sm wide:border wide:last:border-b wide:border-surface-quiet-border wide:dark:border-surface-quiet-border wide:bg-surface-quiet'
+const WIDE_TILE_GRID_CLASS = 'wide:grid wide:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] wide:gap-2.5'
+
 function ArchivedBadge({ label }: { label: string }) {
   return (
     <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -500,6 +508,7 @@ export function TaggingScaffoldManager() {
 
       {rooms.length > 0 && (
         <GlassCard className="gap-0 p-0">
+          <div className={`flex flex-col ${WIDE_TILE_GRID_CLASS} wide:p-3`}>
           {rooms
             .filter((room) => showArchived || !room.archivedAt || roomHasVisibleChildren(room))
             .map((room) => {
@@ -510,7 +519,7 @@ export function TaggingScaffoldManager() {
               )
 
               const powerPointsList = (
-                <div className="flex flex-col pl-4">
+                <div className={`flex flex-col pl-4 ${WIDE_TILE_GRID_CLASS} wide:px-3.5 wide:pb-2 wide:pl-3.5`}>
                   {visiblePowerPoints.map((powerPoint) => {
                     const suppressPowerPointRow = !!powerPoint.archivedAt && !showArchived
 
@@ -518,6 +527,8 @@ export function TaggingScaffoldManager() {
                       (device) => showArchived || !device.archivedAt,
                     )
 
+                    // Devices stay a plain single-column list at every width — never gridded (UX-DR29):
+                    // reordering/moving across a 2D grid is a materially more ambiguous gesture.
                     const deviceList = (
                       <div className="flex flex-col gap-0.5 pb-2 pl-8">
                         {visibleDevices.map((device) => (
@@ -561,7 +572,7 @@ export function TaggingScaffoldManager() {
                       return (
                         <div
                           key={powerPoint.id}
-                          className="border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
+                          className="border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)] wide:col-span-full wide:border-t-0"
                         >
                           {deviceList}
                         </div>
@@ -571,10 +582,10 @@ export function TaggingScaffoldManager() {
                     return (
                       <details
                         key={powerPoint.id}
-                        className="group/pp border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)]"
+                        className={`group/pp border-t border-[rgba(40,70,50,0.08)] dark:border-[rgba(210,235,220,0.08)] ${WIDE_TILE_CLASS}`}
                       >
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                          <span className="flex items-center gap-2">
+                          <span className="flex min-w-0 items-center gap-2 wide:flex-wrap break-words">
                             <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/pp:rotate-90 motion-reduce:transition-none" />
                             <span>{powerPoint.name}</span>
                             <span className="hidden wide:inline text-muted-foreground font-normal">
@@ -637,7 +648,7 @@ export function TaggingScaffoldManager() {
                 return (
                   <div
                     key={room.id}
-                    className={ROOM_ROW_BORDER_CLASS}
+                    className={`${ROOM_ROW_BORDER_CLASS} wide:col-span-full wide:border-b-0`}
                   >
                     {powerPointsList}
                   </div>
@@ -647,10 +658,10 @@ export function TaggingScaffoldManager() {
               return (
                 <details
                   key={room.id}
-                  className={`group/room ${ROOM_ROW_BORDER_CLASS}`}
+                  className={`group/room ${ROOM_ROW_BORDER_CLASS} ${WIDE_TILE_CLASS}`}
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                    <span className="flex items-center gap-2">
+                    <span className="flex min-w-0 items-center gap-2 wide:flex-wrap break-words">
                       <ChevronRight aria-hidden="true" className="size-3 shrink-0 transition-transform group-open/room:rotate-90 motion-reduce:transition-none" />
                       <span>{room.name}</span>
                       <span className="hidden wide:inline text-muted-foreground font-normal">
@@ -698,6 +709,7 @@ export function TaggingScaffoldManager() {
                 </details>
               )
             })}
+          </div>
         </GlassCard>
       )}
 

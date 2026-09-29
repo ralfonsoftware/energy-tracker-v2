@@ -798,4 +798,154 @@ describe('TaggingScaffoldManager', () => {
       expect(screen.getAllByRole('button', { name: 'Add Device' })).toHaveLength(2)
     })
   })
+
+  describe('grid-with-expand (>=660px, Story 8.8 Tasks 2-5, AC #1-#3, #5)', () => {
+    const GRID = 'minmax(220px,1fr)'
+
+    function mockTree(opts: { archivedRoom?: boolean; archivedPowerPoint?: boolean } = {}) {
+      mockFetchRoutes([
+        {
+          method: 'GET',
+          url: '/api/rooms',
+          respond: () =>
+            jsonResponse([
+              { id: 'r1', name: 'Kitchen', archivedAt: opts.archivedRoom ? '2026-01-01T00:00:00Z' : null },
+              { id: 'r2', name: 'Bedroom', archivedAt: null },
+            ]),
+        },
+        {
+          method: 'GET',
+          url: '/api/power-points',
+          respond: () =>
+            jsonResponse([
+              { id: 'p1', roomId: 'r1', name: 'Counter outlet', archivedAt: opts.archivedPowerPoint ? '2026-01-01T00:00:00Z' : null },
+              { id: 'p2', roomId: 'r1', name: 'Stove outlet', archivedAt: null },
+              { id: 'p3', roomId: 'r2', name: 'Bed outlet', archivedAt: null },
+            ]),
+        },
+        {
+          method: 'GET',
+          url: '/api/devices',
+          respond: () =>
+            jsonResponse([
+              { id: 'd1', powerPointId: 'p2', name: 'Kettle', archivedAt: null },
+              { id: 'd2', powerPointId: 'p2', name: 'Toaster', archivedAt: null },
+            ]),
+        },
+      ])
+    }
+
+    function detailsOf(text: string) {
+      const el = screen.getByText(text, { exact: false }).closest('details')
+      if (!el) throw new Error(`No <details> for ${text}`)
+      return el
+    }
+
+    it('lays the Rooms out in a wide auto-fill grid that is a flex column below 660px', async () => {
+      mockTree()
+      render(<TaggingScaffoldManager />)
+      await screen.findByText('Kitchen', { exact: false })
+
+      const roomsContainer = detailsOf('Kitchen').parentElement as HTMLElement
+      expect(roomsContainer).toBe(detailsOf('Bedroom').parentElement)
+      expect(roomsContainer.className).toContain('flex flex-col')
+      expect(roomsContainer.className).toContain('wide:grid')
+      expect(roomsContainer.className).toContain(GRID)
+      expect(roomsContainer.dataset.slot).not.toBe('entry-grid')
+    })
+
+    it('makes Rooms and Power Points span the full grid row when open, with tile styling at wide', async () => {
+      mockTree()
+      const user = userEvent.setup()
+      render(<TaggingScaffoldManager />)
+      await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+      const room = detailsOf('Kitchen')
+      expect(room).toHaveAttribute('open')
+      expect(room.className).toContain('wide:open:col-span-full')
+      expect(room.className).toContain('wide:border ')
+      expect(room.className).toContain('wide:rounded-glass-sm')
+      expect(room.className).toContain('wide:bg-surface-quiet')
+      expect(room.className).toContain('group/room')
+
+      const ppContainer = detailsOf('Counter outlet').parentElement as HTMLElement
+      expect(ppContainer.className).toContain('flex flex-col')
+      expect(ppContainer.className).toContain('wide:grid')
+      expect(ppContainer.className).toContain(GRID)
+
+      const pp = detailsOf('Counter outlet')
+      expect(pp.className).toContain('wide:open:col-span-full')
+      expect(pp.className).toContain('wide:bg-surface-quiet')
+      expect(pp.className).toContain('group/pp')
+    })
+
+    it('keeps Devices a plain single-column list — no grid at any level', async () => {
+      mockTree()
+      const user = userEvent.setup()
+      render(<TaggingScaffoldManager />)
+      await user.click(await screen.findByText('Kitchen', { exact: false }))
+      await user.click(await screen.findByText('Stove outlet', { exact: false }))
+
+      const deviceList = screen.getByText('Kettle').closest('div.flex-col') as HTMLElement
+      expect(deviceList).not.toBeNull()
+      expect(deviceList).toBe(screen.getByText('Toaster').closest('div.flex-col'))
+      expect(deviceList.className).toContain('flex-col')
+      expect(deviceList.className).not.toMatch(/grid/)
+      expect(deviceList.className).not.toContain('wide:')
+    })
+
+    it('spans suppressed-Room and suppressed-Power-Point wrappers across the full grid row', async () => {
+      mockTree({ archivedRoom: true, archivedPowerPoint: true })
+      render(<TaggingScaffoldManager />)
+      await screen.findByText('Stove outlet', { exact: false })
+
+      // Kitchen (archived) is suppressed but has a live child, so its wrapper renders as a <div>.
+      expect(screen.queryByText('Kitchen', { exact: false })).not.toBeInTheDocument()
+      const stove = screen.getByText('Stove outlet', { exact: false }).closest('details') as HTMLElement
+      const ppContainer = stove.parentElement as HTMLElement
+      const roomWrapper = ppContainer.parentElement as HTMLElement
+      expect(roomWrapper.tagName).toBe('DIV')
+      expect(roomWrapper.className).toContain('wide:col-span-full')
+      expect(roomWrapper.className).toContain('wide:border-b-0')
+
+      // Counter outlet (archived, no live devices) is dropped entirely — nothing stray in the grid.
+      expect(screen.queryByText('Counter outlet', { exact: false })).not.toBeInTheDocument()
+    })
+
+    it('spans a suppressed Power Point wrapper (archived PP with a live Device) across the row', async () => {
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([{ id: 'r1', name: 'Kitchen', archivedAt: null }]) },
+        {
+          method: 'GET',
+          url: '/api/power-points',
+          respond: () => jsonResponse([{ id: 'p1', roomId: 'r1', name: 'Old outlet', archivedAt: '2026-01-01T00:00:00Z' }]),
+        },
+        { method: 'GET', url: '/api/devices', respond: () => jsonResponse([{ id: 'd1', powerPointId: 'p1', name: 'Kettle', archivedAt: null }]) },
+      ])
+      const user = userEvent.setup()
+      render(<TaggingScaffoldManager />)
+      await user.click(await screen.findByText('Kitchen', { exact: false }))
+
+      const wrapper = (await screen.findByText('Kettle')).closest('div.flex-col')?.parentElement as HTMLElement
+      expect(wrapper.tagName).toBe('DIV')
+      expect(wrapper.className).toContain('wide:col-span-full')
+      expect(wrapper.className).toContain('wide:border-t-0')
+    })
+
+    it('keeps the accordion behavior: toggling a Room summary opens it and reveals its controls', async () => {
+      mockTree()
+      const user = userEvent.setup()
+      render(<TaggingScaffoldManager />)
+      const summary = (await screen.findByText('Bedroom', { exact: false })).closest('summary') as HTMLElement
+
+      const room = detailsOf('Bedroom')
+      expect(room).not.toHaveAttribute('open')
+      await user.click(summary)
+      expect(room).toHaveAttribute('open')
+      expect(within(room).getAllByRole('button', { name: 'Rename' }).length).toBeGreaterThan(0)
+      expect(within(room).getAllByRole('button', { name: 'Add Power Point' }).length).toBeGreaterThan(0)
+      await user.click(summary)
+      expect(room).not.toHaveAttribute('open')
+    })
+  })
 })
