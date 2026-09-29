@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MeterReadingsCard } from './meter-readings-card'
+import { stubWideViewport } from '@/test/wide-viewport'
 import type { MeterReadingHistoryItemDto, MeterReadingHistoryPageDto } from '@/lib/meter-reading-history-api'
 
 function jsonResponse(body: object | null, status = 200) {
@@ -247,5 +248,118 @@ describe('MeterReadingsCard', () => {
 
     await screen.findByText('5,000 kWh')
     expect(onReadingCorrected).toHaveBeenCalledOnce()
+  })
+})
+
+describe('MeterReadingsCard at >=660px (entry-grid)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubPage(overrides: Partial<MeterReadingHistoryPageDto> = {}, extra?: (url: string) => Response | null) {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const custom = extra?.(String(input))
+      return Promise.resolve(custom ?? jsonResponse(page(overrides)))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    stubWideViewport()
+    return fetchMock
+  }
+
+  it('renders entries as list-item tiles instead of a table', async () => {
+    const user = userEvent.setup()
+    stubPage({
+      items: [item({ id: 'r1', kwhValue: 100 }), item({ id: 'r2', kwhValue: 200 }), item({ id: 'r3', kwhValue: 300 })],
+      totalCount: 3,
+    })
+
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    await screen.findByText('100 kWh')
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+  })
+
+  it('shows value, timestamp, Pending badge and correction note only where applicable', async () => {
+    const user = userEvent.setup()
+    stubPage({
+      items: [
+        item({ id: 'r1', kwhValue: 100, isPendingRegression: true, correctedFromKwhValue: 90, correctedAtUtc: '2026-08-14T00:00:00+00:00' }),
+        item({ id: 'r2', kwhValue: 200, readingTimestamp: '2026-08-16T09:00:00+00:00' }),
+      ],
+      totalCount: 2,
+    })
+
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    await screen.findByText('100 kWh')
+    const [first, second] = screen.getAllByRole('listitem')
+    expect(within(first).getByText('Pending')).toBeInTheDocument()
+    expect(within(first).getByText('Originally logged as 90 kWh')).toBeInTheDocument()
+    expect(within(first).getByText(/Aug 15, 2026/)).toBeInTheDocument()
+    expect(within(second).queryByText('Pending')).not.toBeInTheDocument()
+    expect(within(second).queryByText(/Originally logged/)).not.toBeInTheDocument()
+    expect(within(second).getByText(/Aug 16, 2026/)).toBeInTheDocument()
+  })
+
+  it('gives each tile a distinct accessible name for its Edit button', async () => {
+    const user = userEvent.setup()
+    stubPage({
+      items: [
+        item({ id: 'r1', kwhValue: 100, readingTimestamp: '2026-08-15T14:32:00+00:00' }),
+        item({ id: 'r2', kwhValue: 200, readingTimestamp: '2026-08-16T09:00:00+00:00' }),
+      ],
+      totalCount: 2,
+    })
+
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    await screen.findByText('100 kWh')
+    const editButtons = screen.getAllByRole('button', { name: /Edit reading from/ })
+    expect(editButtons).toHaveLength(2)
+    expect(editButtons[0].getAttribute('aria-label')).not.toBe(editButtons[1].getAttribute('aria-label'))
+  })
+
+  it('opens the edit dialog from a tile and re-fetches the current page after a save', async () => {
+    const user = userEvent.setup()
+    let saved = false
+    const onReadingCorrected = vi.fn()
+    const fetchMock = stubPage({}, (url) => {
+      if (url.includes('/api/meter-readings/') && !url.includes('page=')) {
+        saved = true
+        return jsonResponse(item({ kwhValue: 5000 }))
+      }
+      return jsonResponse(page({ items: [item({ kwhValue: saved ? 5000 : 4821.5 })] }))
+    })
+
+    render(<MeterReadingsCard locale="en-US" onReadingCorrected={onReadingCorrected} />)
+    await openDisclosure(user)
+
+    await screen.findByText('4,821.5 kWh')
+    await user.click(screen.getByRole('button', { name: /Edit reading from/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('5,000 kWh')
+    const getCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/meter-readings?'))
+    expect(getCalls.length).toBeGreaterThanOrEqual(2)
+    expect(onReadingCorrected).toHaveBeenCalledOnce()
+  })
+
+  it('still renders and drives pagination below the grid', async () => {
+    const user = userEvent.setup()
+    stubPage({ items: [item({ id: 'r1', kwhValue: 100 })], totalCount: 40 }, (url) =>
+      url.includes('page=2') ? jsonResponse(page({ items: [item({ id: 'r2', kwhValue: 200 })], totalCount: 40, page: 2 })) : null,
+    )
+
+    render(<MeterReadingsCard locale="en-US" />)
+    await openDisclosure(user)
+
+    await screen.findByText('100 kWh')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByText('200 kWh')
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
   })
 })

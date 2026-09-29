@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { EntryGrid, EntryTile } from '@/components/entry-grid/entry-grid'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useWideBreakpoint } from '@/hooks/use-wide-breakpoint'
 import { fetchMeterReadingHistory, type MeterReadingHistoryItemDto, type MeterReadingHistoryPageDto } from '@/lib/meter-reading-history-api'
 import { EditMeterReadingDialog } from './edit-meter-reading-dialog'
 
@@ -24,6 +26,7 @@ const PAGE_SIZE = 20
 // chart-only), matching PerPlugDataCard's identical idiom one card below it.
 export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsCardProps) {
   const { t } = useTranslation()
+  const isWide = useWideBreakpoint()
   const [page, setPage] = useState(1)
   const [data, setData] = useState<MeterReadingHistoryPageDto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -91,7 +94,41 @@ export function MeterReadingsCard({ locale, onReadingCorrected }: MeterReadingsC
               <p className="text-muted-foreground text-sm">{t('meterReadingHistory.emptyState')}</p>
             )}
 
-            {!loading && !error && data && data.totalCount > 0 && (
+            {!loading && !error && data && data.totalCount > 0 && isWide && (
+              <EntryGrid>
+                {data.items.map((item) => {
+                  const timestamp = dateTimeFormat.format(new Date(item.readingTimestamp))
+                  return (
+                    <EntryTile
+                      key={item.id}
+                      actions={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditing(item)}
+                          aria-label={t('meterReadingHistory.editTriggerFor', { timestamp })}
+                        >
+                          {t('meterReadingHistory.editTrigger')}
+                        </Button>
+                      }
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold tabular-nums">{numberFormat.format(item.kwhValue)} kWh</span>
+                        {item.isPendingRegression && <Badge variant="outline">{t('meterReadingHistory.pendingBadge')}</Badge>}
+                      </div>
+                      {item.correctedFromKwhValue !== null && (
+                        <span className="text-muted-foreground text-xs">
+                          {t('meterReadingHistory.correctedFrom', { kwh: numberFormat.format(item.correctedFromKwhValue) })}
+                        </span>
+                      )}
+                      <span className="text-muted-foreground text-xs tabular-nums">{timestamp}</span>
+                    </EntryTile>
+                  )
+                })}
+              </EntryGrid>
+            )}
+
+            {!loading && !error && data && data.totalCount > 0 && !isWide && (
               <Table>
                 <TableHeader>
                   <TableRow>

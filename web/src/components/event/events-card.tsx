@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { EntryGrid, EntryTile } from '@/components/entry-grid/entry-grid'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useWideBreakpoint } from '@/hooks/use-wide-breakpoint'
 import { fetchEventHistory, messageForEventError, type EventDto, type EventHistoryPageDto } from '@/lib/event-api'
 
 interface EventsCardProps {
@@ -15,6 +17,7 @@ const PAGE_SIZE = 20
 // summary, PAGE_SIZE, locale date formatting, pagination) — all three Trend History cards share it.
 export function EventsCard({ locale }: EventsCardProps) {
   const { t } = useTranslation()
+  const isWide = useWideBreakpoint()
   const [page, setPage] = useState(1)
   const [data, setData] = useState<EventHistoryPageDto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -80,7 +83,20 @@ export function EventsCard({ locale }: EventsCardProps) {
               <p className="text-muted-foreground text-sm">{t('trendHistory.eventsCard.emptyState')}</p>
             )}
 
-            {!loading && !error && data && data.totalCount > 0 && (
+            {!loading && !error && data && data.totalCount > 0 && isWide && (
+              <EntryGrid>
+                {data.items.map((item) => (
+                  <EntryTile key={item.id}>
+                    <EventBody item={item} />
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {dateTimeFormat.format(new Date(item.occurredAt))}
+                    </span>
+                  </EntryTile>
+                ))}
+              </EntryGrid>
+            )}
+
+            {!loading && !error && data && data.totalCount > 0 && !isWide && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -120,28 +136,34 @@ export function EventsCard({ locale }: EventsCardProps) {
 // no fetch of /api/rooms, /api/power-points, or /api/devices here, and no branch on whether the
 // tagged entity still exists — a tag whose target was later archived renders identically to one
 // that's still live, with no "(deleted)" decoration.
-function EventRow({ item, dateTimeFormat }: { item: EventDto; dateTimeFormat: Intl.DateTimeFormat }) {
+function EventBody({ item }: { item: EventDto }) {
   const { t } = useTranslation()
 
   return (
+    <div className="flex flex-col gap-1">
+      <span>{item.description}</span>
+      {item.taggedEntityName != null && (
+        <span className="text-muted-foreground text-xs">{item.taggedEntityName}</span>
+      )}
+      {/* AC #1, #3, #7: rendered inline in the same row, never a separate step/view. No
+          correlation -> render nothing extra, no placeholder, no "no match found" state
+          (UX-DR14). Always one of exactly two fixed, translated strings (UX-DR17) — never raw
+          AI output. */}
+      {item.correlationDirection === 'Bump' && (
+        <span className="text-muted-foreground text-xs">{t('trendHistory.eventsCard.correlation.bump')}</span>
+      )}
+      {item.correlationDirection === 'Dip' && (
+        <span className="text-muted-foreground text-xs">{t('trendHistory.eventsCard.correlation.dip')}</span>
+      )}
+    </div>
+  )
+}
+
+function EventRow({ item, dateTimeFormat }: { item: EventDto; dateTimeFormat: Intl.DateTimeFormat }) {
+  return (
     <TableRow>
       <TableCell>
-        <div className="flex flex-col gap-1">
-          <span>{item.description}</span>
-          {item.taggedEntityName != null && (
-            <span className="text-muted-foreground text-xs">{item.taggedEntityName}</span>
-          )}
-          {/* AC #1, #3, #7: rendered inline in the same row, never a separate step/view. No
-              correlation -> render nothing extra, no placeholder, no "no match found" state
-              (UX-DR14). Always one of exactly two fixed, translated strings (UX-DR17) — never raw
-              AI output. */}
-          {item.correlationDirection === 'Bump' && (
-            <span className="text-muted-foreground text-xs">{t('trendHistory.eventsCard.correlation.bump')}</span>
-          )}
-          {item.correlationDirection === 'Dip' && (
-            <span className="text-muted-foreground text-xs">{t('trendHistory.eventsCard.correlation.dip')}</span>
-          )}
-        </div>
+        <EventBody item={item} />
       </TableCell>
       <TableCell>{dateTimeFormat.format(new Date(item.occurredAt))}</TableCell>
     </TableRow>

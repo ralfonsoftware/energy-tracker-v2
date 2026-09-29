@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventsCard } from './events-card'
+import { stubWideViewport } from '@/test/wide-viewport'
 import type { EventDto, EventHistoryPageDto } from '@/lib/event-api'
 
 function jsonResponse(body: object | null, status = 200) {
@@ -205,5 +206,75 @@ describe('EventsCard', () => {
     expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Previous' })).not.toBeDisabled()
+  })
+})
+
+describe('EventsCard at >=660px (entry-grid)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function renderWide(items: EventDto[], totalCount = items.length) {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.includes('page=2')) {
+        return Promise.resolve(jsonResponse(page({ items: [eventItem({ id: 'p2', description: 'second page' })], totalCount, page: 2 })))
+      }
+      return Promise.resolve(jsonResponse(page({ items, totalCount })))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    stubWideViewport()
+    render(<EventsCard locale="en-US" />)
+    await openDisclosure(user)
+    return { user, fetchMock }
+  }
+
+  it('renders events as list-item tiles instead of a table', async () => {
+    await renderWide([eventItem({ id: 'e1', description: 'one' }), eventItem({ id: 'e2', description: 'two' }), eventItem({ id: 'e3', description: 'three' })])
+
+    await screen.findByText('one')
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+  })
+
+  it('shows description, tag, correlation and timestamp in the tile, with no Edit action', async () => {
+    await renderWide([
+      eventItem({ id: 'e1', description: 'cooked 2h', taggedEntityType: 'Room', taggedEntityName: 'Kitchen', correlationDirection: 'Bump' }),
+    ])
+
+    const tile = (await screen.findByText('cooked 2h')).closest('li') as HTMLElement
+    expect(within(tile).getByText('Kitchen')).toBeInTheDocument()
+    expect(within(tile).getByText('Roughly matches the bump seen.')).toBeInTheDocument()
+    expect(within(tile).getByText(/Aug 15, 2026/)).toBeInTheDocument()
+    expect(within(tile).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('renders an untagged, uncorrelated event with only description and timestamp', async () => {
+    await renderWide([eventItem()])
+
+    const tile = (await screen.findByText('cooked 2h')).closest('li') as HTMLElement
+    expect(tile.querySelectorAll('span')).toHaveLength(2)
+    expect(screen.queryByText(/roughly matches/i)).not.toBeInTheDocument()
+  })
+
+  it('renders the Dip line and an archived entity tag verbatim, without scaffold fetches', async () => {
+    const { fetchMock } = await renderWide([
+      eventItem({ taggedEntityType: 'Room', taggedEntityName: 'Kitchen', correlationDirection: 'Dip' }),
+    ])
+
+    expect(await screen.findByText('Kitchen')).toBeInTheDocument()
+    expect(screen.getByText('Roughly matches the dip seen.')).toBeInTheDocument()
+    const urls = fetchMock.mock.calls.map(([input]) => String(input))
+    expect(urls.some((url) => /^\/api\/(rooms|power-points|devices)/.test(url))).toBe(false)
+  })
+
+  it('still paginates below the grid', async () => {
+    const { user } = await renderWide([eventItem({ description: 'first page' })], 40)
+
+    await screen.findByText('first page')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByText('second page')
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
   })
 })
