@@ -69,7 +69,7 @@ test('the nav chrome swaps between the bottom tab bar and the top nav at the 660
 })
 
 // Story 8.2/Task 3: same jsdom limitation as above — dashboard-page.test.tsx can only prove the
-// wide:max-w-[660px] wrapper class and label spans exist in markup, never which one a real browser
+// wide:max-w-[900px] wrapper class and label spans exist in markup, never which one a real browser
 // actually renders at a given viewport width (AC #1, #3, #4).
 test('the Dashboard content column and header-icon-button labels swap at the 660px breakpoint', async ({ page }) => {
   await page.route('**/api/session', (route) =>
@@ -111,11 +111,11 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
   const narrowBox = await eventButton.boundingBox()
   expect(narrowBox?.width).toBeLessThanOrEqual(48)
   const narrowColumnBox = await contentColumn.boundingBox()
-  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 660px
+  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 900px
 
   // Exact-boundary check: `wide:` is a `min-width: 660px` variant, so 659px must still be the
   // narrow/icon-only layout and 660px must already be the wide/labeled one — otherwise an
-  // off-by-one drift in `--breakpoint-wide` or the `max-w-[660px]` literal would go undetected.
+  // off-by-one drift in `--breakpoint-wide` or the `max-w-[900px]` literal would go undetected.
   await page.setViewportSize({ width: 659, height: 800 })
   await expect(eventLabel).toBeHidden()
   await expect(importLabel).toBeHidden()
@@ -124,16 +124,22 @@ test('the Dashboard content column and header-icon-button labels swap at the 660
   await expect(eventLabel).toBeVisible()
   await expect(importLabel).toBeVisible()
 
+  // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
+  await page.setViewportSize({ width: 800, height: 800 })
+  const midColumnBox = await contentColumn.boundingBox()
+  expect(midColumnBox?.width).toBeGreaterThan(750)
+  expect(midColumnBox?.width).toBeLessThan(800)
+
   await page.setViewportSize({ width: 1000, height: 800 })
   await expect(eventLabel).toBeVisible()
   await expect(importLabel).toBeVisible()
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
 })
 
 // Story 8.3/Task 5: same jsdom limitation as above — trend-history-page.test.tsx can only prove
-// the wide:max-w-[660px] wrapper class and Import label span exist in markup. This also proves the
+// the wide:max-w-[900px] wrapper class and Import label span exist in markup. This also proves the
 // Task 3 table dead-space fix with a precise gap measurement (getBoundingClientRect, not a
 // visual-only class-presence check), per Story 8.2's code-review-driven precedent (AC #1, #2).
 test('the Trend History content column, Import label, and Meter Readings table dead-space fix behave correctly at the 660px breakpoint', async ({ page }) => {
@@ -198,7 +204,7 @@ test('the Trend History content column, Import label, and Meter Readings table d
 
   await expect(importLabel).toBeHidden()
   const narrowColumnBox = await contentColumn.boundingBox()
-  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 660px
+  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 900px
 
   // Exact-boundary check, same as the Dashboard case above: 659px stays icon-only, 660px is labeled.
   await page.setViewportSize({ width: 659, height: 800 })
@@ -207,11 +213,17 @@ test('the Trend History content column, Import label, and Meter Readings table d
   await page.setViewportSize({ width: 660, height: 800 })
   await expect(importLabel).toBeVisible()
 
+  // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
+  await page.setViewportSize({ width: 800, height: 800 })
+  const midColumnBox = await contentColumn.boundingBox()
+  expect(midColumnBox?.width).toBeGreaterThan(750)
+  expect(midColumnBox?.width).toBeLessThan(800)
+
   await page.setViewportSize({ width: 1000, height: 800 })
   await expect(importLabel).toBeVisible()
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
 
   // Task 3: no large blank gap between the rendered Timestamp text and the Edit button, at any
   // width (this fix is unconditional, not wide:-gated — contrast with the column/label assertions
@@ -322,7 +334,7 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   await expect(page.getByRole('heading', { name: 'Tariff Radar' })).toBeVisible()
 
   const narrowColumnBox = await contentColumn.boundingBox()
-  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 660px
+  expect(narrowColumnBox?.width).toBeGreaterThan(400) // tracks the 500px viewport, not capped at 900px
 
   // Below 660px: Monthly Base Fee/Price per kWh stack (same x, different y).
   let baseFeeBox = await monthlyBaseFeeField.boundingBox()
@@ -346,6 +358,12 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   expect(priceBox!.x).toBeGreaterThan(baseFeeBox!.x)
   expect(Math.abs(baseFeeBox!.width - priceBox!.width)).toBeLessThan(baseFeeBox!.width * 0.2)
 
+  // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
+  await page.setViewportSize({ width: 800, height: 800 })
+  const midColumnBox = await contentColumn.boundingBox()
+  expect(midColumnBox?.width).toBeGreaterThan(750)
+  expect(midColumnBox?.width).toBeLessThan(800)
+
   await page.setViewportSize({ width: 1000, height: 800 })
   baseFeeBox = await monthlyBaseFeeField.boundingBox()
   priceBox = await pricePerKwhField.boundingBox()
@@ -353,8 +371,8 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
   expect(priceBox!.x).toBeGreaterThan(baseFeeBox!.x)
 
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
 
   // Submit the compare form and assert the candidate fields pair up + the card tiers (AC #2, #3).
   await page.getByLabel('Candidate monthly base fee').fill('14.90')
@@ -385,7 +403,7 @@ test('the Tariff Radar content column, paired form fields, and card tiers behave
 })
 
 // Story 8.5/Task 5: same jsdom limitation as above — settings-page.test.tsx and
-// tagging-scaffold-manager.test.tsx can only prove the wide:max-w-[660px] wrapper class, the
+// tagging-scaffold-manager.test.tsx can only prove the wide:max-w-[900px] wrapper class, the
 // section-label headings, and the dual Add-button markup all exist, never which one a real
 // browser actually renders at a given viewport width, nor the wide:order-N visual-reorder
 // sequence (AC #1, #2, #3).
@@ -472,11 +490,17 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   await page.setViewportSize({ width: 660, height: 800 })
   await expect(householdSectionLabel).toBeVisible()
 
+  // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
+  await page.setViewportSize({ width: 800, height: 800 })
+  const midColumnBox = await contentColumn.boundingBox()
+  expect(midColumnBox?.width).toBeGreaterThan(750)
+  expect(midColumnBox?.width).toBeLessThan(800)
+
   await page.setViewportSize({ width: 1000, height: 800 })
 
   const wideColumnBox = await contentColumn.boundingBox()
-  expect(wideColumnBox?.width).toBeGreaterThan(600) // must actually be a ~660px column, not collapsed
-  expect(wideColumnBox?.width).toBeLessThanOrEqual(660)
+  expect(wideColumnBox?.width).toBeGreaterThan(800) // must actually be a ~900px column, not collapsed
+  expect(wideColumnBox?.width).toBeLessThanOrEqual(900)
   // Centered: roughly equal left/right gaps against the viewport.
   const leftGap = wideColumnBox!.x
   const rightGap = 1000 - (wideColumnBox!.x + wideColumnBox!.width)

@@ -304,7 +304,7 @@ describe('DashboardPage', () => {
     expect(importLabel).toHaveClass('hidden', 'wide:inline')
   })
 
-  it('constrains the page content to a centered 660px column at the wide breakpoint (AC #1)', () => {
+  it('constrains the page content to a centered 900px column at the wide breakpoint (AC #1)', () => {
     const status: StatusDto = { status: 'withinRange', paceToDateKwh: 1000, baselineToDateKwh: 1000, isLowConfidence: false }
     render(
       <DashboardPage
@@ -335,7 +335,7 @@ describe('DashboardPage', () => {
     // data-slot="nav-chrome-bottom"/"nav-chrome-top") for both this test and the e2e viewport spec.
     const wrapper = document.querySelector('[data-slot="dashboard-content"]')
     expect(wrapper).not.toBeNull()
-    expect(wrapper).toHaveClass('wide:mx-auto', 'wide:w-full', 'wide:max-w-[660px]')
+    expect(wrapper).toHaveClass('wide:mx-auto', 'wide:w-full', 'wide:max-w-[900px]')
     expect(wrapper).toContainElement(heading)
     expect(wrapper).toContainElement(logReadingButton)
   })

@@ -55,7 +55,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
 
   return (
     <main className="flex min-h-svh flex-col gap-6 p-4">
-      <div data-slot="settings-content" className="flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[660px]">
+      <div data-slot="settings-content" className="flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{t('settings.heading')}</h1>
           <Button variant="outline" onClick={onBack}>

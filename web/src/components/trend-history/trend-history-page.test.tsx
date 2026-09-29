@@ -70,7 +70,7 @@ describe('TrendHistoryPage', () => {
     expect(importLabel).toHaveClass('hidden', 'wide:inline')
   })
 
-  it('constrains the page content to a centered 660px column at the wide breakpoint (AC #1)', async () => {
+  it('constrains the page content to a centered 900px column at the wide breakpoint (AC #1)', async () => {
     mockRoutes([])
 
     render(<TrendHistoryPage locale="en-US" householdId="11111111-1111-1111-1111-111111111111" supportsFederatedLogout={true} email={null} onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
@@ -80,7 +80,7 @@ describe('TrendHistoryPage', () => {
     // data-slot="dashboard-content", Story 8.2) for both this test and the e2e viewport spec.
     const wrapper = document.querySelector('[data-slot="trend-history-content"]')
     expect(wrapper).not.toBeNull()
-    expect(wrapper).toHaveClass('wide:mx-auto', 'wide:w-full', 'wide:max-w-[660px]')
+    expect(wrapper).toHaveClass('wide:mx-auto', 'wide:w-full', 'wide:max-w-[900px]')
     expect(wrapper).toContainElement(heading)
   })
 
