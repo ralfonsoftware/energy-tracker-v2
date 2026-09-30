@@ -22,5 +22,6 @@
     - [Primary action button (Log Reading trigger)](./components.md#primary-action-button-log-reading-trigger)
     - [Nav chrome](./components.md#nav-chrome)
     - [Profile menu](./components.md#profile-menu)
+    - [Preference icon strip](./components.md#preference-icon-strip)
     - [Everything else](./components.md#everything-else)
   - [Do's and Don'ts](./dos-and-donts.md)

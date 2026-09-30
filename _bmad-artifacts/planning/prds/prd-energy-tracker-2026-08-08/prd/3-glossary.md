@@ -20,5 +20,5 @@
 - **Event** — a logged, unmeasured activity (e.g. "cooked 2h," "away 2 weeks") captured via Context Capture, optionally tagged to a Room, Power Point, or Device.
 - **Wattage Plausibility** — the AI-assisted rough correlation between a logged Event and the consumption deviation (a bump or a dip) Pattern Detective observed at that time.
 - **Extension Point** — one of three scoped platform hooks: custom event/plausibility rules, generic data-source column mapping, tunable threshold settings.
-- **Locale** — a Household's language+region setting, driving display formatting; underlying data is always stored locale-neutral.
+- **Locale** — a Household's language+region setting, driving both UI language and display formatting (changeable after creation, FR-34); underlying data is always stored locale-neutral.
 - **Self-Hoster** — the secondary-audience user running their own Energy Tracker instance for their own Household, using the same product without special-casing.

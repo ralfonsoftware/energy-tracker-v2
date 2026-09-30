@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile Menu Preferences — Language &amp; Theme</title>
+<style>
+/*
+  PROFILE MENU PREFERENCES MOCKUP (2026-09-30) — FR-34 Language Toggle, FR-35 Theme Toggle
+  ==========================================================================
+  Adds two compact icon-strip controls to the Story 8.1 Profile menu (>=660px)
+  and the same two rows as a "Preferences" card on Settings (<660px, where
+  the Profile menu does not exist — decided with Ralf 2026-09-30).
+
+  No new colors, radii or type sizes: every value below is lifted from
+  key-settings.html (Dark/Light themes, .profile-dropdown, .nav-link.active,
+  .toggle-row .sub) and web/src/index.css (--ring / focus-ring pair).
+  New here: the "icon strip" pattern (segmented radiogroup), specified in
+  DESIGN/components.md -> Preference icon strip.
+
+  Scope disclosure is deliberate: Language changes the WHOLE household
+  (Household.Locale, FR-34) while Theme is THIS DEVICE only (FR-35), so each
+  row carries a one-line quiet sub-label saying which.
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; min-height: 100vh; padding: 48px 24px 88px; background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; }
+.wrap { max-width: 1500px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; }
+h2 { font-size: 15px; font-weight: 700; margin: 44px 0 6px; }
+.intro { max-width: 900px; font-size: 14.5px; line-height: 1.6; color: rgba(234,245,238,0.72); margin-bottom: 8px; }
+.intro code, .spec code { font-weight: 600; color: #8FE9CE; }
+.row { display: flex; flex-wrap: wrap; gap: 32px; margin-top: 18px; align-items: flex-start; }
+
+/* ---------- theme panels (Dark / Light equal citizens) ---------- */
+.theme { border-radius: 28px; padding: 26px 24px 30px; flex: 1 1 420px; }
+.theme.dark { background: linear-gradient(180deg, #10201A 0%, #0B1712 100%); color: #EAF5EE; border: 1px solid rgba(210,235,220,0.1); box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
+.theme.light { background: linear-gradient(180deg, #F6F8EF 0%, #EAF0DE 100%); color: #1E2A1C; box-shadow: 0 24px 60px rgba(40,70,30,0.14); border: 1px solid rgba(255,255,255,0.6); }
+.theme-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 16px; }
+.theme.dark .theme-label { color: rgba(234,245,238,0.46); }
+.theme.light .theme-label { color: rgba(30,42,28,0.46); }
+.cap { font-size: 12px; line-height: 1.5; margin-top: 10px; }
+.theme.dark .cap { color: rgba(234,245,238,0.55); }
+.theme.light .cap { color: rgba(30,42,28,0.6); }
+
+/* ---------- desktop frame: top nav + open dropdown ---------- */
+.frame { position: relative; border-radius: 16px; overflow: hidden; min-height: 400px; }
+.theme.dark .frame { background: radial-gradient(130% 60% at 25% 0%, #16302A 0%, #10201A 55%, #0B1712 100%); border: 1px solid rgba(210,235,220,0.1); }
+.theme.light .frame { background: radial-gradient(130% 60% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); border: 1px solid rgba(40,70,50,0.14); }
+.top-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; }
+.theme.dark .top-nav { border-bottom: 1px solid rgba(210,235,220,0.08); background: rgba(8,16,12,0.35); }
+.theme.light .top-nav { border-bottom: 1px solid rgba(40,70,50,0.1); background: rgba(255,255,255,0.35); }
+.wordmark-row { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 700; }
+.mark { width: 20px; height: 20px; border-radius: 7px; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); }
+.nav-links { display: flex; gap: 4px; }
+.nav-link { font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 10px; }
+.theme.dark .nav-link { color: rgba(234,245,238,0.6); }
+.theme.light .nav-link { color: rgba(30,42,28,0.6); }
+.theme.dark .nav-link.active { background: rgba(47,179,151,0.16); color: #6FD1B1; }
+.theme.light .nav-link.active { background: rgba(30,122,97,0.14); color: #1E7A61; }
+.profile-btn { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; }
+.theme.dark .profile-btn { background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.14); }
+.theme.light .profile-btn { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.16); }
+.profile-avatar { width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(60% 60% at 35% 30%, #8FE9CE, #2FB397 60%, #1B7A65 100%); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #06120D; }
+.profile-chevron { font-size: 8px; opacity: 0.55; }
+
+.profile-dropdown { position: absolute; top: 56px; right: 14px; width: 296px; border-radius: 14px; padding: 8px; z-index: 5; }
+.theme.dark .profile-dropdown { background: rgba(24,38,31,0.98); border: 1px solid rgba(210,235,220,0.18); backdrop-filter: blur(24px) saturate(150%); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+.theme.light .profile-dropdown { background: rgba(255,255,255,0.98); border: 1px solid rgba(40,70,50,0.16); backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 20px 50px rgba(40,70,30,0.22); }
+.pd-email { font-size: 12px; font-weight: 600; padding: 8px 10px 10px; margin-bottom: 4px; }
+.theme.dark .pd-email { color: rgba(234,245,238,0.85); border-bottom: 1px solid rgba(210,235,220,0.1); }
+.theme.light .pd-email { color: rgba(30,42,28,0.85); border-bottom: 1px solid rgba(40,70,50,0.12); }
+.pd-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; font-size: 12.5px; }
+.pd-item svg, .pref-label svg { width: 14px; height: 14px; flex: 0 0 auto; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme.dark .pd-item { color: rgba(234,245,238,0.8); } .theme.dark .pd-item svg { stroke: rgba(234,245,238,0.55); }
+.theme.light .pd-item { color: rgba(30,42,28,0.82); } .theme.light .pd-item svg { stroke: rgba(30,42,28,0.55); }
+.pd-item.danger, .theme .pd-item.danger svg { color: #EB958C; stroke: #EB958C; }
+.pd-sep { height: 1px; margin: 4px 2px; }
+.theme.dark .pd-sep { background: rgba(210,235,220,0.1); } .theme.light .pd-sep { background: rgba(40,70,50,0.12); }
+
+/* ---------- preference row + icon strip (NEW component) ---------- */
+.pref-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 4px 4px 10px; min-height: 48px; }
+.pref-label { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.pref-text { font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+.pref-sub { font-size: 11px; margin-top: 3px; line-height: 1.2; white-space: nowrap; }
+.theme.dark .pref-text { color: rgba(234,245,238,0.85); } .theme.dark .pref-sub { color: rgba(234,245,238,0.5); } .theme.dark .pref-label svg { stroke: rgba(234,245,238,0.55); }
+.theme.light .pref-text { color: rgba(30,42,28,0.85); } .theme.light .pref-sub { color: rgba(30,42,28,0.58); } .theme.light .pref-label svg { stroke: rgba(30,42,28,0.55); }
+.strip { display: flex; gap: 2px; padding: 2px; border-radius: 12px; flex: 0 0 auto; }
+.theme.dark .strip { background: rgba(220,245,230,0.07); border: 1px solid rgba(210,235,220,0.14); }
+.theme.light .strip { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.16); }
+.seg { width: 44px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.3px; border: 1px solid transparent; background: transparent; cursor: pointer; }
+.seg svg { width: 16px; height: 16px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme.dark .seg { color: rgba(234,245,238,0.6); } .theme.dark .seg svg { stroke: rgba(234,245,238,0.6); }
+.theme.light .seg { color: rgba(30,42,28,0.6); } .theme.light .seg svg { stroke: rgba(30,42,28,0.6); }
+.theme.dark .seg.hover { background: rgba(220,245,230,0.1); } .theme.light .seg.hover { background: rgba(40,70,50,0.07); }
+/* selected = nav-chrome active tokens + 1px accent border (state never color-only) */
+.theme.dark .seg.on { background: rgba(47,179,151,0.16); color: #6FD1B1; border-color: rgba(111,209,177,0.55); } .theme.dark .seg.on svg { stroke: #6FD1B1; }
+.theme.light .seg.on { background: rgba(30,122,97,0.14); color: #1E7A61; border-color: rgba(30,122,97,0.55); } .theme.light .seg.on svg { stroke: #1E7A61; }
+/* colors.focus-ring / -dark, 2px, 1px offset — canonical :focus-visible */
+.theme.dark .seg.focus { outline: 2px solid #8FE9CE; outline-offset: 1px; }
+.theme.light .seg.focus { outline: 2px solid #1E7A61; outline-offset: 1px; }
+.seg.busy { opacity: 0.65; }
+.seg.busy::after { content: ""; width: 10px; height: 10px; margin-left: 5px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; }
+.strip.disabled { opacity: 0.45; }
+.pref-err { margin: 2px 6px 6px; padding: 8px 10px; border-radius: 8px; font-size: 11.5px; line-height: 1.45; }
+.theme.dark .pref-err { background: rgba(235,149,140,0.1); border: 1px solid rgba(235,149,140,0.35); color: #EB958C; }
+.theme.light .pref-err { background: rgba(176,50,40,0.07); border: 1px solid rgba(176,50,40,0.3); color: #A5382D; }
+
+/* ---------- mobile settings preferences card ---------- */
+.phone { width: 340px; border-radius: 30px; padding: 12px; flex: 0 0 auto; }
+.theme.dark .phone { background: #0B1712; border: 1px solid rgba(210,235,220,0.14); }
+.theme.light .phone { background: #FFFFFA; border: 1px solid rgba(40,70,50,0.16); }
+.phone-screen { border-radius: 20px; padding: 16px 14px 14px; min-height: 470px; display: flex; flex-direction: column; gap: 12px; }
+.theme.dark .phone-screen { background: radial-gradient(130% 60% at 25% 0%, #16302A 0%, #10201A 55%, #0B1712 100%); }
+.theme.light .phone-screen { background: radial-gradient(130% 60% at 25% 0%, #FAFCF5 0%, #F3F8ED 55%, #EAF0DF 100%); }
+.page-title { font-size: 19px; font-weight: 700; }
+.section-label { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin-top: 4px; }
+.theme.dark .section-label { color: rgba(234,245,238,0.46); } .theme.light .section-label { color: rgba(30,42,28,0.5); }
+.card { border-radius: 18px; padding: 6px 10px; }
+.theme.dark .card { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.13); }
+.theme.light .card { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); }
+.card .pref-row + .pref-row { border-top: 1px solid; }
+.theme.dark .card .pref-row + .pref-row { border-color: rgba(210,235,220,0.08); } .theme.light .card .pref-row + .pref-row { border-color: rgba(40,70,50,0.08); }
+.settings-row { display: flex; align-items: center; gap: 9px; padding: 14px 18px; border-radius: 18px; font-size: 13px; font-weight: 600; }
+.theme.dark .settings-row { background: rgba(220,245,230,0.06); border: 1px solid rgba(210,235,220,0.13); color: #EB958C; }
+.theme.light .settings-row { background: rgba(255,255,255,0.6); border: 1px solid rgba(40,70,50,0.12); color: #A5382D; }
+.settings-row svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ghost-card { height: 54px; border-radius: 18px; }
+.theme.dark .ghost-card { background: rgba(220,245,230,0.04); } .theme.light .ghost-card { background: rgba(255,255,255,0.4); }
+
+/* ---------- state sheet ---------- */
+.states { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px 18px; margin-top: 4px; }
+.state-cell .strip { display: inline-flex; }
+.state-cell .state-name { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+.theme.dark .state-name { color: rgba(234,245,238,0.5); } .theme.light .state-name { color: rgba(30,42,28,0.5); }
+
+.spec { max-width: 980px; font-size: 13.5px; line-height: 1.65; color: rgba(234,245,238,0.75); margin-top: 10px; }
+.spec ul { padding-left: 20px; } .spec li { margin: 4px 0; }
+.tag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 1px; padding: 2px 8px; border-radius: 999px; background: rgba(47,179,151,0.16); color: #6FD1B1; vertical-align: middle; margin-left: 6px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" opacity="0.35"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>Profile menu preferences — Language (FR-34) &amp; Theme (FR-35)</h1>
+  <p class="intro">
+    Two compact <b>icon strips</b> join the Profile menu (≥660px), directly under the account email and above
+    <i>Profile</i> / <i>Log off</i>. Below 660px there is no Profile menu, so the same two rows live in a
+    <b>Preferences card on Settings</b>, next to Log off (decided 2026-09-30).
+    <code>Theme</code> is System / Light / Dark as three icons; <code>Language</code> is the two launch Locales as
+    two-letter codes <code>DE</code> / <code>EN</code> (flags are avoided — a language is not a country).
+    Each row states its scope in one quiet line: Language changes the <b>whole household</b>, Theme only <b>this device</b>.
+  </p>
+
+  <!-- ===================== 1. DESKTOP / TABLET DROPDOWN ===================== -->
+  <h2>1 · Profile menu open (≥660px)</h2>
+  <p class="intro">Dark shown with German labels (household Locale <code>de-DE</code>, theme <i>System</i> resolving to Dark); Light shown with English labels (<code>en-US</code>, theme <i>Light</i> chosen explicitly).</p>
+  <div class="row">
+    <!-- DARK / DE -->
+    <div class="theme dark">
+      <div class="theme-label">Dark · de-DE</div>
+      <div class="frame">
+        <div class="top-nav">
+          <div class="wordmark-row"><span class="mark"></span>Energy Tracker</div>
+          <div class="nav-links"><span class="nav-link">Dashboard</span><span class="nav-link">Verlauf</span><span class="nav-link">Tarifradar</span><span class="nav-link active">Einstellungen</span></div>
+          <div class="profile-btn"><span class="profile-avatar">R</span><span class="profile-chevron">▾</span></div>
+        </div>
+        <div class="profile-dropdown" role="menu">
+          <div class="pd-email">ralf@ehlert.haus</div>
+          <div class="pref-row" role="group" aria-label="Darstellung">
+            <div class="pref-label"><svg><use href="#i-palette"/></svg><div><div class="pref-text">Darstellung</div><div class="pref-sub">Dieses Gerät</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Darstellung">
+              <button class="seg on" role="radio" aria-checked="true" aria-label="System (folgt dem Gerät: Dunkel)" title="System"><svg><use href="#i-monitor"/></svg></button>
+              <button class="seg" role="radio" aria-checked="false" aria-label="Hell" title="Hell"><svg><use href="#i-sun"/></svg></button>
+              <button class="seg" role="radio" aria-checked="false" aria-label="Dunkel" title="Dunkel"><svg><use href="#i-moon"/></svg></button>
+            </div>
+          </div>
+          <div class="pref-row" role="group" aria-label="Sprache">
+            <div class="pref-label"><svg><use href="#i-globe"/></svg><div><div class="pref-text">Sprache</div><div class="pref-sub">Ganzer Haushalt</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Sprache">
+              <button class="seg on" role="radio" aria-checked="true" aria-label="Deutsch" title="Deutsch">DE</button>
+              <button class="seg" role="radio" aria-checked="false" aria-label="English" title="English">EN</button>
+            </div>
+          </div>
+          <div class="pd-sep"></div>
+          <div class="pd-item"><svg><use href="#i-user"/></svg>Profil</div>
+          <div class="pd-item danger"><svg><use href="#i-logout"/></svg>Abmelden</div>
+        </div>
+      </div>
+      <p class="cap">Dropdown widens 226 → 296px to fit a label column plus the widest strip (3 × 44px). Email, Profil, Abmelden keep their existing styling.</p>
+    </div>
+
+    <!-- LIGHT / EN -->
+    <div class="theme light">
+      <div class="theme-label">Light · en-US</div>
+      <div class="frame">
+        <div class="top-nav">
+          <div class="wordmark-row"><span class="mark"></span>Energy Tracker</div>
+          <div class="nav-links"><span class="nav-link">Dashboard</span><span class="nav-link">History</span><span class="nav-link">Tariff Radar</span><span class="nav-link active">Settings</span></div>
+          <div class="profile-btn"><span class="profile-avatar">R</span><span class="profile-chevron">▾</span></div>
+        </div>
+        <div class="profile-dropdown" role="menu">
+          <div class="pd-email">ralf@ehlert.haus</div>
+          <div class="pref-row" role="group" aria-label="Appearance">
+            <div class="pref-label"><svg><use href="#i-palette"/></svg><div><div class="pref-text">Appearance</div><div class="pref-sub">This device</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Appearance">
+              <button class="seg" role="radio" aria-checked="false" aria-label="System" title="System"><svg><use href="#i-monitor"/></svg></button>
+              <button class="seg on" role="radio" aria-checked="true" aria-label="Light" title="Light"><svg><use href="#i-sun"/></svg></button>
+              <button class="seg" role="radio" aria-checked="false" aria-label="Dark" title="Dark"><svg><use href="#i-moon"/></svg></button>
+            </div>
+          </div>
+          <div class="pref-row" role="group" aria-label="Language">
+            <div class="pref-label"><svg><use href="#i-globe"/></svg><div><div class="pref-text">Language</div><div class="pref-sub">Whole household</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Language">
+              <button class="seg" role="radio" aria-checked="false" aria-label="Deutsch" title="Deutsch">DE</button>
+              <button class="seg on" role="radio" aria-checked="true" aria-label="English" title="English">EN</button>
+            </div>
+          </div>
+          <div class="pd-sep"></div>
+          <div class="pd-item"><svg><use href="#i-user"/></svg>Profile</div>
+          <div class="pd-item danger"><svg><use href="#i-logout"/></svg>Log off</div>
+        </div>
+      </div>
+      <p class="cap">Language strip options are endonyms (<i>Deutsch</i>, <i>English</i>) and are never translated, so a member can always find their own language.</p>
+    </div>
+  </div>
+
+  <!-- ===================== 2. STATES ===================== -->
+  <h2>2 · Strip states (Dark + Light)</h2>
+  <p class="intro">Selected is never color-only: fill <i>and</i> a 1px accent border <i>and</i> <code>aria-checked="true"</code>. Focus uses the canonical <code>colors.focus-ring</code> / <code>-dark</code> pair.</p>
+  <div class="row">
+    <div class="theme dark">
+      <div class="theme-label">Dark</div>
+      <div class="states">
+        <div class="state-cell"><div class="state-name">Default</div><div class="strip"><button class="seg on"><svg><use href="#i-monitor"/></svg></button><button class="seg"><svg><use href="#i-sun"/></svg></button><button class="seg"><svg><use href="#i-moon"/></svg></button></div></div>
+        <div class="state-cell"><div class="state-name">Hover (pointer)</div><div class="strip"><button class="seg on"><svg><use href="#i-monitor"/></svg></button><button class="seg hover"><svg><use href="#i-sun"/></svg></button><button class="seg"><svg><use href="#i-moon"/></svg></button></div></div>
+        <div class="state-cell"><div class="state-name">Keyboard focus</div><div class="strip"><button class="seg"><svg><use href="#i-monitor"/></svg></button><button class="seg on focus"><svg><use href="#i-sun"/></svg></button><button class="seg"><svg><use href="#i-moon"/></svg></button></div></div>
+        <div class="state-cell"><div class="state-name">Language · saving</div><div class="strip" aria-busy="true"><button class="seg"><b>DE</b></button><button class="seg on busy">EN</button></div></div>
+        <div class="state-cell"><div class="state-name">Language · offline</div><div class="strip disabled"><button class="seg on" disabled>DE</button><button class="seg" disabled>EN</button></div></div>
+      </div>
+      <div class="pref-err" style="margin-top:16px; max-width:330px;">Couldn't change the language. Your household is still on Deutsch — try again.</div>
+      <p class="cap">Error banner appears under the Language row, the strip snaps back to the persisted Locale (red is allowed here: genuine system error). Offline: strip is disabled and the sub-line reads “Needs a connection”; Theme keeps working offline.</p>
+    </div>
+    <div class="theme light">
+      <div class="theme-label">Light</div>
+      <div class="states">
+        <div class="state-cell"><div class="state-name">Default</div><div class="strip"><button class="seg"><svg><use href="#i-monitor"/></svg></button><button class="seg on"><svg><use href="#i-sun"/></svg></button><button class="seg"><svg><use href="#i-moon"/></svg></button></div></div>
+        <div class="state-cell"><div class="state-name">Hover (pointer)</div><div class="strip"><button class="seg"><svg><use href="#i-monitor"/></svg></button><button class="seg on"><svg><use href="#i-sun"/></svg></button><button class="seg hover"><svg><use href="#i-moon"/></svg></button></div></div>
+        <div class="state-cell"><div class="state-name">Keyboard focus</div><div class="strip"><button class="seg on focus"><svg><use href="#i-monitor"/></svg></button><button class="seg"><svg><use href="#i-sun"/></svg></button><button class="seg"><svg><use href="#i-moon"/></svg></button></div></div>
+        <div class="state-cell"><div class="state-name">Language · saving</div><div class="strip" aria-busy="true"><button class="seg on busy">DE</button><button class="seg">EN</button></div></div>
+        <div class="state-cell"><div class="state-name">Language · offline</div><div class="strip disabled"><button class="seg" disabled>DE</button><button class="seg on" disabled>EN</button></div></div>
+      </div>
+      <div class="pref-err" style="margin-top:16px; max-width:330px;">Die Sprache konnte nicht geändert werden. Dein Haushalt nutzt weiterhin English — bitte erneut versuchen.</div>
+      <p class="cap">Same states, Light tokens. Error copy shown in German to demonstrate the de-DE variant; it always renders in the household's <i>current</i> (still-persisted) language.</p>
+    </div>
+  </div>
+
+  <!-- ===================== 3. MOBILE SETTINGS CARD ===================== -->
+  <h2>3 · Settings “Preferences” card (&lt;660px, no Profile menu)</h2>
+  <p class="intro">Same two rows, same strips, inside a glass card in the Settings screen's new <b>Account</b> group directly above <i>Log off</i> (Story 1.12's control, unchanged). Hidden at ≥660px where the Profile menu carries them.</p>
+  <div class="row">
+    <div class="theme dark">
+      <div class="theme-label">Dark · de-DE · 340px</div>
+      <div class="phone"><div class="phone-screen">
+        <div class="page-title">Einstellungen</div>
+        <div class="ghost-card"></div><div class="ghost-card"></div>
+        <div class="section-label">Konto</div>
+        <div class="card">
+          <div class="pref-row" role="group" aria-label="Darstellung"><div class="pref-label"><svg><use href="#i-palette"/></svg><div><div class="pref-text">Darstellung</div><div class="pref-sub">Dieses Gerät</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Darstellung"><button class="seg on" role="radio" aria-checked="true" aria-label="System" title="System"><svg><use href="#i-monitor"/></svg></button><button class="seg" role="radio" aria-checked="false" aria-label="Hell"><svg><use href="#i-sun"/></svg></button><button class="seg" role="radio" aria-checked="false" aria-label="Dunkel"><svg><use href="#i-moon"/></svg></button></div></div>
+          <div class="pref-row" role="group" aria-label="Sprache"><div class="pref-label"><svg><use href="#i-globe"/></svg><div><div class="pref-text">Sprache</div><div class="pref-sub">Ganzer Haushalt</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Sprache"><button class="seg on" role="radio" aria-checked="true" aria-label="Deutsch">DE</button><button class="seg" role="radio" aria-checked="false" aria-label="English">EN</button></div></div>
+        </div>
+        <div class="settings-row"><svg><use href="#i-logout"/></svg>Abmelden</div>
+      </div></div>
+    </div>
+    <div class="theme light">
+      <div class="theme-label">Light · en-US · 340px</div>
+      <div class="phone"><div class="phone-screen">
+        <div class="page-title">Settings</div>
+        <div class="ghost-card"></div><div class="ghost-card"></div>
+        <div class="section-label">Account</div>
+        <div class="card">
+          <div class="pref-row" role="group" aria-label="Appearance"><div class="pref-label"><svg><use href="#i-palette"/></svg><div><div class="pref-text">Appearance</div><div class="pref-sub">This device</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Appearance"><button class="seg on" role="radio" aria-checked="true" aria-label="System"><svg><use href="#i-monitor"/></svg></button><button class="seg" role="radio" aria-checked="false" aria-label="Light"><svg><use href="#i-sun"/></svg></button><button class="seg" role="radio" aria-checked="false" aria-label="Dark"><svg><use href="#i-moon"/></svg></button></div></div>
+          <div class="pref-row" role="group" aria-label="Language"><div class="pref-label"><svg><use href="#i-globe"/></svg><div><div class="pref-text">Language</div><div class="pref-sub">Whole household</div></div></div>
+            <div class="strip" role="radiogroup" aria-label="Language"><button class="seg" role="radio" aria-checked="false" aria-label="Deutsch">DE</button><button class="seg on" role="radio" aria-checked="true" aria-label="English">EN</button></div></div>
+        </div>
+        <div class="settings-row"><svg><use href="#i-logout"/></svg>Log off</div>
+      </div></div>
+      <p class="cap">Scope sub-lines are kept to two or three words so they never wrap at 320–340px; in Light + en-US the same card reads “This device” / “Whole household”.</p>
+    </div>
+  </div>
+
+  <!-- ===================== 4. SPEC FOR STORIES ===================== -->
+  <h2>4 · Behavior spec (feeds Epic 8 stories)</h2>
+  <div class="spec">
+    <ul>
+      <li><b>Pattern.</b> <code>Preference icon strip</code>: <code>role="radiogroup"</code> with <code>role="radio"</code> segments, roving tabindex — Tab enters the group on the checked segment, ←/→ (and ↑/↓) move <i>and select</i>, Home/End jump. Each segment has an accessible name (icons are never the only label); <code>title</code> shows the name on hover.</li>
+      <li><b>Size.</b> Segment 44 × 40px visual, 44 × 44px hit area (row padding); strip radius 12px, segment radius 10px; row min-height 48px.</li>
+      <li><b>Order in the dropdown.</b> Email → Appearance → Language → separator → Profile → Log off. Tab order follows reading order; Escape closes the menu and returns focus to the avatar button. Selecting a segment does <u>not</u> close the menu.</li>
+      <li><b>Theme (FR-35).</b> Applies instantly, no request. Saved per device; applied before first paint. “System” follows the OS live; its accessible name includes the resolved value (“System — currently Dark”). Works offline.</li>
+      <li><b>Language (FR-34).</b> Optimistic select → persist <code>Household.Locale</code> → on success switch UI language + number/date formatting together, without reload; a polite live region announces the change <i>in the new language</i> (“Sprache: Deutsch”). On failure, strip reverts and the inline error appears under the row; the language does not change. Other household members receive it on next load/session refresh.</li>
+      <li><b>Offline.</b> Language strip disabled (server-persisted setting), sub-line becomes “Needs a connection” / “Benötigt eine Verbindung”. Theme unaffected.</li>
+      <li><b>Copy.</b> New keys in both catalogs: appearance label + sub-line, theme option names, language label + sub-line, saving/error/offline strings. <code>Deutsch</code> / <code>English</code> are literal endonyms in both catalogs.</li>
+      <li><b>Below 660px.</b> Same rows as a Preferences card in Settings › Account, above Log off. Not rendered at ≥660px (single owner per width).</li>
+    </ul>
+    <p style="margin-top:12px;"><span class="tag">SPINES WIN</span> If this mock and <code>EXPERIENCE.md</code> / <code>DESIGN/components.md</code> ever disagree, the spines win.</p>
+  </div>
+</div>
+</body>
+</html>

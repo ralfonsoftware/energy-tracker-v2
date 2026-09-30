@@ -2,12 +2,12 @@
 
 Every existing frontend surface (Dashboard, Trend History, Tariff Radar, Settings) renders correctly at desktop and tablet width (≥660px) instead of an unconstrained mobile layout — one shared breakpoint, a top-nav chrome variant, a Profile menu, and system-wide application of already-established-but-under-used patterns (unit-inside-field, card-hierarchy, section grouping, tree summary rows). Delivers no new domain capability; makes every existing capability (Epics 1, 2, 4, 5) usable at desktop/tablet width, closing the gap between the already-documented UX-DR19 responsive-layout intent and what actually shipped. Single epic rather than per-screen epics: all seven UX-DRs share one breakpoint mechanism and one nav-chrome/profile-menu component reused identically across all four screens — splitting by screen would repeatedly touch the same shared component. Story sequencing: shared breakpoint infrastructure + nav chrome + profile menu first, then Dashboard → Trend History → Tariff Radar → Settings.
 
-Source: UX review of all 9 production screens at desktop and tablet width, 2026-09-23 — see `_bmad-artifacts/planning/ux-designs/ux-energy-tracker-2026-08-08/mockups/critique-desktop-breakpoint-2026-09-23.html` for the full before/after mockups and rationale behind Stories 8.1–8.5's acceptance criteria. **Stories 8.6–8.9 (added 2026-09-28)** extend the epic with a follow-up round, sourced from Ralf's live desktop review of the shipped Stories 8.1–8.5 output — the 660px column, while a correct fix for the "ungoverned mobile layout on desktop" problem, itself left a desktop viewport under-used once seen live (a squeezed Trend History chart, long single-column Settings/Tariff lists). See `mockups/key-trend-history.html`, `mockups/key-settings.html`, and `mockups/key-tariff-radar.html` (all promoted 2026-09-28) for the corrected state.
+Source: UX review of all 9 production screens at desktop and tablet width, 2026-09-23 — see `_bmad-artifacts/planning/ux-designs/ux-energy-tracker-2026-08-08/mockups/critique-desktop-breakpoint-2026-09-23.html` for the full before/after mockups and rationale behind Stories 8.1–8.5's acceptance criteria. **Stories 8.10–8.12 (added 2026-09-30)** add the Theme Toggle (FR-35) and Language Toggle (FR-34) to the Profile menu and, below 660px, to a Settings Preferences card — UX per `mockups/key-profile-preferences.html`. **Stories 8.6–8.9 (added 2026-09-28)** extend the epic with a follow-up round, sourced from Ralf's live desktop review of the shipped Stories 8.1–8.5 output — the 660px column, while a correct fix for the "ungoverned mobile layout on desktop" problem, itself left a desktop viewport under-used once seen live (a squeezed Trend History chart, long single-column Settings/Tariff lists). See `mockups/key-trend-history.html`, `mockups/key-settings.html`, and `mockups/key-tariff-radar.html` (all promoted 2026-09-28) for the corrected state.
 
-**FRs covered:** none (no new FR) — additive touch on FR-33 only (Story 1.12, status: done; Story 8.1 below extends its reachable surface, does not modify its existing behavior)
+**FRs covered:** FR-34, FR-35 (added 2026-09-30 — Language Toggle, Theme Toggle; stories to be added); additive touch on FR-33 only (Story 1.12, status: done; Story 8.1 below extends its reachable surface, does not modify its existing behavior)
 **NFRs:** none directly; closes a gap the Cross-Cutting NFRs never specified (no existing responsive/breakpoint NFR)
 **Architecture:** AD-17 (session/logout — Story 8.1 reuses the existing `/logout` flow verbatim), AD-18 (i18n — any new UI string is a resource-file addition to both `en-US`/`de-DE`, never a code branch)
-**UX-DRs:** UX-DR9 (amended), UX-DR19 (amended twice — 2026-09-23 and 2026-09-28), UX-DR23, UX-DR24, UX-DR25, UX-DR26, UX-DR27, UX-DR28, UX-DR29, UX-DR30, UX-DR31 — full text of the amendments and new entries is in `epics/requirements-inventory.md`
+**UX-DRs:** UX-DR9 (amended), UX-DR19 (amended twice — 2026-09-23 and 2026-09-28), UX-DR23, UX-DR24, UX-DR25, UX-DR26, UX-DR27, UX-DR28, UX-DR29, UX-DR30, UX-DR31, UX-DR32, UX-DR33 — full text of the amendments and new entries is in `epics/requirements-inventory.md`
 
 ## Story 8.1: Responsive Nav Chrome & Profile Menu
 
@@ -210,3 +210,122 @@ So that I can compare them at a glance instead of scrolling between two stacked 
 **Given** the same screen at <660px
 **When** rendered
 **Then** the existing stacked layout (Story 8.4) is unchanged
+
+## Story 8.10: Theme Toggle in the Profile Menu (System / Light / Dark)
+
+*(added 2026-09-30, new FR-35)*
+
+As a Household member,
+I want to choose System, Light, or Dark from the Profile menu,
+So that I can override my device's color scheme when I prefer the other theme, without changing my OS setting.
+
+**Acceptance Criteria:**
+
+**Given** the Profile menu is open (≥660px, Story 8.1)
+**When** rendered
+**Then** it shows, between the account email and the Profile / Log off rows, an "Appearance" row carrying the new Preference icon strip (UX-DR32) with exactly three segments — System, Light, Dark (monitor / sun / moon icons) — plus the scope sub-label "This device", with the dropdown widened to 296px; the active segment shows the fill, 1px accent border, and `aria-checked="true"` (never color alone), using the existing nav-chrome active tokens and the canonical focus-ring pair
+
+**Given** the strip has keyboard focus
+**When** the member presses ←/→ (or ↑/↓) or Home/End
+**Then** focus moves **and selects** per `radiogroup` semantics, Tab enters the group on the checked segment, every segment has an accessible name (the System name includes the resolved value, e.g. "System — currently Dark"), and Escape closes the menu returning focus to the avatar button
+
+**Given** the member selects Light or Dark
+**When** the selection is made
+**Then** the theme applies immediately on every screen without reload or network request, the menu stays open, and the choice is stored per device in `localStorage` — not on the Household, not per member (FR-35)
+
+**Given** System is selected (the default when nothing is stored)
+**When** the OS color-scheme preference changes
+**Then** the app follows it live (today's `initColorScheme` behavior is preserved); with Light or Dark selected, OS changes are ignored
+
+**Given** a stored choice exists
+**When** the page loads or reloads (including after logoff)
+**Then** the stored theme is applied before first paint — the inline script in `web/index.html` reads it, so there is no flash of the wrong theme — and the `<meta name="theme-color">` values follow the effective theme rather than only the OS media query
+
+**Given** `localStorage` is unavailable or holds an unrecognized value
+**When** the app loads
+**Then** it falls back to System without error
+
+**Given** the device is offline
+**When** the member changes the theme
+**Then** it works exactly as online (no server involvement)
+
+**And** all new strings exist in both `en-US` and `de-DE` catalogs (AD-18); Dark and Light both remain fully designed on every surface (UX-DR11), verified in both themes for the new row (UX-DR32, FR-35)
+
+**Technical notes:**
+- New shared component: the Preference icon strip (`radiogroup`), reused by Stories 8.11 and 8.12.
+- Extend `web/src/lib/color-scheme.ts` (currently OS-only, comment "No manual toggle yet") rather than adding a parallel mechanism; update its header comment.
+- Reference: `_bmad-artifacts/planning/ux-designs/ux-energy-tracker-2026-08-08/mockups/key-profile-preferences.html` §1, §2.
+
+## Story 8.11: Language Toggle — Household Locale Switch
+
+*(added 2026-09-30, new FR-34)*
+
+As a Household member,
+I want to switch the household's language between Deutsch and English from the Profile menu,
+So that the app's language and number/date formats match what the household actually wants, after creation as well as at creation.
+
+**Acceptance Criteria:**
+
+**Given** the Profile menu is open (≥660px)
+**When** rendered
+**Then** below the Appearance row it shows a "Language" row with the Preference icon strip (UX-DR32) offering `DE` and `EN` (endonyms `Deutsch` / `English` as accessible names — never translated, never flags) and the scope sub-label "Whole household"; the segment matching the persisted `Household.Locale` is selected
+
+**Given** a member selects the other language
+**When** the selection is made
+**Then** the segment shows selected immediately with a saving indicator, the new `Household.Locale` is persisted through a new authenticated Household-scoped endpoint (any Household member may call it — no admin role exists in v1), and on success the UI language **and** number/date formatting switch together without reload (AD-18), the menu stays open, and a polite live region announces the change in the new language
+
+**Given** the session/household response and the i18next instance
+**When** the app loads for a signed-in member
+**Then** the active UI language is `Household.Locale` — the browser-language detector no longer overrides it after Household creation; the detector remains only for pre-Household screens (Household creation display language), preserving Story 1.5's explicit-choice behavior; this also removes the language-vs-date-format mismatch recorded in `deferred-work.md` (Tariff Check card)
+
+**Given** the persist request fails
+**When** the failure is returned
+**Then** the strip reverts to the persisted Locale, an inline error appears under the row ("Couldn't change the language…", rendered in the still-persisted language), and no UI language or format changes occur
+
+**Given** the device is offline
+**When** the Profile menu is opened
+**Then** the Language strip is disabled and its sub-line reads "Needs a connection" (de: "Benötigt eine Verbindung"); the Appearance row is unaffected
+
+**Given** another Household member has the app open
+**When** the Locale is changed elsewhere
+**Then** they receive the new Locale on their next load or session refresh — no live push is required
+
+**Given** the Locale is changed
+**When** stored data is inspected
+**Then** it is unchanged (locale-neutral storage, NFR5) and any offline-queued Meter Reading (AD-16) is unaffected
+
+**And** every new string exists in both catalogs (AD-18); the endpoint validates the Locale against the supported list (`de-DE`, `en-US`) and rejects anything else (FR-34, UX-DR32)
+
+**Technical notes:**
+- Session response already carries `Locale`; add the write endpoint alongside the existing `PUT /households/{id}/…` settings endpoints (e.g. `/households/{id}/locale`) and its API tests.
+- Reference: mockup §1–§2 (saving / offline / error states).
+
+## Story 8.12: Preferences Card in Settings (<660px)
+
+*(added 2026-09-30, new FR-34 / FR-35)*
+
+As a Household member on a phone,
+I want the same Appearance and Language controls in Settings,
+So that I can change them where I am, even though the Profile menu only exists at desktop/tablet width.
+
+**Acceptance Criteria:**
+
+**Given** the Settings screen at an available width <660px
+**When** rendered
+**Then** a "Preferences" glass card appears in the Account group (the "Account" section label, directly above the unchanged Log off control from Story 1.12), containing the Appearance and Language rows with the same strips, sub-labels, states, and behavior as Stories 8.10 and 8.11 (UX-DR33) — one shared component, no duplicated logic
+
+**Given** the same screen at ≥660px
+**When** rendered
+**Then** the Preferences card is not rendered — the Profile menu is the single home for both controls at that width
+
+**Given** the card at 320–340px width in both `de-DE` and `en-US`
+**When** rendered
+**Then** rows and sub-labels do not wrap or overflow, and segments keep their 44×44 hit area
+
+**Given** a member changes theme or language in the card
+**When** they then widen the viewport to ≥660px (or reload)
+**Then** the Profile menu shows the same, persisted state (Theme per device, Language per Household)
+
+**And** Story 1.12's Log off control and the Settings page's existing sections are otherwise unchanged; Dark and Light both verified (UX-DR33, FR-34, FR-35)
+
+**Technical notes:** depends on Stories 8.10 and 8.11. Reference: mockup §3.

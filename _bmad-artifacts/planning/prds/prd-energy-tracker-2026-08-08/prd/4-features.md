@@ -344,3 +344,27 @@ A Household member can log off from a dedicated, always-reachable control. Logof
 - If the configured OIDC provider does not support RP-initiated logout, logoff falls back to local-session-only — the member is warned this may not fully sign them out of the identity provider.
 - Any unsynced offline-queued Meter Readings (AD-16 IndexedDB queue) are flushed or explicitly surfaced before logoff completes — they never silently carry over and get attributed to whichever Household the next logged-in account belongs to.
 - The control is reachable from every authenticated screen (not buried in a rarely visited settings sub-page), consistent with this being a routine action for shared/multi-account devices, not an edge case.
+
+### FR-34: Language Toggle (Household Locale Switch)
+
+A Household member can change the Household's Locale (`de-DE` / `en-US`) after creation, from a dedicated control in the Profile menu. Household Locale stays the single setting that drives both UI language and number/date formatting — there is no separate per-member or per-device language setting.
+
+**Consequences (testable):**
+- The control is reachable from every authenticated screen at desktop/tablet width via the Profile menu, and from Settings at phone width (where no Profile menu exists) — same always-reachable principle as FR-33 — and shows the currently active Locale.
+- Changing the Locale persists to the Household, applies immediately to the current session without a manual reload, and applies to every member of the Household on their next load or session refresh.
+- UI language and number/date formatting always follow the Household Locale — the browser's language is at most a suggestion for the initial choice at Household creation (FR-26), never an override afterwards. A Household can never show one language in copy and another in dates or numbers.
+- Stored data is unaffected by a Locale change (locale-neutral storage per the i18n/locale NFR); only display changes.
+- Every UI string introduced by this feature exists in both launch Locale catalogs; adding a further Locale remains a resource-file addition, not a code change.
+- An unsynced offline-queued Meter Reading (AD-16) is unaffected by a Locale change — queued values are entered and stored locale-neutral.
+
+### FR-35: Theme Toggle (System / Light / Dark)
+
+A signed-in member can choose the app's color theme — System, Light, or Dark — from a dedicated control in the Profile menu. System is the default and follows the device's OS color-scheme preference, which is how the product behaves today.
+
+**Consequences (testable):**
+- The control offers exactly three choices — System, Light, Dark — shows which is active, and is reachable from every authenticated screen at desktop/tablet width via the Profile menu, and from Settings at phone width.
+- The choice applies immediately, without reload, on every screen.
+- With System selected, the theme follows the OS preference and changes live if the OS preference changes; with Light or Dark selected, OS changes are ignored.
+- The choice is stored per device/browser, not per Household or per member — two members on one shared device see the same theme, and one member on two devices may choose differently. It survives reload and logoff.
+- A saved choice is applied before first paint, so a reload never flashes the wrong theme.
+- Dark and Light remain equal citizens (UX-DR11) — neither is a fallback of the other, and both are fully designed on every surface.
