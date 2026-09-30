@@ -6,8 +6,8 @@ public class FrontendDoesNotStoreAuthTokensTests
 {
     // Story 8.10 / FR-35: the theme preference (System/Light/Dark) is deliberately stored per device
     // in localStorage. These are the ONLY files allowed to reference it. The stored value is the plain
-    // string 'light' | 'dark' (System = nothing stored) — never anything token-like. Compared by path
-    // suffix after normalising separators; any new file touching browser storage still fails the guard.
+    // string 'light' | 'dark' (System = nothing stored) — never anything token-like. Compared by exact path
+    // relative to web/src after normalising separators; any new file touching browser storage still fails the guard.
     private static readonly string[] ThemePreferenceAllowlist =
     [
         "lib/color-scheme.ts",
@@ -25,7 +25,7 @@ public class FrontendDoesNotStoreAuthTokensTests
         var offendingFiles = Directory
             .EnumerateFiles(webSrcDir, "*.*", SearchOption.AllDirectories)
             .Where(f => f.EndsWith(".ts", StringComparison.Ordinal) || f.EndsWith(".tsx", StringComparison.Ordinal))
-            .Where(f => !IsAllowlisted(f))
+            .Where(f => !IsAllowlisted(webSrcDir, f))
             .Where(f =>
             {
                 var content = File.ReadAllText(f);
@@ -51,10 +51,10 @@ public class FrontendDoesNotStoreAuthTokensTests
         }
     }
 
-    private static bool IsAllowlisted(string path)
+    private static bool IsAllowlisted(string webSrcDir, string path)
     {
-        var normalized = path.Replace('\\', '/');
-        return ThemePreferenceAllowlist.Any(allowed => normalized.EndsWith("/" + allowed, StringComparison.Ordinal));
+        var relative = Path.GetRelativePath(webSrcDir, path).Replace('\\', '/');
+        return ThemePreferenceAllowlist.Contains(relative, StringComparer.Ordinal);
     }
 
     private static string FindWebSrcDirectory()

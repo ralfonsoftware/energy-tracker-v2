@@ -25,7 +25,7 @@ interface PreferenceStripProps<T extends string> {
 // Story 8.10 (UX-DR32): generic, controlled icon strip with radiogroup semantics. Arrow keys move
 // AND select (wrapping), Home/End jump to the ends. Knows nothing about themes or locales — Stories
 // 8.11/8.12 reuse it. Handled keys stop propagation so a parent Radix menu's own key handling
-// (focus-first/last item, typeahead) never steals them.
+// (focus-first/last item, typeahead — printable keys are swallowed too) never steals them.
 export function PreferenceStrip<T extends string>({
   options,
   value,
@@ -50,6 +50,8 @@ export function PreferenceStrip<T extends string>({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return
+    // Leave browser/OS shortcuts (Alt+Arrow = back, Ctrl/Cmd+Home/End, ...) alone.
+    if (event.altKey || event.ctrlKey || event.metaKey) return
     const currentIndex = Math.max(
       0,
       options.findIndex((o) => o.value === value),
@@ -71,7 +73,11 @@ export function PreferenceStrip<T extends string>({
         target = options.length - 1
         break
     }
-    if (target === null) return
+    if (target === null) {
+      // Printable characters would reach the parent Radix menu's typeahead and pull focus onto an item.
+      if (event.key.length === 1) event.stopPropagation()
+      return
+    }
     event.preventDefault()
     event.stopPropagation()
     select(target)

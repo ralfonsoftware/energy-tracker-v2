@@ -489,3 +489,21 @@
 - source_story: `_bmad-artifacts/implementation/8-7-meter-readings-events-tariff-history-entry-grid.md`
   summary: `Intl.DateTimeFormat.format(new Date(item.occurredAt))` throws `RangeError` on an unparseable `occurredAt`, which would blank the whole Events card.
   evidence: Pre-existing in the table row; the tile branch repeats it. Raised by Edge Case Hunter during code review. [web/src/components/event/events-card.tsx]
+
+## Deferred from: code review of 8-10-theme-toggle-profile-menu (2026-09-30)
+
+- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+  summary: `PreferenceStrip` does not guard input while `pendingValue` is set (double clicks/arrows fire concurrent `onChange`), announces no "saving" state, and computes the arrow index from `value` rather than the focused segment.
+  evidence: Only matters once Story 8.11 makes the strip async. [web/src/components/preferences/preference-strip.tsx]
+
+- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+  summary: Radix `role="menu"` now contains non-menuitem radiogroups (wrapped in `role="none"`); screen-reader menu navigation may skip them. Popover fallback not evaluated.
+  evidence: Design-level; revisit with 8.11/8.12. [web/src/components/dashboard/profile-menu.tsx]
+
+- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+  summary: `PreferenceRow` uses `whitespace-nowrap` on label and sub-label with no truncation/wrap fallback; will overflow in the Settings card below 660px.
+  evidence: Deferred to Story 8.12. [web/src/components/preferences/preference-row.tsx]
+
+- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+  summary: Spinner ignores `prefers-reduced-motion`; nothing asserts `index.html`'s inline theme script (key, colours) stays in sync with `color-scheme.ts`.
+  evidence: Low. [web/src/components/preferences/preference-strip.tsx, web/index.html]

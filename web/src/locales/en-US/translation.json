@@ -294,12 +294,9 @@
     "appearance": {
       "label": "Appearance",
       "scope": "This device",
-      "system": "System",
       "light": "Light",
       "dark": "Dark",
-      "systemCurrently": "System — currently {{value}}",
-      "resolvedLight": "Light",
-      "resolvedDark": "Dark"
+      "systemCurrently": "System — currently {{value}}"
     }
   },
   "trendHistory": {

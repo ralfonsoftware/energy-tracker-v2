@@ -843,11 +843,12 @@ test('the Profile menu theme toggle overrides the OS, survives reload with no fl
   await expect(page.getByRole('radio', { name: 'Dark', exact: true })).toBeChecked()
   await expect(page.getByRole('menu')).toBeVisible()
 
-  // Reload on the light OS: the stored choice wins, applied before React mounts (no flash).
-  await page.reload({ waitUntil: 'commit' })
-  await page.waitForFunction(() => document.readyState !== 'loading')
-  expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true)
-  expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]')?.getAttribute('content'))).toBe(DARK)
+  // Reload on the light OS: the stored choice still wins once the app is back up (the no-flash proof
+  // — inline script alone, app bundle blocked — is the dedicated test below).
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
+  await expect(html).toHaveClass(/dark/)
+  await expect(themeColor).toHaveAttribute('content', DARK)
 
   // Light chosen while the OS is dark: the theme-color meta follows the effective (light) theme.
   await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
@@ -864,3 +865,24 @@ test('the Profile menu theme toggle overrides the OS, survives reload with no fl
   await expect(html).not.toHaveClass(/dark/)
   await expect(themeColor).toHaveAttribute('content', LIGHT)
 })
+
+// Story 8.10 review: proves the inline <head> script alone (app bundle blocked, so initColorScheme()
+// never runs) applies the stored choice before first paint — including Light stored on a dark OS.
+for (const { stored, os, dark, color } of [
+  { stored: 'dark', os: 'light', dark: true, color: '#12201A' },
+  { stored: 'light', os: 'dark', dark: false, color: '#F3F8ED' },
+  { stored: null, os: 'dark', dark: true, color: '#12201A' },
+] as const) {
+  test(`the inline script applies stored=${stored ?? 'nothing'} on an OS-${os} device without the app bundle`, async ({
+    page,
+  }) => {
+    await page.route('**/assets/**/*.js', (route) => route.abort())
+    await page.addInitScript((value) => {
+      if (value) window.localStorage.setItem('energy-tracker-theme', value)
+    }, stored)
+    await page.emulateMedia({ colorScheme: os })
+    await page.goto('/')
+    expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(dark)
+    expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]')?.getAttribute('content'))).toBe(color)
+  })
+}

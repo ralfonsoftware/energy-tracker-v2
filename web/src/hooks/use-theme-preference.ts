@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import {
-  getResolvedTheme,
+  getSystemTheme,
   getThemePreference,
   setThemePreference,
   subscribeTheme,
@@ -10,13 +10,14 @@ import {
 
 interface ThemePreferenceState {
   preference: ThemePreference
-  resolved: ResolvedTheme
+  // What System resolves to now (the OS scheme) — not the applied theme when Light/Dark is pinned.
+  system: ResolvedTheme
   setPreference: (preference: ThemePreference) => void
 }
 
 // Two separate snapshots (both primitive strings) keep useSyncExternalStore's referential check stable.
 export function useThemePreference(): ThemePreferenceState {
   const preference = useSyncExternalStore(subscribeTheme, getThemePreference, () => 'system' as const)
-  const resolved = useSyncExternalStore(subscribeTheme, getResolvedTheme, () => 'light' as const)
-  return { preference, resolved, setPreference: setThemePreference }
+  const system = useSyncExternalStore(subscribeTheme, getSystemTheme, () => 'light' as const)
+  return { preference, system, setPreference: setThemePreference }
 }

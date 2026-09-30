@@ -9,10 +9,10 @@ import { PreferenceStrip } from './preference-strip'
 // Story 8.10 (FR-35, UX-DR32): theme override, stored per device by lib/color-scheme.ts.
 export function AppearanceRow() {
   const { t } = useTranslation()
-  const { preference, resolved, setPreference } = useThemePreference()
+  const { preference, system, setPreference } = useThemePreference()
   const labelId = useId()
 
-  const resolvedLabel = t(resolved === 'dark' ? 'preferences.appearance.resolvedDark' : 'preferences.appearance.resolvedLight')
+  const resolvedLabel = t(system === 'dark' ? 'preferences.appearance.dark' : 'preferences.appearance.light')
 
   return (
     <PreferenceRow

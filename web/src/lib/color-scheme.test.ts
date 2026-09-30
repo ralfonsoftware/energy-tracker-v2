@@ -15,10 +15,15 @@ function mockMatchMedia(matches: boolean) {
   const query = {
     matches,
     addEventListener: (_: string, cb: () => void) => listeners.push(cb),
+    removeEventListener: (_: string, cb: () => void) => {
+      const i = listeners.indexOf(cb)
+      if (i !== -1) listeners.splice(i, 1)
+    },
   }
   vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(query))
   return {
     query,
+    listenerCount: () => listeners.length,
     fireChange: (nextMatches: boolean) => {
       query.matches = nextMatches
       listeners.forEach((cb) => cb())
@@ -39,6 +44,25 @@ afterEach(() => {
 })
 
 describe('initColorScheme', () => {
+  it('does not stack OS change listeners when called more than once', () => {
+    const { listenerCount } = mockMatchMedia(false)
+    initColorScheme()
+    initColorScheme()
+    initColorScheme()
+    expect(listenerCount()).toBe(1)
+  })
+
+  it('falls back to addListener on a legacy MediaQueryList (Safari < 14) without throwing', () => {
+    const handlers: Array<() => void> = []
+    const query = { matches: false, addListener: (cb: () => void) => handlers.push(cb) }
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(query))
+    expect(() => initColorScheme()).not.toThrow()
+    expect(handlers).toHaveLength(1)
+    query.matches = true
+    handlers.forEach((cb) => cb())
+    expect(isDark()).toBe(true)
+  })
+
   it('applies the dark class when the OS prefers dark on load', () => {
     mockMatchMedia(true)
     initColorScheme()

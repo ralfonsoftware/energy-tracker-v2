@@ -59,6 +59,18 @@ describe('AppearanceRow', () => {
     expect(screen.getByRole('radio', { name: 'System — currently Dark' })).toBeInTheDocument()
   })
 
+  it("System's name reports the OS scheme, not the pinned theme, and still tracks OS changes", () => {
+    const { fireChange } = mockMatchMedia(false)
+    initColorScheme()
+    setThemePreference('dark')
+    render(<AppearanceRow />)
+    expect(screen.getByRole('radio', { name: 'System — currently Light' })).toBeInTheDocument()
+
+    act(() => fireChange(true))
+    expect(screen.getByRole('radio', { name: 'System — currently Dark' })).toBeInTheDocument()
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+  })
+
   it('selecting Dark/Light applies immediately and updates the preference — with no network call', async () => {
     const user = userEvent.setup()
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })

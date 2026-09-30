@@ -175,6 +175,15 @@ auth, ingress, or a real rendered flow you want to see with your own eyes —
 hold a dedicated Auth0 test-user account, separate from any real personal
 account, for driving a real OIDC login through Claude-in-Chrome (or manually).
 
+**Approved for live verification.** The project owner has approved signing in
+with these `OIDC_TEST_USER_*` values for live verification during story
+reviews. Note that Claude-in-Chrome sessions do not type passwords into the
+external Auth0 login page themselves — for a review session, either sign in
+yourself in the automation browser first (then hand the tab over), or keep an
+already-authenticated browser session; the review can then drive everything
+after login. Logging off during a check ends that session and needs a manual
+sign-in again.
+
 **Log in with the username, not the email.** This tenant's connection
 identifies users by username (`OIDC_TEST_USER_NAME`) — the Auth0 hosted
 login page's first field is labeled "Benutzername"/"Username" and only

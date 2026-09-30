@@ -4,7 +4,7 @@ baseline_commit: 6fba2b1
 
 # Story 8.10: Theme Toggle in the Profile Menu (System / Light / Dark)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -17,7 +17,7 @@ so that I can override my device's color scheme when I prefer the other theme, w
 ## Acceptance Criteria
 
 1. **Given** the Profile menu is open (≥660px, Story 8.1), **when** rendered, **then** it shows, between the account email and the Profile / Log off rows, an "Appearance" row carrying the new Preference icon strip (UX-DR32) with exactly three segments — System, Light, Dark (monitor / sun / moon icons) — plus the scope sub-label "This device", with the dropdown widened to 296px; the active segment shows the fill, 1px accent border, and `aria-checked="true"` (never color alone), using the existing nav-chrome active tokens and the canonical focus-ring pair.
-2. **Given** the strip has keyboard focus, **when** the member presses ←/→ (or ↑/↓) or Home/End, **then** focus moves **and selects** per `radiogroup` semantics, Tab enters the group on the checked segment, every segment has an accessible name (the System name includes the resolved value, e.g. "System — currently Dark"), and Escape closes the menu returning focus to the avatar button.
+2. **Given** the strip has keyboard focus, **when** the member presses ←/→ (or ↑/↓) or Home/End, **then** focus moves **and selects** per `radiogroup` semantics, Tab enters the group on the checked segment (inside the Profile menu, Radix traps Tab, so Tab/Shift+Tab cycle between each strip's checked segment and the first enabled menu item; other items are reached with arrow keys), every segment has an accessible name (the System name includes the resolved value, e.g. "System — currently Dark"), and Escape closes the menu returning focus to the avatar button.
 3. **Given** the member selects Light or Dark, **when** the selection is made, **then** the theme applies immediately on every screen without reload or network request, the menu stays open, and the choice is stored per device in `localStorage` — not on the Household, not per member (FR-35).
 4. **Given** System is selected (the default when nothing is stored), **when** the OS color-scheme preference changes, **then** the app follows it live (today's `initColorScheme` behavior is preserved); with Light or Dark selected, OS changes are ignored.
 5. **Given** a stored choice exists, **when** the page loads or reloads (including after logoff), **then** the stored theme is applied before first paint — the inline script in `web/index.html` reads it, so there is no flash of the wrong theme — and the `<meta name="theme-color">` values follow the effective theme rather than only the OS media query.
@@ -153,7 +153,7 @@ claude-sonnet-5-5
 
 - Tasks 1–3, 5–7 implemented and green: web vitest 480 pass, `tsc -b` clean, oxlint no new warnings (pre-existing only), `dotnet test` Architecture 6/6 (guard proven narrow with a temporary probe file, removed), Playwright 7/7.
 - Guard allowlist: `lib/color-scheme.ts` + `.test.ts`, plus an existence assertion. Because of that, `appearance-row.test.tsx` asserts via `getThemePreference()` instead of reading storage; storage writes are covered in `color-scheme.test.ts`.
-- Radix: arrow/Home/End handled in strip with stopPropagation; menu stays open on segment click; Escape returns focus to trigger — all verified in jsdom. Tab behavior inside the real menu and ≥44px hit area (Task 4 sub-item) still need live Chrome verification.
+- Radix: arrow/Home/End handled in strip with stopPropagation; menu stays open on segment click; Escape returns focus to trigger — all verified in jsdom.
 - i18n: new top-level `preferences.appearance.*` block in both catalogs; key sets diffed manually (identical); no parity test exists.
 - **Live Chrome verification (Task 8), real household, de-DE, ~1511px, Light + Dark:** row renders per mockup (Darstellung / Dieses Gerät, 296px menu); Dark applies immediately with menu open, `theme-color` meta follows (#12201A / #F3F8ED), single meta; stored `dark` survives reload (no flash, class present on load); all four top-nav screens stay dark; Escape closes the menu and focus returns to "Konto-Menü"; ←/→/Home/End move+select.
 - **Live findings fixed:** (1) Keyboard users could not reach the strip — Radix swallows Tab and the strip isn't a menu item (menu opens focused on "Abmelden"). Added `cycleTabStops` on the menu content: Tab/Shift+Tab cycle strip checked segment ↔ first enabled item; unit test added. (2) Hit area measured 42px (pseudo inset is inside the 1px border); changed to `-inset-y-[3px]` → 44px, verified live.
@@ -185,3 +185,28 @@ claude-sonnet-5-5
 
 - 2026-09-30: Story 8.10 created — ready-for-dev.
 - 2026-09-30: Implemented theme preference (lib, inline script, strip/row components, Profile menu, i18n, guard allowlist, tests). Live Chrome verification done; fixed Tab reachability of the strip and 44px hit area. Status → review.
+
+### Review Findings
+
+- [x] [Review][Decision] (resolved: live checks run in the review session, see below) Task 8 ticked `[x]` with only partial live verification — Completion Notes admit log-off/back-in persistence (AC #5) was not exercised live, English copy was only unit-tested (live check was de-DE), and "Light chosen + OS Dark → light theme-color" was only covered by e2e. Task 8 says not to tick on unit/e2e proof alone, and the live gate blocks review→done. Options: run the missing live Chrome checks, or untick Task 8 and record accepted deviations.
+- [x] [Review][Decision] (resolved 2026-09-30: accepted and documented — AC #2 reworded; matches Radix's arrows-for-items / Tab-for-widgets convention and scales to two strips in 8.11) AC #2 deviation: Tab cycles between the strip's checked segment and the first enabled menu item (`cycleTabStops`) instead of "Tab enters the group on the checked segment" in DOM order; other menu items are reachable only via arrows. Rationale is in Completion Notes but not flagged as a deviation. Accept + document (and revisit for two strips in 8.11), or change the behaviour.
+- [x] [Review][Patch] No-flash e2e assertion is weak [web/e2e/app-shell.spec.ts] — `reload({waitUntil:'commit'})` + `readyState !== 'loading'` can pass after `initColorScheme()` ran, so it does not prove the inline script applied the class. Also never covers a fresh load with Light stored + OS dark. Use `addInitScript` + DOMContentLoaded capture (or block `/src/main.tsx`), and reload with dark emulation before asserting.
+- [x] [Review][Patch] Typeahead keys inside the strip bubble to Radix and steal focus to a menu item [web/src/components/preferences/preference-strip.tsx:51]
+- [x] [Review][Patch] Strip key handler hijacks modified keys (Alt+Arrow = browser back, Ctrl/Cmd+Home/End) — return early on alt/ctrl/meta [web/src/components/preferences/preference-strip.tsx:51]
+- [x] [Review][Patch] `initColorScheme` adds the matchMedia `change` listener on every call and throws on Safari <14 (no `addEventListener` on MediaQueryList) before `createRoot` — attach once, fall back to `addListener` [web/src/lib/color-scheme.ts:90]
+- [x] [Review][Patch] Theme-guard allowlist matches by `"/" + suffix`, so any `*/lib/color-scheme.ts` under `web/src` is exempt — compare the path relative to `web/src` exactly [tests/EnergyTracker.Architecture.Tests/FrontendDoesNotStoreAuthTokensTests.cs:57]
+- [x] [Review][Patch] Unused i18n key `preferences.appearance.system` (row uses `systemCurrently`); `resolvedLight`/`resolvedDark` duplicate `light`/`dark` [web/src/locales/*/translation.json]
+- [x] [Review][Patch] Stale Completion Note ("Tab behavior … still need live Chrome verification") contradicts later notes that say it was verified and fixed [8-10-theme-toggle-profile-menu.md]
+- [x] [Review][Patch] Found live during review: System segment read "System — currently Dark" on a light OS when Dark was pinned (it reported the applied theme, not the OS scheme). Now uses `getSystemTheme()`, and OS changes notify subscribers even while Light/Dark is pinned; test added [web/src/lib/color-scheme.ts, web/src/hooks/use-theme-preference.ts]
+- [x] [Review][Defer] `PreferenceStrip` ignores `pending` for input (second click/arrow fires another `onChange` mid-save), has no "saving" announcement, and derives the arrow index from `value` rather than the focused segment — deferred, matters only once 8.11 makes the strip async
+- [x] [Review][Defer] Radix `role="menu"` containing non-menuitem radiogroups (a11y semantics; Popover fallback never evaluated) — deferred, design-level decision to revisit with 8.11/8.12
+- [x] [Review][Defer] `whitespace-nowrap` label/sub-label in `PreferenceRow` will overflow in the narrow Settings card — deferred to 8.12
+- [x] [Review][Defer] `animate-spin` spinner ignores `prefers-reduced-motion`; no drift test between `index.html` inline script and `color-scheme.ts` — deferred, low
+
+#### Review session: patches applied + live verification (2026-09-30)
+
+- Patches: e2e no-flash proof replaced (inline script alone, app bundle blocked; stored dark/OS light, stored light/OS dark, nothing/OS dark) plus reload persistence assertion; typeahead keys and alt/ctrl/meta keys no longer captured by the strip; `initColorScheme` no longer stacks OS listeners and falls back to `addListener` (Safari < 14); guard allowlist compares the exact path relative to `web/src`; unused/duplicate i18n keys removed; stale Completion Note removed. New unit tests cover each. Web vitest 486 pass, `tsc -b` clean, Architecture 6/6, Playwright 10/10.
+- Live Chrome (local stack via `scripts/run-api.sh` + Vite on https://localhost:5173, existing signed-in test-user session): de-DE — Dunkel applies with the menu open, `theme-color` #12201A, storage `dark`, typed "a" keeps focus on the strip (no jump to "Abmelden"), Alt+← ignored, Tab/Shift+Tab cycle strip ↔ first item, hit area 44px. en-US (switched via `i18nextLng`) — copy "Appearance / This device / System — currently Light / Light / Dark / Profile / Log off"; Dark persists across reload; Light applies, meta #F3F8ED, persists across reload; **log off → theme key still `light` afterwards (AC #5)**. Browser state restored (de-DE, System). Signing back in was not performed (Auth0 password entry is left to the user).
+- Still e2e-only: "Light chosen while the OS is Dark" (the OS scheme cannot be flipped from the browser session).
+- Decision 2 resolved by Ralf: accept the Tab cycle and document it (AC #2 reworded). Light-chosen-with-OS-dark was verified live by Ralf earlier.
+- 2026-09-30: Code review complete — patches applied, live Chrome verification done, System-label bug fixed, both decisions resolved. Status → done.

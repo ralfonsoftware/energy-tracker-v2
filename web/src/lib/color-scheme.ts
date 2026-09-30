@@ -21,6 +21,7 @@ const DARK_QUERY = '(prefers-color-scheme: dark)'
 let current: ThemePreference | null = null
 const subscribers = new Set<() => void>()
 let listenersAttached = false
+let osQuery: MediaQueryList | null = null
 
 function parse(value: string | null): ThemePreference {
   return value === 'light' || value === 'dark' ? value : 'system'
@@ -45,9 +46,14 @@ export function getThemePreference(): ThemePreference {
   return current
 }
 
+// What System would resolve to right now, regardless of the current preference.
+export function getSystemTheme(): ResolvedTheme {
+  return osPrefersDark() ? 'dark' : 'light'
+}
+
 export function getResolvedTheme(): ResolvedTheme {
   const preference = getThemePreference()
-  return preference === 'system' ? (osPrefersDark() ? 'dark' : 'light') : preference
+  return preference === 'system' ? getSystemTheme() : preference
 }
 
 function syncThemeColorMeta(resolved: ResolvedTheme): void {
@@ -83,17 +89,45 @@ export function setThemePreference(preference: ThemePreference): void {
   apply()
 }
 
+// Preference is read at event time: OS changes only matter while it is 'system'.
+function onOsChange(): void {
+  if (getThemePreference() === 'system') {
+    apply()
+  } else {
+    // Theme itself is pinned, but subscribers (the System segment's "currently X") still track the OS.
+    subscribers.forEach((cb) => cb())
+  }
+}
+
+// Safari < 14 exposes only the deprecated addListener/removeListener on MediaQueryList.
+function watchOsQuery(query: MediaQueryList): void {
+  if (typeof query.addEventListener === 'function') {
+    query.addEventListener('change', onOsChange)
+  } else {
+    query.addListener?.(onOsChange)
+  }
+}
+
+function unwatchOsQuery(query: MediaQueryList): void {
+  if (typeof query.removeEventListener === 'function') {
+    query.removeEventListener('change', onOsChange)
+  } else {
+    query.removeListener?.(onOsChange)
+  }
+}
+
 export function initColorScheme(): void {
   current = readStored()
   apply()
 
+  // Re-init (HMR, tests) must not stack OS listeners.
+  if (osQuery) {
+    unwatchOsQuery(osQuery)
+    osQuery = null
+  }
   if (typeof window.matchMedia === 'function') {
-    // Preference is read at event time: OS changes only matter while it is 'system'.
-    window.matchMedia(DARK_QUERY).addEventListener('change', () => {
-      if (getThemePreference() === 'system') {
-        apply()
-      }
-    })
+    osQuery = window.matchMedia(DARK_QUERY)
+    watchOsQuery(osQuery)
   }
 
   if (!listenersAttached) {

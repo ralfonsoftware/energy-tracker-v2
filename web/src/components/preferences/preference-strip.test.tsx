@@ -108,4 +108,28 @@ describe('PreferenceStrip', () => {
     expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-busy', 'true')
     expect(screen.getAllByTestId('preference-strip-spinner')).toHaveLength(1)
   })
+
+  it('ignores arrow keys combined with alt/ctrl/meta so browser shortcuts keep working', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<Harness onChange={onChange} />)
+    screen.getByRole('radio', { name: 'Alpha' }).focus()
+    await user.keyboard('{Alt>}{ArrowRight}{/Alt}')
+    await user.keyboard('{Control>}{End}{/Control}')
+    await user.keyboard('{Meta>}{ArrowLeft}{/Meta}')
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('stops printable keys from bubbling to a parent menu (typeahead)', async () => {
+    const user = userEvent.setup()
+    const parentKeyDown = vi.fn()
+    render(
+      <div onKeyDown={parentKeyDown}>
+        <Harness />
+      </div>,
+    )
+    screen.getByRole('radio', { name: 'Alpha' }).focus()
+    await user.keyboard('p')
+    expect(parentKeyDown).not.toHaveBeenCalled()
+  })
 })
