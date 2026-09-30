@@ -94,6 +94,43 @@ public abstract class HouseholdRepositoryTestsBase
         await Should.ThrowAsync<HouseholdConcurrencyConflictException>(() =>
             repository.UpdateAiPlausibilityEnabledAsync(householdId, false, 0, TestContext.Current.CancellationToken));
     }
+
+    // Story 8.11: Locale is last-write-wins — no expectedVersion, no Version bump.
+    [Fact]
+    public async Task UpdateLocaleAsync_updates_only_Locale_and_leaves_Version_and_baseline_untouched()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(TestContext.Current.CancellationToken);
+        var household = NewHousehold(householdId);
+        household.YearlyBaselineKwh = 3500m;
+        dbContext.Households.Add(household);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new HouseholdRepository(dbContext);
+
+        var updated = await repository.UpdateLocaleAsync(householdId, "de-DE", TestContext.Current.CancellationToken);
+
+        updated.Locale.ShouldBe("de-DE");
+        await using var freshDbContext = OpenFreshDbContext();
+        var reloaded = await freshDbContext.Households.SingleAsync(h => h.Id == householdId, TestContext.Current.CancellationToken);
+        reloaded.Locale.ShouldBe("de-DE");
+        reloaded.Version.ShouldBe(0);
+        reloaded.YearlyBaselineKwh.ShouldBe(3500m);
+    }
+
+    [Fact]
+    public async Task UpdateLocaleAsync_is_idempotent_for_an_unchanged_value()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(TestContext.Current.CancellationToken);
+        dbContext.Households.Add(NewHousehold(householdId));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var repository = new HouseholdRepository(dbContext);
+
+        var updated = await repository.UpdateLocaleAsync(householdId, "en-US", TestContext.Current.CancellationToken);
+
+        updated.Locale.ShouldBe("en-US");
+        updated.Version.ShouldBe(0);
+    }
 }
 
 public class PostgresHouseholdRepositoryTests : HouseholdRepositoryTestsBase, IAsyncLifetime

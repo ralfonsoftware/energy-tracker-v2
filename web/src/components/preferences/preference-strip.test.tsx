@@ -132,4 +132,37 @@ describe('PreferenceStrip', () => {
     await user.keyboard('p')
     expect(parentKeyDown).not.toHaveBeenCalled()
   })
+
+  it('ignores clicks and arrow keys while a save is pending', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <PreferenceStrip options={options} value="b" pendingValue="b" ariaLabel="Letters" onChange={onChange} />,
+    )
+    await user.click(screen.getByRole('radio', { name: 'Alpha' }))
+    screen.getByRole('radio', { name: 'Beta' }).focus()
+    await user.keyboard('{ArrowRight}')
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('derives the arrow target from the focused segment, not from value', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<PreferenceStrip options={options} value="a" ariaLabel="Letters" onChange={onChange} />)
+    screen.getByRole('radio', { name: 'Beta' }).focus()
+    await user.keyboard('{ArrowRight}')
+    expect(onChange).toHaveBeenCalledWith('c')
+  })
+
+  it('keeps the first segment reachable when no segment is checked', () => {
+    render(<PreferenceStrip options={options} value="zzz" ariaLabel="Letters" onChange={() => {}} />)
+    expect(screen.getAllByRole('radio').map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1', '-1'])
+  })
+
+  it('renders code segments in bold and gates the spinner on reduced motion', () => {
+    render(<PreferenceStrip options={options} value="a" pendingValue="b" ariaLabel="Letters" onChange={() => {}} />)
+    expect(screen.getByRole('radio', { name: 'Alpha' })).toHaveClass('font-bold')
+    expect(screen.getByTestId('preference-strip-spinner')).toHaveClass('motion-safe:animate-spin')
+    expect(screen.getByTestId('preference-strip-spinner')).not.toHaveClass('animate-spin')
+  })
 })

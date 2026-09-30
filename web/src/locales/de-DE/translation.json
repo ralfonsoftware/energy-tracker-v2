@@ -297,6 +297,17 @@
       "light": "Hell",
       "dark": "Dunkel",
       "systemCurrently": "System — aktuell {{value}}"
+    },
+    "language": {
+      "label": "Sprache",
+      "scope": "Ganzer Haushalt",
+      "offline": "Benötigt eine Verbindung",
+      "option": {
+        "de": "Deutsch",
+        "en": "English"
+      },
+      "error": "Die Sprache konnte nicht geändert werden. Dein Haushalt nutzt weiterhin {{language}} — bitte erneut versuchen.",
+      "announce": "Sprache: {{language}}"
     }
   },
   "trendHistory": {

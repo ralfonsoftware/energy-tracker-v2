@@ -302,7 +302,7 @@
 ## Deferred from: code review of story-5-4-tariff-check-reminder (2026-09-17)
 
 - `refreshTariffCheck`'s catch-all collapses network errors and "no Tariff configured" into the same `null` state, indistinguishable in the UI — deferred, pre-existing: mirrors `refreshStatus`'s identical existing pattern two functions above in the same file, not introduced by this story. Raised by adversarial review (Blind Hunter). [web/src/App.tsx:90-97]
-- `TariffCheckCard`'s `locale` prop drives only `Intl.DateTimeFormat`, not the i18next-resolved copy itself, so a household whose configured locale differs from the app's active UI language could see the date and surrounding sentence in two different languages — deferred, pre-existing: an existing app-wide pattern (e.g. `status-card.tsx`), not introduced by this story. Raised by adversarial review (Blind Hunter). [web/src/components/tariff/tariff-check-card.tsx:21-24]
+- `TariffCheckCard`'s `locale` prop drives only `Intl.DateTimeFormat`, not the i18next-resolved copy itself, so a household whose configured locale differs from the app's active UI language could see the date and surrounding sentence in two different languages — deferred, pre-existing: an existing app-wide pattern (e.g. `status-card.tsx`), not introduced by this story. Raised by adversarial review (Blind Hunter). **Resolved by Story 8.11** (once a Household is ready, `Household.Locale` drives both the i18next language and the `locale` prop). [web/src/components/tariff/tariff-check-card.tsx:21-24]
 - The new `GET /api/tariff-check` endpoint carries no `.Produces<T>()`/OpenAPI metadata — deferred, pre-existing: matches the existing pattern for every other route in the same file. Raised by adversarial review (Blind Hunter). [src/EnergyTracker.Api/Endpoints/TariffEndpoints.cs]
 
 ## Deferred from: code review of story-1.12 (2026-09-17)
@@ -494,7 +494,7 @@
 
 - source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: `PreferenceStrip` does not guard input while `pendingValue` is set (double clicks/arrows fire concurrent `onChange`), announces no "saving" state, and computes the arrow index from `value` rather than the focused segment.
-  evidence: Only matters once Story 8.11 makes the strip async. [web/src/components/preferences/preference-strip.tsx]
+  evidence: Only matters once Story 8.11 makes the strip async. **Resolved by Story 8.11** (input ignored while pending, focused-index arrows, no-checked fallback; the saving state is announced via the Profile menu's live region). [web/src/components/preferences/preference-strip.tsx]
 
 - source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Radix `role="menu"` now contains non-menuitem radiogroups (wrapped in `role="none"`); screen-reader menu navigation may skip them. Popover fallback not evaluated.
@@ -506,4 +506,4 @@
 
 - source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Spinner ignores `prefers-reduced-motion`; nothing asserts `index.html`'s inline theme script (key, colours) stays in sync with `color-scheme.ts`.
-  evidence: Low. [web/src/components/preferences/preference-strip.tsx, web/index.html]
+  evidence: Low. **Spinner half resolved by Story 8.11** (`motion-safe:animate-spin`); the inline-script drift test is still open. [web/src/components/preferences/preference-strip.tsx, web/index.html]

@@ -26,4 +26,12 @@ void i18next
     },
   })
 
+// Keep <html lang> in step with the active language so screen readers pronounce the UI (and the
+// Story 8.11 live-region announcement) in the right voice.
+const syncDocumentLang = (lng: string | undefined) => {
+  if (lng) document.documentElement.lang = lng
+}
+i18next.on('languageChanged', syncDocumentLang)
+syncDocumentLang(i18next.language)
+
 export default i18next

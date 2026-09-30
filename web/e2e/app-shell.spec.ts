@@ -798,6 +798,73 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   for (let i = 1; i < narrowRooms.length; i++) expect(narrowRooms[i].y).toBeGreaterThan(narrowRooms[i - 1].y)
 })
 
+// Story 8.11/Task 11: the live language switch (UI copy + <html lang> + menu staying open) and the
+// failure/offline states are browser behavior jsdom can't fully prove.
+async function openProfileMenuInDe(page: import('@playwright/test').Page, putStatus: number) {
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId: '11111111-1111-1111-1111-111111111111',
+        locale: 'de-DE',
+        currency: 'EUR',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+  await page.route('**/api/households/*/locale', (route) =>
+    route.fulfill({ status: putStatus, contentType: 'application/json', body: '{}' }),
+  )
+  await page.setViewportSize({ width: 1000, height: 800 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Konto-Menü' }).click()
+}
+
+test('the Profile menu language toggle switches UI language and <html lang> live, keeping the menu open', async ({ page }) => {
+  await openProfileMenuInDe(page, 200)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE')
+  await expect(page.getByRole('radiogroup', { name: 'Sprache' })).toBeVisible()
+
+  await page.getByRole('radio', { name: 'English', exact: true }).click()
+
+  await expect(page.getByRole('radiogroup', { name: 'Language' })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'English', exact: true })).toBeChecked()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-US')
+  await expect(page.getByRole('menu')).toBeVisible()
+  await expect(page.getByTestId('profile-menu-live-region')).toHaveText('Language: English')
+})
+
+test('a failed language save reverts the strip, shows the inline error and leaves the language unchanged', async ({ page }) => {
+  await openProfileMenuInDe(page, 500)
+
+  await page.getByRole('radio', { name: 'English', exact: true }).click()
+
+  await expect(page.getByRole('alert')).toContainText('Die Sprache konnte nicht geändert werden')
+  await expect(page.getByRole('radio', { name: 'Deutsch', exact: true })).toBeChecked()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE')
+  await expect(page.getByRole('radiogroup', { name: 'Sprache' })).toBeVisible()
+})
+
+test('offline disables the Language strip with "Benötigt eine Verbindung" while the Theme strip still works', async ({ page }) => {
+  await openProfileMenuInDe(page, 200)
+
+  await page.context().setOffline(true)
+
+  await expect(page.getByText('Benötigt eine Verbindung')).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'English', exact: true })).toBeDisabled()
+  await page.getByRole('radio', { name: 'Dunkel', exact: true }).click()
+  await expect(page.getByRole('radio', { name: 'Dunkel', exact: true })).toBeChecked()
+  await page.context().setOffline(false)
+})
+
 // Story 8.10/Task 7: the pre-paint inline script, live OS-follow, and <meta theme-color> are
 // browser-only behavior jsdom can't prove (AC #3-#5). Stored choice must beat the OS with no flash.
 test('the Profile menu theme toggle overrides the OS, survives reload with no flash, and System follows the OS', async ({

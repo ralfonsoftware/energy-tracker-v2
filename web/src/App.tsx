@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18next, { supportedLocales } from '@/i18n'
+import { HouseholdLocaleContext } from '@/lib/household-locale-context'
 import { HouseholdCreationForm, type CreatedHousehold } from '@/components/household-creation/household-creation-form'
 import { InviteAcceptForm } from '@/components/household-invite/invite-accept-form'
 import { SettingsPage } from '@/components/settings/settings-page'
@@ -232,6 +234,20 @@ function App() {
     }
   }, [state.status, inviteToken])
 
+  // Story 8.11 (AD-18, AC #3): once a Household is ready its Locale — not the browser detector —
+  // drives the UI language. One seam covers session load, household creation and invite join.
+  const readyLocale = state.status === 'ready' ? state.household.locale : null
+  useEffect(() => {
+    if (readyLocale !== null && (supportedLocales as readonly string[]).includes(readyLocale)) {
+      void i18next.changeLanguage(readyLocale)
+    }
+  }, [readyLocale])
+
+  const setLocale = useCallback((locale: string) => {
+    setState((prev) => (prev.status === 'ready' ? { ...prev, household: { ...prev.household, locale } } : prev))
+  }, [])
+  const localeContextValue = useMemo(() => ({ locale: readyLocale, setLocale }), [readyLocale, setLocale])
+
   if (state.status === 'loading' || state.status === 'unauthenticated') {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-4">
@@ -284,89 +300,93 @@ function App() {
     )
   }
 
-  if (view === 'settings') {
+  const renderReadyView = () => {
+    if (view === 'settings') {
+      return (
+        <SettingsPage
+          householdId={state.household.id}
+          supportsFederatedLogout={supportsFederatedLogout}
+          email={email}
+          onBack={() => setView('dashboard')}
+          onTrendHistoryClick={() => setView('trendHistory')}
+          onTariffRadarClick={() => setView('tariffRadar')}
+        />
+      )
+    }
+
+    if (view === 'trendHistory') {
+      return (
+        <TrendHistoryPage
+          locale={state.household.locale}
+          householdId={state.household.id}
+          supportsFederatedLogout={supportsFederatedLogout}
+          email={email}
+          onBack={() => setView('dashboard')}
+          onSettingsClick={() => setView('settings')}
+          onTariffRadarClick={() => setView('tariffRadar')}
+          onSmartPlugImportClick={() => {
+            setSmartPlugImportReturnView('trendHistory')
+            setView('smartPlugImport')
+          }}
+        />
+      )
+    }
+
+    if (view === 'tariffRadar') {
+      return (
+        <TariffRadarPage
+          locale={state.household.locale}
+          householdCurrency={state.household.currency}
+          householdId={state.household.id}
+          supportsFederatedLogout={supportsFederatedLogout}
+          email={email}
+          tariffCheck={tariffCheck}
+          onTariffCheckChanged={refreshTariffCheck}
+          onBack={() => setView('dashboard')}
+          onTrendHistoryClick={() => setView('trendHistory')}
+          onSettingsClick={() => setView('settings')}
+        />
+      )
+    }
+
+    if (view === 'smartPlugImport') {
+      return <SmartPlugImportPage onBack={() => setView(smartPlugImportReturnView)} />
+    }
+
     return (
-      <SettingsPage
-        householdId={state.household.id}
+      <DashboardPage
+        household={state.household}
         supportsFederatedLogout={supportsFederatedLogout}
         email={email}
-        onBack={() => setView('dashboard')}
+        status={status}
+        statusLoading={statusLoading}
+        tariffCheck={tariffCheck}
+        playStatusEntranceAnimation={playStatusEntranceAnimation}
+        logSheetOpen={logSheetOpen}
+        onLogSheetOpenChange={handleLogSheetOpenChange}
+        onReadingSaved={() => {
+          void refreshOpenRegressionPrompt()
+          void refreshStatus()
+        }}
+        logEventOpen={logEventOpen}
+        onLogEventOpenChange={handleLogEventOpenChange}
+        openRegressionPrompt={openRegressionPrompt}
+        onRegressionResolved={() => {
+          void refreshOpenRegressionPrompt()
+          void refreshStatus()
+        }}
+        onSettingsClick={() => setView('settings')}
         onTrendHistoryClick={() => setView('trendHistory')}
         onTariffRadarClick={() => setView('tariffRadar')}
-      />
-    )
-  }
-
-  if (view === 'trendHistory') {
-    return (
-      <TrendHistoryPage
-        locale={state.household.locale}
-        householdId={state.household.id}
-        supportsFederatedLogout={supportsFederatedLogout}
-        email={email}
-        onBack={() => setView('dashboard')}
-        onSettingsClick={() => setView('settings')}
-        onTariffRadarClick={() => setView('tariffRadar')}
         onSmartPlugImportClick={() => {
-          setSmartPlugImportReturnView('trendHistory')
+          setSmartPlugImportReturnView('dashboard')
           setView('smartPlugImport')
         }}
       />
     )
   }
 
-  if (view === 'tariffRadar') {
-    return (
-      <TariffRadarPage
-        locale={state.household.locale}
-        householdCurrency={state.household.currency}
-        householdId={state.household.id}
-        supportsFederatedLogout={supportsFederatedLogout}
-        email={email}
-        tariffCheck={tariffCheck}
-        onTariffCheckChanged={refreshTariffCheck}
-        onBack={() => setView('dashboard')}
-        onTrendHistoryClick={() => setView('trendHistory')}
-        onSettingsClick={() => setView('settings')}
-      />
-    )
-  }
-
-  if (view === 'smartPlugImport') {
-    return <SmartPlugImportPage onBack={() => setView(smartPlugImportReturnView)} />
-  }
-
-  return (
-    <DashboardPage
-      household={state.household}
-      supportsFederatedLogout={supportsFederatedLogout}
-      email={email}
-      status={status}
-      statusLoading={statusLoading}
-      tariffCheck={tariffCheck}
-      playStatusEntranceAnimation={playStatusEntranceAnimation}
-      logSheetOpen={logSheetOpen}
-      onLogSheetOpenChange={handleLogSheetOpenChange}
-      onReadingSaved={() => {
-        void refreshOpenRegressionPrompt()
-        void refreshStatus()
-      }}
-      logEventOpen={logEventOpen}
-      onLogEventOpenChange={handleLogEventOpenChange}
-      openRegressionPrompt={openRegressionPrompt}
-      onRegressionResolved={() => {
-        void refreshOpenRegressionPrompt()
-        void refreshStatus()
-      }}
-      onSettingsClick={() => setView('settings')}
-      onTrendHistoryClick={() => setView('trendHistory')}
-      onTariffRadarClick={() => setView('tariffRadar')}
-      onSmartPlugImportClick={() => {
-        setSmartPlugImportReturnView('dashboard')
-        setView('smartPlugImport')
-      }}
-    />
-  )
+  return <HouseholdLocaleContext.Provider value={localeContextValue}>{renderReadyView()}</HouseholdLocaleContext.Provider>
 }
 
 export default App

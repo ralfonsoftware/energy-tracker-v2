@@ -38,10 +38,14 @@ export function PreferenceStrip<T extends string>({
 }: PreferenceStripProps<T>) {
   const refs = useRef<Array<HTMLButtonElement | null>>([])
   const pending = pendingValue !== undefined
+  // No checked segment (stored value outside the option list): keep the strip reachable.
+  const hasChecked = options.some((o) => o.value === value)
 
   const select = (index: number) => {
     const next = options[index]
     if (!next) return
+    // A save is in flight: input is ignored so a second onChange can't race the first.
+    if (pending) return
     refs.current[index]?.focus()
     if (next.value !== value) {
       onChange(next.value)
@@ -52,9 +56,12 @@ export function PreferenceStrip<T extends string>({
     if (disabled) return
     // Leave browser/OS shortcuts (Alt+Arrow = back, Ctrl/Cmd+Home/End, ...) alone.
     if (event.altKey || event.ctrlKey || event.metaKey) return
+    // Index from the focused segment (value can be ahead of / behind focus during an optimistic
+    // save or after a revert), falling back to the checked one.
+    const focusedIndex = refs.current.findIndex((el) => el !== null && el === document.activeElement)
     const currentIndex = Math.max(
       0,
-      options.findIndex((o) => o.value === value),
+      focusedIndex !== -1 ? focusedIndex : options.findIndex((o) => o.value === value),
     )
     let target: number | null = null
     switch (event.key) {
@@ -112,13 +119,14 @@ export function PreferenceStrip<T extends string>({
             aria-checked={checked}
             aria-label={option.label}
             title={option.label}
-            tabIndex={checked ? 0 : -1}
+            tabIndex={checked || (!hasChecked && index === 0) ? 0 : -1}
             disabled={disabled}
             onClick={() => {
-              if (!checked) onChange(option.value)
+              if (!checked && !pending) onChange(option.value)
             }}
             className={cn(
-              'relative flex h-10 w-11 items-center justify-center rounded-[10px] border border-transparent text-xs font-semibold outline-none',
+              'relative flex h-10 w-11 items-center justify-center rounded-[10px] border border-transparent text-xs outline-none',
+              option.code && !option.icon ? 'font-bold' : 'font-semibold',
               // Extends the 44x40 visual segment to a 44x44 hit area (inset is measured inside the 1px border, hence 3px).
               "before:absolute before:inset-x-0 before:-inset-y-[3px] before:content-['']",
               'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
@@ -129,7 +137,7 @@ export function PreferenceStrip<T extends string>({
             )}
           >
             {pendingValue === option.value ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" data-testid="preference-strip-spinner" />
+              <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden="true" data-testid="preference-strip-spinner" />
             ) : (
               (option.icon ?? option.code)
             )}

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import i18next from 'i18next'
 import App from './App'
 
 // Routes only /api/session to the given response; every other call (e.g. Story 2.3's
@@ -42,9 +43,51 @@ function mockFetchRoutes(routes: Array<{ method: string; url: string; respond: (
 }
 
 describe('App', () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals()
     window.history.pushState({}, '', '/')
+    await i18next.changeLanguage('en-US')
+  })
+
+  describe('household locale drives the UI language (Story 8.11, AC #3)', () => {
+    it('switches the active language to Household.Locale once the session is ready, overriding the detector', async () => {
+      await i18next.changeLanguage('en-US') // what the browser detector resolved
+      mockSession({ hasHousehold: true, householdId: '11111111-1111-1111-1111-111111111111', locale: 'de-DE', currency: 'EUR' })
+
+      render(<App />)
+
+      await vi.waitFor(() => expect(i18next.language).toBe('de-DE'))
+      expect(document.documentElement.lang).toBe('de-DE')
+    })
+
+    it('leaves the detector language alone while there is no Household yet', async () => {
+      const changeLanguage = vi.spyOn(i18next, 'changeLanguage')
+      mockSession({ hasHousehold: false, householdId: null, locale: null, currency: null })
+
+      render(<App />)
+
+      expect(await screen.findByRole('heading', { name: 'Set up your Household' })).toBeInTheDocument()
+      expect(changeLanguage).not.toHaveBeenCalled()
+      expect(i18next.language).toBe('en-US')
+      changeLanguage.mockRestore()
+    })
+
+    it("switches to the joined Household's language after accepting an invite", async () => {
+      const user = userEvent.setup()
+      window.history.pushState({}, '', '/join/sometoken')
+      mockFetchRoutes([
+        { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: false, householdId: null, locale: null, currency: null }) },
+        { method: 'GET', url: '/api/household-invites/sometoken', respond: () => jsonResponse({ expiresAtUtc: '2026-08-21T00:00:00Z' }) },
+        { method: 'POST', url: '/api/household-invites/sometoken/accept', respond: () => jsonResponse({ id: '11111111-1111-1111-1111-111111111111', locale: 'de-DE', currency: 'EUR' }) },
+        { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
+        { method: 'GET', url: '/api/status', respond: () => jsonResponse(null) },
+        { method: 'GET', url: '/api/tariff-check', respond: () => jsonResponse(null) },
+      ])
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Join Household' }))
+
+      await vi.waitFor(() => expect(i18next.language).toBe('de-DE'))
+    })
   })
 
   it('renders the placeholder shell once the session has a Household', async () => {

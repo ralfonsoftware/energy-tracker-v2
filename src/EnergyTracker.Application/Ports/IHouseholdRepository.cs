@@ -21,6 +21,9 @@ public interface IHouseholdRepository
     /// <summary>Updates the Yearly Baseline under AD-4 optimistic concurrency, throwing <see cref="HouseholdConcurrencyConflictException"/> on a lost race.</summary>
     Task<Household> UpdateYearlyBaselineAsync(Guid householdId, decimal yearlyBaselineKwh, int expectedVersion, CancellationToken cancellationToken);
 
+    /// <summary>Updates the Locale only — deliberately no expected version and no <c>Version</c> bump (Story 8.11 concurrency decision): last write wins and an unrelated in-flight edit is not invalidated.</summary>
+    Task<Household> UpdateLocaleAsync(Guid householdId, string locale, CancellationToken cancellationToken);
+
     /// <summary>Updates the AI Wattage Plausibility on/off toggle under AD-4 optimistic concurrency, throwing <see cref="HouseholdConcurrencyConflictException"/> on a lost race.</summary>
     Task<Household> UpdateAiPlausibilityEnabledAsync(Guid householdId, bool enabled, int expectedVersion, CancellationToken cancellationToken);
 }
