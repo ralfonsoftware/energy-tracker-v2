@@ -498,12 +498,22 @@
 
 - source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Radix `role="menu"` now contains non-menuitem radiogroups (wrapped in `role="none"`); screen-reader menu navigation may skip them. Popover fallback not evaluated.
-  evidence: Design-level; revisit with 8.11/8.12. [web/src/components/dashboard/profile-menu.tsx]
+  evidence: Design-level; revisit with 8.11/8.12. Still open after 8.12 (Profile-menu-specific; the Settings card is plain-page context with correct radiogroup semantics). [web/src/components/dashboard/profile-menu.tsx]
 
 - source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: `PreferenceRow` uses `whitespace-nowrap` on label and sub-label with no truncation/wrap fallback; will overflow in the Settings card below 660px.
-  evidence: Deferred to Story 8.12. [web/src/components/preferences/preference-row.tsx]
+  evidence: Deferred to Story 8.12. **Resolved by Story 8.12** (in-card rows drop horizontal padding via `rowClassName`; Playwright proves no wrap/overflow at 320/340px in en-US and de-DE, online and offline — no truncation needed). [web/src/components/preferences/preference-row.tsx]
 
 - source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Spinner ignores `prefers-reduced-motion`; nothing asserts `index.html`'s inline theme script (key, colours) stays in sync with `color-scheme.ts`.
   evidence: Low. **Spinner half resolved by Story 8.11** (`motion-safe:animate-spin`); the inline-script drift test is still open. [web/src/components/preferences/preference-strip.tsx, web/index.html]
+
+## Deferred from: code review of 8-12-settings-preferences-card-mobile (2026-09-30)
+
+- source_story: `_bmad-artifacts/implementation/8-12-settings-preferences-card-mobile.md`
+  summary: Crossing 660px while a Language save is in flight unmounts the Preferences card, dropping the screen-reader announcement and any error alert.
+  evidence: Low, rare. Fix would lift the live region above the `!wide` gate in `SettingsPage`. [web/src/components/preferences/preferences-card.tsx]
+
+- source_story: `_bmad-artifacts/implementation/8-12-settings-preferences-card-mobile.md`
+  summary: The 660px breakpoint is duplicated in CSS `--breakpoint-wide`, `WIDE_QUERY` in `use-wide-breakpoint.ts`, and the e2e viewport sizes, with no enforcement that they stay in sync.
+  evidence: Low, pre-existing (hook predates 8.12). [web/src/hooks/use-wide-breakpoint.ts]

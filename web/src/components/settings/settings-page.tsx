@@ -17,7 +17,9 @@ import { DataExportPanel } from '@/components/data-export/data-export-panel'
 import { DataImportPanel } from '@/components/data-import/data-import-panel'
 import { InviteMemberRow } from '@/components/household-invite/invite-member-row'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
+import { PreferencesCard } from '@/components/preferences/preferences-card'
 import { useLogoff } from '@/hooks/use-logoff'
+import { useWideBreakpoint } from '@/hooks/use-wide-breakpoint'
 import { SectionLabel } from './section-label'
 
 interface SettingsPageProps {
@@ -37,11 +39,14 @@ interface SettingsPageProps {
 // (Story 1.12, FR-33) — the one control on this page reachable from every screen in exactly one
 // further tap (AC #1), since Settings itself is one tap away via NavChrome's always-present
 // bottom tab bar — and full Data Export/Import (Story 7.1's DataExportPanel, Story 7.2's
-// DataImportPanel, UX-DR12).
+// DataImportPanel, UX-DR12), and — below 660px only — the Account group (Story 8.12, UX-DR33):
+// the Preferences card (Appearance + Language) above Log off, since the Profile menu that hosts
+// those controls at >=660px doesn't exist on phones.
 // Smart Plug Import moved OFF this page by Story 3.5 (FR-4 amendment, UX-DR20) — it's now a
 // dedicated Dashboard-launched screen, not a Settings-embedded panel.
 export function SettingsPage({ householdId, supportsFederatedLogout, email, onBack, onTrendHistoryClick, onTariffRadarClick }: SettingsPageProps) {
   const { t } = useTranslation()
+  const wide = useWideBreakpoint()
   const {
     logoffStep,
     logoffChecking,
@@ -90,10 +95,18 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
             <DataImportPanel />
           </div>
 
-          <Button variant="outline" className="wide:hidden self-start" onClick={openLogoffDialog}>
-            <LogOut aria-hidden="true" />
-            {t('settings.logoff.trigger')}
-          </Button>
+          {/* Story 8.12: Account group below 660px — Preferences card (JS-gated so it's truly not
+              rendered at >=660px, where the Profile menu owns these controls) above Log off. */}
+          <div data-testid="settings-account-group" className="flex flex-col gap-[var(--spacing-card-gap)] wide:hidden">
+            <h2 className="text-[11px] font-bold tracking-[0.6px] text-muted-foreground uppercase">
+              {t('settings.sections.account')}
+            </h2>
+            {!wide && <PreferencesCard householdId={householdId} />}
+            <Button variant="outline" className="self-start" onClick={openLogoffDialog}>
+              <LogOut aria-hidden="true" />
+              {t('settings.logoff.trigger')}
+            </Button>
+          </div>
         </div>
       </div>
 

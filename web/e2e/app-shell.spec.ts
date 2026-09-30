@@ -953,3 +953,171 @@ for (const { stored, os, dark, color } of [
     expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]')?.getAttribute('content'))).toBe(color)
   })
 }
+
+// Story 8.12: Settings' Preferences card below 660px. Geometry (no wrap/overflow, hit area) and the
+// breakpoint swap are browser-only; jsdom proves structure and order.
+async function openSettingsAt(page: import('@playwright/test').Page, width: number, locale: 'de-DE' | 'en-US', putStatus = 200) {
+  // Registered first so the specific routes below take precedence.
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId: '11111111-1111-1111-1111-111111111111',
+        locale,
+        currency: 'EUR',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+  await page.route('**/api/households/*/locale', (route) =>
+    route.fulfill({ status: putStatus, contentType: 'application/json', body: '{}' }),
+  )
+  await page.setViewportSize({ width, height: 800 })
+  await page.goto('/')
+  await page.getByRole('button', { name: locale === 'de-DE' ? 'Einstellungen' : 'Settings' }).first().click()
+}
+
+test('the Preferences card sits under an Account label above Log off below 660px and is not in the DOM at 660px', async ({ page }) => {
+  await openSettingsAt(page, 500, 'en-US')
+  const card = page.getByTestId('preferences-card')
+  const heading = page.getByRole('heading', { name: 'Account', exact: true })
+  const logoff = page.getByRole('button', { name: 'Log off', exact: true })
+  await expect(heading).toBeVisible()
+  await expect(card).toBeVisible()
+  const [h, c, l] = await Promise.all([heading.boundingBox(), card.boundingBox(), logoff.boundingBox()])
+  expect(h!.y).toBeLessThan(c!.y)
+  expect(c!.y + c!.height).toBeLessThanOrEqual(l!.y)
+
+  await page.setViewportSize({ width: 659, height: 800 })
+  await expect(card).toBeVisible()
+
+  await page.setViewportSize({ width: 660, height: 800 })
+  await expect(page.getByTestId('preferences-card')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible()
+})
+
+for (const width of [320, 340]) {
+  for (const locale of ['en-US', 'de-DE'] as const) {
+    for (const offline of [false, true]) {
+      test(`the Preferences card fits without wrap or overflow at ${width}px in ${locale}${offline ? ' offline' : ''}`, async ({ page }) => {
+        await openSettingsAt(page, width, locale)
+        const card = page.getByTestId('preferences-card')
+        await expect(card).toBeVisible()
+        try {
+          if (offline) {
+            await page.context().setOffline(true)
+            await expect(page.getByText(locale === 'de-DE' ? 'Benötigt eine Verbindung' : 'Needs a connection')).toBeVisible()
+          }
+
+          const metrics = await card.evaluate((el) => {
+            // Single line = height under 1.5 line boxes ("normal" line-height falls back to 1.4 x font size).
+            const lineHeightOf = (e: HTMLElement) => {
+              const cs = getComputedStyle(e)
+              return Number.isNaN(parseFloat(cs.lineHeight)) ? parseFloat(cs.fontSize) * 1.4 : parseFloat(cs.lineHeight)
+            }
+            const cardRect = el.getBoundingClientRect()
+            const rows = Array.from(el.querySelectorAll<HTMLElement>('span[id]')).map((label) => {
+              const textBlock = label.closest<HTMLElement>('.min-w-0')
+              const sub = label.parentElement?.nextElementSibling as HTMLElement | null
+              const strip = textBlock?.nextElementSibling as HTMLElement | null
+              if (!textBlock || !sub || !strip) throw new Error('PreferenceRow DOM structure changed')
+              const labelRect = label.getBoundingClientRect()
+              const subRect = sub.getBoundingClientRect()
+              const stripRect = strip.getBoundingClientRect()
+              return {
+                labelH: labelRect.height,
+                labelLine: lineHeightOf(label),
+                subH: subRect.height,
+                subLine: lineHeightOf(sub),
+                // nowrap text never wraps, so overflow shows up as text running into the strip or past the card.
+                labelClear: labelRect.right <= stripRect.left && labelRect.right <= cardRect.right,
+                subClear: subRect.right <= stripRect.left && subRect.right <= cardRect.right,
+                textBlockOverflow: textBlock.scrollWidth > textBlock.clientWidth,
+              }
+            })
+            return {
+              cardOverflow: el.scrollWidth > el.clientWidth,
+              docOverflow: document.documentElement.scrollWidth > window.innerWidth,
+              rows,
+            }
+          })
+          expect(metrics.cardOverflow).toBe(false)
+          expect(metrics.docOverflow).toBe(false)
+          expect(metrics.rows).toHaveLength(2)
+          for (const r of metrics.rows) {
+            expect(r.labelClear).toBe(true)
+            expect(r.subClear).toBe(true)
+            expect(r.textBlockOverflow).toBe(false)
+            expect(r.labelH).toBeLessThan(r.labelLine * 1.5)
+            expect(r.subH).toBeLessThan(r.subLine * 1.5)
+          }
+          const radios = await card.getByRole('radio').all()
+          expect(radios.length).toBeGreaterThan(0)
+          for (const radio of radios) {
+            const box = await radio.boundingBox()
+            expect(box).not.toBeNull()
+            expect(box!.width).toBeGreaterThanOrEqual(44)
+            // Visual segment is 44x40; the ::before inset extends the hit area to 44x44.
+            expect(box!.height).toBeGreaterThanOrEqual(40)
+            const hit = await radio.evaluate((r) => {
+              const before = getComputedStyle(r, '::before')
+              return { position: before.position, top: parseFloat(before.top), bottom: parseFloat(before.bottom) }
+            })
+            expect(hit.position).toBe('absolute')
+            expect(hit.top).toBeLessThanOrEqual(-3)
+            expect(hit.bottom).toBeLessThanOrEqual(-3)
+          }
+        } finally {
+          if (offline) await page.context().setOffline(false)
+        }
+      })
+    }
+  }
+}
+
+test('Theme and Language chosen in the card persist into the Profile menu at wide width and across reload', async ({ page }) => {
+  const puts: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'PUT' && /\/api\/households\/[^/]+\/locale$/.test(req.url())) puts.push(req.postData() ?? '')
+  })
+  await openSettingsAt(page, 500, 'de-DE')
+  await page.getByTestId('preferences-card').getByRole('radio', { name: 'Dunkel', exact: true }).click()
+  await page.getByTestId('preferences-card').getByRole('radio', { name: 'English', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-US')
+  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible()
+  expect(puts).toEqual([JSON.stringify({ locale: 'en-US' })])
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true)
+  // Theme is per device: it must be in localStorage, not just in memory.
+  expect(await page.evaluate(() => Object.values(localStorage).includes('dark'))).toBe(true)
+
+  await page.setViewportSize({ width: 1000, height: 800 })
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await expect(page.getByRole('radio', { name: 'Dark', exact: true })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'English', exact: true })).toBeChecked()
+
+  // Reload: the theme comes back from localStorage on its own (the mocked session still reports de-DE,
+  // since the Household locale is server state).
+  await page.reload()
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true)
+  // UI is de-DE again here: the mocked session (Household locale, server state) still says de-DE.
+  await page.getByRole('button', { name: /Account menu|Konto/ }).click()
+  await expect(page.getByRole('radio', { name: 'Dunkel', exact: true })).toBeChecked()
+})
+
+test('a failed language save in the card reverts the strip and shows the alert', async ({ page }) => {
+  await openSettingsAt(page, 500, 'de-DE', 500)
+  await page.getByTestId('preferences-card').getByRole('radio', { name: 'English', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Die Sprache konnte nicht geändert werden')
+  await expect(page.getByTestId('preferences-card').getByRole('radio', { name: 'Deutsch', exact: true })).toBeChecked()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE')
+})
