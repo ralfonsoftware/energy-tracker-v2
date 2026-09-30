@@ -155,7 +155,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **Security:**
 - Every route requires authentication except the OIDC callback — don't add an unauthenticated endpoint without an explicit, reviewed reason.
-- Never store an auth token client-side (`localStorage`/`sessionStorage`/JS-readable cookie) — enforced by `FrontendDoesNotStoreAuthTokensTests`. Session state lives only in the httpOnly cookie.
+- Never store an auth token client-side (`localStorage`/`sessionStorage`/JS-readable cookie) — enforced by `FrontendDoesNotStoreAuthTokensTests`. The sole, allowlisted exception is the per-device theme preference (`'light'`/`'dark'`, FR-35) in `web/src/lib/color-scheme.ts` (+ its test); `web/index.html`'s inline script isn't scanned (guard covers only `.ts`/`.tsx`). Session state lives only in the httpOnly cookie.
 - Secrets (DB connection string, OIDC client secret, AI API key) come only from env vars/Container Apps secrets/`.env` — never committed, never baked into the image.
 
 **Performance/operational gotchas:**

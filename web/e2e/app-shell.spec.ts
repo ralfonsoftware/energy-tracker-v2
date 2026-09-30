@@ -797,3 +797,70 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   expect(new Set(narrowRooms.map((b) => Math.round(b.x))).size).toBe(1)
   for (let i = 1; i < narrowRooms.length; i++) expect(narrowRooms[i].y).toBeGreaterThan(narrowRooms[i - 1].y)
 })
+
+// Story 8.10/Task 7: the pre-paint inline script, live OS-follow, and <meta theme-color> are
+// browser-only behavior jsdom can't prove (AC #3-#5). Stored choice must beat the OS with no flash.
+test('the Profile menu theme toggle overrides the OS, survives reload with no flash, and System follows the OS', async ({
+  page,
+}) => {
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId: '11111111-1111-1111-1111-111111111111',
+        locale: 'en-US',
+        currency: 'USD',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+
+  const html = page.locator('html')
+  const themeColor = page.locator('meta[name="theme-color"]')
+  const LIGHT = '#F3F8ED'
+  const DARK = '#12201A'
+
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.setViewportSize({ width: 1000, height: 800 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
+  await expect(html).not.toHaveClass(/dark/)
+  await expect(themeColor).toHaveAttribute('content', LIGHT)
+
+  // Pick Dark on a light OS: applies immediately, menu stays open.
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('radio', { name: 'Dark', exact: true }).click()
+  await expect(html).toHaveClass(/dark/)
+  await expect(themeColor).toHaveAttribute('content', DARK)
+  await expect(page.getByRole('radio', { name: 'Dark', exact: true })).toBeChecked()
+  await expect(page.getByRole('menu')).toBeVisible()
+
+  // Reload on the light OS: the stored choice wins, applied before React mounts (no flash).
+  await page.reload({ waitUntil: 'commit' })
+  await page.waitForFunction(() => document.readyState !== 'loading')
+  expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true)
+  expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]')?.getAttribute('content'))).toBe(DARK)
+
+  // Light chosen while the OS is dark: the theme-color meta follows the effective (light) theme.
+  await expect(page.getByRole('heading', { name: 'Energy Tracker' })).toBeVisible()
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('radio', { name: 'Light', exact: true }).click()
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(html).not.toHaveClass(/dark/)
+  await expect(themeColor).toHaveAttribute('content', LIGHT)
+
+  // Back to System: follows the OS live.
+  await page.getByRole('radio', { name: /^System/ }).click()
+  await expect(html).toHaveClass(/dark/)
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect(html).not.toHaveClass(/dark/)
+  await expect(themeColor).toHaveAttribute('content', LIGHT)
+})

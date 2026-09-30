@@ -4,16 +4,27 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F8ED" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12201A" />
+    <meta name="theme-color" content="#F3F8ED" />
     <title>Energy Tracker</title>
     <script>
-      // Applied synchronously, before CSS paints, to avoid a flash of the
-      // wrong theme. src/lib/color-scheme.ts re-applies this on the OS
-      // 'change' event once the app has mounted.
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark')
-      }
+      // Applied synchronously, before CSS paints, to avoid a flash of the wrong
+      // theme. Mirrors getThemePreference() in src/lib/color-scheme.ts — keep the
+      // storage key and values ('light' | 'dark'; anything else = System) in sync
+      // with it. The theme-color literals are the same as THEME_COLOR_* there.
+      // src/lib/color-scheme.ts takes over once the app has mounted.
+      try {
+        var stored = null
+        try {
+          stored = window.localStorage.getItem('energy-tracker-theme')
+        } catch (e) {}
+        var dark =
+          stored === 'dark' ||
+          (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', dark ? '#12201A' : '#F3F8ED')
+      } catch (e) {}
     </script>
   </head>
   <body>

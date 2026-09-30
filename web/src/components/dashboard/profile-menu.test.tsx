@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
+import { setThemePreference } from '@/lib/color-scheme'
 import { ProfileMenu } from './profile-menu'
 
 const householdId = '11111111-1111-1111-1111-111111111111'
@@ -33,6 +34,7 @@ describe('ProfileMenu', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    setThemePreference('system')
   })
 
   it('opens on click and shows the account email, Profile, and Log off rows (AC #3)', async () => {
@@ -79,5 +81,82 @@ describe('ProfileMenu', () => {
     await user.click(screen.getByRole('button', { name: 'Yes, log off' }))
     await waitFor(() => expect(window.location.href).toBe('/logout'))
     restoreLocation()
+  })
+
+  describe('Appearance row (Story 8.10)', () => {
+    it('sits between the email and the Profile row, inside a 296px-wide menu (AC #1)', async () => {
+      const user = userEvent.setup()
+      render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+      const email = await screen.findByText('ralf@example.com')
+      const group = screen.getByRole('radiogroup', { name: 'Appearance' })
+      const profile = screen.getByText('Profile')
+      expect(email.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(group.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(screen.getByRole('menu')).toHaveClass('w-[296px]')
+      expect(screen.getAllByRole('radio')).toHaveLength(3)
+    })
+
+    it('selecting a segment keeps the menu open (AC #3)', async () => {
+      const user = userEvent.setup()
+      render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+      await user.click(await screen.findByRole('radio', { name: 'Dark' }))
+
+      expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked()
+      expect(screen.getByText('Profile')).toBeInTheDocument()
+      expect(screen.getByText('Log off')).toBeInTheDocument()
+    })
+
+    it('arrow keys change the selection without Radix stealing focus to a menu item (AC #2)', async () => {
+      const user = userEvent.setup()
+      render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+      const system = await screen.findByRole('radio', { name: /^System/ })
+      system.focus()
+      await user.keyboard('{ArrowRight}')
+      expect(screen.getByRole('radio', { name: 'Light' })).toHaveFocus()
+      expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked()
+
+      await user.keyboard('{End}')
+      expect(screen.getByRole('radio', { name: 'Dark' })).toHaveFocus()
+
+      await user.keyboard('{Home}')
+      expect(screen.getByRole('radio', { name: /^System/ })).toHaveFocus()
+    })
+
+    it('Tab and Shift+Tab cycle between the strip and the first enabled menu item (AC #2)', async () => {
+      const user = userEvent.setup()
+      render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+      await screen.findByRole('radiogroup', { name: 'Appearance' })
+
+      screen.getByRole('menuitem', { name: 'Log off' }).focus()
+      await user.tab()
+      expect(screen.getByRole('radio', { name: /^System/ })).toHaveFocus()
+
+      await user.tab()
+      expect(screen.getByRole('menuitem', { name: 'Log off' })).toHaveFocus()
+
+      await user.tab({ shift: true })
+      expect(screen.getByRole('radio', { name: /^System/ })).toHaveFocus()
+    })
+
+    it('Escape closes the menu and returns focus to the avatar button (AC #2)', async () => {
+      const user = userEvent.setup()
+      render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+      const trigger = screen.getByRole('button', { name: 'Account menu' })
+      await user.click(trigger)
+
+      const light = await screen.findByRole('radio', { name: 'Light' })
+      light.focus()
+      await user.keyboard('{Escape}')
+
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+      expect(trigger).toHaveFocus()
+    })
   })
 })
