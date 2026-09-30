@@ -1,12 +1,25 @@
 import 'fake-indexeddb/auto'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { setThemePreference } from '@/lib/color-scheme'
+import { HouseholdLocaleContext } from '@/lib/household-locale-context'
 import { ProfileMenu } from './profile-menu'
 
 const householdId = '11111111-1111-1111-1111-111111111111'
+
+function setOnLine(value: boolean) {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value })
+}
+
+function renderWithLocale() {
+  return render(
+    <HouseholdLocaleContext.Provider value={{ locale: 'en-US', setLocale: () => {} }}>
+      <ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />
+    </HouseholdLocaleContext.Provider>,
+  )
+}
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
@@ -35,6 +48,7 @@ describe('ProfileMenu', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     setThemePreference('system')
+    setOnLine(true)
   })
 
   it('opens on click and shows the account email, Profile, and Log off rows (AC #3)', async () => {
@@ -95,7 +109,7 @@ describe('ProfileMenu', () => {
       expect(email.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(group.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(screen.getByRole('menu')).toHaveClass('w-[296px]')
-      expect(screen.getAllByRole('radio')).toHaveLength(3)
+      expect(within(group).getAllByRole('radio')).toHaveLength(3)
     })
 
     it('selecting a segment keeps the menu open (AC #3)', async () => {
@@ -128,9 +142,9 @@ describe('ProfileMenu', () => {
       expect(screen.getByRole('radio', { name: /^System/ })).toHaveFocus()
     })
 
-    it('Tab and Shift+Tab cycle between the strip and the first enabled menu item (AC #2)', async () => {
+    it('Tab and Shift+Tab cycle Appearance → Language → first enabled menu item (AC #2, 8.11 two-strip revisit)', async () => {
       const user = userEvent.setup()
-      render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+      renderWithLocale()
       await user.click(screen.getByRole('button', { name: 'Account menu' }))
       await screen.findByRole('radiogroup', { name: 'Appearance' })
 
@@ -139,10 +153,52 @@ describe('ProfileMenu', () => {
       expect(screen.getByRole('radio', { name: /^System/ })).toHaveFocus()
 
       await user.tab()
+      expect(screen.getByRole('radio', { name: 'English' })).toHaveFocus()
+
+      await user.tab()
       expect(screen.getByRole('menuitem', { name: 'Log off' })).toHaveFocus()
 
       await user.tab({ shift: true })
+      expect(screen.getByRole('radio', { name: 'English' })).toHaveFocus()
+
+      await user.tab({ shift: true })
       expect(screen.getByRole('radio', { name: /^System/ })).toHaveFocus()
+    })
+
+    it('Tab skips the disabled (offline) Language strip', async () => {
+      setOnLine(false)
+      const user = userEvent.setup()
+      renderWithLocale()
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+      await screen.findByRole('radiogroup', { name: 'Appearance' })
+
+      screen.getByRole('radio', { name: /^System/ }).focus()
+      await user.tab()
+      expect(screen.getByRole('menuitem', { name: 'Log off' })).toHaveFocus()
+    })
+
+    it('renders the Language row below Appearance and above Profile (8.11, AC #1)', async () => {
+      const user = userEvent.setup()
+      renderWithLocale()
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+      const appearance = await screen.findByRole('radiogroup', { name: 'Appearance' })
+      const language = screen.getByRole('radiogroup', { name: 'Language' })
+      const profile = screen.getByText('Profile')
+      expect(appearance.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(language.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('selecting a language keeps the menu open, including after the save resolves', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})))
+      const user = userEvent.setup()
+      renderWithLocale()
+      await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+      await user.click(await screen.findByRole('radio', { name: 'Deutsch' }))
+
+      await waitFor(() => expect(screen.getByTestId('profile-menu-live-region')).toHaveTextContent('Sprache: Deutsch'))
+      expect(screen.getByRole('menu')).toBeInTheDocument()
     })
 
     it('Escape closes the menu and returns focus to the avatar button (AC #2)', async () => {

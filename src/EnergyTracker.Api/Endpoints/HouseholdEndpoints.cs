@@ -128,6 +128,31 @@ public static class HouseholdEndpoints
             }
         });
 
+        // Story 8.11: any Household member may change the Household's language (no admin role in
+        // v1). Unlike the routes above this carries no Version — see SetHouseholdLocale.
+        api.MapPut("/households/{id}/locale", async (
+            Guid id,
+            SetHouseholdLocaleRequest request,
+            ICurrentHouseholdAccessor householdAccessor,
+            SetHouseholdLocale setHouseholdLocale,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryAuthorizeHousehold(id, householdAccessor, out var forbidden))
+            {
+                return forbidden;
+            }
+
+            try
+            {
+                var household = await setHouseholdLocale.ExecuteAsync(id, request.Locale, cancellationToken);
+                return Results.Ok(ToDetailsResponse(household));
+            }
+            catch (HouseholdValidationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            }
+        });
+
         // AC #5: always visible regardless of AiPlausibilityEnabled's value — GET never 404s or
         // omits the payload just because the toggle is off or the backend is unconfigured.
         api.MapGet("/households/{id}/ai-plausibility", async (
@@ -188,6 +213,8 @@ public record CreateHouseholdRequest(string Locale, string Currency);
 public record HouseholdResponse(Guid Id, string Locale, string Currency, decimal? YearlyBaselineKwh, int Version);
 
 public record SetYearlyBaselineRequest(decimal YearlyBaselineKwh, int Version);
+
+public record SetHouseholdLocaleRequest(string? Locale);
 
 public record AiPlausibilitySettingsResponse(bool Enabled, bool BackendConfigured, string? BackendLabel, int Version);
 

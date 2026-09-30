@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { User, LogOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,7 @@ import {
 import { GLASS_DROPDOWN_CLASSNAME, GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 import { useLogoff } from '@/hooks/use-logoff'
 import { AppearanceRow } from '@/components/preferences/appearance-row'
+import { LanguageRow } from '@/components/preferences/language-row'
 
 // Radix's menu content preventDefaults Tab and only arrow-navigates between menu items, which would
 // leave the preference strips (radiogroups, not menu items) unreachable by keyboard. Make Tab /
@@ -30,7 +31,7 @@ function cycleTabStops(event: KeyboardEvent<HTMLDivElement>) {
   if (event.key !== 'Tab') return
   const content = event.currentTarget
   const stops = [
-    ...content.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"][tabindex="0"]'),
+    ...content.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"][tabindex="0"]:not([disabled])'),
     ...[...content.querySelectorAll<HTMLElement>('[role="menuitem"]:not([data-disabled])')].slice(0, 1),
   ]
   const target = event.target as HTMLElement
@@ -64,9 +65,15 @@ export function ProfileMenu({ email, householdId, supportsFederatedLogout }: Pro
     proceedPastQueueCheck,
     navigateToLogout,
   } = useLogoff(householdId, supportsFederatedLogout)
+  // Story 8.11: announcements (e.g. the language change) live outside DropdownMenuContent so they
+  // survive the member pressing Escape right after switching.
+  const [announcement, setAnnouncement] = useState('')
 
   return (
     <>
+      <div role="status" aria-live="polite" className="sr-only" data-testid="profile-menu-live-region">
+        {announcement}
+      </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -84,11 +91,12 @@ export function ProfileMenu({ email, householdId, supportsFederatedLogout }: Pro
               <DropdownMenuSeparator />
             </>
           )}
-          {/* Story 8.10: preference rows (Appearance; 8.11 adds Language directly below). role="none" keeps
+          {/* Story 8.10: preference rows (Appearance, then Language). role="none" keeps
               the radiogroups out of the menu's direct-children semantics. Plain buttons, not menu items,
               so selecting a segment never closes the menu. */}
           <div role="none">
             <AppearanceRow />
+            <LanguageRow householdId={householdId} onAnnounce={setAnnouncement} />
           </div>
           <DropdownMenuSeparator />
           {/* Task 3: "Profile" has no defined destination anywhere in the PRD/epics/UX docs — a

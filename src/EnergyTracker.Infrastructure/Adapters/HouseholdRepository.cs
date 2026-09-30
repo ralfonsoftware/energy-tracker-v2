@@ -121,6 +121,19 @@ public class HouseholdRepository(EnergyTrackerDbContext dbContext) : IHouseholdR
         return household;
     }
 
+    public async Task<Household> UpdateLocaleAsync(Guid householdId, string locale, CancellationToken cancellationToken)
+    {
+        var household = await dbContext.Households.SingleAsync(h => h.Id == householdId, cancellationToken);
+
+        // Deliberately no expectedVersion / Version++ (Story 8.11): EF writes only the modified
+        // Locale column and the loaded Version stays in the UPDATE's WHERE, so a concurrent
+        // baseline edit still detects its own real conflict.
+        household.Locale = locale;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return household;
+    }
+
     public async Task<Household> UpdateAiPlausibilityEnabledAsync(Guid householdId, bool enabled, int expectedVersion, CancellationToken cancellationToken)
     {
         var household = await dbContext.Households.SingleAsync(h => h.Id == householdId, cancellationToken);

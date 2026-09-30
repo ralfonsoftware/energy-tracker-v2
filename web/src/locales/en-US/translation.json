@@ -297,6 +297,17 @@
       "light": "Light",
       "dark": "Dark",
       "systemCurrently": "System — currently {{value}}"
+    },
+    "language": {
+      "label": "Language",
+      "scope": "Whole household",
+      "offline": "Needs a connection",
+      "option": {
+        "de": "Deutsch",
+        "en": "English"
+      },
+      "error": "Couldn't change the language. Your household is still on {{language}} — try again.",
+      "announce": "Language: {{language}}"
     }
   },
   "trendHistory": {
