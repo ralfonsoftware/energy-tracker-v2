@@ -290,6 +290,15 @@
     "avatarLabel": "Konto-Menü",
     "profile": "Profil"
   },
+  "preferences": {
+    "appearance": {
+      "label": "Darstellung",
+      "scope": "Dieses Gerät",
+      "light": "Hell",
+      "dark": "Dunkel",
+      "systemCurrently": "System — aktuell {{value}}"
+    }
+  },
   "trendHistory": {
     "emptyState": "Noch nicht genug Verlaufsdaten für einen Trend.",
     "chartLoadError": "Der Trendverlauf konnte nicht geladen werden — bitte versuche es erneut.",

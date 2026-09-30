@@ -290,6 +290,15 @@
     "avatarLabel": "Account menu",
     "profile": "Profile"
   },
+  "preferences": {
+    "appearance": {
+      "label": "Appearance",
+      "scope": "This device",
+      "light": "Light",
+      "dark": "Dark",
+      "systemCurrently": "System — currently {{value}}"
+    }
+  },
   "trendHistory": {
     "emptyState": "Not enough history yet to show a trend.",
     "chartLoadError": "Couldn't load the trend chart — try again.",

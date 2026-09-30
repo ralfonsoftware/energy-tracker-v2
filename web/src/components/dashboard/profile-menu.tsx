@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { User, LogOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -20,6 +21,26 @@ import {
 } from '@/components/ui/dialog'
 import { GLASS_DROPDOWN_CLASSNAME, GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 import { useLogoff } from '@/hooks/use-logoff'
+import { AppearanceRow } from '@/components/preferences/appearance-row'
+
+// Radix's menu content preventDefaults Tab and only arrow-navigates between menu items, which would
+// leave the preference strips (radiogroups, not menu items) unreachable by keyboard. Make Tab /
+// Shift+Tab cycle between each strip's checked segment and the first enabled menu item instead.
+function cycleTabStops(event: KeyboardEvent<HTMLDivElement>) {
+  if (event.key !== 'Tab') return
+  const content = event.currentTarget
+  const stops = [
+    ...content.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"][tabindex="0"]'),
+    ...[...content.querySelectorAll<HTMLElement>('[role="menuitem"]:not([data-disabled])')].slice(0, 1),
+  ]
+  const target = event.target as HTMLElement
+  const current = stops.findIndex((stop) => stop === target || stop.closest('[role="radiogroup"]')?.contains(target))
+  const fallback = current === -1 ? (event.shiftKey ? stops.length - 1 : 0) : current + (event.shiftKey ? -1 : 1)
+  const next = stops[(fallback + stops.length) % stops.length]
+  if (!next) return
+  event.preventDefault()
+  next.focus()
+}
 
 interface ProfileMenuProps {
   email: string | null
@@ -56,13 +77,20 @@ export function ProfileMenu({ email, householdId, supportsFederatedLogout }: Pro
             <User className="size-4" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className={cn(GLASS_DROPDOWN_CLASSNAME, 'w-56')}>
+        <DropdownMenuContent align="end" className={cn(GLASS_DROPDOWN_CLASSNAME, 'w-[296px]')} onKeyDown={cycleTabStops}>
           {email && (
             <>
               <DropdownMenuLabel className="truncate font-normal text-foreground">{email}</DropdownMenuLabel>
               <DropdownMenuSeparator />
             </>
           )}
+          {/* Story 8.10: preference rows (Appearance; 8.11 adds Language directly below). role="none" keeps
+              the radiogroups out of the menu's direct-children semantics. Plain buttons, not menu items,
+              so selecting a segment never closes the menu. */}
+          <div role="none">
+            <AppearanceRow />
+          </div>
+          <DropdownMenuSeparator />
           {/* Task 3: "Profile" has no defined destination anywhere in the PRD/epics/UX docs — a
               visibly present, non-interactive row rather than a silent no-op onClick (open
               question, noted in Completion Notes for a future story). */}

@@ -1,17 +1,144 @@
-// Auto-applies the .dark class from the OS color-scheme preference. No manual
-// toggle yet (product decision, not a DESIGN.md requirement) — DESIGN.md just
-// treats Dark and Light as equal citizens, both fully designed and neither
-// a fallback of the other.
-// index.html carries a synchronous inline copy of the initial check, applied
-// before first paint to avoid a flash of the wrong theme; this function is
-// what keeps it live after mount.
-export function initColorScheme(): void {
-  const query = window.matchMedia('(prefers-color-scheme: dark)')
+// Theme preference: System | Light | Dark, stored per device (FR-35) — never on the Household.
+// System (the default, stored as "nothing") follows the OS color scheme live; Light/Dark override it
+// and ignore OS changes. DESIGN.md treats Dark and Light as equal citizens.
+// index.html carries a synchronous inline copy of the read logic (same key and values as
+// getThemePreference) applied before first paint to avoid a flash of the wrong theme — the two
+// MUST stay in sync. This module keeps things live after mount.
+// This file (and its test) is the single allowlisted localStorage user — see
+// FrontendDoesNotStoreAuthTokensTests. The stored value is only 'light' | 'dark', never a token.
 
-  const apply = () => {
-    document.documentElement.classList.toggle('dark', query.matches)
+export type ThemePreference = 'system' | 'light' | 'dark'
+export type ResolvedTheme = 'light' | 'dark'
+
+export const THEME_STORAGE_KEY = 'energy-tracker-theme'
+// Same literals as the inline script in index.html (duplicated there by necessity).
+export const THEME_COLOR_LIGHT = '#F3F8ED'
+export const THEME_COLOR_DARK = '#12201A'
+
+const DARK_QUERY = '(prefers-color-scheme: dark)'
+
+// null = not read yet. Also the in-memory fallback when storage is unavailable.
+let current: ThemePreference | null = null
+const subscribers = new Set<() => void>()
+let listenersAttached = false
+let osQuery: MediaQueryList | null = null
+
+function parse(value: string | null): ThemePreference {
+  return value === 'light' || value === 'dark' ? value : 'system'
+}
+
+function readStored(): ThemePreference {
+  try {
+    return parse(window.localStorage.getItem(THEME_STORAGE_KEY))
+  } catch {
+    return 'system'
+  }
+}
+
+function osPrefersDark(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia(DARK_QUERY).matches
+    : false
+}
+
+export function getThemePreference(): ThemePreference {
+  current ??= readStored()
+  return current
+}
+
+// What System would resolve to right now, regardless of the current preference.
+export function getSystemTheme(): ResolvedTheme {
+  return osPrefersDark() ? 'dark' : 'light'
+}
+
+export function getResolvedTheme(): ResolvedTheme {
+  const preference = getThemePreference()
+  return preference === 'system' ? getSystemTheme() : preference
+}
+
+function syncThemeColorMeta(resolved: ResolvedTheme): void {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  meta?.setAttribute('content', resolved === 'dark' ? THEME_COLOR_DARK : THEME_COLOR_LIGHT)
+}
+
+function apply(): void {
+  const resolved = getResolvedTheme()
+  document.documentElement.classList.toggle('dark', resolved === 'dark')
+  syncThemeColorMeta(resolved)
+  subscribers.forEach((cb) => cb())
+}
+
+export function subscribeTheme(cb: () => void): () => void {
+  subscribers.add(cb)
+  return () => {
+    subscribers.delete(cb)
+  }
+}
+
+export function setThemePreference(preference: ThemePreference): void {
+  current = preference
+  try {
+    if (preference === 'system') {
+      window.localStorage.removeItem(THEME_STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(THEME_STORAGE_KEY, preference)
+    }
+  } catch {
+    // Storage unavailable (e.g. Safari private mode): the choice still applies for this session.
+  }
+  apply()
+}
+
+// Preference is read at event time: OS changes only matter while it is 'system'.
+function onOsChange(): void {
+  if (getThemePreference() === 'system') {
+    apply()
+  } else {
+    // Theme itself is pinned, but subscribers (the System segment's "currently X") still track the OS.
+    subscribers.forEach((cb) => cb())
+  }
+}
+
+// Safari < 14 exposes only the deprecated addListener/removeListener on MediaQueryList.
+function watchOsQuery(query: MediaQueryList): void {
+  if (typeof query.addEventListener === 'function') {
+    query.addEventListener('change', onOsChange)
+  } else {
+    query.addListener?.(onOsChange)
+  }
+}
+
+function unwatchOsQuery(query: MediaQueryList): void {
+  if (typeof query.removeEventListener === 'function') {
+    query.removeEventListener('change', onOsChange)
+  } else {
+    query.removeListener?.(onOsChange)
+  }
+}
+
+export function initColorScheme(): void {
+  current = readStored()
+  apply()
+
+  // Re-init (HMR, tests) must not stack OS listeners.
+  if (osQuery) {
+    unwatchOsQuery(osQuery)
+    osQuery = null
+  }
+  if (typeof window.matchMedia === 'function') {
+    osQuery = window.matchMedia(DARK_QUERY)
+    watchOsQuery(osQuery)
   }
 
-  apply()
-  query.addEventListener('change', apply)
+  if (!listenersAttached) {
+    listenersAttached = true
+    // Another tab on the same device changed the theme.
+    window.addEventListener('storage', (event) => {
+      if (event.key !== null && event.key !== THEME_STORAGE_KEY) {
+        return
+      }
+      current = readStored()
+      apply()
+    })
+  }
 }
