@@ -8,7 +8,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 **Promoted (story created 2026-10-02, Epic 10)**
 
-- Migrate on deploy, no backup/rollback story (code review of spec-azure-sql-ci-migration-firewall (2026-08-13))
 - Real-time Event has no forward-window readings (code review of story-6.3 (2026-09-21))
 - NavChrome last in DOM at wide (keyboard tab-order check (spec-tab-order-check, 2026-10-02))
 
@@ -119,10 +118,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
   summary: No periodic sweep prunes orphaned `gh-actions-migrate-*` SQL firewall rules left behind by a killed/force-cancelled runner (the in-job `if: always()`+`continue-on-error` cleanup only covers normal step failure, not hard cancellation).
   evidence: Azure SQL server-level firewall rules have a hard cap (128); enough abandoned runs could eventually exhaust it and start blocking legitimate deploys. Building a reaper is a distinct, separately-scoped task, not part of this hotfix.
-
-- [promoted: 10-1-migration-safety-on-deploy] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
-  summary: The CI migration step runs `dotnet ef database update` on every deploy with no pre-migration backup/snapshot and no expand/contract discipline documented — a bad migration commits directly against production with no rollback story.
-  evidence: This is a pre-existing characteristic of the overall "migrate on deploy" strategy (not introduced by this diff, which only makes migrations apply where none were applying before); worth a dedicated migration-safety pass once the app has real user data at stake, not blocking for a schema that today only adds new tables.
 
 
 ## Deferred from: code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
