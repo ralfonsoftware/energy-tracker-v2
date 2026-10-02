@@ -281,10 +281,6 @@ Archived 2026-10-02 from `deferred-work.md` (Epic 8 retro action #6, `spec-defer
 
 ## Deferred from: code review of story-6.3 (2026-09-21)
 
-- [accepted: Deliberate AD-10. Same root cause as 402] source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: Correlation is computed exactly once, right after `CreateEvent` enqueues the job — a Meter Reading backfilled later with a `ReadingTimestamp` that lands inside an already-correlated Event's ±7-day window never triggers a recompute, so that Event's correlation can permanently understate a deviation that a backfilled reading would otherwise reveal.
-  evidence: Deliberate scope simplification (mirrors AD-10's "derive once, read back forever" discipline this story was told to follow) — no recompute trigger exists in this codebase for any backfill-shaped edit today (e.g. a backfilled Meter Reading doesn't retroactively recompute Pattern Detective's StatusSnapshot history either). Not reachable by any current test. [src/EnergyTracker.Application/CorrelateEvent.cs]
-
 - [accepted: Duplicate of 123/76/31 class; households never deleted] source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
   summary: `GET`/`PUT /households/{id}/ai-plausibility` call `dbContext.Households.SingleAsync(h => h.Id == id, ...)` with no not-found guard — if the Household row were deleted between authorization and this query, this throws `InvalidOperationException` (unhandled 500) instead of a clean 404.
   evidence: Pre-existing pattern copied verbatim from the existing GET endpoint (`HouseholdEndpoints.cs:97`), not introduced by this diff, and unreachable today since Households are never deleted in this app. Raised by Edge Case Hunter during code review. [src/EnergyTracker.Api/Endpoints/HouseholdEndpoints.cs:145]

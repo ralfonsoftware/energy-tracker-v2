@@ -347,6 +347,7 @@ builder.Services.AddScoped<CreateEvent>();
 builder.Services.AddScoped<GetEventHistory>();
 builder.Services.AddScoped<SetAiPlausibilityEnabled>();
 builder.Services.AddScoped<CorrelateEvent>();
+builder.Services.AddScoped<RequeueEventCorrelations>();
 
 builder.Services.AddScoped<IHouseholdExportReader, HouseholdExportReader>();
 builder.Services.AddScoped<ExportHouseholdData>();

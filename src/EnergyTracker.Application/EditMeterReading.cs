@@ -1,6 +1,7 @@
 using System.Globalization;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using EnergyTracker.Domain.Calculations;
 
 namespace EnergyTracker.Application;
 
@@ -9,7 +10,8 @@ public class EditMeterReading(
     IMeterReadingRepository readingRepository,
     IAuditCorrectionRecorder auditCorrectionRecorder,
     IUnitOfWork unitOfWork,
-    IStatusRecomputeService statusRecomputeService)
+    IStatusRecomputeService statusRecomputeService,
+    RequeueEventCorrelations requeueEventCorrelations)
 {
     public async Task<MeterReading> ExecuteAsync(Guid householdId, Guid readingId, decimal kwhValue, int expectedVersion, CancellationToken cancellationToken)
     {
@@ -57,6 +59,14 @@ public class EditMeterReading(
         // Mirrors CreateMeterReading's placement: recompute runs as a separate step after the
         // core write transaction commits, never wrapped inside it (AD-7, AC #3).
         await statusRecomputeService.RecomputeAsync(householdId, cancellationToken);
+
+        // Story 10.2 (AC #3): a real kWh change shifts the deltas around this reading, so Events
+        // whose window contains its ReadingTimestamp are re-evaluated (the no-op path returned above).
+        await requeueEventCorrelations.ExecuteAsync(
+            householdId,
+            updatedReading.ReadingTimestamp - WindowedDeviationCalculator.WindowRadius,
+            updatedReading.ReadingTimestamp + WindowedDeviationCalculator.WindowRadius,
+            cancellationToken);
 
         return updatedReading;
     }

@@ -30,6 +30,16 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
             .CountAsync(r => r.HouseholdId == householdId, TestContext.Current.CancellationToken);
     }
 
+    private async Task<int> CountCorrelateEventJobRowsAsync(Guid householdId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        // IgnoreQueryFilters for the same reason as CountMeterReadingRowsAsync above. Counting
+        // rows regardless of Status: the in-process worker may already have processed some.
+        return await dbContext.BackgroundJobs.IgnoreQueryFilters()
+            .CountAsync(j => j.HouseholdId == householdId && j.JobType == "CorrelateEvent", TestContext.Current.CancellationToken);
+    }
+
     private static Task<HttpResponseMessage> SetYearlyBaselineAsync(HttpClient client, Guid householdId, decimal yearlyBaselineKwh, int version) =>
         client.PutAsJsonAsync(
             $"/api/households/{householdId}/yearly-baseline",
@@ -375,4 +385,44 @@ public class MeterReadingEndpointsTests(EnergyTrackerApiFactory factory) : IClas
             "/api/meter-readings",
             new { kwhValue, readingTimestamp, idempotencyKey = Guid.NewGuid() },
             TestContext.Current.CancellationToken);
+
+    // Story 10.2 (AC #1, #4): a reading inside an existing Event's ±7-day window requeues that
+    // Event's correlation; one outside every window does not.
+    [Fact]
+    public async Task POST_meter_readings_inside_an_Events_window_enqueues_a_CorrelateEvent_job_and_one_outside_does_not()
+    {
+        var (client, householdId) = await CreateHouseholdAsync();
+        var toggle = await client.PutAsJsonAsync(
+            $"/api/households/{householdId}/ai-plausibility", new { enabled = true, version = 0 }, TestContext.Current.CancellationToken);
+        toggle.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var occurredAt = DateTimeOffset.UtcNow.AddHours(-1);
+        var eventResponse = await client.PostAsJsonAsync(
+            "/api/events",
+            new { description = "gaming session 3h", occurredAt, taggedEntityType = (string?)null, taggedEntityId = (Guid?)null },
+            TestContext.Current.CancellationToken);
+        eventResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var jobsAfterEventCreate = await CountCorrelateEventJobRowsAsync(householdId);
+
+        var outsideResponse = await client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue = 100m, readingTimestamp = occurredAt.AddDays(-30), idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+        outsideResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await CountCorrelateEventJobRowsAsync(householdId)).ShouldBe(jobsAfterEventCreate);
+
+        var insideResponse = await client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue = 200m, readingTimestamp = occurredAt.AddDays(-2), idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+        insideResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await CountCorrelateEventJobRowsAsync(householdId)).ShouldBe(jobsAfterEventCreate + 1);
+
+        // Window membership is inclusive at both ends (AC #4): exactly 7 days away still requeues.
+        var boundaryResponse = await client.PostAsJsonAsync(
+            "/api/meter-readings",
+            new { kwhValue = 300m, readingTimestamp = occurredAt.AddDays(-7), idempotencyKey = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+        boundaryResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await CountCorrelateEventJobRowsAsync(householdId)).ShouldBe(jobsAfterEventCreate + 2);
+    }
 }

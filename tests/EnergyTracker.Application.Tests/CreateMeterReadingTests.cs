@@ -10,6 +10,13 @@ public class CreateMeterReadingTests
     private readonly IMeterReadingRepository _repository = Substitute.For<IMeterReadingRepository>();
     private readonly IMeterRegressionPromptRepository _regressionPromptRepository = Substitute.For<IMeterRegressionPromptRepository>();
     private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
+    private readonly IHouseholdRepository _householdRepository = Substitute.For<IHouseholdRepository>();
+    private readonly IEventRepository _eventRepository = Substitute.For<IEventRepository>();
+    private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
+
+    private RequeueEventCorrelations Requeue() => new(
+        _householdRepository, _eventRepository, _repository, _jobQueue,
+        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>());
 
     private static MainMeter NewMainMeter(Guid householdId) => new()
     {
@@ -18,7 +25,7 @@ public class CreateMeterReadingTests
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    private CreateMeterReading Sut() => new(_repository, _regressionPromptRepository, _statusRecomputeService);
+    private CreateMeterReading Sut() => new(_repository, _regressionPromptRepository, _statusRecomputeService, Requeue());
 
     public CreateMeterReadingTests()
     {
@@ -361,5 +368,72 @@ public class CreateMeterReadingTests
             sut.ExecuteAsync(Guid.NewGuid(), 100m, new DateTimeOffset(1999, 12, 31, 23, 59, 59, TimeSpan.Zero), Guid.NewGuid(), TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>());
+    }
+
+    // Story 10.2 (AC #1, #2, #4): selection is by the new reading's ReadingTimestamp ±7 days,
+    // inclusive, never by entry order.
+    [Fact]
+    public async Task Requeues_Event_correlations_for_the_readings_plus_minus_7_day_window()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
+        {
+            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+        });
+        var backfilledTimestamp = DateTimeOffset.UtcNow.AddDays(-20);
+
+        await Sut().ExecuteAsync(householdId, 4821.5m, backfilledTimestamp, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        await _eventRepository.Received(1).GetByOccurredAtRangeAsync(
+            backfilledTimestamp.AddDays(-7), backfilledTimestamp.AddDays(7), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_retried_idempotent_create_does_not_requeue()
+    {
+        var householdId = Guid.NewGuid();
+        var existing = new MeterReading
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = Guid.NewGuid(), KwhValue = 1m,
+            ReadingTimestamp = DateTimeOffset.UtcNow, IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _repository.FindByIdempotencyKeyAsync(existing.IdempotencyKey, Arg.Any<CancellationToken>()).Returns(existing);
+
+        await Sut().ExecuteAsync(householdId, 1m, existing.ReadingTimestamp, existing.IdempotencyKey, TestContext.Current.CancellationToken);
+
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+    }
+
+    // Review patch: a reading that opens a regression prompt makes AD-12 exclude everything at or
+    // after it, so Events wholly after the +7-day edge must be re-evaluated too.
+    [Fact]
+    public async Task A_reading_that_opens_a_regression_prompt_requeues_every_Event_from_its_window_onward()
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        var backfilledTimestamp = DateTimeOffset.UtcNow.AddDays(-20);
+        _repository.FindImmediatelyPrecedingAsync(mainMeter.Id, backfilledTimestamp, Arg.Any<CancellationToken>()).Returns(new MeterReading
+        {
+            Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = mainMeter.Id, KwhValue = 9000m,
+            ReadingTimestamp = backfilledTimestamp.AddDays(-1), IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
+        {
+            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+        });
+
+        await Sut().ExecuteAsync(householdId, 100m, backfilledTimestamp, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        await _eventRepository.Received(1).GetByOccurredAtRangeAsync(
+            backfilledTimestamp.AddDays(-7),
+            Arg.Is<DateTimeOffset>(to => to > DateTimeOffset.UtcNow && to <= DateTimeOffset.UtcNow.AddMinutes(10)),
+            Arg.Any<CancellationToken>());
     }
 }
