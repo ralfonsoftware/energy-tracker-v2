@@ -517,3 +517,17 @@
 - source_story: `_bmad-artifacts/implementation/8-12-settings-preferences-card-mobile.md`
   summary: The 660px breakpoint is duplicated in CSS `--breakpoint-wide`, `WIDE_QUERY` in `use-wide-breakpoint.ts`, and the e2e viewport sizes, with no enforcement that they stay in sync.
   evidence: Low, pre-existing (hook predates 8.12). [web/src/hooks/use-wide-breakpoint.ts]
+
+## Deferred from: locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
+  summary: Tariff Radar history table scrolls horizontally by ~10px at 659px in de-DE (scrollWidth 587 > clientWidth 577 in the `overflow-x-auto` wrapper) when an entry carries correction notes.
+  evidence: Found in the live pass with real household data; the page itself does not overflow. The e2e matrix seed (3 entries, corrections, date ranges) only reaches 578 vs 577, within the audit's 1px tolerance, so this defect has NO automated regression guard. Candidate fixes: tighter column padding or wrapping on the correction note, or accept the scroll container as intentional. [web/src/components/tariff/tariff-history-list.tsx]
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
+  summary: Icon-only header buttons below 660px (Import in `trend-history-page.tsx`, and the Dashboard Event/Import equivalents) are `size-10` (40px) with no `::before` hit-area extension, so the touch target is 40px, not the 44px the sweep spec and Stories 8.2/8.3 assumed.
+  evidence: Hit-testing 2px outside each edge of the 659px Import button lands outside the button on all four sides; the e2e test pins the 40px box. Fix is `size-11` or a `::before` extension, a visual change deferred for a decision. [web/src/components/trend-history/trend-history-page.tsx:84]
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
+  summary: Sweep audit depth gaps: ancestor opacity, backdrop-filter and pseudo-element backgrounds are not modelled in the contrast backdrop; placeholder/input-value text, WCAG 1.4.11 non-text (UI component) contrast and vertical clipping are not audited; per-cell layout identity covers only the nav chrome (not the Settings Preferences card); locale number/date formatting is not asserted beyond `<html lang>`; translucent layers resolve via a 1×1 canvas with premultiplied-alpha precision loss.
+  evidence: Raised by the quick-dev review of the sweep; none produced a false result in the 48-cell run, and elements over gradients/images are skipped and counted in the `contrast-skipped` annotation. [web/e2e/locale-theme-sweep.spec.ts]

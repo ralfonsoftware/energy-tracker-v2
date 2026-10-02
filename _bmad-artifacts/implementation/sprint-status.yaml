@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-09-30
+# last_updated: 2026-10-02
 # Dated change history prior to 2026-09-23 archived to sprint-status-history.md (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-09-30
+last_updated: 2026-10-02
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -105,12 +105,12 @@ development_status:
   6-3-wattage-plausibility-correlation: done
   epic-6-retrospective: done
 
-  epic-7: in-progress
+  epic-7: done
   7-1-full-data-export: done
   7-2-full-data-import-restore-migration: done
   epic-7-retrospective: done
 
-  epic-8: in-progress
+  epic-8: done
   8-1-responsive-nav-chrome-profile-menu: done
   8-2-dashboard-desktop-tablet-layout: done
   8-3-trend-history-desktop-tablet-layout: done
@@ -123,7 +123,7 @@ development_status:
   8-10-theme-toggle-profile-menu: done
   8-11-language-toggle-household-locale-switch: done
   8-12-settings-preferences-card-mobile: done
-  epic-8-retrospective: optional
+  epic-8-retrospective: done
 
   epic-9: backlog
   9-1-ai-backend-spike: backlog
@@ -296,3 +296,38 @@ action_items:
     owner: "Winston"
     status: done
     note: "2026-09-21 epic-6 retro. Raised in spec-ssh-net-cve-fix's own review as a systemic gap (the SSH.NET CVE shipped silently until manually caught); escalated to its own owned action item per Ralf's explicit request during this retro, rather than left as a quiet deferred-work entry."
+  - epic: 8
+    action: "Locale x theme sweep: de-DE/en-US x light/dark at 659/660/900px across all four screens (overflow, clipping, contrast, long German labels); e2e matrix plus one live pass"
+    owner: "Dana/Amelia"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02 progress: spec-locale-theme-sweep (branch feature/locale-theme-sweep) — 48-cell e2e matrix + live pass done, 5 contrast token fixes; 2 findings logged in deferred-work.md (659px de-DE tariff table scroll, 40px icon buttons). Stays open until merged."
+  - epic: 8
+    action: "Keyboard tab-order check for wide:order-N Settings sections, paired Tariff fields, Profile menu, preference strips, NavChrome variants"
+    owner: "Dana/Charlie"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+  - epic: 8
+    action: "Breakpoint/column single source of truth: drift test tying --breakpoint-wide, WIDE_QUERY, e2e boundary values and the max-w-[900px] literal"
+    owner: "Charlie"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+  - epic: 8
+    action: "Document the live-resize verification procedure (real tab at target width) in project-context.md process gates"
+    owner: "Amelia"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+  - epic: 8
+    action: "Record deferred-work.md convention (append new sections at the end, chronological) in project-context.md"
+    owner: "Amelia"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+  - epic: 8
+    action: "Triage all ~165 deferred-work.md entries into resolved/accepted/still-open (themed index)/promote; proposal for Ralf's approval before any deletion; needs a spec doc"
+    owner: "Amelia/Charlie/Dana"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+  - epic: 8
+    action: "Add status marker ([open]/[resolved: story]/[accepted: reason]) to deferred-work entries going forward; review open items at each epic retro"
+    owner: "Amelia"
+    status: open
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
