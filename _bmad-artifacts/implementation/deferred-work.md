@@ -531,3 +531,21 @@
 - [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
   summary: Sweep audit depth gaps: ancestor opacity, backdrop-filter and pseudo-element backgrounds are not modelled in the contrast backdrop; placeholder/input-value text, WCAG 1.4.11 non-text (UI component) contrast and vertical clipping are not audited; per-cell layout identity covers only the nav chrome (not the Settings Preferences card); locale number/date formatting is not asserted beyond `<html lang>`; translucent layers resolve via a 1×1 canvas with premultiplied-alpha precision loss.
   evidence: Raised by the quick-dev review of the sweep; none produced a false result in the 48-cell run, and elements over gradients/images are skipped and counted in the `contrast-skipped` annotation. [web/e2e/locale-theme-sweep.spec.ts]
+
+## Deferred from: keyboard tab-order check (spec-tab-order-check, 2026-10-02)
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
+  summary: At ≥660px NavChrome (top nav + Profile avatar) is visually first but last in the DOM, so keyboard users Tab through the whole page before reaching it (WCAG 2.4.3 Focus Order). Kept deliberately by Story 8.1 (`wide:order-first`) so phones keep the bottom bar last.
+  evidence: Pinned by `web/e2e/tab-order.spec.ts` on all four screens (it fails if the nav moves in the DOM, so the fix must update the pin). Candidate fixes: render the nav first in the DOM at ≥660px via `useWideBreakpoint` (touches `nav-chrome.tsx` and the four page mounts; watch the 660px boundary), or add a skip link plus `<nav aria-label>` landmarks (new UI and strings in both catalogs). Needs its own story. [web/src/components/dashboard/nav-chrome.tsx:48]
+
+- [resolved: spec-tab-order-check] source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
+  summary: Earlier entry "Nothing … confirms keyboard tab order survived wrapping previously-sibling field divs in new intermediate row-wrapper divs at ≥660px" (Tariff configuration and comparison forms) and the repo-wide "no tab-order tests" gap.
+  evidence: `web/e2e/tab-order.spec.ts` now asserts tab order = visual order for the paired Tariff fields (add and compare forms), Settings `wide:order-N` sections incl. the AI Plausibility + Household pair, the entry grids and the Profile menu cycle (Epic 8 retro action #2). No divergence found apart from the NavChrome entry above.
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
+  summary: Nothing enforces that a new `wide:order-*` / reordering class gets a tab-order test; the rule in `project-context.md` is prose only.
+  evidence: Raised by the quick-dev review. A source-scan guard test (every file using `wide:order-`/`order-first` must be named in `tab-order.spec.ts`) would close it, like the architecture guard tests. [web/e2e/tab-order.spec.ts]
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
+  summary: Tab-order coverage gaps: the tagging-scaffold wide grid (expanded `col-span-full` tiles), Dashboard reordering, Events tiles (no focusable controls), Settings at 659px, the Profile menu below 900px and other close paths (outside click), and non-Chromium browsers.
+  evidence: Review-found; none has a known defect (tagging grid sets no `dense` flow, Dashboard has no `wide:order-*`). The current spec covers the surfaces named in Epic 8 retro action #2. [web/e2e/tab-order.spec.ts]

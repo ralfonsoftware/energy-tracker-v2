@@ -71,6 +71,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **React (frontend):**
 - **i18n (AD-18):** `Household.Locale` is the single field driving both number/date formatting and UI language; translations are additive i18next catalogs in `web/src/locales/{locale}` — adding a locale is a resource-file addition, never a code change.
 - **Offline queue (AD-16/stack):** Meter Reading creation only (not edits) queues locally via IndexedDB and flushes on reconnect — don't extend this offline pattern to other writes without a matching architecture decision.
+- **Visual reordering must not reorder focus (WCAG 2.4.3):** `wide:order-*`, `flex-row` pairs and grids may only rearrange content so that Tab order still equals reading order. `web/e2e/tab-order.spec.ts` enforces this per surface; the one documented exception is NavChrome (visually first at ≥660px, last in DOM/tab order), pinned there and tracked in `deferred-work.md`. Add any new reordered surface to that spec.
 - Components follow the existing `web/src/components/{feature}` grouping (e.g. `household-invite`, `household-creation`, `tagging-scaffold`) plus a shared `components/ui` for shadcn primitives — new feature UI gets its own folder, not dumped into `components/ui`.
 
 ### Testing Rules
