@@ -324,8 +324,8 @@ action_items:
   - epic: 8
     action: "Triage all ~165 deferred-work.md entries into resolved/accepted/still-open (themed index)/promote; proposal for Ralf's approval before any deletion; needs a spec doc"
     owner: "Amelia/Charlie/Dana"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+    status: done
+    note: "2026-10-02 epic-8 retro. Doc-only, committed directly on main per Ralf. 174 entries triaged: 25 resolved removed, 88 accepted archived to deferred-work-accepted.md, 58 open + 3 promoted kept with index. See spec-deferred-work-triage.md. Promoted (need stories): CI migrate-on-deploy safety, real-time Event correlation recompute, NavChrome DOM order."
   - epic: 8
     action: "Add status marker ([open]/[resolved: story]/[accepted: reason]) to deferred-work entries going forward; review open items at each epic retro"
     owner: "Amelia"
