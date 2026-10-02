@@ -304,8 +304,8 @@ action_items:
   - epic: 8
     action: "Keyboard tab-order check for wide:order-N Settings sections, paired Tariff fields, Profile menu, preference strips, NavChrome variants"
     owner: "Dana/Charlie"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+    status: done
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: spec-tab-order-check (branch feature/tab-order-check) — web/e2e/tab-order.spec.ts, 22 tests; no divergence except NavChrome (visually first, last in tab order), pinned as intentional and logged in deferred-work.md as an open follow-up. Merged in PR #86."
   - epic: 8
     action: "Breakpoint/column single source of truth: drift test tying --breakpoint-wide, WIDE_QUERY, e2e boundary values and the max-w-[900px] literal"
     owner: "Charlie"
