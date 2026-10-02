@@ -132,6 +132,12 @@ development_status:
   9-4-production-implementation-self-hosting: backlog
   epic-9-retrospective: optional
 
+  epic-10: in-progress
+  10-1-migration-safety-on-deploy: ready-for-dev
+  10-2-event-correlation-forward-window-recompute: ready-for-dev
+  10-3-navchrome-dom-order-tab-order: ready-for-dev
+  epic-10-retrospective: optional
+
 action_items:
   - epic: 7
     action: "Add observability to the household-export success path (duration, per-collection row counts, page round trips) — the OOM incident went undetected until it actually crashed; nothing today would show a future household trending toward the same danger zone before it repeats"

@@ -37,6 +37,10 @@ Every existing frontend surface (Dashboard, Trend History, Tariff Radar, Setting
 Decides and stands up the real AI backend behind Wattage Plausibility Correlation (FR-17) — Epic 6 built the full plumbing (port, adapter, Household toggle, background job, graceful degradation — AD-8) but only its no-op path has ever run in any environment. Two research-only stories (spike narrowing Azure AI Foundry vs. self-hosted LMStudio vs. a plain cloud API, then deeper production-rollout/self-hosting research) precede two production-implementation stories (Azure-hosted, then self-hosted). Escalated from Epic 6 Retro Action Item #2 (open across Epics 6–8 with no decision) at Epic 7's retrospective (2026-09-26), at Ralf's explicit direction, from a lingering action item to its own epic.
 **FRs covered:** none (no new FR) — operationalizes FR-17's already-specified household-level backend choice and NFR14's cost constraint; no product-facing behavior change beyond the correlation actually firing instead of always degrading.
 
+## Epic 10: Deferred-Work Hardening
+Three stories promoted from the 2026-10-02 `deferred-work.md` triage: migration safety on deploy (restore point, rollback runbook, expand/contract rule), event-correlation recompute once the forward window has readings, and NavChrome document order matching visual order (WCAG 2.4.3). No new FR; independent of Epic 9.
+**FRs covered:** none (hardens FR-17 correctness and Epic 8's accessibility intent)
+
 **Deferred — not decomposed into an epic:**
 - FR-19 (Custom Event/Plausibility Rules) — Could-have, explicitly out of MVP scope per PRD §6.2; no rule engine designed yet
 - FR-20 (Generic Data-Source Column Mapping) — Could-have, explicitly out of MVP scope per PRD §6.2; PRD itself flags as low-confidence pending a feasibility spike (Open Question 1)

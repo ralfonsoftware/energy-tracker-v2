@@ -6,7 +6,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Index
 
-**Promoted (need a story/spec)**
+**Promoted (story created 2026-10-02, Epic 10)**
 
 - Migrate on deploy, no backup/rollback story (code review of spec-azure-sql-ci-migration-firewall (2026-08-13))
 - Real-time Event has no forward-window readings (code review of story-6.3 (2026-09-21))
@@ -120,7 +120,7 @@ Conventions: append new sections at the end, chronological (see `project-context
   summary: No periodic sweep prunes orphaned `gh-actions-migrate-*` SQL firewall rules left behind by a killed/force-cancelled runner (the in-job `if: always()`+`continue-on-error` cleanup only covers normal step failure, not hard cancellation).
   evidence: Azure SQL server-level firewall rules have a hard cap (128); enough abandoned runs could eventually exhaust it and start blocking legitimate deploys. Building a reaper is a distinct, separately-scoped task, not part of this hotfix.
 
-- [promoted: needs story] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
+- [promoted: 10-1-migration-safety-on-deploy] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
   summary: The CI migration step runs `dotnet ef database update` on every deploy with no pre-migration backup/snapshot and no expand/contract discipline documented — a bad migration commits directly against production with no rollback story.
   evidence: This is a pre-existing characteristic of the overall "migrate on deploy" strategy (not introduced by this diff, which only makes migrations apply where none were applying before); worth a dedicated migration-safety pass once the app has real user data at stake, not blocking for a schema that today only adds new tables.
 
@@ -310,7 +310,7 @@ Conventions: append new sections at the end, chronological (see `project-context
   summary: `CorrelateEvent`/`WindowedDeviationCalculator` do not apply AD-12's "exclude readings at/after an open MeterRegressionPrompt" filter that `GetCurrentStatus` applies via `PatternDetectiveCalculator.ExcludeFromOpenPrompt` — a household with an open regression prompt whose triggering reading falls inside an Event's ±7-day window could have its rough correlation computed from a raw, not-yet-corrected meter delta (e.g. a rollover/reset artifact).
   evidence: Deliberate scope simplification, not caught by any test (none exists for this interaction). Reasoned low-risk given AC #1's own "rough/approximate signal" framing and UX-DR17's no-false-precision stance — a correlation that's occasionally derived from an uncorrected delta is consistent with the feature's own explicitly-approximate nature — but worth applying the same exclusion `GetCurrentStatus` uses if this proves to generate visibly wrong Bump/Dip results in practice. [src/EnergyTracker.Application/CorrelateEvent.cs, src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
 
-- [promoted: needs story] source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
+- [promoted: 10-2-event-correlation-forward-window-recompute] source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
   summary: For a real-time-logged Event (`OccurredAt` ≈ now), the ±7-day window's forward half has no `MeterReading`s yet when `CorrelateEvent` runs seconds later, since those readings haven't been taken — and because correlation is computed exactly once and never revisited, this is the common case for real-time-logged Events, not just a backfill edge case.
   evidence: Reinforces the item above (same root cause: no recompute trigger exists in this codebase). Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Application/CorrelateEvent.cs:45-49]
 
@@ -410,7 +410,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: keyboard tab-order check (spec-tab-order-check, 2026-10-02)
 
-- [promoted: needs story] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
+- [promoted: 10-3-navchrome-dom-order-tab-order] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
   summary: At ≥660px NavChrome (top nav + Profile avatar) is visually first but last in the DOM, so keyboard users Tab through the whole page before reaching it (WCAG 2.4.3 Focus Order). Kept deliberately by Story 8.1 (`wide:order-first`) so phones keep the bottom bar last.
   evidence: Pinned by `web/e2e/tab-order.spec.ts` on all four screens (it fails if the nav moves in the DOM, so the fix must update the pin). Candidate fixes: render the nav first in the DOM at ≥660px via `useWideBreakpoint` (touches `nav-chrome.tsx` and the four page mounts; watch the 660px boundary), or add a skip link plus `<nav aria-label>` landmarks (new UI and strings in both catalogs). Needs its own story. [web/src/components/dashboard/nav-chrome.tsx:48]
 
@@ -424,3 +424,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] source_spec: `_bmad-artifacts/implementation/spec-breakpoint-drift-test.md`
   summary: The drift test is value-based and px-only; the underlying duplication remains. A shared exported breakpoint constant (hook `WIDE_QUERY`, `wide-viewport.ts` stub) would remove two copies outright, but needed a production change that the spec's Ask First reserved.
   evidence: Review-found. Not scanned: rem/em units, `max-width` queries, `min-[Npx]:` variants, column assertions outside `app-shell.spec.ts`. [web/src/layout-constants.drift.test.ts]
+
+## Deferred from: story creation for Epic 10 (10-1-migration-safety-on-deploy, 2026-10-02)
+
+- [open] source_story: `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md`
+  summary: Self-hosters may have no documented way to apply EF Core migrations: grep finds no migration step in `docker-compose.yml`, `Dockerfile` or `docs/self-hosting.md`, and the API never calls `Migrate()`/`MigrateAsync()` (only `scripts/migrate.sh` is documented, in `docs/local-development.md`).
+  evidence: Found while grounding story 10.1 (originally the Story 1.1 entry, marked resolved on the strength of `docs/local-development.md:32` alone). Not verified end to end against a fresh self-host install; kept out of 10.1's scope. [docs/self-hosting.md, docker-compose.yml]
