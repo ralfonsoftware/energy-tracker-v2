@@ -99,8 +99,11 @@ Container App's connection string names the database `energytracker`, which is w
    options with a smaller blast radius: a household can use its own export (Story 7.1) and restore
    from export (Story 7.2); a database restore recovers every household at once.
 2. **Restore the marker timestamp to a new database.** Take `Restore point (UTC)` from the failed
-   run's summary and subtract about a minute to absorb runner/Azure clock skew. The restored database
-   is billed at normal rates until it is deleted.
+   run's summary and subtract about a minute to absorb runner/Azure clock skew (the command printed
+   in the summary already does). The marker must not be older than `Earliest restore date` from the
+   same summary; if it is, PITR cannot reach it. The restored database is billed at normal rates
+   until it is deleted. `--service-objective Basic` assumes the production database is still on the
+   Basic tier — use its current service objective if it has been scaled.
 
    ```bash
    az sql db restore --resource-group <rg> --server <server> \
@@ -131,12 +134,18 @@ Container App's connection string names the database `energytracker`, which is w
      --name energytracker-restore-<runid> --new-name energytracker
    ```
 
-5. **Verify the app.** `GET /health` is liveness-only (it does not touch the database), so also load a
+   If the second rename fails, no database is called `energytracker`: immediately rename
+   `energytracker-bad-<runid>` back to `energytracker` to restore service, then investigate.
+
+5. **Do not redeploy the same commit.** `app-deploy.yml` applies pending migrations on every run, so
+   deploying again before the bad migration is reverted or fixed in `main` re-applies it to the
+   restored database.
+6. **Verify the app.** `GET /health` is liveness-only (it does not touch the database), so also load a
    real page that reads data and log in.
-6. **Data-loss window.** Everything written between the marker and the swap is lost. The old revision
+7. **Data-loss window.** Everything written between the marker and the swap is lost. The old revision
    keeps serving writes during the migration, so the window is at least the migration's duration plus
    however long steps 1–4 take.
-7. **Clean up.** Delete `energytracker-bad-<runid>` once it is no longer needed for forensics, plus any
+8. **Clean up.** Delete `energytracker-bad-<runid>` once it is no longer needed for forensics, plus any
    scratch databases (`az sql db delete --yes ...`). Basic databases bill hourly, so a forgotten copy
    costs money. Confirm with `az sql db list`.
 

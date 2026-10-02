@@ -197,21 +197,23 @@ jobs:
           # migration"). Only the timestamp, server and database name are mandatory; the pending
           # list and earliestRestoreDate are best-effort (the firewall rule may still be propagating)
           # and a failure to write the summary must never fail the deploy.
-          RESTORE_POINT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EARLIEST=$(az sql db show \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
             --server ${{ steps.sqlserver.outputs.name }} \
             --name energytracker \
             --query earliestRestoreDate -o tsv 2>/dev/null || true)
-          if [ -z "$EARLIEST" ]; then
-            EARLIEST="unavailable"
-            echo "::warning::Could not read earliestRestoreDate for the pre-migration restore point"
-          fi
-          if PENDING_LIST=$(dotnet ef migrations list \
+          case "$EARLIEST" in
+            ''|null|None)
+              EARLIEST="unavailable"
+              echo "::warning::Could not read earliestRestoreDate for the pre-migration restore point"
+              ;;
+          esac
+          EF_LIST_ERR="${RUNNER_TEMP:-/tmp}/ef-migrations-list.err"
+          if PENDING_LIST=$(timeout 120 dotnet ef migrations list \
             --project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
             --startup-project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
             --context EnergyTrackerDbContext \
-            --connection "$CONNECTION_STRING" 2>/dev/null); then
+            --connection "$CONNECTION_STRING" 2>"$EF_LIST_ERR") && [ -n "$PENDING_LIST" ]; then
             PENDING=$(printf '%s\n' "$PENDING_LIST" | grep -F '(Pending)' || true)
             if [ -z "$PENDING" ]; then
               PENDING="none pending"
@@ -219,7 +221,13 @@ jobs:
           else
             PENDING="unavailable"
             echo "::warning::Could not list pending migrations for the pre-migration restore point"
+            tail -n 5 "$EF_LIST_ERR" 2>/dev/null || true
           fi
+          # Captured last, right before the first attempt, so the marker sits as close to the
+          # migration as possible; the printed restore time is one minute earlier to absorb
+          # runner/Azure clock skew (matches the runbook).
+          RESTORE_POINT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          RESTORE_TIME_UTC=$(date -u -d "${RESTORE_POINT_UTC} - 1 minute" +%Y-%m-%dT%H:%M:%SZ) || RESTORE_TIME_UTC="${RESTORE_POINT_UTC}"
           {
             echo "### Pre-migration restore point"
             echo ""
@@ -230,13 +238,13 @@ jobs:
             echo "- Pending migrations:"
             echo ""
             echo '```'
-            echo "${PENDING}"
+            printf '%s\n' "${PENDING}"
             echo '```'
             echo ""
-            echo "Restore to a new database (see infra/README.md, \"Rolling back a bad migration\"):"
+            echo "Restore to a new database (see infra/README.md, \"Rolling back a bad migration\"); the time below is the marker minus one minute:"
             echo ""
             echo '```'
-            echo "az sql db restore --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --server ${{ steps.sqlserver.outputs.name }} --name energytracker --dest-name energytracker-restore-${{ github.run_id }} --time ${RESTORE_POINT_UTC} --service-objective Basic"
+            echo "az sql db restore --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --server ${{ steps.sqlserver.outputs.name }} --name energytracker --dest-name energytracker-restore-${{ github.run_id }}-${{ github.run_attempt }} --time ${RESTORE_TIME_UTC} --service-objective Basic"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY" || echo "::warning::Could not write the pre-migration restore point summary"
 

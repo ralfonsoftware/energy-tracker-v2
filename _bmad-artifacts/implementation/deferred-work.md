@@ -425,3 +425,10 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] source_story: `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md`
   summary: Self-hosters may have no documented way to apply EF Core migrations: grep finds no migration step in `docker-compose.yml`, `Dockerfile` or `docs/self-hosting.md`, and the API never calls `Migrate()`/`MigrateAsync()` (only `scripts/migrate.sh` is documented, in `docs/local-development.md`).
   evidence: Found while grounding story 10.1 (originally the Story 1.1 entry, marked resolved on the strength of `docs/local-development.md:32` alone). Not verified end to end against a fresh self-host install; kept out of 10.1's scope. [docs/self-hosting.md, docker-compose.yml]
+
+## Deferred from: code review of 10-1-migration-safety-on-deploy (2026-10-02)
+
+- [open] Expand/contract rule in `project-context.md` is advisory prose only: no lint, review-checklist item or test, and the destructive-change list omits index/constraint drops, type changes, data-modifying `Sql()` and unique indexes on existing data.
+- [open] No long-term retention (LTR) configured: a bad migration noticed after the 7-day PITR window is unrecoverable; not documented as an accepted risk.
+- [open] Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name the Azure role needed for `az sql db restore`/`rename`.
+- [open] Pending-migrations list in the restore-point block runs once before the retry loop and can read "unavailable" while the firewall rule is still propagating.

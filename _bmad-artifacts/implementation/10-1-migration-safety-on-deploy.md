@@ -4,7 +4,7 @@ baseline_commit: b503218
 
 # Story 10.1: Migration Safety on Deploy — Restore Point, Rollback Runbook, Expand/Contract Rule
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -54,10 +54,10 @@ so that a bad migration can be undone in minutes with a known data-loss window i
   - [x] Re-run the Task 2 test: green. `actionlint` is **not** installed locally; do a manual YAML review (indentation inside the `run: |` block, `${{ }}` expressions only where the existing step already uses them) and state in Completion Notes that actionlint was not available. Check that `$GITHUB_STEP_SUMMARY` markdown renders (fenced code for the restore command).
   - [x] Confirm by diff that nothing else in the file changed (AC #3).
 
-- [ ] **Task 4 (conditional on Open Question 3): explicit PITR retention in Bicep (AC #9)** — `infra/modules/database-sqlserver.bicep`
+- [x] **Task 4 (conditional on Open Question 3): explicit PITR retention in Bicep (AC #9)** — `infra/modules/database-sqlserver.bicep`
   - [x] Add `resource shortTermRetention 'Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies@2025-01-01' = { parent: sqlDatabase, name: 'default', properties: { retentionDays: 7 } }`. Do **not** set `diffBackupIntervalInHours` (DTU default is 24h; not this story's concern). Verify the resource type/API version against the Bicep reference before writing; the module already uses `@2025-01-01` for sibling resources.
   - [x] No new parameter unless Ralf wants it tunable; 7 is the Basic-tier maximum (Azure docs: Basic is configurable 1–7 days), so a larger value would fail.
-  - [ ] `pr-review.yml`'s what-if runs automatically on the PR (infra changed); it must show only the new child resource. Merging triggers `infra-deploy.yml` (path-filtered on `infra/**`) — note this redeploy also exercises the "preserve running image" logic; watch that the Container App image is not reset (`infra/README.md`, "infra-deploy.yml preserves the currently-running Container App image").
+  - [x] `pr-review.yml`'s what-if runs automatically on the PR (infra changed); it must show only the new child resource. Merging triggers `infra-deploy.yml` (path-filtered on `infra/**`) — note this redeploy also exercises the "preserve running image" logic; watch that the Container App image is not reset (`infra/README.md`, "infra-deploy.yml preserves the currently-running Container App image").
 
 - [x] **Task 5: Runbook + expand/contract rule (AC #5, #7)** — docs only
   - [x] `infra/README.md`: new section "Rolling back a bad migration (Azure SQL point-in-time restore)" next to the Entra-only auth runbook (same file, same tone: numbered steps, exact `az` commands with `<placeholders>`, "why" paragraph). Required content is AC #5. Commands to include (verify flags with `az sql db restore --help` / `az sql db rename --help` while writing; they are the documented CLI surface at story-writing time, not guaranteed identical):
@@ -87,6 +87,25 @@ so that a bad migration can be undone in minutes with a known data-loss window i
 - [x] **Task 8: Housekeeping**
   - [x] Mark the `deferred-work.md` entry resolved per the new convention (`[resolved: 10-1-migration-safety-on-deploy]` → move per `project-context.md`'s deferred-work rules: resolved entries are deleted, with the story referenced in the commit). Also update the *promoted* index line in `deferred-work.md`.
   - [x] Update `sprint-status.yaml` (`10-1-migration-safety-on-deploy`) and the File List below.
+
+### Review Findings
+
+Code review 2026-10-02 (range `b2f7b28..56400fa`; layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor).
+
+- [x] [Review][Decision] RESOLVED 2026-10-02 (Ralf, user-reported): retention is 7 days, the Azure default for the tier. AC #9 has no post-deploy evidence that retention is 7 days — Completion Notes cite only the pre-Bicep `str-policy` value (7) and a successful `infra-deploy.yml` run (37028026055). Run `az sql db str-policy show` on `energytracker` and record `retentionDays`, or accept the gap explicitly. Also reconcile the unticked Task 4 boxes (the what-if showed a "modify" with an Azure-defaulted `diffBackupIntervalInHours`, not a "clean" no-op).
+- [x] [Review][Decision] RESOLVED 2026-10-02 (Ralf): keep the step 6 data-loss warning only, no scale-to-zero step; dismissed. Runbook step 4 does not stop writes before the swap — the old revision keeps writing to the bad DB during the restore and the two renames (writes lost). Options: add a "scale the Container App to 0 replicas (or accept the loss window)" step, or keep the current warning in step 6 only.
+- [x] [Review][Patch] Summary restore command uses the raw marker, but the runbook says subtract ~1 minute; marker is also captured before the slow `az sql db show` / `dotnet ef migrations list`, widening the loss window [.github/workflows/app-deploy.yml:200,239]
+- [x] [Review][Patch] `--dest-name energytracker-restore-${{ github.run_id }}` collides on a workflow re-run (same run_id); add `run_attempt` [.github/workflows/app-deploy.yml:239]
+- [x] [Review][Patch] `dotnet ef migrations list`: stderr discarded to /dev/null and no timeout; an empty stdout with exit 0 reports "none pending" instead of "unavailable" [.github/workflows/app-deploy.yml:210-222]
+- [x] [Review][Patch] `earliestRestoreDate` accepts literal `null`/`None` as a valid date [.github/workflows/app-deploy.yml:206]
+- [x] [Review][Patch] `echo "${PENDING}"` should be `printf '%s\n'` (backslashes/leading `-n`) [.github/workflows/app-deploy.yml:233]
+- [x] [Review][Patch] Runbook gaps: recovery if the second rename fails (rename `-bad` back), marker older than `earliestRestoreDate`, the next deploy re-applies the bad migration unless reverted first, `--service-objective Basic` assumes the current SKU [infra/README.md:96-146]
+- [x] [Review][Patch] Guard test only checks the first `GITHUB_STEP_SUMMARY` mention; match the `>> "$GITHUB_STEP_SUMMARY"` redirect and the restore-point heading instead [tests/EnergyTracker.Architecture.Tests/MigrationDeployWorkflowRestorePointGuardTests.cs:30]
+- [x] [Review][Patch] Story file hygiene: stale "Not done — needs Ralf" bullets (Tasks 7/8) contradict the later "done" bullets; `deferred-work.md` missing from File List; unticked Task 4/6 boxes [10-1-migration-safety-on-deploy.md:195-214]
+- [x] [Review][Defer] Expand/contract rule is advisory prose only (no lint/checklist/test; destructive-change list incomplete) [_bmad-artifacts/project-context.md] — deferred, enforcement is a separate story
+- [x] [Review][Defer] No long-term retention (LTR): a problem noticed after 7 days is unrecoverable; not called out as an accepted risk [infra/modules/database-sqlserver.bicep] — deferred, needs a cost/risk decision
+- [x] [Review][Defer] Runbook does not verify auditing/firewall/TDE/alert settings on the swapped-in database, nor name the Azure role needed to run the restore [infra/README.md:96-146] — deferred
+- [x] [Review][Defer] Pending list is read once before the retry loop and can read "unavailable" while the firewall rule propagates (live run was fine) [.github/workflows/app-deploy.yml:210] — deferred, best-effort by design
 
 ## Dev Notes
 
@@ -192,11 +211,11 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 - Bicep: `shortTermRetention` child resource (`retentionDays: 7`) added to `database-sqlserver.bicep`; `az bicep build` compiles it into `Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies` with `retentionDays: 7`. The local Bicep CLI has no types for `@2025-01-01` and emits BCP081 warnings for every `Microsoft.Sql` resource in the module (pre-existing, not just the new one), so the PR `what-if` is the real validation.
 - Runbook added to `infra/README.md` (flags verified against `az sql db restore/rename/delete --help`); expand/contract + restore-point pointer added to `project-context.md` (Migrations).
 
-**Not done — needs Ralf (the dev agent has no `az` session):**
+**Live gates (originally needed Ralf; all since done — see the bullets below):**
 - Task 4 remainder (AC #9): PR what-if showed no `retentionDays` change (policy listed as modify with only the Azure-defaulted `diffBackupIntervalInHours` line); post-merge `infra-deploy.yml` run (37028026055) succeeded; Ralf reported the image-not-reset check done.
 - Task 6 (AC #6) — DONE, evidence here (box left unchecked only because Task 6 subtasks were not individually ticked): drill run by Ralf 2026-10-02: restore 285 s; contained users `energytracker-prod-app` and `energy-tracker-devops-uami` survived (EXTERNAL_USER); two renames 26 s; `ef migrations list` on the restored DB showed history through `20260925160743_…`. Deviations folded into the runbook: the first draft's `short-term-retention-policy` command was wrong (correct: `az sql db str-policy show`); the check ran as the operator's identity, not the CI identity. Cleanup confirmed by Ralf: `az sql db list` shows only `master` and `energytracker`; the drill firewall rule is gone. Pre-Bicep `str-policy` showed `retentionDays: 7` (Azure default), so declaring it in Bicep should be a what-if no-op on the value; the new child resource itself is still what AC #9's what-if/live run must confirm.
-- Task 7 (AC #8): observe the restore-point block in the first real `App Deploy` run.
-- Task 8: resolve the `deferred-work.md` entry (delete it and its promoted index line, referencing this story in the commit) and set `sprint-status.yaml` to `review`/`done` — deliberately deferred until the live gates pass, so a failed live check doesn't leave the item deleted.
+- Task 7 (AC #8): observe the restore-point block in the first real `App Deploy` run — done, see below.
+- Task 8: resolve the `deferred-work.md` entry (delete it and its promoted index line, referencing this story in the commit) and set `sprint-status.yaml` to `review`/`done` — done after the live gates passed (see below).
 
 - Task 7 (AC #8) — verified live by Ralf on App Deploy run 37028026236 (merge of PR #89): Summary tab showed server `energytracker-prod-qvc6vfmtp5-sql`, DB `energytracker`, restore point `2026-10-02T15:47:44Z`, earliest restore date `2026-09-25T15:47:45Z`, "none pending", and the restore command in a fenced block. Log scan: all steps in original order succeeded, no warnings, no secrets echoed; "No migrations were applied".
 - Task 8: `deferred-work.md` entry and its promoted index line deleted (resolved by this story); sprint status updated by the close-out commit.
@@ -212,7 +231,9 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 - `_bmad-artifacts/project-context.md` (modified)
 - `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md` (story file)
 - `_bmad-artifacts/implementation/sprint-status.yaml` (modified)
+- `_bmad-artifacts/implementation/deferred-work.md` (modified)
 
 ### Change Log
 
 - 2026-10-02: Added pre-migration restore-point summary block, guard test, 7-day PITR retention in Bicep, rollback runbook and expand/contract rule. Live gates passed (PR #89 merged; drill, deploy verification and deferred-work close-out done).
+- 2026-10-02: Code review patches applied (restore time minus 1 min and marker captured last, `run_attempt` in dest-name, `ef migrations list` timeout/stderr/empty handling, `earliestRestoreDate` null guard, `printf`, runbook gaps, tighter guard test). The patched summary block has not yet run in CI.
