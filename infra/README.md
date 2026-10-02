@@ -79,6 +79,90 @@ lookup is empty and the parameter's own default (the placeholder image) is used,
 the Container App still bootstraps correctly on first deploy, and only starts running a real image
 once `app-deploy.yml` first runs.
 
+### Rolling back a bad migration (Azure SQL point-in-time restore)
+
+`app-deploy.yml` applies EF Core migrations **before** it deploys the new revision, and the old
+revision keeps serving traffic (and writes) while they run. Azure SQL already takes automatic
+backups and supports point-in-time restore (PITR); the migration step records a restore marker in
+the run's **Summary** tab ("Pre-migration restore point": UTC timestamp, server, database, pending
+migrations, `earliestRestoreDate`, and the ready-made `az sql db restore` command). Retention is
+declared in `modules/database-sqlserver.bicep` (`backupShortTermRetentionPolicies`, 7 days — the
+Basic-tier maximum). This is the runbook for using that marker. Azure cannot overwrite an existing
+database during a restore, so a rollback is **restore to a new database, then swap names** — the
+Container App's connection string names the database `energytracker`, which is why the swap uses
+`az sql db rename` instead of repointing the app.
+
+1. **Decide: forward-fix or restore.** A restore throws away every write made since the marker —
+   including writes the *old* revision accepted while the migration ran. If the bad migration only
+   needs a corrective follow-up migration (and no data was lost), prefer a forward-fix deploy. Restore
+   only when data or schema is damaged in a way a new migration cannot repair. Other recovery
+   options with a smaller blast radius: a household can use its own export (Story 7.1) and restore
+   from export (Story 7.2); a database restore recovers every household at once.
+2. **Restore the marker timestamp to a new database.** Take `Restore point (UTC)` from the failed
+   run's summary and subtract about a minute to absorb runner/Azure clock skew. The restored database
+   is billed at normal rates until it is deleted.
+
+   ```bash
+   az sql db restore --resource-group <rg> --server <server> \
+     --name energytracker --dest-name energytracker-restore-<runid> \
+     --time <marker-minus-1min, e.g. 2026-10-02T13:24:00Z> --service-objective Basic
+   ```
+
+3. **Verify the restored database before swapping.** Connect as the CI identity (a temporary
+   firewall rule is needed — copy the pattern from `app-deploy.yml`, and remove it afterwards) and
+   check that `dotnet ef migrations list` shows the **pre-migration** set, with the bad migration
+   `(Pending)`:
+
+   ```bash
+   dotnet ef migrations list \
+     --project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
+     --startup-project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
+     --context EnergyTrackerDbContext \
+     --connection "Server=tcp:<server-fqdn>,1433;Database=energytracker-restore-<runid>;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+   ```
+
+4. **Swap the names** (old → bad, restored → live). Between the two commands there is no database
+   called `energytracker`; the Container App's connections fail and must reconnect.
+
+   ```bash
+   az sql db rename --resource-group <rg> --server <server> \
+     --name energytracker --new-name energytracker-bad-<runid>
+   az sql db rename --resource-group <rg> --server <server> \
+     --name energytracker-restore-<runid> --new-name energytracker
+   ```
+
+5. **Verify the app.** `GET /health` is liveness-only (it does not touch the database), so also load a
+   real page that reads data and log in.
+6. **Data-loss window.** Everything written between the marker and the swap is lost. The old revision
+   keeps serving writes during the migration, so the window is at least the migration's duration plus
+   however long steps 1–4 take.
+7. **Clean up.** Delete `energytracker-bad-<runid>` once it is no longer needed for forensics, plus any
+   scratch databases (`az sql db delete --yes ...`). Basic databases bill hourly, so a forgotten copy
+   costs money. Confirm with `az sql db list`.
+
+**Why not `dotnet ef database update <previous migration>`?** The `Down()` methods are scaffolded and
+never rehearsed, and they cannot restore data that a destructive `Up()` already dropped. PITR is the
+rollback mechanism; migrations are written to be safe instead (expand/contract, see
+`_bmad-artifacts/project-context.md`, Migrations).
+
+_Drill (2026-10-02, Story 10.1, production `energytracker` restored from a point 15 minutes earlier into a
+scratch database on the same server):_
+
+- **Restore duration: 285 s** (~5 min) for the current production size. Expect it to grow with the
+  database; this is the floor for the time to recovery, before verification and the swap.
+- **Contained Entra users survive the restore.** Both `energytracker-prod-app` and
+  `energy-tracker-devops-uami` were present as `EXTERNAL_USER` in the restored database, so no
+  `grant-entra-db-users.sql` re-run is needed.
+- **Two consecutive `az sql db rename` calls took 26 s** in total — that is the window in which no
+  database named `energytracker` exists. Connections from the Container App fail during it and must
+  reconnect.
+- `dotnet ef migrations list` against the restored database listed the migration history up to
+  `20260925160743_AddSmartPlugReadingHouseholdIntervalStartIdIndex`. The drill ran against an
+  up-to-date schema, so the "bad migration shows `(Pending)`" outcome in step 3 was not exercised
+  with a real bad migration.
+- The drill connected with the operator's own Entra identity, not `energy-tracker-devops-uami`; the
+  CI identity's access was confirmed only by its contained user being present.
+
 ## One-time identity bootstrap (already done — reference only)
 
 The workflow authenticates to Azure via OIDC federated-credential login
