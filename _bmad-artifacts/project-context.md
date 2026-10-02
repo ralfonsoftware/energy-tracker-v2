@@ -130,6 +130,9 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Workflow-level `concurrency` cancels in-progress runs on new pushes to the same PR.
 - **NuGet Audit gate (`Directory.Build.props`):** `NuGetAuditMode=all` + `NuGetAuditLevel=moderate` + `NU1902`–`NU1904` in `WarningsAsErrors` — a moderate-or-worse advisory on a direct **or transitive** package fails `dotnet restore` (the `build-test-lint` job's first step), not just warns. Don't suppress an NU190x code to unblock a PR — bump/replace the offending package (see `spec-nuget-audit-ci-gate.md`, `spec-ssh-net-cve-fix.md`).
 
+**`_bmad-artifacts/implementation/deferred-work.md` convention:**
+- **Append new sections at the end of the file, in chronological order (oldest first, newest last).** Never insert at the top. This matches what the `bmad-code-review` skill does, and the Epic 8 retro found that mixed insertion order (newest-first sections interleaved with appended ones) was a main reason the file became hard to read (519 lines, ~58 sections). Each section keeps the heading `## Deferred from: code review of <story-or-spec> (<YYYY-MM-DD>)`. Traces to the Epic 8 retro (2026-10-02, Action #5).
+
 **Migrations:**
 - Always add migrations via `scripts/add-migration.sh <Name>` — never `dotnet ef migrations add` directly against one provider project (AD-2).
 

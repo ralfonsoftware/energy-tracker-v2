@@ -319,8 +319,8 @@ action_items:
   - epic: 8
     action: "Record deferred-work.md convention (append new sections at the end, chronological) in project-context.md"
     owner: "Amelia"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+    status: done
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: doc-only, committed directly on main per Ralf's instruction — project-context.md Development Workflow Rules, new 'deferred-work.md convention' block (append at end, chronological, never insert at top)."
   - epic: 8
     action: "Triage all ~165 deferred-work.md entries into resolved/accepted/still-open (themed index)/promote; proposal for Ralf's approval before any deletion; needs a spec doc"
     owner: "Amelia/Charlie/Dana"
