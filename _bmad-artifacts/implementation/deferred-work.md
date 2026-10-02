@@ -549,3 +549,13 @@
 - [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
   summary: Tab-order coverage gaps: the tagging-scaffold wide grid (expanded `col-span-full` tiles), Dashboard reordering, Events tiles (no focusable controls), Settings at 659px, the Profile menu below 900px and other close paths (outside click), and non-Chromium browsers.
   evidence: Review-found; none has a known defect (tagging grid sets no `dense` flow, Dashboard has no `wide:order-*`). The current spec covers the surfaces named in Epic 8 retro action #2. [web/e2e/tab-order.spec.ts]
+
+## Breakpoint/column drift guard (spec-breakpoint-drift-test, Epic 8 retro action #3)
+
+- [resolved: spec-breakpoint-drift-test] source_spec: `_bmad-artifacts/implementation/spec-breakpoint-drift-test.md`
+  summary: Resolves the Story 8.12 deferral that the 660px breakpoint lives in `--breakpoint-wide`, `WIDE_QUERY` and e2e with no sync check, and the repetition of `max-w-[900px]` across four pages. `web/src/layout-constants.drift.test.ts` now fails naming any copy that drifts.
+  evidence: Verified by mutation (breakpoint 700px, one wrapper 880px): the test fails naming the stale copies. The earlier entry on Settings and Tariff Radar lacking unit-level `wide:max-w-[900px]` assertions stays [open]; the drift test only checks the class value, not that each page has a unit test.
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-breakpoint-drift-test.md`
+  summary: The drift test is value-based and px-only; the underlying duplication remains. A shared exported breakpoint constant (hook `WIDE_QUERY`, `wide-viewport.ts` stub) would remove two copies outright, but needed a production change that the spec's Ask First reserved.
+  evidence: Review-found. Not scanned: rem/em units, `max-width` queries, `min-[Npx]:` variants, column assertions outside `app-shell.spec.ts`. [web/src/layout-constants.drift.test.ts]
