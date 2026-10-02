@@ -4,7 +4,7 @@ baseline_commit: b503218
 
 # Story 10.1: Migration Safety on Deploy — Restore Point, Rollback Runbook, Expand/Contract Rule
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -71,22 +71,22 @@ so that a bad migration can be undone in minutes with a known data-loss window i
   - [x] `_bmad-artifacts/project-context.md`: extend the **Migrations** block (currently one bullet, line ~137) with the expand/contract rule from AC #7 and a one-line pointer to the runbook and to the step-summary restore marker. Keep it to a short block — this file is auto-loaded into every dev-story/code-review run.
   - [x] Cross-link: one line in `docs/local-vs-azure-deltas.md` is **not** needed (this is Azure-only operations, not a local/Azure structural delta); do not add one.
 
-- [ ] **Task 6: Live rehearsal of the restore (AC #6)** — human-run or human-supervised; **Ralf's Azure login needed, the dev agent has no `az` session**
-  - [ ] Using the runbook text verbatim, restore production `energytracker` at a timestamp ~10+ minutes in the past into `energytracker-drill-<yyyymmdd>`; record start/finish time (restore duration is the headline number for the data-loss/downtime discussion).
-  - [ ] Verify connect as the CI identity (`dotnet ef migrations list --connection "…Database=energytracker-drill-…;Authentication=Active Directory Default…"`) — the run needs the temporary firewall rule pattern from `app-deploy.yml`; remove it afterwards.
-  - [ ] Verify the Container App identity's access if feasible (or record that contained-user presence was checked via `SELECT name FROM sys.database_principals WHERE type = 'E' OR type = 'X'` instead).
-  - [ ] Rename round-trip on **scratch** databases only (never production): drill DB → `…-b` → back; record elapsed time.
-  - [ ] Delete the drill databases and any firewall rule; confirm with `az sql db list`. Basic is hourly-billed; leaving a drill DB running is the only cost risk in this story.
-  - [ ] Fold every deviation (flag names, timing, user survival) back into the runbook text. Record the evidence (commands + outputs, secrets redacted) in Completion Notes.
+- [x] **Task 6: Live rehearsal of the restore (AC #6)** — human-run or human-supervised; **Ralf's Azure login needed, the dev agent has no `az` session**
+  - [x] Using the runbook text verbatim, restore production `energytracker` at a timestamp ~10+ minutes in the past into `energytracker-drill-<yyyymmdd>`; record start/finish time (restore duration is the headline number for the data-loss/downtime discussion).
+  - [x] (Accepted deviation — see Completion Notes) Verify connect as the CI identity (`dotnet ef migrations list --connection "…Database=energytracker-drill-…;Authentication=Active Directory Default…"`) — the run needs the temporary firewall rule pattern from `app-deploy.yml`; remove it afterwards.
+  - [x] Verify the Container App identity's access if feasible (or record that contained-user presence was checked via `SELECT name FROM sys.database_principals WHERE type = 'E' OR type = 'X'` instead).
+  - [x] Rename round-trip on **scratch** databases only (never production): drill DB → `…-b` → back; record elapsed time.
+  - [x] Delete the drill databases and any firewall rule; confirm with `az sql db list`. Basic is hourly-billed; leaving a drill DB running is the only cost risk in this story.
+  - [x] Fold every deviation (flag names, timing, user survival) back into the runbook text. Record the evidence (commands + outputs, secrets redacted) in Completion Notes.
 
-- [ ] **Task 7: Live verification of the deploy step (AC #8) — gate, same standard as the Auth0/Chrome gate in `project-context.md`**
-  - [ ] After merge, observe the first `App Deploy` run: open the run's Summary tab and confirm the restore-point block (timestamp, server, DB, pending/none, `earliestRestoreDate`, restore command) renders correctly. A unit/guard test alone does not satisfy this; if it cannot be observed (no push happens), trigger `workflow_dispatch` on `main`.
-  - [ ] Confirm the remaining steps (firewall removal, ACR login, deploy, health check) behaved exactly as before, and that no secret appears in the log.
-  - [ ] The story stays in `review` until this is observed; do not mark Task 7 complete from the guard test.
+- [x] **Task 7: Live verification of the deploy step (AC #8) — gate, same standard as the Auth0/Chrome gate in `project-context.md`**
+  - [x] After merge, observe the first `App Deploy` run: open the run's Summary tab and confirm the restore-point block (timestamp, server, DB, pending/none, `earliestRestoreDate`, restore command) renders correctly. A unit/guard test alone does not satisfy this; if it cannot be observed (no push happens), trigger `workflow_dispatch` on `main`.
+  - [x] Confirm the remaining steps (firewall removal, ACR login, deploy, health check) behaved exactly as before, and that no secret appears in the log.
+  - [x] The story stays in `review` until this is observed; do not mark Task 7 complete from the guard test.
 
-- [ ] **Task 8: Housekeeping**
-  - [ ] Mark the `deferred-work.md` entry resolved per the new convention (`[resolved: 10-1-migration-safety-on-deploy]` → move per `project-context.md`'s deferred-work rules: resolved entries are deleted, with the story referenced in the commit). Also update the *promoted* index line in `deferred-work.md`.
-  - [ ] Update `sprint-status.yaml` (`10-1-migration-safety-on-deploy`) and the File List below.
+- [x] **Task 8: Housekeeping**
+  - [x] Mark the `deferred-work.md` entry resolved per the new convention (`[resolved: 10-1-migration-safety-on-deploy]` → move per `project-context.md`'s deferred-work rules: resolved entries are deleted, with the story referenced in the commit). Also update the *promoted* index line in `deferred-work.md`.
+  - [x] Update `sprint-status.yaml` (`10-1-migration-safety-on-deploy`) and the File List below.
 
 ## Dev Notes
 
@@ -193,10 +193,15 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 - Runbook added to `infra/README.md` (flags verified against `az sql db restore/rename/delete --help`); expand/contract + restore-point pointer added to `project-context.md` (Migrations).
 
 **Not done — needs Ralf (the dev agent has no `az` session):**
-- Task 4 remainder (AC #9): clean PR `what-if`, then a live `infra-deploy.yml` run leaving the DB at 7 days, watching that the Container App image is not reset.
+- Task 4 remainder (AC #9): PR what-if showed no `retentionDays` change (policy listed as modify with only the Azure-defaulted `diffBackupIntervalInHours` line); post-merge `infra-deploy.yml` run (37028026055) succeeded; Ralf reported the image-not-reset check done.
 - Task 6 (AC #6) — DONE, evidence here (box left unchecked only because Task 6 subtasks were not individually ticked): drill run by Ralf 2026-10-02: restore 285 s; contained users `energytracker-prod-app` and `energy-tracker-devops-uami` survived (EXTERNAL_USER); two renames 26 s; `ef migrations list` on the restored DB showed history through `20260925160743_…`. Deviations folded into the runbook: the first draft's `short-term-retention-policy` command was wrong (correct: `az sql db str-policy show`); the check ran as the operator's identity, not the CI identity. Cleanup confirmed by Ralf: `az sql db list` shows only `master` and `energytracker`; the drill firewall rule is gone. Pre-Bicep `str-policy` showed `retentionDays: 7` (Azure default), so declaring it in Bicep should be a what-if no-op on the value; the new child resource itself is still what AC #9's what-if/live run must confirm.
 - Task 7 (AC #8): observe the restore-point block in the first real `App Deploy` run.
 - Task 8: resolve the `deferred-work.md` entry (delete it and its promoted index line, referencing this story in the commit) and set `sprint-status.yaml` to `review`/`done` — deliberately deferred until the live gates pass, so a failed live check doesn't leave the item deleted.
+
+- Task 7 (AC #8) — verified live by Ralf on App Deploy run 37028026236 (merge of PR #89): Summary tab showed server `energytracker-prod-qvc6vfmtp5-sql`, DB `energytracker`, restore point `2026-10-02T15:47:44Z`, earliest restore date `2026-09-25T15:47:45Z`, "none pending", and the restore command in a fenced block. Log scan: all steps in original order succeeded, no warnings, no secrets echoed; "No migrations were applied".
+- Task 8: `deferred-work.md` entry and its promoted index line deleted (resolved by this story); sprint status updated by the close-out commit.
+
+- Task 6 deviation ACCEPTED by Ralf (2026-10-02): the drill connected as the operator's Entra identity, not `energy-tracker-devops-uami`, so AC #6's "connectivity verified as the CI identity" was met only indirectly — the CI identity's contained user was present in the restored database, and the live App Deploy (run 37028026236) connected to the live database as that identity. Accepted as sufficient.
 
 ### File List
 
@@ -210,4 +215,4 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 
 ### Change Log
 
-- 2026-10-02: Added pre-migration restore-point summary block, guard test, 7-day PITR retention in Bicep, rollback runbook and expand/contract rule. Live gates (Tasks 4-remainder, 6, 7, 8) outstanding.
+- 2026-10-02: Added pre-migration restore-point summary block, guard test, 7-day PITR retention in Bicep, rollback runbook and expand/contract rule. Live gates passed (PR #89 merged; drill, deploy verification and deferred-work close-out done).
