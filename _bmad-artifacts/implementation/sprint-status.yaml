@@ -329,5 +329,5 @@ action_items:
   - epic: 8
     action: "Add status marker ([open]/[resolved: story]/[accepted: reason]) to deferred-work entries going forward; review open items at each epic retro"
     owner: "Amelia"
-    status: open
+    status: done
     note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."

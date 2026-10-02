@@ -132,6 +132,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **`_bmad-artifacts/implementation/deferred-work.md` convention:**
 - **Append new sections at the end of the file, in chronological order (oldest first, newest last).** Never insert at the top. This matches what the `bmad-code-review` skill does, and the Epic 8 retro found that mixed insertion order (newest-first sections interleaved with appended ones) was a main reason the file became hard to read (519 lines, ~58 sections). Each section keeps the heading `## Deferred from: code review of <story-or-spec> (<YYYY-MM-DD>)`. Traces to the Epic 8 retro (2026-10-02, Action #5).
+- **Every entry starts with a status marker:** `[open]`, `[resolved: <story-or-spec>]`, or `[accepted: <reason, plus revisit trigger if any>]` (`[promoted: needs story]` while a promoted item has no story yet). New entries are written `[open]`. When an entry is resolved or accepted, move it out of `deferred-work.md` (resolved: delete; accepted: move to `deferred-work-accepted.md`) instead of leaving it. Review the open items, and the themed index at the top of the file, at each epic retro. Traces to the Epic 8 retro (2026-10-02, Action #7); the 2026-10-02 triage (`spec-deferred-work-triage.md`) established the two-file split.
 
 **Migrations:**
 - Always add migrations via `scripts/add-migration.sh <Name>` — never `dotnet ef migrations add` directly against one provider project (AD-2).
