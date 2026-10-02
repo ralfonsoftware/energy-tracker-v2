@@ -309,8 +309,8 @@ action_items:
   - epic: 8
     action: "Breakpoint/column single source of truth: drift test tying --breakpoint-wide, WIDE_QUERY, e2e boundary values and the max-w-[900px] literal"
     owner: "Charlie"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+    status: done
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: spec-breakpoint-drift-test (branch chore/breakpoint-drift-test) — web/src/layout-constants.drift.test.ts, no production change; px-only, value-based. Shared-constant follow-up logged in deferred-work.md as open. Merged in PR #87."
   - epic: 8
     action: "Document the live-resize verification procedure (real tab at target width) in project-context.md process gates"
     owner: "Amelia"
