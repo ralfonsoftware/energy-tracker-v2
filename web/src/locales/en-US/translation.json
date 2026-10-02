@@ -43,7 +43,8 @@
     "sections": {
       "aiPlausibilityCheck": "AI Plausibility Check",
       "household": "Household",
-      "data": "Data"
+      "data": "Data",
+      "account": "Account"
     },
     "logoff": {
       "trigger": "Log off",

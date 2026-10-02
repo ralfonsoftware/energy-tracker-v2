@@ -43,7 +43,8 @@
     "sections": {
       "aiPlausibilityCheck": "KI-Plausibilitätsprüfung",
       "household": "Haushalt",
-      "data": "Daten"
+      "data": "Daten",
+      "account": "Konto"
     },
     "logoff": {
       "trigger": "Abmelden",

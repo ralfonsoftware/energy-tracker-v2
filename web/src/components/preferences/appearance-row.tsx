@@ -7,7 +7,7 @@ import { PreferenceRow } from './preference-row'
 import { PreferenceStrip } from './preference-strip'
 
 // Story 8.10 (FR-35, UX-DR32): theme override, stored per device by lib/color-scheme.ts.
-export function AppearanceRow() {
+export function AppearanceRow({ rowClassName }: { rowClassName?: string }) {
   const { t } = useTranslation()
   const { preference, system, setPreference } = useThemePreference()
   const labelId = useId()
@@ -20,6 +20,7 @@ export function AppearanceRow() {
       label={t('preferences.appearance.label')}
       subLabel={t('preferences.appearance.scope')}
       labelId={labelId}
+      className={rowClassName}
     >
       <PreferenceStrip<ThemePreference>
         ariaLabelledBy={labelId}

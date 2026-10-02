@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { SettingsPage } from './settings-page'
 import { enqueue } from '@/lib/offline-queue'
+import { HouseholdLocaleContext } from '@/lib/household-locale-context'
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
@@ -274,6 +275,95 @@ describe('SettingsPage', () => {
       expect(screen.queryByRole('heading', { name: 'Log off?' })).not.toBeInTheDocument()
       expect(window.location.href).toBe('')
       restoreLocation()
+    })
+  })
+
+  describe('Account group / Preferences card (Story 8.12, UX-DR33)', () => {
+    function stubMatchMedia(initial: boolean) {
+      let matches = initial
+      const listeners = new Set<() => void>()
+      const mql = {
+        get matches() {
+          return matches
+        },
+        media: '(min-width: 660px)',
+        addEventListener: (_: string, cb: () => void) => listeners.add(cb),
+        removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+      }
+      vi.stubGlobal('matchMedia', vi.fn(() => mql))
+      return {
+        set(value: boolean) {
+          matches = value
+          act(() => listeners.forEach((cb) => cb()))
+        },
+      }
+    }
+
+    it('below 660px shows the Account heading, then the Preferences card, then Log off', async () => {
+      stubFetch()
+      renderSettingsPage(false)
+
+      const heading = await screen.findByRole('heading', { level: 2, name: 'Account' })
+      const card = screen.getByTestId('preferences-card')
+      const logoff = screen.getByRole('button', { name: 'Log off' })
+      expect(within(card).getByRole('radiogroup', { name: 'Appearance' })).toBeInTheDocument()
+      expect(within(card).getByRole('radiogroup', { name: 'Language' })).toBeInTheDocument()
+      expect(heading.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(card.compareDocumentPosition(logoff) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+      // The new Account wrapper must not break Log off: it still opens the confirm dialog.
+      await userEvent.setup().click(logoff)
+      expect(await screen.findByRole('heading', { name: 'Log off?' })).toBeInTheDocument()
+    })
+
+    it('at >=660px does not render the card or its radiogroups; Log off stays in the DOM (CSS-hidden)', async () => {
+      stubMatchMedia(true)
+      stubFetch()
+      renderSettingsPage(false)
+
+      await screen.findByRole('button', { name: 'Log off' })
+      expect(screen.queryByTestId('preferences-card')).not.toBeInTheDocument()
+      expect(screen.queryByRole('radiogroup', { name: 'Appearance' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('radiogroup', { name: 'Language' })).not.toBeInTheDocument()
+      expect(screen.getByTestId('settings-account-group')).toHaveClass('wide:hidden')
+    })
+
+    it('unmounts the card when the viewport crosses 660px, even with a Language save in flight', async () => {
+      const media = stubMatchMedia(false)
+      const user = userEvent.setup()
+      let resolvePut!: (r: Response) => void
+      const setLocale = vi.fn()
+      stubFetch()
+      const baseFetch = globalThis.fetch as (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: string | URL | Request, init?: RequestInit) =>
+          String(input) === `/api/households/${householdId}/locale`
+            ? new Promise<Response>((r) => (resolvePut = r))
+            : baseFetch(input, init),
+        ),
+      )
+      render(
+        <HouseholdLocaleContext.Provider value={{ locale: 'en-US', setLocale }}>
+          <SettingsPage
+            householdId={householdId}
+            supportsFederatedLogout={false}
+            email={null}
+            onBack={() => {}}
+            onTrendHistoryClick={() => {}}
+            onTariffRadarClick={() => {}}
+          />
+        </HouseholdLocaleContext.Provider>,
+      )
+
+      await user.click(await screen.findByRole('radio', { name: 'Deutsch' }))
+      expect(resolvePut).toBeDefined()
+      media.set(true)
+      expect(screen.queryByTestId('preferences-card')).not.toBeInTheDocument()
+
+      // The in-flight save still lands in App-level context; only the card's announcement is dropped.
+      await act(async () => resolvePut(new Response('{}', { status: 200 })))
+      await waitFor(() => expect(setLocale).toHaveBeenCalledWith('de-DE'))
     })
   })
 })

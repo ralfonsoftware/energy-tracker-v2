@@ -17,11 +17,13 @@ interface LanguageRowProps {
   householdId: string
   // Writes the post-save announcement into a live region that outlives the menu (see ProfileMenu).
   onAnnounce?: (message: string) => void
+  // Story 8.12: lets the Settings card trim the row's horizontal padding; the menu passes nothing.
+  rowClassName?: string
 }
 
 // Story 8.11 (FR-34, UX-DR32): Household.Locale switch. Reads the persisted Locale and setLocale from
 // HouseholdLocaleContext so Story 8.12's Settings card can mount it unchanged.
-export function LanguageRow({ householdId, onAnnounce }: LanguageRowProps) {
+export function LanguageRow({ householdId, onAnnounce, rowClassName }: LanguageRowProps) {
   const { t } = useTranslation()
   const { locale: persistedLocale, setLocale } = useHouseholdLocale()
   const online = useOnlineStatus()
@@ -66,6 +68,7 @@ export function LanguageRow({ householdId, onAnnounce }: LanguageRowProps) {
         label={t('preferences.language.label')}
         subLabel={online ? t('preferences.language.scope') : t('preferences.language.offline')}
         labelId={labelId}
+        className={rowClassName}
       >
         <PreferenceStrip<LocaleValue>
           ariaLabelledBy={labelId}
@@ -81,7 +84,7 @@ export function LanguageRow({ householdId, onAnnounce }: LanguageRowProps) {
         />
       </PreferenceRow>
       {error && (
-        <p role="alert" className="text-destructive px-2 pb-1 text-[11px] leading-snug">
+        <p role="alert" className={`text-destructive ${rowClassName ?? 'px-2'} pb-1 text-[11px] leading-snug`}>
           {t('preferences.language.error', { language: endonym(persistedLocale) })}
         </p>
       )}
