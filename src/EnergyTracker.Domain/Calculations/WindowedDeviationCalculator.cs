@@ -18,6 +18,25 @@ public static class WindowedDeviationCalculator
     private static readonly IReadOnlyDictionary<Guid, MeterRegressionPrompt> NoResolvedPrompts =
         new Dictionary<Guid, MeterRegressionPrompt>();
 
+    // AD-12: an open MeterRegressionPrompt excludes its triggering reading and everything
+    // chronologically at or after it (ReadingTimestamp, then Id). Unlike
+    // PatternDetectiveCalculator.ExcludeFromOpenPrompt, the boundary reading is passed by value and
+    // need not be in the sequence: a ±7-day slice routinely does not contain it (before the window
+    // → everything is excluded; after it → nothing is).
+    public static IReadOnlyList<MeterReading> ExcludeAtOrAfter(
+        IReadOnlyList<MeterReading> orderedReadings, MeterReading? boundary)
+    {
+        if (boundary is null)
+        {
+            return orderedReadings;
+        }
+
+        return orderedReadings
+            .Where(r => r.ReadingTimestamp < boundary.ReadingTimestamp
+                || (r.ReadingTimestamp == boundary.ReadingTimestamp && r.Id.CompareTo(boundary.Id) < 0))
+            .ToList();
+    }
+
     // AC #2: caller decides which readings fall in the window and passes them in already —
     // mirrors PatternDetectiveCalculator.ComputePaceToDate's "caller supplies the already-windowed
     // sequence" shape rather than this static method reaching for a repository itself.
@@ -33,8 +52,8 @@ public static class WindowedDeviationCalculator
     // current-previous delta is meaningless and must be corrected (Rollover) or voided (Reset),
     // exactly like the trailing-365-day pace walk does — a meter rollover/reset landing inside an
     // Event's ±7-day window would otherwise poison this first/last delta into a spurious Bump/Dip.
-    // (AD-12's *open*-prompt exclusion is a separate, earlier concern — deliberately still deferred,
-    // see deferred-work.md — this only ever sees resolved prompts.)
+    // (AD-12's *open*-prompt exclusion is a separate, earlier step — ExcludeAtOrAfter below — so
+    // this only ever sees resolved prompts.)
     public static AiPlausibilityDirection? ComputeDeviation(
         IReadOnlyList<MeterReading> readingsInWindow,
         decimal yearlyBaselineKwh,

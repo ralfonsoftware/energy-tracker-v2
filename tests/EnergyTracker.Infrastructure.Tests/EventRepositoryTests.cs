@@ -345,6 +345,126 @@ public abstract class EventRepositoryTestsBase
         await Should.NotThrowAsync(() =>
             repository.SetCorrelationAsync(Guid.NewGuid(), "Bump", DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
     }
+
+    // Story 10.2 — CorrelateEvent's re-evaluation can retract a correlation, so "clear" must be
+    // expressible: both columns null.
+    [Fact]
+    public async Task SetCorrelationAsync_with_nulls_clears_both_fields()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var @event = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "gaming session 3h",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        await repository.AddAsync(@event, TestContext.Current.CancellationToken);
+        await repository.SetCorrelationAsync(@event.Id, "Bump", DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+
+        await repository.SetCorrelationAsync(@event.Id, null, null, TestContext.Current.CancellationToken);
+
+        await using var freshDbContext = OpenFreshDbContext(householdId);
+        var reloaded = await freshDbContext.Events.SingleAsync(e => e.Id == @event.Id, TestContext.Current.CancellationToken);
+        reloaded.CorrelationDirection.ShouldBeNull();
+        reloaded.CorrelationComputedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task FindByIdAsync_returns_the_Event_or_null()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var @event = new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "cooked 2h",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        await repository.AddAsync(@event, TestContext.Current.CancellationToken);
+
+        var found = await repository.FindByIdAsync(@event.Id, TestContext.Current.CancellationToken);
+        var missing = await repository.FindByIdAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        found.ShouldNotBeNull();
+        found.Description.ShouldBe("cooked 2h");
+        missing.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetByOccurredAtRangeAsync_is_inclusive_at_both_ends_and_ordered_by_OccurredAt_then_Id()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var from = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var to = from.AddDays(14);
+
+        Event NewEvent(string description, DateTimeOffset occurredAt, Guid? id = null) => new()
+        {
+            Id = id ?? Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = description,
+            OccurredAt = occurredAt,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+
+        var tooEarly = NewEvent("too early", from.AddSeconds(-1));
+        var atFrom = NewEvent("at from", from);
+        var middle = NewEvent("middle", from.AddDays(3));
+        var atTo = NewEvent("at to", to);
+        var tooLate = NewEvent("too late", to.AddSeconds(1));
+        foreach (var @event in new[] { atTo, tooLate, middle, tooEarly, atFrom })
+        {
+            await repository.AddAsync(@event, TestContext.Current.CancellationToken);
+        }
+
+        var result = await repository.GetByOccurredAtRangeAsync(from, to, TestContext.Current.CancellationToken);
+
+        result.Select(e => e.Id).ShouldBe([atFrom.Id, middle.Id, atTo.Id]);
+    }
+
+    [Fact]
+    public async Task GetByOccurredAtRangeAsync_excludes_another_Households_Events()
+    {
+        var householdId = Guid.NewGuid();
+        var otherHouseholdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, otherHouseholdId, TestContext.Current.CancellationToken);
+        var repository = new EventRepository(dbContext);
+        var occurredAt = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        await repository.AddAsync(new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            Description = "not yours",
+            OccurredAt = occurredAt,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }, TestContext.Current.CancellationToken);
+        await repository.AddAsync(new Event
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "yours",
+            OccurredAt = occurredAt,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }, TestContext.Current.CancellationToken);
+
+        var result = await repository.GetByOccurredAtRangeAsync(
+            occurredAt.AddDays(-1), occurredAt.AddDays(1), TestContext.Current.CancellationToken);
+
+        result.Single().Description.ShouldBe("yours");
+    }
 }
 
 public class PostgresEventRepositoryTests : EventRepositoryTestsBase, IAsyncLifetime

@@ -20,9 +20,9 @@ public class WindowedDeviationCalculatorTests
     private const decimal ExpectedKwh = 200m;
     private const decimal ThresholdKwh = 20m;
 
-    private static MeterReading Reading(decimal kwhValue, DateTimeOffset readingTimestamp) => new()
+    private static MeterReading Reading(decimal kwhValue, DateTimeOffset readingTimestamp, Guid? id = null) => new()
     {
-        Id = Guid.NewGuid(),
+        Id = id ?? Guid.NewGuid(),
         HouseholdId = Guid.NewGuid(),
         MainMeterId = Guid.NewGuid(),
         KwhValue = kwhValue,
@@ -209,5 +209,61 @@ public class WindowedDeviationCalculatorTests
         // prorated threshold band, so no deviation. A voided pre-Reset leg would otherwise have
         // pulled the raw last-minus-first delta (ExpectedKwh - 995, a huge spurious Dip) instead.
         result.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ExcludeAtOrAfter_with_no_boundary_returns_the_input_unchanged()
+    {
+        IReadOnlyList<MeterReading> readings = [Reading(1m, WindowStart), Reading(2m, WindowStart + TimeSpan.FromDays(1))];
+
+        WindowedDeviationCalculator.ExcludeAtOrAfter(readings, null).ShouldBe(readings);
+    }
+
+    [Fact]
+    public void ExcludeAtOrAfter_with_a_boundary_before_the_window_returns_empty()
+    {
+        IReadOnlyList<MeterReading> readings = [Reading(1m, WindowStart), Reading(2m, WindowStart + TimeSpan.FromDays(1))];
+        var boundary = Reading(0m, WindowStart - TimeSpan.FromDays(3));
+
+        WindowedDeviationCalculator.ExcludeAtOrAfter(readings, boundary).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ExcludeAtOrAfter_with_a_boundary_after_the_window_keeps_every_reading()
+    {
+        IReadOnlyList<MeterReading> readings = [Reading(1m, WindowStart), Reading(2m, WindowStart + TimeSpan.FromDays(1))];
+        var boundary = Reading(9m, WindowStart + TimeSpan.FromDays(30));
+
+        WindowedDeviationCalculator.ExcludeAtOrAfter(readings, boundary).ShouldBe(readings);
+    }
+
+    [Fact]
+    public void ExcludeAtOrAfter_with_a_boundary_inside_the_window_keeps_only_the_prefix()
+    {
+        var first = Reading(1m, WindowStart);
+        var trigger = Reading(2m, WindowStart + TimeSpan.FromDays(1));
+        var after = Reading(3m, WindowStart + TimeSpan.FromDays(2));
+
+        var result = WindowedDeviationCalculator.ExcludeAtOrAfter([first, trigger, after], trigger);
+
+        result.ShouldBe([first]);
+    }
+
+    [Fact]
+    public void ExcludeAtOrAfter_breaks_same_timestamp_ties_by_Id()
+    {
+        var lowId = new Guid("00000000-0000-0000-0000-000000000001");
+        var highId = new Guid("00000000-0000-0000-0000-000000000002");
+        var earlier = Reading(1m, WindowStart);
+        var sameTimestampLow = Reading(2m, WindowStart + TimeSpan.FromDays(1), lowId);
+        var sameTimestampHigh = Reading(3m, WindowStart + TimeSpan.FromDays(1), highId);
+
+        // Boundary is the high-Id reading: the low-Id one sorts strictly before it and survives.
+        WindowedDeviationCalculator.ExcludeAtOrAfter([earlier, sameTimestampLow, sameTimestampHigh], sameTimestampHigh)
+            .ShouldBe([earlier, sameTimestampLow]);
+
+        // Boundary is the low-Id reading: the high-Id one sorts after it and is excluded with it.
+        WindowedDeviationCalculator.ExcludeAtOrAfter([earlier, sameTimestampLow, sameTimestampHigh], sameTimestampLow)
+            .ShouldBe([earlier]);
     }
 }

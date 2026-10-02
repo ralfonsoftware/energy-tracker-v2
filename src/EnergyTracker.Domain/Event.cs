@@ -28,9 +28,11 @@ public class Event
     public string? TaggedEntityName { get; init; }
 
     // Story 6.3 (AC #1, #3, #4) — both null means "no correlation" (AC #3), the simplest
-    // representation for data that's 1:1-owned by this Event with no independent lifecycle. Set
-    // once, together, by CorrelateEvent's background job and never recomputed at render time
-    // (AD-10's "derive once, read back forever" discipline extends here too). Plain "Bump"|"Dip"
+    // representation for data that's 1:1-owned by this Event with no independent lifecycle. Written,
+    // always together (both null or both set), by CorrelateEvent's background job, never computed at
+    // render time. Story 10.2: latest evaluation wins — CorrelateEvent re-runs when Meter Readings in
+    // the Event's ±7-day window change, so a correlation can later flip or be cleared. (This
+    // relaxes Story 6.3's "derive once" analogy; AD-10 itself only concerns the tag snapshot.) Plain "Bump"|"Dip"
     // string column, not an enum, matching TaggedEntityType's own discriminator-column precedent —
     // mutable (not init), since it's written well after the Event row itself is created.
     public string? CorrelationDirection { get; set; }

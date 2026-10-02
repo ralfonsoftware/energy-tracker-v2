@@ -8,7 +8,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 **Promoted (story created 2026-10-02, Epic 10)**
 
-- Real-time Event has no forward-window readings (code review of story-6.3 (2026-09-21))
 - NavChrome last in DOM at wide (keyboard tab-order check (spec-tab-order-check, 2026-10-02))
 
 **test-coverage (18)**
@@ -97,10 +96,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 **i18n (1)**
 
 - No de-DE test for toggle strings — code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
-
-**concurrency-correctness (1)**
-
-- CorrelateEvent skips AD-12 prompt exclusion — code review of story-6.3 (2026-09-21)
 
 
 ## Deferred from: code review of 1-2-azure-infrastructure-as-code-resource-deployment-pipeline (2026-08-12)
@@ -299,17 +294,6 @@ Conventions: append new sections at the end, chronological (see `project-context
   evidence: Raised by adversarial review (Blind Hunter). Functional risk is low since the display code path (`GetEventHistory`/`EventRepository`/`events-card.tsx`) never branches on tag type — only test coverage is missing. Worth a parametrized test across all 3 types in a follow-up. [tests/EnergyTracker.Infrastructure.Tests/EventRepositoryTests.cs, tests/EnergyTracker.Api.Tests/EventEndpointsTests.cs]
 
 
-## Deferred from: code review of story-6.3 (2026-09-21)
-
-- [open] source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: `CorrelateEvent`/`WindowedDeviationCalculator` do not apply AD-12's "exclude readings at/after an open MeterRegressionPrompt" filter that `GetCurrentStatus` applies via `PatternDetectiveCalculator.ExcludeFromOpenPrompt` — a household with an open regression prompt whose triggering reading falls inside an Event's ±7-day window could have its rough correlation computed from a raw, not-yet-corrected meter delta (e.g. a rollover/reset artifact).
-  evidence: Deliberate scope simplification, not caught by any test (none exists for this interaction). Reasoned low-risk given AC #1's own "rough/approximate signal" framing and UX-DR17's no-false-precision stance — a correlation that's occasionally derived from an uncorrected delta is consistent with the feature's own explicitly-approximate nature — but worth applying the same exclusion `GetCurrentStatus` uses if this proves to generate visibly wrong Bump/Dip results in practice. [src/EnergyTracker.Application/CorrelateEvent.cs, src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
-
-- [promoted: 10-2-event-correlation-forward-window-recompute] source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: For a real-time-logged Event (`OccurredAt` ≈ now), the ±7-day window's forward half has no `MeterReading`s yet when `CorrelateEvent` runs seconds later, since those readings haven't been taken — and because correlation is computed exactly once and never revisited, this is the common case for real-time-logged Events, not just a backfill edge case.
-  evidence: Reinforces the item above (same root cause: no recompute trigger exists in this codebase). Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Application/CorrelateEvent.cs:45-49]
-
-
 ## Deferred from: code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
 
 - [open] No `aria-live` region on the error/validation-failure states [web/src/components/data-import/data-import-panel.tsx:142] — pre-existing systemic gap: `DataExportPanel`'s identical error-rendering pattern has the same gap, unrelated to this story. Raised by adversarial review (Blind Hunter).
@@ -432,3 +416,17 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] No long-term retention (LTR) configured: a bad migration noticed after the 7-day PITR window is unrecoverable; not documented as an accepted risk.
 - [open] Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name the Azure role needed for `az sql db restore`/`rename`.
 - [open] Pending-migrations list in the restore-point block runs once before the retry loop and can read "unavailable" while the firewall rule is still propagating.
+
+## Deferred from: story 10-2-event-correlation-forward-window-recompute (2026-10-02)
+
+- [open] `CorrelateEvent` `BackgroundJob` rows are never swept (the 30-day sweep only covers `ProcessSmartPlugImport` rows, `SmartPlugImportRepository.cs`); story 10.2 adds a handful more per Meter Reading write inside an Event window. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
+- [open] After a regression-prompt resolve, the re-evaluated set is "Events since the trigger", uncapped; typically a handful. [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs]
+- [open] A correlation can flip or disappear as readings arrive (latest evaluation wins); by design, but not announced in the UI.
+- [open] When the AI answers "None" for a persisting deviation, every later in-window reading costs one AI call: the two persisted columns cannot distinguish "evaluated, no match" from "never evaluated". Bounded by readings per ±7-day window. Epic 9 stories 9.3/9.4 live verification should include one forward-window recompute against the real backend.
+- [open] The requeue trigger skips AI-off Households (documented AD-8 exception, Ask First #3, Ralf 2026-10-02), so enabling the Settings toggle does not re-evaluate existing Events until a Meter Reading in their window next changes. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+
+## Deferred from: code review of story-10-2 (2026-10-02)
+
+- Same-timestamp tiebreak in `WindowedDeviationCalculator.ExcludeAtOrAfter` (and the in-memory ordering in `CorrelateEvent`) uses .NET `Guid.CompareTo`, which can differ from the database `uuid` ordering; only matters for readings with an identical `ReadingTimestamp` at the open-prompt boundary. [src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
+- Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event, and the job rows are never swept (overlaps the existing `[open]` sweep entry). [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+- Per-Event dedup of requeued `CorrelateEvent` jobs (review decision 2c) needs an Event reference on `BackgroundJob` (new column/migration); not possible inside story 10.2 (AC #10: no migration). Concurrent jobs for one Event remain last-write-wins. [src/EnergyTracker.Application/RequeueEventCorrelations.cs] Reason: Ralf accepts last-write-wins (2026-10-02).
