@@ -17,7 +17,11 @@ public class MigrationDeployWorkflowRestorePointGuardTests
     private const string MigrationStepName = "Apply pending EF Core migrations";
     private const string DeployStepName = "Deploy new revision";
     private const string SummaryVariable = "GITHUB_STEP_SUMMARY";
+    private const string RestorePointHeading = "Pre-migration restore point";
     private const string EfUpdateCommand = "dotnet ef database update";
+
+    // The actual write: a redirect into the summary file, not any mention of the variable name.
+    private static readonly Regex SummaryRedirect = new(@">>\s*""?\$\{?GITHUB_STEP_SUMMARY\}?""?", RegexOptions.Compiled);
 
     private static readonly Regex StepStart = new(@"^\s*- name:\s*(?<name>.+?)\s*$", RegexOptions.Compiled);
 
@@ -27,11 +31,16 @@ public class MigrationDeployWorkflowRestorePointGuardTests
         var steps = ReadSteps();
         var migrationStep = FindStep(steps, MigrationStepName);
 
-        var summaryIndex = migrationStep.Body.IndexOf(SummaryVariable, StringComparison.Ordinal);
+        var redirect = SummaryRedirect.Match(migrationStep.Body);
+        var summaryIndex = redirect.Success ? redirect.Index : -1;
         summaryIndex.ShouldBeGreaterThanOrEqualTo(
             0,
             $"Step '{MigrationStepName}' in {RelativeFilePath} must write the pre-migration restore point to " +
             $"${SummaryVariable} (AC #4a) — the block is missing.");
+
+        migrationStep.Body.ShouldContain(
+            RestorePointHeading,
+            customMessage: $"Step '{MigrationStepName}' in {RelativeFilePath} must write the '{RestorePointHeading}' block.");
 
         var efUpdateIndex = migrationStep.Body.IndexOf(EfUpdateCommand, StringComparison.Ordinal);
         efUpdateIndex.ShouldBeGreaterThanOrEqualTo(

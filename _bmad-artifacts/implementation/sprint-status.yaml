@@ -133,7 +133,7 @@ development_status:
   epic-9-retrospective: optional
 
   epic-10: in-progress
-  10-1-migration-safety-on-deploy: review
+  10-1-migration-safety-on-deploy: done
   10-2-event-correlation-forward-window-recompute: ready-for-dev
   10-3-navchrome-dom-order-tab-order: ready-for-dev
   epic-10-retrospective: optional
