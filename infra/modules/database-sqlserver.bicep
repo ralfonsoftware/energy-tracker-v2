@@ -99,6 +99,17 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2025-01-01' = {
   }
 }
 
+// Story 10.1: declares the point-in-time-restore window explicitly instead of relying on the
+// Azure default. 7 days is the maximum for the Basic tier (configurable 1-7). The migration
+// rollback runbook (infra/README.md, "Rolling back a bad migration") depends on this window.
+resource shortTermRetention 'Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies@2025-01-01' = {
+  parent: sqlDatabase
+  name: 'default'
+  properties: {
+    retentionDays: 7
+  }
+}
+
 // Allows access from Azure-hosted resources (the Container App is not VNet-integrated in this
 // scale-to-zero Consumption setup) without opening the server to the public internet at large.
 resource allowAzureServices 'Microsoft.Sql/servers/firewallRules@2025-01-01' = {

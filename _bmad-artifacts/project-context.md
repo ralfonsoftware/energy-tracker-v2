@@ -136,6 +136,8 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **Migrations:**
 - Always add migrations via `scripts/add-migration.sh <Name>` — never `dotnet ef migrations add` directly against one provider project (AD-2).
+- **Expand/contract:** a migration must be safe for the **previous** application image to run against. `app-deploy.yml` migrates before deploying, and its health-check rollback redeploys the previous image against the already-migrated schema; a failed multi-migration run can also stop partway. Destructive changes (drop/rename column or table, narrowing `AlterColumn`, new NOT NULL without default) ship in a **later** deploy than the code that stops using the old shape.
+- Rollback is a point-in-time restore, not `Down()`: every deploy writes a "Pre-migration restore point" block to the Actions run summary; the procedure is `infra/README.md` → "Rolling back a bad migration".
 
 **Local dev scripts (`scripts/`):** `run-api.sh`, `migrate.sh`, `add-migration.sh` — prefer these over raw `dotnet run`/`dotnet ef` invocations; they encode required env vars and provider wiring documented in `docs/local-development.md`.
 

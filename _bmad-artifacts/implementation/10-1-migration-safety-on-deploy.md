@@ -4,7 +4,7 @@ baseline_commit: b503218
 
 # Story 10.1: Migration Safety on Deploy — Restore Point, Rollback Runbook, Expand/Contract Rule
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -31,36 +31,36 @@ so that a bad migration can be undone in minutes with a known data-loss window i
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Kickoff checks (mandatory, before any edit)**
-  - [ ] Re-read the whole `Apply pending EF Core migrations` step (`.github/workflows/app-deploy.yml:164-204`) and the firewall steps around it; confirm the line numbers in this story still match (the file is edited often).
-  - [ ] `grep -rn suppressTransaction src/` — at story-writing time there were **zero** hits, so every migration runs in a single EF transaction; note the result in Completion Notes (it determines whether a *single* migration can ever be half-applied; it can still stop *between* migrations).
-  - [ ] Confirm with Ralf which of the Open Questions below are decided before starting Task 2; do not guess Q1 or Q3.
+- [x] **Task 1: Kickoff checks (mandatory, before any edit)**
+  - [x] Re-read the whole `Apply pending EF Core migrations` step (`.github/workflows/app-deploy.yml:164-204`) and the firewall steps around it; confirm the line numbers in this story still match (the file is edited often).
+  - [x] `grep -rn suppressTransaction src/` — at story-writing time there were **zero** hits, so every migration runs in a single EF transaction; note the result in Completion Notes (it determines whether a *single* migration can ever be half-applied; it can still stop *between* migrations).
+  - [x] Confirm with Ralf which of the Open Questions below are decided before starting Task 2; do not guess Q1 or Q3.
 
-- [ ] **Task 2: Guard test first, red (AC #4)** — new `tests/EnergyTracker.Architecture.Tests/MigrationDeployWorkflowRestorePointGuardTests.cs`
-  - [ ] Copy the repo-root locator idiom from `EveHomeXlsxParserUsesZeroOffsetForUtcNormalizationConventionTests.FindRepoRoot()` (walk up from `AppContext.BaseDirectory` to `EnergyTracker.sln`); read `.github/workflows/app-deploy.yml` as text; split into steps on lines matching `^\s*- name:`. No YAML library (none is referenced; Architecture.Tests deliberately stays dependency-light like its siblings).
-  - [ ] Strip whole-line `#` comments before searching (same precedent as the sibling guard tests) so the explanatory comments in the workflow cannot satisfy or break an assertion.
-  - [ ] Assert: step `Apply pending EF Core migrations` exists; inside it the index of `GITHUB_STEP_SUMMARY` is < the index of `dotnet ef database update`; the step `Deploy new revision` index is greater than the migration step's. Failure messages name the step and the expectation.
-  - [ ] Run it: it must fail for the right reason (summary block missing) before Task 3. Also mutate once after green (move the block below the `dotnet ef` call) and confirm it fails; record in Completion Notes.
+- [x] **Task 2: Guard test first, red (AC #4)** — new `tests/EnergyTracker.Architecture.Tests/MigrationDeployWorkflowRestorePointGuardTests.cs`
+  - [x] Copy the repo-root locator idiom from `EveHomeXlsxParserUsesZeroOffsetForUtcNormalizationConventionTests.FindRepoRoot()` (walk up from `AppContext.BaseDirectory` to `EnergyTracker.sln`); read `.github/workflows/app-deploy.yml` as text; split into steps on lines matching `^\s*- name:`. No YAML library (none is referenced; Architecture.Tests deliberately stays dependency-light like its siblings).
+  - [x] Strip whole-line `#` comments before searching (same precedent as the sibling guard tests) so the explanatory comments in the workflow cannot satisfy or break an assertion.
+  - [x] Assert: step `Apply pending EF Core migrations` exists; inside it the index of `GITHUB_STEP_SUMMARY` is < the index of `dotnet ef database update`; the step `Deploy new revision` index is greater than the migration step's. Failure messages name the step and the expectation.
+  - [x] Run it: it must fail for the right reason (summary block missing) before Task 3. Also mutate once after green (move the block below the `dotnet ef` call) and confirm it fails; record in Completion Notes.
 
-- [ ] **Task 3: Restore-point block in the migration step, green (AC #1-#3)** — `.github/workflows/app-deploy.yml`
-  - [ ] Inside the existing step (do **not** add a second connection-string construction), after `CONNECTION_STRING` is built and **before** `for attempt in …`:
+- [x] **Task 3: Restore-point block in the migration step, green (AC #1-#3)** — `.github/workflows/app-deploy.yml`
+  - [x] Inside the existing step (do **not** add a second connection-string construction), after `CONNECTION_STRING` is built and **before** `for attempt in …`:
     - `RESTORE_POINT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)`
     - `EARLIEST=$(az sql db show --resource-group … --server … --name energytracker --query earliestRestoreDate -o tsv || true)`
     - `PENDING=$(dotnet ef migrations list … --connection "$CONNECTION_STRING" 2>/dev/null | grep -F '(Pending)' || true)` (EF prints pending migrations with a `(Pending)` suffix — **verify the exact format locally against a fresh Postgres/SqlServer container before relying on it**; if the output format differs, adjust the grep and the test's expectations, not the AC).
     - Write the block with `{ … } >> "$GITHUB_STEP_SUMMARY" || echo "::warning::could not write restore-point summary"`.
-  - [ ] The database name is the literal already present in the connection string (`energytracker`); the server name is `${{ steps.sqlserver.outputs.name }}`. Do not introduce a new variable for either.
-  - [ ] Emit `::warning::` for each unavailable optional field; never `exit 1` for them (AC #2).
-  - [ ] Add a comment above the block explaining *why* (restore marker for PITR; link to the infra/README runbook section), in this file's existing comment style, and mention it in the step's header comment.
-  - [ ] Re-run the Task 2 test: green. `actionlint` is **not** installed locally; do a manual YAML review (indentation inside the `run: |` block, `${{ }}` expressions only where the existing step already uses them) and state in Completion Notes that actionlint was not available. Check that `$GITHUB_STEP_SUMMARY` markdown renders (fenced code for the restore command).
-  - [ ] Confirm by diff that nothing else in the file changed (AC #3).
+  - [x] The database name is the literal already present in the connection string (`energytracker`); the server name is `${{ steps.sqlserver.outputs.name }}`. Do not introduce a new variable for either.
+  - [x] Emit `::warning::` for each unavailable optional field; never `exit 1` for them (AC #2).
+  - [x] Add a comment above the block explaining *why* (restore marker for PITR; link to the infra/README runbook section), in this file's existing comment style, and mention it in the step's header comment.
+  - [x] Re-run the Task 2 test: green. `actionlint` is **not** installed locally; do a manual YAML review (indentation inside the `run: |` block, `${{ }}` expressions only where the existing step already uses them) and state in Completion Notes that actionlint was not available. Check that `$GITHUB_STEP_SUMMARY` markdown renders (fenced code for the restore command).
+  - [x] Confirm by diff that nothing else in the file changed (AC #3).
 
 - [ ] **Task 4 (conditional on Open Question 3): explicit PITR retention in Bicep (AC #9)** — `infra/modules/database-sqlserver.bicep`
-  - [ ] Add `resource shortTermRetention 'Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies@2025-01-01' = { parent: sqlDatabase, name: 'default', properties: { retentionDays: 7 } }`. Do **not** set `diffBackupIntervalInHours` (DTU default is 24h; not this story's concern). Verify the resource type/API version against the Bicep reference before writing; the module already uses `@2025-01-01` for sibling resources.
-  - [ ] No new parameter unless Ralf wants it tunable; 7 is the Basic-tier maximum (Azure docs: Basic is configurable 1–7 days), so a larger value would fail.
+  - [x] Add `resource shortTermRetention 'Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies@2025-01-01' = { parent: sqlDatabase, name: 'default', properties: { retentionDays: 7 } }`. Do **not** set `diffBackupIntervalInHours` (DTU default is 24h; not this story's concern). Verify the resource type/API version against the Bicep reference before writing; the module already uses `@2025-01-01` for sibling resources.
+  - [x] No new parameter unless Ralf wants it tunable; 7 is the Basic-tier maximum (Azure docs: Basic is configurable 1–7 days), so a larger value would fail.
   - [ ] `pr-review.yml`'s what-if runs automatically on the PR (infra changed); it must show only the new child resource. Merging triggers `infra-deploy.yml` (path-filtered on `infra/**`) — note this redeploy also exercises the "preserve running image" logic; watch that the Container App image is not reset (`infra/README.md`, "infra-deploy.yml preserves the currently-running Container App image").
 
-- [ ] **Task 5: Runbook + expand/contract rule (AC #5, #7)** — docs only
-  - [ ] `infra/README.md`: new section "Rolling back a bad migration (Azure SQL point-in-time restore)" next to the Entra-only auth runbook (same file, same tone: numbered steps, exact `az` commands with `<placeholders>`, "why" paragraph). Required content is AC #5. Commands to include (verify flags with `az sql db restore --help` / `az sql db rename --help` while writing; they are the documented CLI surface at story-writing time, not guaranteed identical):
+- [x] **Task 5: Runbook + expand/contract rule (AC #5, #7)** — docs only
+  - [x] `infra/README.md`: new section "Rolling back a bad migration (Azure SQL point-in-time restore)" next to the Entra-only auth runbook (same file, same tone: numbered steps, exact `az` commands with `<placeholders>`, "why" paragraph). Required content is AC #5. Commands to include (verify flags with `az sql db restore --help` / `az sql db rename --help` while writing; they are the documented CLI surface at story-writing time, not guaranteed identical):
     - restore: `az sql db restore --resource-group <rg> --server <server> --name energytracker --dest-name energytracker-restore-<runid> --time <marker-minus-1min> --service-objective Basic` (restore **to a new database on the same server**; Azure cannot overwrite an existing database; the restored DB is billed at normal rates until deleted)
     - swap: `az sql db rename … --name energytracker --new-name energytracker-bad-<runid>` then `… --name energytracker-restore-<runid> --new-name energytracker`
     - Use the marker **minus ~1 minute** to absorb runner/Azure clock skew; state that the earliest/latest restorable point is Azure-managed and the drill (Task 6) is what confirms the real granularity.
@@ -68,8 +68,8 @@ so that a bad migration can be undone in minutes with a known data-loss window i
     - The Container App's connection string names the database `energytracker`, which is why the swap uses rename instead of repointing the app.
     - Why not `dotnet ef database update <previous>`: `Down()` methods are scaffolded, never rehearsed, and cannot restore data a destructive `Up()` dropped.
     - Expected downtime during the two renames, and that the Container App's EF connections must reconnect (scale-to-zero may make this invisible; observe in the drill).
-  - [ ] `_bmad-artifacts/project-context.md`: extend the **Migrations** block (currently one bullet, line ~137) with the expand/contract rule from AC #7 and a one-line pointer to the runbook and to the step-summary restore marker. Keep it to a short block — this file is auto-loaded into every dev-story/code-review run.
-  - [ ] Cross-link: one line in `docs/local-vs-azure-deltas.md` is **not** needed (this is Azure-only operations, not a local/Azure structural delta); do not add one.
+  - [x] `_bmad-artifacts/project-context.md`: extend the **Migrations** block (currently one bullet, line ~137) with the expand/contract rule from AC #7 and a one-line pointer to the runbook and to the step-summary restore marker. Keep it to a short block — this file is auto-loaded into every dev-story/code-review run.
+  - [x] Cross-link: one line in `docs/local-vs-azure-deltas.md` is **not** needed (this is Azure-only operations, not a local/Azure structural delta); do not add one.
 
 - [ ] **Task 6: Live rehearsal of the restore (AC #6)** — human-run or human-supervised; **Ralf's Azure login needed, the dev agent has no `az` session**
   - [ ] Using the runbook text verbatim, restore production `energytracker` at a timestamp ~10+ minutes in the past into `energytracker-drill-<yyyymmdd>`; record start/finish time (restore duration is the headline number for the data-loss/downtime discussion).
@@ -172,10 +172,42 @@ so that a bad migration can be undone in minutes with a known data-loss window i
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5.5 (claude-sonnet-5-5)
 
 ### Debug Log References
 
+- Task 2 red: `MigrationDeployWorkflowRestorePointGuardTests` failed with "…must write the pre-migration restore point to $GITHUB_STEP_SUMMARY (AC #4a) — the block is missing." (the intended reason).
+- Task 2 mutation: moved the summary write below the retry loop → test failed with "writes $GITHUB_STEP_SUMMARY AFTER 'dotnet ef database update' (AC #4b)"; restored the file → green.
+- `dotnet test EnergyTracker.sln`: 887 passed, 0 failed.
+
 ### Completion Notes List
 
+**Done (Tasks 1, 2, 3, 5 and the code part of Task 4):**
+- Decisions (Ralf, this session): Q1 = PITR marker (not `az sql db copy`); Q3 = yes, declare 7-day retention in Bicep. Q2/Q4 stay "no / document-only" per the story's recommendations; Q5/Q6 unanswered but not blocking (Q5 already logged as a deferred entry at story creation; Q6: Ralf runs the drill).
+- `grep -rn suppressTransaction src/` → zero hits, so every migration is a single EF transaction (a single migration cannot be half-applied; a run can still stop between migrations).
+- Workflow line numbers in the story (164-204) were slightly stale; the step content matched.
+- `app-deploy.yml`: pure additions (53 lines, 0 deletions); the connection string, retry loop, `Command Timeout=600`, `timeout-minutes: 20`, firewall steps and health-check rollback are byte-identical. The block captures `RESTORE_POINT_UTC` once before the loop, reads `earliestRestoreDate` (`az sql db show`, `|| true`) and the pending list (`dotnet ef migrations list` + `grep -F '(Pending)'`), emits `::warning::` and writes "unavailable" for either on failure, and writes the summary with `|| echo "::warning::…"` so a summary-write failure cannot fail the deploy. No secret or connection string is written to the summary.
+- EF pending format verified locally against a throwaway Postgres 17 container (own password, port 55432, stopped afterwards): fresh DB lists `<id> (Pending)` for all 27 migrations; after `database update` the `grep -F '(Pending)'` finds nothing, which the block turns into "none pending". The Postgres project was used for the format check only; the SqlServer provider uses the same EF command/output code.
+- Shell block was exercised locally with stubbed `az`/`dotnet` (az failing → "unavailable" + warning; dotnet listing a pending migration) and `bash -n`; the rendered summary markdown was inspected. `actionlint` is not installed; YAML parses (PyYAML) and was reviewed manually. **There is no automated coverage of the shell inside `run: |` beyond the guard's ordering checks** — real verification is Tasks 6 and 7.
+- Bicep: `shortTermRetention` child resource (`retentionDays: 7`) added to `database-sqlserver.bicep`; `az bicep build` compiles it into `Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies` with `retentionDays: 7`. The local Bicep CLI has no types for `@2025-01-01` and emits BCP081 warnings for every `Microsoft.Sql` resource in the module (pre-existing, not just the new one), so the PR `what-if` is the real validation.
+- Runbook added to `infra/README.md` (flags verified against `az sql db restore/rename/delete --help`); expand/contract + restore-point pointer added to `project-context.md` (Migrations).
+
+**Not done — needs Ralf (the dev agent has no `az` session):**
+- Task 4 remainder (AC #9): clean PR `what-if`, then a live `infra-deploy.yml` run leaving the DB at 7 days, watching that the Container App image is not reset.
+- Task 6 (AC #6) — DONE, evidence here (box left unchecked only because Task 6 subtasks were not individually ticked): drill run by Ralf 2026-10-02: restore 285 s; contained users `energytracker-prod-app` and `energy-tracker-devops-uami` survived (EXTERNAL_USER); two renames 26 s; `ef migrations list` on the restored DB showed history through `20260925160743_…`. Deviations folded into the runbook: the first draft's `short-term-retention-policy` command was wrong (correct: `az sql db str-policy show`); the check ran as the operator's identity, not the CI identity. Cleanup confirmed by Ralf: `az sql db list` shows only `master` and `energytracker`; the drill firewall rule is gone. Pre-Bicep `str-policy` showed `retentionDays: 7` (Azure default), so declaring it in Bicep should be a what-if no-op on the value; the new child resource itself is still what AC #9's what-if/live run must confirm.
+- Task 7 (AC #8): observe the restore-point block in the first real `App Deploy` run.
+- Task 8: resolve the `deferred-work.md` entry (delete it and its promoted index line, referencing this story in the commit) and set `sprint-status.yaml` to `review`/`done` — deliberately deferred until the live gates pass, so a failed live check doesn't leave the item deleted.
+
 ### File List
+
+- `.github/workflows/app-deploy.yml` (modified)
+- `tests/EnergyTracker.Architecture.Tests/MigrationDeployWorkflowRestorePointGuardTests.cs` (new)
+- `infra/modules/database-sqlserver.bicep` (modified)
+- `infra/README.md` (modified)
+- `_bmad-artifacts/project-context.md` (modified)
+- `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md` (story file)
+- `_bmad-artifacts/implementation/sprint-status.yaml` (modified)
+
+### Change Log
+
+- 2026-10-02: Added pre-migration restore-point summary block, guard test, 7-day PITR retention in Bicep, rollback runbook and expand/contract rule. Live gates (Tasks 4-remainder, 6, 7, 8) outstanding.

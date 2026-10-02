@@ -161,6 +161,8 @@ jobs:
       # step can succeed post-cutover — see infra/README.md's Entra-only auth cutover runbook.
       # Retries with backoff: Azure SQL firewall rule changes can take up to 5 minutes to
       # propagate, so the first attempt(s) immediately after rule creation may legitimately fail.
+      # Before the first attempt it writes a "Pre-migration restore point" block to the run
+      # summary (Story 10.1; guarded by MigrationDeployWorkflowRestorePointGuardTests).
       - name: Apply pending EF Core migrations
         timeout-minutes: 20
         run: |
@@ -186,6 +188,57 @@ jobs:
           # scale even at 300s — its Up() now runs as three separate commands (temp index create,
           # delete, temp index drop), each getting this full budget independently.
           CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=600;"
+
+          # Pre-migration restore point (Story 10.1): Azure SQL already takes automatic backups with
+          # point-in-time restore, so the "snapshot" is just a recorded UTC marker plus the exact
+          # restore command — captured ONCE here, before the first attempt, never per retry. The old
+          # revision keeps serving writes while migrations run, so everything written after this
+          # marker is lost by a restore (rollback runbook: infra/README.md, "Rolling back a bad
+          # migration"). Only the timestamp, server and database name are mandatory; the pending
+          # list and earliestRestoreDate are best-effort (the firewall rule may still be propagating)
+          # and a failure to write the summary must never fail the deploy.
+          RESTORE_POINT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EARLIEST=$(az sql db show \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --server ${{ steps.sqlserver.outputs.name }} \
+            --name energytracker \
+            --query earliestRestoreDate -o tsv 2>/dev/null || true)
+          if [ -z "$EARLIEST" ]; then
+            EARLIEST="unavailable"
+            echo "::warning::Could not read earliestRestoreDate for the pre-migration restore point"
+          fi
+          if PENDING_LIST=$(dotnet ef migrations list \
+            --project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
+            --startup-project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
+            --context EnergyTrackerDbContext \
+            --connection "$CONNECTION_STRING" 2>/dev/null); then
+            PENDING=$(printf '%s\n' "$PENDING_LIST" | grep -F '(Pending)' || true)
+            if [ -z "$PENDING" ]; then
+              PENDING="none pending"
+            fi
+          else
+            PENDING="unavailable"
+            echo "::warning::Could not list pending migrations for the pre-migration restore point"
+          fi
+          {
+            echo "### Pre-migration restore point"
+            echo ""
+            echo "- SQL server: \`${{ steps.sqlserver.outputs.name }}\`"
+            echo "- Database: \`energytracker\`"
+            echo "- Restore point (UTC): \`${RESTORE_POINT_UTC}\`"
+            echo "- Earliest restore date: \`${EARLIEST}\`"
+            echo "- Pending migrations:"
+            echo ""
+            echo '```'
+            echo "${PENDING}"
+            echo '```'
+            echo ""
+            echo "Restore to a new database (see infra/README.md, \"Rolling back a bad migration\"):"
+            echo ""
+            echo '```'
+            echo "az sql db restore --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --server ${{ steps.sqlserver.outputs.name }} --name energytracker --dest-name energytracker-restore-${{ github.run_id }} --time ${RESTORE_POINT_UTC} --service-objective Basic"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY" || echo "::warning::Could not write the pre-migration restore point summary"
 
           for attempt in 1 2 3 4 5; do
             if dotnet ef database update \
