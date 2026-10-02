@@ -31,7 +31,7 @@ function UnitInput({ className, unit, wrapperClassName, ...props }: UnitInputPro
       />
       <span
         data-slot="unit-input-unit"
-        className="shrink-0 text-sm font-semibold text-[rgba(30,42,28,0.62)] dark:text-[rgba(234,245,238,0.6)]"
+        className="shrink-0 text-sm font-semibold text-[rgba(30,42,28,0.72)] dark:text-[rgba(234,245,238,0.6)]"
       >
         {unit}
       </span>

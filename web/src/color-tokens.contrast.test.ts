@@ -144,4 +144,19 @@ describe.each(THEMES)('$name theme color-token contrast (WCAG AA, 4.5:1)', ({ to
       expect(contrastAgainstBg(textColor, bgColor)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
     })
   })
+
+  // Locale × theme sweep (2026-10-02): these pairs were 3.9-4.45:1 on the real page backdrop.
+  describe('Sweep findings (muted text and active nav on the bare page background)', () => {
+    it('text-muted-foreground clears AA against the bare page background', () => {
+      const textColor = color(tokens, 'muted-foreground')
+      const bgColor = compositeStack(tokens, [...PLAIN_PAGE_BACKDROP])
+      expect(contrastAgainstBg(textColor, bgColor)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
+    })
+
+    it('nav-chrome active foreground clears AA against the active tab tint over the bare page background', () => {
+      const textColor = color(tokens, 'nav-chrome-active-foreground')
+      const bgColor = compositeStack(tokens, [...PLAIN_PAGE_BACKDROP, 'nav-chrome-active-bg'])
+      expect(contrastAgainstBg(textColor, bgColor)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
+    })
+  })
 })

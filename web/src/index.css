@@ -141,7 +141,7 @@
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
+    --muted-foreground: oklch(0.5 0 0);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.577 0.245 27.325);
@@ -207,9 +207,11 @@
        direction-green-eco.html's light variant */
     --status-card-specular-overlay: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.6) 48%, transparent 60%);
     /* Nav chrome active-tab — Story 2.5, resolved in mockups/key-dashboard.html's own header
-       comment as a direct reuse of the already-confirmed brand-accent badge tokens */
+       comment as a reuse of the brand-accent badge tokens. The foreground was later darkened from the
+       brand accent (#1E7A61, 4.0:1 on this tint) to #186651 (>=5:1) — locale × theme sweep,
+       2026-10-02; the tint itself is unchanged. */
     --nav-chrome-active-bg: rgba(30, 122, 97, 0.14);
-    --nav-chrome-active-foreground: #1E7A61;
+    --nav-chrome-active-foreground: #186651;
     /* Epic 8 UX-DR24 "quiet" surface tier — values carried forward verbatim from Story 5.4's
        Tariff Check card (mockups/key-dashboard.html line 226, .theme.light .tariff-quiet). */
     --surface-quiet: rgba(255, 255, 255, 0.4);
@@ -231,7 +233,7 @@
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
+    --muted-foreground: oklch(0.77 0 0);
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
@@ -278,7 +280,7 @@
     /* The raw --attractiveness-not-worth-it (#E2685A) measures only 3.50:1 as body/figure text
        against its own -bg tint (mockup's own verification comment) — this dedicated, lighter
        token is used for the not-worth-it amount figure specifically, never the raw token. */
-    --attractiveness-not-worth-it-text: #EB958C;
+    --attractiveness-not-worth-it-text: #F2A9A1;
     --attractiveness-signal-supporting-text: rgba(234, 245, 238, 0.7);
     /* Status card specular-sweep overlay gradient — Story 2.5, verbatim from
        direction-green-eco.html's dark variant */
