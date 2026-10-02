@@ -314,8 +314,8 @@ action_items:
   - epic: 8
     action: "Document the live-resize verification procedure (real tab at target width) in project-context.md process gates"
     owner: "Amelia"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
+    status: done
+    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: doc-only (branch doc/epic-8-live-resize-procedure) — project-context.md Process gates, new 'Live-resize verification procedure' bullet (fresh tab, resize before navigate, confirm innerWidth, per-width tabs, user-driven in-tab resize, non-acceptable substitutes)."
   - epic: 8
     action: "Record deferred-work.md convention (append new sections at the end, chronological) in project-context.md"
     owner: "Amelia"
