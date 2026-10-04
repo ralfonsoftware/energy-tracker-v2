@@ -423,6 +423,10 @@ Conventions: append new sections at the end, chronological (see `project-context
 - Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event, and the job rows are never swept (overlaps the existing `[open]` sweep entry). [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
 - Per-Event dedup of requeued `CorrelateEvent` jobs (review decision 2c) needs an Event reference on `BackgroundJob` (new column/migration); not possible inside story 10.2 (AC #10: no migration). Concurrent jobs for one Event remain last-write-wins. [src/EnergyTracker.Application/RequeueEventCorrelations.cs] Reason: Ralf accepts last-write-wins (2026-10-02).
 
+- source_spec: `_bmad-artifacts/implementation/spec-local-dev-start-stop-scripts.md`
+  summary: Set `strictPort: true` in `web/vite.config.ts` so Vite fails instead of silently moving to 5174 when 5173 is taken.
+  evidence: Without it, `scripts/dev-up.sh` health-checks 5173 (possibly another process) and prints a URL Vite isn't serving; changing vite.config.ts was out of scope (Ask First).
+
 ## Deferred from: code review of story 10-3-navchrome-dom-order-tab-order (2026-10-04)
 
 - [open] An open Account menu stays open when the window is resized below 660px, because its trigger sits in the top nav, which becomes `display:none`; the same behaviour existed before 10.3. Seen in the 10.3 live gate. [web/src/components/dashboard/profile-menu.tsx]
