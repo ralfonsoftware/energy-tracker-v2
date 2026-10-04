@@ -4,7 +4,7 @@ baseline_commit: b503218
 
 # Story 10.3: NavChrome Document Order Matches Visual Order (Focus Order, WCAG 2.4.3)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 10 "Deferred-work hardening" is new (created 2026-10-02 from the Epic 8 retro action #6 triage, `spec-deferred-work-triage.md`). Origin: deferred-work.md entry "NavChrome last in DOM at wide" (spec-tab-order-check, 2026-10-02), promoted by Ralf. -->
@@ -31,40 +31,40 @@ so that focus order follows reading order instead of making me Tab through the w
 
 Test-first: Tasks 1 and 2 must be run and seen **red** against the current code before Task 3.
 
-- [ ] Task 1: Invert the NavChrome pin in `web/e2e/tab-order.spec.ts` (AC: #1, #2, #3, #7)
-  - [ ] 1.1 Replace the `NavChrome tab position … (pinned: …)` loop (lines ~379–416) with assertions per screen × width [659, 660, 900]: at ≥660 the first 5 `tabThrough` stops all have `nav === 'top'` and content stops follow; at 659 every stop after the first `nav` stop is `nav === 'bottom'` and the first stop is content. Keep the existing checks that survive: only one nav tabbable (`new Set(navStops.map(s => s.nav))`), nav link count 5 / 4, links left-to-right, `Account menu` last in the top nav, top nav visually above content at ≥660 and bottom bar below at <660.
-  - [ ] 1.2 Add the diagnostic that stops this from restating the DOM: compare Tab order against *visual* order computed from `getBoundingClientRect` (nav stops' `rect.top` ≤ every content stop's `rect.top` at ≥660). A pure CSS reorder must fail it.
-  - [ ] 1.3 Rewrite the header comment (lines 3–13) and the failure message (line ~400) so they describe the guard, not a divergence. Keep every other test in the file untouched (their groups ignore ungrouped nav stops via `tabOrderOfGroups`, so they should stay green with nav now first; confirm).
-  - [ ] 1.4 Run the spec against the unchanged code and confirm the new NavChrome tests fail at 660/900 and pass at 659.
-- [ ] Task 2: Unit tests (AC: #1, #3, #4, #6, #7)
-  - [ ] 2.1 `nav-chrome.test.tsx`: render `placement="top"` and `placement="bottom"` separately; assert each renders exactly one `nav[data-slot=…]` with the right classes (`hidden wide:flex` / `wide:hidden`), four entries, active state, handlers, Account menu only in top.
-  - [ ] 2.2 One page-level test per screen (dashboard, trend-history, tariff-radar, settings — extend the existing `*-page.test.tsx`): the top nav is the first element child of `<main>` and the bottom nav the last (document order), so a page that forgets one mount fails.
-  - [ ] 2.3 Fix tests that index navs by DOM order, which flips once the top nav comes first: `dashboard-page.test.tsx` ~line 202–204 (`settingsButtons[1]` was "the top nav") and the comment at ~174–175. Scope by `data-slot` (`within(document.querySelector('nav[data-slot="nav-chrome-top"]')!)`) instead of an index. The other `getAllByRole(...)[0]` sites (`App.test.tsx`, `settings-page.test.tsx:185`, `trend-history-page.test.tsx:99,110`, `dashboard-page.test.tsx:168,238`) click whichever variant comes first and call the same handler, so they stay valid; leave them unless one asserts which variant it hit.
-- [ ] Task 3: Split placement in `web/src/components/dashboard/nav-chrome.tsx` (AC: #1–#4, #6, #8)
-  - [ ] 3.1 Add a required prop `placement: 'top' | 'bottom'`. `top` renders only the existing `<nav data-slot="nav-chrome-top" className="hidden wide:flex …">` (brand, four links, ProfileMenu). `bottom` renders only `<nav data-slot="nav-chrome-bottom" className="mt-auto wide:hidden …">`. Remove the shared wrapper `<div className="mt-auto wide:order-first wide:mt-0">` entirely: `mt-auto` moves onto the bottom nav itself and `wide:order-first`/`wide:mt-0` disappear. With no wrapper a hidden variant is `display:none`, so it is not a flex item and `gap-4` adds no space (AC #4). Do **not** keep an empty wrapper div; it would become a zero-height flex item that still receives the gap.
-  - [ ] 3.2 Keep the markup, classes, `aria-current` handling, `data-slot` values and the four buttons per variant byte-for-byte; only the wrapper and `placement` branching change. Share the four-button data (label key, icon, handler, active key) instead of copy-pasting if it can be done without changing the DOM; otherwise leave the duplication as it is today. Do not widen scope into a refactor.
-  - [ ] 3.3 Update the file's header comment (lines ~25–30, ~45–47), which still describes `wide:order-first` and a single mount point.
-- [ ] Task 4: Mount both placements in the four pages (AC: #1–#4, #6)
-  - [ ] 4.1 In `dashboard-page.tsx`, `trend-history-page.tsx`, `tariff-radar-page.tsx`, `settings-page.tsx`: render `<NavChrome placement="top" … />` as the **first child of `<main>`**, before the `data-slot="*-content"` wrapper, and `<NavChrome placement="bottom" … />` where NavChrome is mounted today (last, before `MeterRegressionPromptDialog` on Dashboard). Pass the identical props to both (`active`, the four `onXClick`, `householdId`, `supportsFederatedLogout`, `email`); build the props once per page (a local `navProps` object) so the two mounts cannot drift.
-  - [ ] 4.2 Update the comments in the four pages that say NavChrome is "deliberately outside this wrapper" only if they now misdescribe the structure (the nav is still outside the content wrapper, so most stay true).
-- [ ] Task 5: Green the unit and e2e suites (AC: #1–#7)
-  - [ ] 5.1 `npm test` in `web/` (Vitest), `npm run lint`, type-check/build as the repo does in `pr-review.yml`. `layout-constants.drift.test.ts` must stay green (breakpoint and column copies are untouched).
-  - [ ] 5.2 Playwright: `tab-order.spec.ts`, `app-shell.spec.ts` and `locale-theme-sweep.spec.ts` all green. The sweep's layout-identity check (`nav[data-slot=…]` visible per width) still holds because the `data-slot` attributes are unchanged.
-- [ ] Task 6: Close the loop in docs (AC: #7)
-  - [ ] 6.1 `_bmad-artifacts/implementation/deferred-work.md`: delete the `[promoted: needs story]` NavChrome entry (and its line in the Index). The related open entry about tab-order coverage gaps stays (its Profile-menu-below-900px item is unrelated).
-  - [ ] 6.2 `_bmad-artifacts/project-context.md` (line ~74, "Visual reordering must not reorder focus"): remove the NavChrome exception ("the one documented exception is NavChrome … tracked in `deferred-work.md`"); the rule now has no exceptions. Note that NavChrome's two placements are mounted separately precisely so no CSS `order` is needed.
-  - [ ] 6.3 No new `deferred-work.md` entries unless review finds something real; if so, use the `[open]` marker format from `project-context.md`.
-- [ ] Task 7: Self-review checklist before handoff (AC: #3, #4, #8)
-  - [ ] 7.1 Confirm `git grep "wide:order-first"` returns nothing in `web/`.
-  - [ ] 7.2 Confirm there is no JS breakpoint branch added (`useWideBreakpoint` is not used here); the swap stays CSS-only.
-  - [ ] 7.3 Confirm `en-US`/`de-DE` catalogs are unchanged (`git diff --stat web/src/locales`).
-- [ ] Task 8: **Live verification gate** (AC: #9). The story cannot move review → done without this.
-  - [ ] 8.1 Follow the `project-context.md` "Live-resize verification procedure" exactly: close prior tabs, `tabs_create_mcp` a fresh tab, `resize_window` **before** the first `navigate`, then read back `window.innerWidth` via `javascript_tool` and require it to equal the target. One tab per width: **659**, **660**, **900** (add 500 if cheap). A 659 request that reads back 660 is the clamp floor, not a 659px check; retry in a fresh tab group or ask Ralf.
-  - [ ] 8.2 The app requires Auth0 sign-in. Use the environment the previous Epic 8 live checks used (local dev via `./scripts/run-api.sh` or the deployed site) and ask Ralf to sign in if needed. If the Claude-in-Chrome extension is "not connected", raise it immediately and pause for Ralf, don't defer.
-  - [ ] 8.3 In each tab, on each of the four screens, press the **real Tab key** from a fresh load (blur first) and record `document.activeElement`'s accessible name and `getBoundingClientRect().top` for the first and last few stops. Expect: ≥660 → Dashboard, Trend History, Tariff Radar, Settings, Account menu, then content; 659 → content first, bottom bar last.
-  - [ ] 8.4 Measure, don't eyeball: `getBoundingClientRect()` of the top nav (above content, full width at ≥660), of the bottom bar at 659 (bottom of viewport on a short page, below content), and the `<main>` children's `display`/order.
-  - [ ] 8.5 In-tab live swap: an in-tab resize across 660 without reload can't be driven by automation, so **ask Ralf to resize the real window** across 660 and record what he observes (nav swaps, no flash, nothing remounts, page state such as a typed field survives). Don't skip it.
-  - [ ] 8.6 Record the evidence (widths read back, stops observed, Ralf's observation) in Completion Notes. Substitutes need Ralf's explicit acceptance recorded in the story (8.12 precedent).
+- [x] Task 1: Invert the NavChrome pin in `web/e2e/tab-order.spec.ts` (AC: #1, #2, #3, #7)
+  - [x] 1.1 Replace the `NavChrome tab position … (pinned: …)` loop (lines ~379–416) with assertions per screen × width [659, 660, 900]: at ≥660 the first 5 `tabThrough` stops all have `nav === 'top'` and content stops follow; at 659 every stop after the first `nav` stop is `nav === 'bottom'` and the first stop is content. Keep the existing checks that survive: only one nav tabbable (`new Set(navStops.map(s => s.nav))`), nav link count 5 / 4, links left-to-right, `Account menu` last in the top nav, top nav visually above content at ≥660 and bottom bar below at <660.
+  - [x] 1.2 Add the diagnostic that stops this from restating the DOM: compare Tab order against *visual* order computed from `getBoundingClientRect` (nav stops' `rect.top` ≤ every content stop's `rect.top` at ≥660). A pure CSS reorder must fail it.
+  - [x] 1.3 Rewrite the header comment (lines 3–13) and the failure message (line ~400) so they describe the guard, not a divergence. Keep every other test in the file untouched (their groups ignore ungrouped nav stops via `tabOrderOfGroups`, so they should stay green with nav now first; confirm).
+  - [x] 1.4 Run the spec against the unchanged code and confirm the new NavChrome tests fail at 660/900 and pass at 659.
+- [x] Task 2: Unit tests (AC: #1, #3, #4, #6, #7)
+  - [x] 2.1 `nav-chrome.test.tsx`: render `placement="top"` and `placement="bottom"` separately; assert each renders exactly one `nav[data-slot=…]` with the right classes (`hidden wide:flex` / `wide:hidden`), four entries, active state, handlers, Account menu only in top.
+  - [x] 2.2 One page-level test per screen (dashboard, trend-history, tariff-radar, settings — extend the existing `*-page.test.tsx`): the top nav is the first element child of `<main>` and the bottom nav the last (document order), so a page that forgets one mount fails.
+  - [x] 2.3 Fix tests that index navs by DOM order, which flips once the top nav comes first: `dashboard-page.test.tsx` ~line 202–204 (`settingsButtons[1]` was "the top nav") and the comment at ~174–175. Scope by `data-slot` (`within(document.querySelector('nav[data-slot="nav-chrome-top"]')!)`) instead of an index. The other `getAllByRole(...)[0]` sites (`App.test.tsx`, `settings-page.test.tsx:185`, `trend-history-page.test.tsx:99,110`, `dashboard-page.test.tsx:168,238`) click whichever variant comes first and call the same handler, so they stay valid; leave them unless one asserts which variant it hit.
+- [x] Task 3: Split placement in `web/src/components/dashboard/nav-chrome.tsx` (AC: #1–#4, #6, #8)
+  - [x] 3.1 Add a required prop `placement: 'top' | 'bottom'`. `top` renders only the existing `<nav data-slot="nav-chrome-top" className="hidden wide:flex …">` (brand, four links, ProfileMenu). `bottom` renders only `<nav data-slot="nav-chrome-bottom" className="mt-auto wide:hidden …">`. Remove the shared wrapper `<div className="mt-auto wide:order-first wide:mt-0">` entirely: `mt-auto` moves onto the bottom nav itself and `wide:order-first`/`wide:mt-0` disappear. With no wrapper a hidden variant is `display:none`, so it is not a flex item and `gap-4` adds no space (AC #4). Do **not** keep an empty wrapper div; it would become a zero-height flex item that still receives the gap.
+  - [x] 3.2 Keep the markup, classes, `aria-current` handling, `data-slot` values and the four buttons per variant byte-for-byte; only the wrapper and `placement` branching change. Share the four-button data (label key, icon, handler, active key) instead of copy-pasting if it can be done without changing the DOM; otherwise leave the duplication as it is today. Do not widen scope into a refactor.
+  - [x] 3.3 Update the file's header comment (lines ~25–30, ~45–47), which still describes `wide:order-first` and a single mount point.
+- [x] Task 4: Mount both placements in the four pages (AC: #1–#4, #6)
+  - [x] 4.1 In `dashboard-page.tsx`, `trend-history-page.tsx`, `tariff-radar-page.tsx`, `settings-page.tsx`: render `<NavChrome placement="top" … />` as the **first child of `<main>`**, before the `data-slot="*-content"` wrapper, and `<NavChrome placement="bottom" … />` where NavChrome is mounted today (last, before `MeterRegressionPromptDialog` on Dashboard). Pass the identical props to both (`active`, the four `onXClick`, `householdId`, `supportsFederatedLogout`, `email`); build the props once per page (a local `navProps` object) so the two mounts cannot drift.
+  - [x] 4.2 Update the comments in the four pages that say NavChrome is "deliberately outside this wrapper" only if they now misdescribe the structure (the nav is still outside the content wrapper, so most stay true).
+- [x] Task 5: Green the unit and e2e suites (AC: #1–#7)
+  - [x] 5.1 `npm test` in `web/` (Vitest), `npm run lint`, type-check/build as the repo does in `pr-review.yml`. `layout-constants.drift.test.ts` must stay green (breakpoint and column copies are untouched).
+  - [x] 5.2 Playwright: `tab-order.spec.ts`, `app-shell.spec.ts` and `locale-theme-sweep.spec.ts` all green. The sweep's layout-identity check (`nav[data-slot=…]` visible per width) still holds because the `data-slot` attributes are unchanged.
+- [x] Task 6: Close the loop in docs (AC: #7)
+  - [x] 6.1 `_bmad-artifacts/implementation/deferred-work.md`: delete the `[promoted: needs story]` NavChrome entry (and its line in the Index). The related open entry about tab-order coverage gaps stays (its Profile-menu-below-900px item is unrelated).
+  - [x] 6.2 `_bmad-artifacts/project-context.md` (line ~74, "Visual reordering must not reorder focus"): remove the NavChrome exception ("the one documented exception is NavChrome … tracked in `deferred-work.md`"); the rule now has no exceptions. Note that NavChrome's two placements are mounted separately precisely so no CSS `order` is needed.
+  - [x] 6.3 No new `deferred-work.md` entries unless review finds something real; if so, use the `[open]` marker format from `project-context.md`.
+- [x] Task 7: Self-review checklist before handoff (AC: #3, #4, #8)
+  - [x] 7.1 Confirm `git grep "wide:order-first"` returns nothing in `web/`.
+  - [x] 7.2 Confirm there is no JS breakpoint branch added (`useWideBreakpoint` is not used here); the swap stays CSS-only.
+  - [x] 7.3 Confirm `en-US`/`de-DE` catalogs are unchanged (`git diff --stat web/src/locales`).
+- [x] Task 8: **Live verification gate** (AC: #9). The story cannot move review → done without this.
+  - [x] 8.1 Follow the `project-context.md` "Live-resize verification procedure" exactly: close prior tabs, `tabs_create_mcp` a fresh tab, `resize_window` **before** the first `navigate`, then read back `window.innerWidth` via `javascript_tool` and require it to equal the target. One tab per width: **659**, **660**, **900** (add 500 if cheap). A 659 request that reads back 660 is the clamp floor, not a 659px check; retry in a fresh tab group or ask Ralf.
+  - [x] 8.2 The app requires Auth0 sign-in. Use the environment the previous Epic 8 live checks used (local dev via `./scripts/run-api.sh` or the deployed site) and ask Ralf to sign in if needed. If the Claude-in-Chrome extension is "not connected", raise it immediately and pause for Ralf, don't defer.
+  - [x] 8.3 In each tab, on each of the four screens, press the **real Tab key** from a fresh load (blur first) and record `document.activeElement`'s accessible name and `getBoundingClientRect().top` for the first and last few stops. Expect: ≥660 → Dashboard, Trend History, Tariff Radar, Settings, Account menu, then content; 659 → content first, bottom bar last.
+  - [x] 8.4 Measure, don't eyeball: `getBoundingClientRect()` of the top nav (above content, full width at ≥660), of the bottom bar at 659 (bottom of viewport on a short page, below content), and the `<main>` children's `display`/order.
+  - [x] 8.5 In-tab live swap: an in-tab resize across 660 without reload can't be driven by automation, so **ask Ralf to resize the real window** across 660 and record what he observes (nav swaps, no flash, nothing remounts, page state such as a typed field survives). Don't skip it.
+  - [x] 8.6 Record the evidence (widths read back, stops observed, Ralf's observation) in Completion Notes. Substitutes need Ralf's explicit acceptance recorded in the story (8.12 precedent).
 
 ## Dev Notes
 
@@ -157,10 +157,54 @@ No new files, dependencies, tokens, strings, migrations or backend changes. One 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-5-5
 
 ### Debug Log References
 
+- Red phase: new e2e NavChrome tests failed 8/12 (all ≥660px) against unchanged code, passed at 659; new unit tests failed 25.
+
 ### Completion Notes List
 
+- Option A (split placement, CSS-only) implemented; Ask First defaults taken (no new `tariff-radar-page.test.tsx`; Tariff Radar covered by e2e).
+- `NavChrome` takes `placement: 'top'|'bottom'`, wrapper and `wide:order-first` removed, `mt-auto` moved to the bottom nav. Four pages mount top first in `<main>` and bottom last via one `navProps` object.
+- Tests: Vitest 542/542 pass; `tsc -b` and lint clean (only pre-existing warnings); Playwright tab-order, app-shell, locale-theme-sweep 97/97 pass. `en-US`/`de-DE` untouched, no JS breakpoint added.
+- `git grep wide:order-first web/` only matches the negative assertion in `nav-chrome.test.tsx`.
+- **Task 8 live evidence (2026-10-04, local dev app `https://localhost:5173`, Ralf signed in, de-DE UI, real Tab key presses via Claude-in-Chrome, one fresh tab per width, `window.innerWidth` read back):**
+  - 659 (read back 659; an earlier 660 request read back 659 while a stale tab shared the window and was redone after closing it): all four screens: first stop is content, last four stops are the bottom bar (Dashboard, Verlauf, Tarifradar, Einstellungen). `nav-chrome-top` `display:none`; `<main>` children: top(none), content, bottom(flex). Bottom bar rect y 564–641 of a 657px viewport on the short Dashboard (bottom-pinned).
+  - 660 (read back 660): all four screens: stops 1–5 are Dashboard, Verlauf, Tarifradar, Einstellungen, Konto-Menü (rect top 28), then content (min rect top 89+). Top nav rect y16–73, full width 628, above content; bottom nav `display:none`.
+  - 900 (read back 900; a first 900 request read back 660 and was discarded): identical result; top nav width 868 above the content column.
+  - Not done (optional): 500px.
+  - Note: key presses only reached the page after a screenshot call focused it; plain Tab immediately after navigate registered no stops.
+  - **8.5 (Ralf, real window resized across 660px, 2026-10-04):** nav swaps between top and bottom; no flash; typed text survives; the open Account (profile) menu stays open when sized down.
+
 ### File List
+
+- web/src/components/dashboard/nav-chrome.tsx
+- web/src/components/dashboard/nav-chrome.test.tsx
+- web/src/components/dashboard/dashboard-page.tsx
+- web/src/components/dashboard/dashboard-page.test.tsx
+- web/src/components/trend-history/trend-history-page.tsx
+- web/src/components/trend-history/trend-history-page.test.tsx
+- web/src/components/tariff/tariff-radar-page.tsx
+- web/src/components/settings/settings-page.tsx
+- web/src/components/settings/settings-page.test.tsx
+- web/e2e/tab-order.spec.ts
+- _bmad-artifacts/project-context.md
+- _bmad-artifacts/implementation/deferred-work.md
+- _bmad-artifacts/implementation/sprint-status.yaml
+- _bmad-artifacts/implementation/10-3-navchrome-dom-order-tab-order.md
+
+### Change Log
+
+- 2026-10-04: Code review: added skip-to-content link (WCAG 2.4.1) and a Tariff Radar DOM-order test; 2 items deferred; status → done.
+- 2026-10-04: Live gate (Task 8) completed; status → review.
+- 2026-10-04: Split NavChrome placement so DOM/Tab order matches visual order; inverted e2e pin into guard; docs closed out (Tasks 1–7).
+
+### Review Findings
+
+Code review 2026-10-04 (Blind Hunter, Edge Case Hunter, Acceptance Auditor). 17 findings dismissed as noise.
+
+- [x] [Review][Patch] Bypass blocks (WCAG 2.4.1): nav is now first on every screen, so keyboard users Tab through 5 stops (4 links + Account menu) before the page content, and no skip link exists — decided (Ralf, 2026-10-04): add a skip-to-content link now. The deferred-work entry removed by this story also named a skip link plus labelled landmarks as an alternative fix. [web/src/components/dashboard/nav-chrome.tsx and the four page components] — fixed: skip link as first element of the top nav (`app.skipToContent`, en-US + de-DE), targets `id="main-content"` on each page's content wrapper; wide-only, hidden off-screen until focused. AC #1 now reads: first six Tab stops are the skip link, the four nav links and the Account menu; AC #8 (no locale changes) is superseded by this one new key. `tab-order.spec.ts` updated (6 nav stops at ≥660px, skip link first, none at 659px).
+- [x] [Review][Patch] Task 2.2 is ticked `[x]` for all four screens, but Tariff Radar has no page-level DOM-order unit test (covered by e2e only, per the Ask First default) — add the test, or amend the Task 2.2 text to say so [web/src/components/tariff/tariff-radar-page.tsx] — fixed: added `tariff-radar-page.test.tsx` (top nav first, bottom nav last, two navs, `#main-content`)
+- [x] [Review][Defer] An open Account menu stays open when the window is resized below 660px (its trigger becomes `display:none`) [web/src/components/dashboard/profile-menu.tsx] — deferred, pre-existing (the old single-mount `hidden wide:flex` top nav behaved the same); observed in the live gate, never logged
+- [x] [Review][Defer] No automated guard that the bottom bar stays pinned (`mt-auto`) on a short page at <660px; only the manual Dashboard measurement in Completion Notes [web/src/components/dashboard/nav-chrome.tsx] — deferred, e2e only checks "below content"

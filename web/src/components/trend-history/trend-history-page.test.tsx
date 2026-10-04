@@ -34,6 +34,17 @@ describe('TrendHistoryPage', () => {
     vi.unstubAllGlobals()
   })
 
+  it('mounts the top nav first and the bottom nav last in <main> (Story 10.3)', async () => {
+    mockRoutes([])
+
+    render(<TrendHistoryPage locale="en-US" householdId="11111111-1111-1111-1111-111111111111" supportsFederatedLogout={true} email={null} onBack={() => {}} onSettingsClick={() => {}} onTariffRadarClick={() => {}} onSmartPlugImportClick={() => {}} />)
+
+    const main = screen.getByRole('main')
+    expect(main.firstElementChild).toHaveAttribute('data-slot', 'nav-chrome-top')
+    expect(main.lastElementChild).toHaveAttribute('data-slot', 'nav-chrome-bottom')
+    expect(await screen.findByText('Not enough history yet to show a trend.')).toBeInTheDocument()
+  })
+
   it('renders the chart, the Meter Readings card, the Events card, and the Per-Plug card in that order', async () => {
     mockRoutes([])
 

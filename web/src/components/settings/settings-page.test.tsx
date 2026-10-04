@@ -59,6 +59,18 @@ describe('SettingsPage', () => {
     vi.unstubAllGlobals()
   })
 
+  it('mounts the top nav first and the bottom nav last in <main> (Story 10.3)', async () => {
+    stubFetch()
+    renderSettingsPage(true)
+
+    const main = screen.getByRole('main')
+    expect(main.firstElementChild).toHaveAttribute('data-slot', 'nav-chrome-top')
+    const navs = main.querySelectorAll(':scope > nav[data-slot]')
+    expect(navs[navs.length - 1]).toHaveAttribute('data-slot', 'nav-chrome-bottom')
+    expect(main.lastElementChild).toBe(navs[navs.length - 1])
+    await screen.findByRole('button', { name: 'Export data' })
+  })
+
   it('no longer renders a Smart Plug Import panel — moved to its own Dashboard-launched screen (Story 3.5, AC #1)', async () => {
     stubFetch()
 

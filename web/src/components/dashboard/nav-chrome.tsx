@@ -6,6 +6,9 @@ import { ProfileMenu } from './profile-menu'
 type NavTab = 'dashboard' | 'trendHistory' | 'tariffRadar' | 'settings'
 
 interface NavChromeProps {
+  // Which variant this mount renders. Pages mount 'top' as the first child of <main> and 'bottom'
+  // as the last, so DOM (and Tab) order matches visual order at every width (WCAG 2.4.3).
+  placement: 'top' | 'bottom'
   active: NavTab
   onDashboardClick: () => void
   onTrendHistoryClick: () => void
@@ -24,11 +27,13 @@ const LINK_CLASSNAME =
   'flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-muted-foreground'
 
 // One component, not two (UX-DR9/DESIGN/components.md) — the exact same active/onXClick props
-// render both a <660px bottom-tab-bar and a >=660px top-nav variant, swapped via the `wide:`
-// breakpoint variant (Task 1) rather than two separate components. NavChrome's own mount point in
-// every page stays exactly where it already is; `wide:order-first` alone repositions the wide
-// variant to visual top (Task 2) — see nav-chrome's wrapping <div> below.
+// drive both a <660px bottom-tab-bar and a >=660px top-nav variant. Each page mounts NavChrome
+// twice, `placement="top"` as the first child of <main> and `placement="bottom"` as the last, and
+// the `wide:` breakpoint variant hides whichever doesn't apply (display:none, so it is neither
+// focusable nor a flex item that `gap` could add space for). No CSS `order` is involved, so Tab
+// order equals visual order (Story 10.3).
 export function NavChrome({
+  placement,
   active,
   onDashboardClick,
   onTrendHistoryClick,
@@ -40,17 +45,14 @@ export function NavChrome({
 }: NavChromeProps) {
   const { t } = useTranslation()
 
-  return (
-    // mt-auto is what pushed NavChrome to the bottom of each page's flex-col <main> before this
-    // story — preserved here on the wrapper (now the actual flex item) for <660px. At >=660px,
-    // wide:order-first repositions this same single mount point to visual top (Task 2) — mt-0
-    // cancels the auto margin so it doesn't fight the reordering.
-    <div className="mt-auto wide:order-first wide:mt-0">
-      {/* Bottom tab bar — mobile convention, unchanged below the 660px breakpoint (AC #2).
-          data-slot is a stable, visibility-independent hook for e2e viewport-resize assertions
-          (Task 7) — Playwright's role queries exclude display:none elements from the a11y tree,
-          so a plain role/text locator can't reliably tell the two <nav>s apart across a resize. */}
-      <nav data-slot="nav-chrome-bottom" className="wide:hidden flex items-stretch justify-around border-t border-border px-2 pt-2.5 pb-4">
+  // Bottom tab bar — mobile convention, unchanged below the 660px breakpoint (AC #2).
+  // data-slot is a stable, visibility-independent hook for e2e viewport-resize assertions
+  // (Task 7) — Playwright's role queries exclude display:none elements from the a11y tree,
+  // so a plain role/text locator can't reliably tell the two <nav>s apart across a resize.
+  // mt-auto pins it to the bottom of each page's min-h-svh flex-col <main> on short pages.
+  if (placement === 'bottom') {
+    return (
+      <nav data-slot="nav-chrome-bottom" className="mt-auto wide:hidden flex items-stretch justify-around border-t border-border px-2 pt-2.5 pb-4">
         <button
           type="button"
           className={cn(ITEM_CLASSNAME, active === 'dashboard' && ACTIVE_CLASSNAME)}
@@ -91,57 +93,75 @@ export function NavChrome({
           <span className="text-[9.5px] font-semibold">{t('dashboard.nav.settings')}</span>
         </button>
       </nav>
+    )
+  }
 
-      {/* Top nav — desktop/tablet convention at >=660px (AC #1). Brand wordmark, the same four
-          links, then the Profile menu (Task 3) on the far right; this is the only surface that
-          mounts ProfileMenu (no <660px equivalent). */}
-      <nav data-slot="nav-chrome-top" className="hidden wide:flex items-center justify-between border-b border-border px-4 py-2.5">
-        <span className="text-sm font-bold">{t('app.title')}</span>
+  // Top nav — desktop/tablet convention at >=660px (AC #1). Brand wordmark, the same four
+  // links, then the Profile menu (Task 3) on the far right; this is the only surface that
+  // mounts ProfileMenu (no <660px equivalent).
+  return (
+    <nav data-slot="nav-chrome-top" className="relative hidden wide:flex items-center justify-between border-b border-border px-4 py-2.5">
+      {/* Bypass block (WCAG 2.4.1): the nav is the first Tab stop on every screen, so the first
+          stop of all is a skip link to the page's content wrapper (id="main-content"). Only the
+          top variant has it; <660px the bottom bar is last in Tab order, so nothing to bypass. */}
+      <a
+        href="#main-content"
+        className="absolute left-2 top-2 z-10 -translate-y-[200%] rounded-xl bg-background px-3 py-2 text-xs font-semibold text-foreground focus:translate-y-0"
+        onClick={(e) => {
+          // Hash navigation would change the URL; focus the target directly instead.
+          e.preventDefault()
+          const target = document.getElementById('main-content')
+          target?.focus()
+          target?.scrollIntoView?.()
+        }}
+      >
+        {t('app.skipToContent')}
+      </a>
+      <span className="text-sm font-bold">{t('app.title')}</span>
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className={cn(LINK_CLASSNAME, active === 'dashboard' && ACTIVE_CLASSNAME)}
-            aria-current={active === 'dashboard' ? 'page' : undefined}
-            onClick={onDashboardClick}
-          >
-            <Home className="size-4" aria-hidden="true" />
-            {t('dashboard.nav.dashboard')}
-          </button>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          className={cn(LINK_CLASSNAME, active === 'dashboard' && ACTIVE_CLASSNAME)}
+          aria-current={active === 'dashboard' ? 'page' : undefined}
+          onClick={onDashboardClick}
+        >
+          <Home className="size-4" aria-hidden="true" />
+          {t('dashboard.nav.dashboard')}
+        </button>
 
-          <button
-            type="button"
-            className={cn(LINK_CLASSNAME, active === 'trendHistory' && ACTIVE_CLASSNAME)}
-            aria-current={active === 'trendHistory' ? 'page' : undefined}
-            onClick={onTrendHistoryClick}
-          >
-            <LineChart className="size-4" aria-hidden="true" />
-            {t('dashboard.nav.trendHistory')}
-          </button>
+        <button
+          type="button"
+          className={cn(LINK_CLASSNAME, active === 'trendHistory' && ACTIVE_CLASSNAME)}
+          aria-current={active === 'trendHistory' ? 'page' : undefined}
+          onClick={onTrendHistoryClick}
+        >
+          <LineChart className="size-4" aria-hidden="true" />
+          {t('dashboard.nav.trendHistory')}
+        </button>
 
-          <button
-            type="button"
-            className={cn(LINK_CLASSNAME, active === 'tariffRadar' && ACTIVE_CLASSNAME)}
-            aria-current={active === 'tariffRadar' ? 'page' : undefined}
-            onClick={onTariffRadarClick}
-          >
-            <Clock className="size-4" aria-hidden="true" />
-            {t('dashboard.nav.tariffRadar')}
-          </button>
+        <button
+          type="button"
+          className={cn(LINK_CLASSNAME, active === 'tariffRadar' && ACTIVE_CLASSNAME)}
+          aria-current={active === 'tariffRadar' ? 'page' : undefined}
+          onClick={onTariffRadarClick}
+        >
+          <Clock className="size-4" aria-hidden="true" />
+          {t('dashboard.nav.tariffRadar')}
+        </button>
 
-          <button
-            type="button"
-            className={cn(LINK_CLASSNAME, active === 'settings' && ACTIVE_CLASSNAME)}
-            aria-current={active === 'settings' ? 'page' : undefined}
-            onClick={onSettingsClick}
-          >
-            <SettingsIcon className="size-4" aria-hidden="true" />
-            {t('dashboard.nav.settings')}
-          </button>
-        </div>
+        <button
+          type="button"
+          className={cn(LINK_CLASSNAME, active === 'settings' && ACTIVE_CLASSNAME)}
+          aria-current={active === 'settings' ? 'page' : undefined}
+          onClick={onSettingsClick}
+        >
+          <SettingsIcon className="size-4" aria-hidden="true" />
+          {t('dashboard.nav.settings')}
+        </button>
+      </div>
 
-        <ProfileMenu email={email} householdId={householdId} supportsFederatedLogout={supportsFederatedLogout} />
-      </nav>
-    </div>
+      <ProfileMenu email={email} householdId={householdId} supportsFederatedLogout={supportsFederatedLogout} />
+    </nav>
   )
 }

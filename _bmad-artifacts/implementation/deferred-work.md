@@ -6,10 +6,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Index
 
-**Promoted (story created 2026-10-02, Epic 10)**
-
-- NavChrome last in DOM at wide (keyboard tab-order check (spec-tab-order-check, 2026-10-02))
-
 **test-coverage (18)**
 
 - Export stream property names vs HouseholdExportResult, no round-trip test — code review of spec-household-export-oom-fix (2026-09-25)
@@ -389,10 +385,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: keyboard tab-order check (spec-tab-order-check, 2026-10-02)
 
-- [promoted: 10-3-navchrome-dom-order-tab-order] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
-  summary: At ≥660px NavChrome (top nav + Profile avatar) is visually first but last in the DOM, so keyboard users Tab through the whole page before reaching it (WCAG 2.4.3 Focus Order). Kept deliberately by Story 8.1 (`wide:order-first`) so phones keep the bottom bar last.
-  evidence: Pinned by `web/e2e/tab-order.spec.ts` on all four screens (it fails if the nav moves in the DOM, so the fix must update the pin). Candidate fixes: render the nav first in the DOM at ≥660px via `useWideBreakpoint` (touches `nav-chrome.tsx` and the four page mounts; watch the 660px boundary), or add a skip link plus `<nav aria-label>` landmarks (new UI and strings in both catalogs). Needs its own story. [web/src/components/dashboard/nav-chrome.tsx:48]
-
 - [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
   summary: Nothing enforces that a new `wide:order-*` / reordering class gets a tab-order test; the rule in `project-context.md` is prose only.
   evidence: Raised by the quick-dev review. A source-scan guard test (every file using `wide:order-`/`order-first` must be named in `tab-order.spec.ts`) would close it, like the architecture guard tests. [web/e2e/tab-order.spec.ts]
@@ -434,3 +426,8 @@ Conventions: append new sections at the end, chronological (see `project-context
 - source_spec: `_bmad-artifacts/implementation/spec-local-dev-start-stop-scripts.md`
   summary: Set `strictPort: true` in `web/vite.config.ts` so Vite fails instead of silently moving to 5174 when 5173 is taken.
   evidence: Without it, `scripts/dev-up.sh` health-checks 5173 (possibly another process) and prints a URL Vite isn't serving; changing vite.config.ts was out of scope (Ask First).
+
+## Deferred from: code review of story 10-3-navchrome-dom-order-tab-order (2026-10-04)
+
+- [open] An open Account menu stays open when the window is resized below 660px, because its trigger sits in the top nav, which becomes `display:none`; the same behaviour existed before 10.3. Seen in the 10.3 live gate. [web/src/components/dashboard/profile-menu.tsx]
+- [open] No automated guard that the bottom tab bar stays pinned to the viewport bottom (`mt-auto`) on a short page at <660px; `tab-order.spec.ts` only checks it sits below the content, and unit tests check the class string. [web/src/components/dashboard/nav-chrome.tsx]

@@ -1,6 +1,7 @@
 {
   "app": {
-    "title": "Energy Tracker"
+    "title": "Energy Tracker",
+    "skipToContent": "Skip to main content"
   },
   "session": {
     "loading": "Loading…",

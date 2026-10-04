@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-10-02
+last_updated: 2026-10-04
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -135,7 +135,7 @@ development_status:
   epic-10: in-progress
   10-1-migration-safety-on-deploy: done
   10-2-event-correlation-forward-window-recompute: done
-  10-3-navchrome-dom-order-tab-order: ready-for-dev
+  10-3-navchrome-dom-order-tab-order: done
   epic-10-retrospective: optional
 
 action_items:

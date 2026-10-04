@@ -1,16 +1,16 @@
 import { expect, test, type Page } from '@playwright/test'
 
 // Epic 8 retro action item #2: keyboard tab order vs visual order at >=660px (WCAG 2.4.3).
-// Epic 8 reorders content visually (`wide:order-N` Settings sections, `wide:order-first` NavChrome,
+// Epic 8 reorders content visually (`wide:order-N` Settings sections,
 // `wide:flex-row` field pairs, CSS grids) while the DOM stays put. For each reordered surface we
 // tag its *groups* (a Settings section, a form field, a grid tile), press the real Tab key through
 // the page, and compare the order groups are first reached in against their visual reading order
 // (row by row, left to right, computed from layout). Groups, not single controls, because two
 // side-by-side blocks of several fields each legitimately tab column by column.
 //
-// One divergence is intentional and pinned: NavChrome is visually first at >=660px but last in the
-// DOM, so it is last in tab order (Story 8.1 kept the DOM position so phones stay correct). The pin
-// fails if that changes in either direction. The fix is logged in deferred-work.md.
+// NavChrome is guarded too: its top variant is mounted first in <main> and its bottom variant last
+// (Story 10.3), so at >=660px the nav is both visually first and first in tab order, and on phones
+// the bottom bar is visually and tab-order last. No CSS `order` is involved.
 
 type Screen = 'dashboard' | 'trendHistory' | 'tariffRadar' | 'settings'
 
@@ -376,36 +376,47 @@ for (const { screen, wait, minTiles } of GRIDS) {
   }
 }
 
-// --- NavChrome: the documented, pinned divergence --------------------------------------------------
+// --- NavChrome: tab order equals visual order ------------------------------------------------------
 
 const SCREENS: Screen[] = ['dashboard', 'trendHistory', 'tariffRadar', 'settings']
 
 for (const screen of SCREENS) {
   for (const width of [659, 660, 900]) {
-    test(`NavChrome tab position on ${screen} at ${width}px (pinned: wide nav is visually first but last in tab order)`, async ({ page }) => {
+    test(`NavChrome tab position on ${screen} at ${width}px (${width >= 660 ? 'nav first' : 'bottom bar last'}, equals visual order)`, async ({ page }) => {
       await openScreen(page, screen, width)
       const wide = width >= 660
       const stops = await tabThrough(page)
       const navStops = stops.filter((s) => s.nav !== null)
       const contentStops = stops.filter((s) => s.nav === null)
-      expect(navStops.map((s) => s.name), `NavChrome contributes 4 links${wide ? ' + the account menu' : ''}`).toHaveLength(wide ? 5 : 4)
+      // Wide: skip link (WCAG 2.4.1) + 4 links + the account menu; phone: the 4 bottom-bar entries.
+      expect(navStops.map((s) => s.name), `NavChrome contributes ${wide ? 'a skip link, 4 links and the account menu' : '4 links'}`).toHaveLength(wide ? 6 : 4)
+      if (wide) expect(navStops[0].name, 'the skip link is the very first Tab stop').toContain('Skip to main content')
+      else expect(stops.map((s) => s.name).join('|'), 'no skip link below 660px').not.toContain('Skip to main content')
       expect(contentStops.length, 'page has content Tab stops').toBeGreaterThan(0)
       expect(new Set(navStops.map((s) => s.nav)), `only the ${wide ? 'top' : 'bottom'} nav is tabbable`).toEqual(new Set([wide ? 'top' : 'bottom']))
 
-      // All content first, nav last — at every width. DOM order is unchanged by wide:order-first.
-      const firstNav = stops.findIndex((s) => s.nav !== null)
-      expect(firstNav, 'NavChrome has a first Tab stop').toBeGreaterThanOrEqual(0)
-      expect(
-        stops.slice(firstNav).every((s) => s.nav !== null),
-        `NavChrome must be the last Tab group (observed: ${stops.map((s) => s.name).join(' | ')}). If this fails because the nav moved in the DOM, the divergence is fixed: update this pin and resolve the NavChrome entry in deferred-work.md.`,
-      ).toBe(true)
-
-      // Visual position: top nav above all content at >=660px (the divergence), bottom bar below it on phones.
-      const navTop = Math.min(...navStops.map((s) => s.rect.top))
-      const contentTop = Math.min(...contentStops.map((s) => s.rect.top))
-      const contentBottom = Math.max(...contentStops.map((s) => s.rect.bottom))
-      if (wide) expect(navTop, 'top nav is visually above the page content').toBeLessThan(contentTop)
-      else expect(navTop, 'bottom bar is visually below the page content').toBeGreaterThan(contentBottom - 1)
+      const observed = stops.map((s) => s.name).join(' | ')
+      if (wide) {
+        // Nav stops come first in the real Tab sequence, then content.
+        expect(
+          stops.slice(0, navStops.length).every((s) => s.nav === 'top'),
+          `the first ${navStops.length} Tab stops must be the top nav (observed: ${observed})`,
+        ).toBe(true)
+        // Diagnostic against a pure CSS reorder: the nav is also visually above every content stop.
+        const navMaxTop = Math.max(...navStops.map((s) => s.rect.top))
+        const contentTop = Math.min(...contentStops.map((s) => s.rect.top))
+        expect(navMaxTop, `top nav stops must be visually above all content stops (observed: ${observed})`).toBeLessThanOrEqual(contentTop)
+      } else {
+        expect(stops[0].nav, `first Tab stop at <660px is page content (observed: ${observed})`).toBeNull()
+        const firstNav = stops.findIndex((s) => s.nav !== null)
+        expect(
+          stops.slice(firstNav).every((s) => s.nav === 'bottom'),
+          `every stop after the first nav stop must be the bottom bar (observed: ${observed})`,
+        ).toBe(true)
+        const contentBottom = Math.max(...contentStops.map((s) => s.rect.bottom))
+        const navTop = Math.min(...navStops.map((s) => s.rect.top))
+        expect(navTop, 'bottom bar is visually below the page content').toBeGreaterThan(contentBottom - 1)
+      }
 
       // Within the nav: left to right, avatar (wide only) last.
       const navLefts = navStops.map((s) => s.rect.left)
