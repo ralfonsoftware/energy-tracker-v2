@@ -73,7 +73,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
     <main className="flex min-h-svh flex-col gap-6 p-4">
       <NavChrome placement="top" {...navProps} />
 
-      <div data-slot="settings-content" className="flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[900px]">
+      <div id="main-content" tabIndex={-1} data-slot="settings-content" className="outline-none flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{t('settings.heading')}</h1>
           <Button variant="outline" onClick={onBack}>

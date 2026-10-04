@@ -35,6 +35,36 @@ function renderNavChrome(
 // the job of web/e2e/app-shell.spec.ts and web/e2e/tab-order.spec.ts.
 const ENTRIES = ['Dashboard', 'Trend History', 'Tariff Radar', 'Settings'] as const
 
+describe('NavChrome skip link (WCAG 2.4.1)', () => {
+  it('is the first element of the top nav and points at the content wrapper', () => {
+    const { container } = renderNavChrome('top', 'dashboard')
+
+    const nav = container.querySelector('nav[data-slot="nav-chrome-top"]')!
+    const link = screen.getByRole('link', { name: 'Skip to main content' })
+    expect(nav.firstElementChild).toBe(link)
+    expect(link).toHaveAttribute('href', '#main-content')
+  })
+
+  it('moves focus to #main-content when activated', async () => {
+    const target = document.createElement('div')
+    target.id = 'main-content'
+    target.tabIndex = -1
+    document.body.appendChild(target)
+    renderNavChrome('top', 'dashboard')
+
+    await userEvent.click(screen.getByRole('link', { name: 'Skip to main content' }))
+
+    expect(target).toHaveFocus()
+    target.remove()
+  })
+
+  it('is not rendered in the bottom bar', () => {
+    renderNavChrome('bottom', 'dashboard')
+
+    expect(screen.queryByRole('link', { name: 'Skip to main content' })).not.toBeInTheDocument()
+  })
+})
+
 describe.each<Placement>(['top', 'bottom'])('NavChrome placement="%s"', (placement) => {
   const otherPlacement: Placement = placement === 'top' ? 'bottom' : 'top'
 

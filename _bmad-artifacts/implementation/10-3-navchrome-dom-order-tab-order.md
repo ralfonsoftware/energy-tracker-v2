@@ -4,7 +4,7 @@ baseline_commit: b503218
 
 # Story 10.3: NavChrome Document Order Matches Visual Order (Focus Order, WCAG 2.4.3)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 10 "Deferred-work hardening" is new (created 2026-10-02 from the Epic 8 retro action #6 triage, `spec-deferred-work-triage.md`). Origin: deferred-work.md entry "NavChrome last in DOM at wide" (spec-tab-order-check, 2026-10-02), promoted by Ralf. -->
@@ -196,5 +196,15 @@ claude-sonnet-5-5
 
 ### Change Log
 
+- 2026-10-04: Code review: added skip-to-content link (WCAG 2.4.1) and a Tariff Radar DOM-order test; 2 items deferred; status → done.
 - 2026-10-04: Live gate (Task 8) completed; status → review.
 - 2026-10-04: Split NavChrome placement so DOM/Tab order matches visual order; inverted e2e pin into guard; docs closed out (Tasks 1–7).
+
+### Review Findings
+
+Code review 2026-10-04 (Blind Hunter, Edge Case Hunter, Acceptance Auditor). 17 findings dismissed as noise.
+
+- [x] [Review][Patch] Bypass blocks (WCAG 2.4.1): nav is now first on every screen, so keyboard users Tab through 5 stops (4 links + Account menu) before the page content, and no skip link exists — decided (Ralf, 2026-10-04): add a skip-to-content link now. The deferred-work entry removed by this story also named a skip link plus labelled landmarks as an alternative fix. [web/src/components/dashboard/nav-chrome.tsx and the four page components] — fixed: skip link as first element of the top nav (`app.skipToContent`, en-US + de-DE), targets `id="main-content"` on each page's content wrapper; wide-only, hidden off-screen until focused. AC #1 now reads: first six Tab stops are the skip link, the four nav links and the Account menu; AC #8 (no locale changes) is superseded by this one new key. `tab-order.spec.ts` updated (6 nav stops at ≥660px, skip link first, none at 659px).
+- [x] [Review][Patch] Task 2.2 is ticked `[x]` for all four screens, but Tariff Radar has no page-level DOM-order unit test (covered by e2e only, per the Ask First default) — add the test, or amend the Task 2.2 text to say so [web/src/components/tariff/tariff-radar-page.tsx] — fixed: added `tariff-radar-page.test.tsx` (top nav first, bottom nav last, two navs, `#main-content`)
+- [x] [Review][Defer] An open Account menu stays open when the window is resized below 660px (its trigger becomes `display:none`) [web/src/components/dashboard/profile-menu.tsx] — deferred, pre-existing (the old single-mount `hidden wide:flex` top nav behaved the same); observed in the live gate, never logged
+- [x] [Review][Defer] No automated guard that the bottom bar stays pinned (`mt-auto`) on a short page at <660px; only the manual Dashboard measurement in Completion Notes [web/src/components/dashboard/nav-chrome.tsx] — deferred, e2e only checks "below content"

@@ -144,7 +144,7 @@ export function DashboardPage({
           >=660px (UX-DR19). NavChrome and the regression dialog are deliberately outside this
           wrapper (see story Dev Notes): NavChrome's top-nav variant is full-width by design
           (Story 8.1), and the dialog is an overlay with its own sizing. */}
-      <div data-slot="dashboard-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
+      <div id="main-content" tabIndex={-1} data-slot="dashboard-content" className="outline-none flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">{t('app.title')}</h1>
           <div className="flex items-center gap-2">

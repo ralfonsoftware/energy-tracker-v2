@@ -388,7 +388,10 @@ for (const screen of SCREENS) {
       const stops = await tabThrough(page)
       const navStops = stops.filter((s) => s.nav !== null)
       const contentStops = stops.filter((s) => s.nav === null)
-      expect(navStops.map((s) => s.name), `NavChrome contributes 4 links${wide ? ' + the account menu' : ''}`).toHaveLength(wide ? 5 : 4)
+      // Wide: skip link (WCAG 2.4.1) + 4 links + the account menu; phone: the 4 bottom-bar entries.
+      expect(navStops.map((s) => s.name), `NavChrome contributes ${wide ? 'a skip link, 4 links and the account menu' : '4 links'}`).toHaveLength(wide ? 6 : 4)
+      if (wide) expect(navStops[0].name, 'the skip link is the very first Tab stop').toContain('Skip to main content')
+      else expect(stops.map((s) => s.name).join('|'), 'no skip link below 660px').not.toContain('Skip to main content')
       expect(contentStops.length, 'page has content Tab stops').toBeGreaterThan(0)
       expect(new Set(navStops.map((s) => s.nav)), `only the ${wide ? 'top' : 'bottom'} nav is tabbable`).toEqual(new Set([wide ? 'top' : 'bottom']))
 

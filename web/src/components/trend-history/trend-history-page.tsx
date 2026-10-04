@@ -91,7 +91,7 @@ export function TrendHistoryPage({
           a centered 900px column at >=660px (UX-DR19), mirroring dashboard-page.tsx's Story 8.2
           wrapper verbatim. NavChrome is deliberately outside this wrapper: its top-nav variant is
           full-width by design (Story 8.1). */}
-      <div data-slot="trend-history-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
+      <div id="main-content" tabIndex={-1} data-slot="trend-history-content" className="outline-none flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">{t('dashboard.nav.trendHistory')}</h1>
           <button

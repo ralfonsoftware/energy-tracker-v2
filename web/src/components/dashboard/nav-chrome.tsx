@@ -100,7 +100,23 @@ export function NavChrome({
   // links, then the Profile menu (Task 3) on the far right; this is the only surface that
   // mounts ProfileMenu (no <660px equivalent).
   return (
-    <nav data-slot="nav-chrome-top" className="hidden wide:flex items-center justify-between border-b border-border px-4 py-2.5">
+    <nav data-slot="nav-chrome-top" className="relative hidden wide:flex items-center justify-between border-b border-border px-4 py-2.5">
+      {/* Bypass block (WCAG 2.4.1): the nav is the first Tab stop on every screen, so the first
+          stop of all is a skip link to the page's content wrapper (id="main-content"). Only the
+          top variant has it; <660px the bottom bar is last in Tab order, so nothing to bypass. */}
+      <a
+        href="#main-content"
+        className="absolute left-2 top-2 z-10 -translate-y-[200%] rounded-xl bg-background px-3 py-2 text-xs font-semibold text-foreground focus:translate-y-0"
+        onClick={(e) => {
+          // Hash navigation would change the URL; focus the target directly instead.
+          e.preventDefault()
+          const target = document.getElementById('main-content')
+          target?.focus()
+          target?.scrollIntoView?.()
+        }}
+      >
+        {t('app.skipToContent')}
+      </a>
       <span className="text-sm font-bold">{t('app.title')}</span>
 
       <div className="flex items-center gap-1">
