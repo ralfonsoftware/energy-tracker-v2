@@ -59,10 +59,10 @@ Test-first: Tasks 1 and 2 must be run and seen **red** against the current code 
   - [x] 7.2 Confirm there is no JS breakpoint branch added (`useWideBreakpoint` is not used here); the swap stays CSS-only.
   - [x] 7.3 Confirm `en-US`/`de-DE` catalogs are unchanged (`git diff --stat web/src/locales`).
 - [ ] Task 8: **Live verification gate** (AC: #9). The story cannot move review → done without this.
-  - [ ] 8.1 Follow the `project-context.md` "Live-resize verification procedure" exactly: close prior tabs, `tabs_create_mcp` a fresh tab, `resize_window` **before** the first `navigate`, then read back `window.innerWidth` via `javascript_tool` and require it to equal the target. One tab per width: **659**, **660**, **900** (add 500 if cheap). A 659 request that reads back 660 is the clamp floor, not a 659px check; retry in a fresh tab group or ask Ralf.
-  - [ ] 8.2 The app requires Auth0 sign-in. Use the environment the previous Epic 8 live checks used (local dev via `./scripts/run-api.sh` or the deployed site) and ask Ralf to sign in if needed. If the Claude-in-Chrome extension is "not connected", raise it immediately and pause for Ralf, don't defer.
-  - [ ] 8.3 In each tab, on each of the four screens, press the **real Tab key** from a fresh load (blur first) and record `document.activeElement`'s accessible name and `getBoundingClientRect().top` for the first and last few stops. Expect: ≥660 → Dashboard, Trend History, Tariff Radar, Settings, Account menu, then content; 659 → content first, bottom bar last.
-  - [ ] 8.4 Measure, don't eyeball: `getBoundingClientRect()` of the top nav (above content, full width at ≥660), of the bottom bar at 659 (bottom of viewport on a short page, below content), and the `<main>` children's `display`/order.
+  - [x] 8.1 Follow the `project-context.md` "Live-resize verification procedure" exactly: close prior tabs, `tabs_create_mcp` a fresh tab, `resize_window` **before** the first `navigate`, then read back `window.innerWidth` via `javascript_tool` and require it to equal the target. One tab per width: **659**, **660**, **900** (add 500 if cheap). A 659 request that reads back 660 is the clamp floor, not a 659px check; retry in a fresh tab group or ask Ralf.
+  - [x] 8.2 The app requires Auth0 sign-in. Use the environment the previous Epic 8 live checks used (local dev via `./scripts/run-api.sh` or the deployed site) and ask Ralf to sign in if needed. If the Claude-in-Chrome extension is "not connected", raise it immediately and pause for Ralf, don't defer.
+  - [x] 8.3 In each tab, on each of the four screens, press the **real Tab key** from a fresh load (blur first) and record `document.activeElement`'s accessible name and `getBoundingClientRect().top` for the first and last few stops. Expect: ≥660 → Dashboard, Trend History, Tariff Radar, Settings, Account menu, then content; 659 → content first, bottom bar last.
+  - [x] 8.4 Measure, don't eyeball: `getBoundingClientRect()` of the top nav (above content, full width at ≥660), of the bottom bar at 659 (bottom of viewport on a short page, below content), and the `<main>` children's `display`/order.
   - [ ] 8.5 In-tab live swap: an in-tab resize across 660 without reload can't be driven by automation, so **ask Ralf to resize the real window** across 660 and record what he observes (nav swaps, no flash, nothing remounts, page state such as a typed field survives). Don't skip it.
   - [ ] 8.6 Record the evidence (widths read back, stops observed, Ralf's observation) in Completion Notes. Substitutes need Ralf's explicit acceptance recorded in the story (8.12 precedent).
 
@@ -169,7 +169,13 @@ claude-sonnet-5-5
 - `NavChrome` takes `placement: 'top'|'bottom'`, wrapper and `wide:order-first` removed, `mt-auto` moved to the bottom nav. Four pages mount top first in `<main>` and bottom last via one `navProps` object.
 - Tests: Vitest 542/542 pass; `tsc -b` and lint clean (only pre-existing warnings); Playwright tab-order, app-shell, locale-theme-sweep 97/97 pass. `en-US`/`de-DE` untouched, no JS breakpoint added.
 - `git grep wide:order-first web/` only matches the negative assertion in `nav-chrome.test.tsx`.
-- **Task 8 (live verification) NOT done**: needs Auth0 sign-in in a real Chrome tab; paused for Ralf. Story stays in-progress.
+- **Task 8 live evidence (2026-10-04, local dev app `https://localhost:5173`, Ralf signed in, de-DE UI, real Tab key presses via Claude-in-Chrome, one fresh tab per width, `window.innerWidth` read back):**
+  - 659 (read back 659; an earlier 660 request read back 659 while a stale tab shared the window and was redone after closing it): all four screens: first stop is content, last four stops are the bottom bar (Dashboard, Verlauf, Tarifradar, Einstellungen). `nav-chrome-top` `display:none`; `<main>` children: top(none), content, bottom(flex). Bottom bar rect y 564–641 of a 657px viewport on the short Dashboard (bottom-pinned).
+  - 660 (read back 660): all four screens: stops 1–5 are Dashboard, Verlauf, Tarifradar, Einstellungen, Konto-Menü (rect top 28), then content (min rect top 89+). Top nav rect y16–73, full width 628, above content; bottom nav `display:none`.
+  - 900 (read back 900; a first 900 request read back 660 and was discarded): identical result; top nav width 868 above the content column.
+  - Not done (optional): 500px.
+  - Note: key presses only reached the page after a screenshot call focused it; plain Tab immediately after navigate registered no stops.
+  - **8.5 pending**: Ralf to resize the real window across 660 and report. Story stays in-progress until recorded.
 
 ### File List
 
