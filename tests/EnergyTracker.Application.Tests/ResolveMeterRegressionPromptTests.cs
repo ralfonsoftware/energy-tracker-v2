@@ -8,6 +8,14 @@ namespace EnergyTracker.Application.Tests;
 public class ResolveMeterRegressionPromptTests
 {
     private readonly IMeterRegressionPromptRepository _repository = Substitute.For<IMeterRegressionPromptRepository>();
+    private readonly IMeterReadingRepository _readingRepository = Substitute.For<IMeterReadingRepository>();
+    private readonly IHouseholdRepository _householdRepository = Substitute.For<IHouseholdRepository>();
+    private readonly IEventRepository _eventRepository = Substitute.For<IEventRepository>();
+    private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
+
+    private RequeueEventCorrelations Requeue() => new(
+        _householdRepository, _eventRepository, _readingRepository, _jobQueue,
+        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>());
 
     private static MeterRegressionPrompt NewOpenPrompt(Guid householdId, Guid mainMeterId) => new()
     {
@@ -21,7 +29,7 @@ public class ResolveMeterRegressionPromptTests
         ResolvedAtUtc = null,
     };
 
-    private ResolveMeterRegressionPrompt Sut() => new(_repository);
+    private ResolveMeterRegressionPrompt Sut() => new(_repository, Requeue());
 
     [Fact]
     public async Task Reset_resolves_cleanly_with_no_capacity_involved()
@@ -191,5 +199,73 @@ public class ResolveMeterRegressionPromptTests
             sut.ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Rollover, 1_000_000_000_000_000m, TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>());
+    }
+
+    // Story 10.2 (AC #8)
+    [Fact]
+    public async Task A_successful_resolve_requeues_Events_from_the_triggering_reading_minus_7_days()
+    {
+        var householdId = Guid.NewGuid();
+        var prompt = NewOpenPrompt(householdId, Guid.NewGuid());
+        var trigger = new MeterReading
+        {
+            Id = prompt.MeterReadingId, HouseholdId = householdId, MainMeterId = prompt.MainMeterId, KwhValue = 5m,
+            ReadingTimestamp = new DateTimeOffset(2026, 5, 20, 8, 0, 0, TimeSpan.Zero),
+            IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
+        _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
+        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(true);
+        _readingRepository.FindByIdAsync(trigger.Id, Arg.Any<CancellationToken>()).Returns(trigger);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
+        {
+            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+        });
+
+        await Sut().ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken);
+
+        await _eventRepository.Received(1).GetByOccurredAtRangeAsync(
+            trigger.ReadingTimestamp.AddDays(-7),
+            Arg.Is<DateTimeOffset>(to => to > DateTimeOffset.UtcNow && to <= DateTimeOffset.UtcNow.AddMinutes(10)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_lost_race_resolve_does_not_requeue()
+    {
+        var householdId = Guid.NewGuid();
+        var prompt = NewOpenPrompt(householdId, Guid.NewGuid());
+        _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
+        _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
+        _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(false);
+
+        await Should.ThrowAsync<MeterRegressionPromptNotOpenException>(() =>
+            Sut().ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken));
+
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+    }
+
+    [Fact]
+    public async Task A_failing_or_missing_trigger_lookup_never_fails_the_committed_resolve()
+    {
+        var householdId = Guid.NewGuid();
+
+        // A resolve mutates the prompt, so each scenario needs its own open prompt.
+        async Task ResolveWithTriggerLookupAsync(Func<Task<MeterReading?>> lookup)
+        {
+            var prompt = NewOpenPrompt(householdId, Guid.NewGuid());
+            _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
+            _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
+            _repository.ResolveAsync(Arg.Any<MeterRegressionPrompt>(), Arg.Any<CancellationToken>()).Returns(true);
+            _readingRepository.FindByIdAsync(prompt.MeterReadingId, Arg.Any<CancellationToken>()).Returns(_ => lookup());
+
+            await Should.NotThrowAsync(() => Sut().ExecuteAsync(
+                householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken));
+        }
+
+        await ResolveWithTriggerLookupAsync(() => Task.FromException<MeterReading?>(new InvalidOperationException("db blip")));
+        await ResolveWithTriggerLookupAsync(() => Task.FromResult<MeterReading?>(null));
+
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
     }
 }

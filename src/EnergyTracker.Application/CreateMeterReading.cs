@@ -1,5 +1,6 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using EnergyTracker.Domain.Calculations;
 
 namespace EnergyTracker.Application;
 
@@ -7,7 +8,8 @@ namespace EnergyTracker.Application;
 public class CreateMeterReading(
     IMeterReadingRepository repository,
     IMeterRegressionPromptRepository regressionPromptRepository,
-    IStatusRecomputeService statusRecomputeService)
+    IStatusRecomputeService statusRecomputeService,
+    RequeueEventCorrelations requeueEventCorrelations)
 {
     // Small clock-skew allowance, not a real "reading from the future" — a client's local clock
     // can legitimately be a few minutes off from the server's.
@@ -77,8 +79,10 @@ public class CreateMeterReading(
         // Only the immediately-preceding comparison is in scope — a backfill is never
         // retroactively re-checked against its chronological successor.
         var preceding = await repository.FindImmediatelyPrecedingAsync(mainMeter.Id, persistedReading.ReadingTimestamp, cancellationToken);
+        var openedRegressionPrompt = false;
         if (preceding is not null && persistedReading.KwhValue < preceding.KwhValue)
         {
+            openedRegressionPrompt = true;
             await regressionPromptRepository.AddAsync(
                 new MeterRegressionPrompt
                 {
@@ -98,6 +102,24 @@ public class CreateMeterReading(
         // whether a regression prompt was also opened above (AD-7 names this handler as one of
         // exactly two call sites; the other, Smart-Plug-import-completion, is Epic 3's job).
         await statusRecomputeService.RecomputeAsync(householdId, cancellationToken);
+
+        // Story 10.2 (AC #1, #2, #4): Events whose ±7-day window contains this reading are
+        // re-evaluated. After the prompt insert above, so an open prompt already excludes this
+        // reading; never inside a transaction and never fails the committed write (AD-7). A newly
+        // opened prompt additionally excludes everything at or after this reading (AD-12), so every
+        // Event from this reading's window onward is re-evaluated, not only the ±7-day neighbours.
+        if (openedRegressionPrompt)
+        {
+            await requeueEventCorrelations.ExecuteFromAsync(householdId, persistedReading.ReadingTimestamp, cancellationToken);
+        }
+        else
+        {
+            await requeueEventCorrelations.ExecuteAsync(
+                householdId,
+                persistedReading.ReadingTimestamp - WindowedDeviationCalculator.WindowRadius,
+                persistedReading.ReadingTimestamp + WindowedDeviationCalculator.WindowRadius,
+                cancellationToken);
+        }
 
         return persistedReading;
     }

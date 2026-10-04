@@ -124,14 +124,27 @@ export function DashboardPage({
     />
   ) : undefined
 
+  const navProps = {
+    active: 'dashboard' as const,
+    onDashboardClick: () => {},
+    onTrendHistoryClick,
+    onTariffRadarClick,
+    onSettingsClick,
+    householdId: household.id,
+    supportsFederatedLogout,
+    email,
+  }
+
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
+      <NavChrome placement="top" {...navProps} />
+
       {/* Story 8.2/Task 1: constrains the page's own content — header row, event confirmation,
           Status/Tariff-Check cards, and the Log Reading CTA — to a centered 900px column at
           >=660px (UX-DR19). NavChrome and the regression dialog are deliberately outside this
           wrapper (see story Dev Notes): NavChrome's top-nav variant is full-width by design
           (Story 8.1), and the dialog is an overlay with its own sizing. */}
-      <div data-slot="dashboard-content" className="flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
+      <div id="main-content" tabIndex={-1} data-slot="dashboard-content" className="outline-none flex flex-col gap-4 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">{t('app.title')}</h1>
           <div className="flex items-center gap-2">
@@ -186,16 +199,7 @@ export function DashboardPage({
         {showPopulated && <div className="flex justify-center">{logReadingSheet}</div>}
       </div>
 
-      <NavChrome
-        active="dashboard"
-        onDashboardClick={() => {}}
-        onTrendHistoryClick={onTrendHistoryClick}
-        onTariffRadarClick={onTariffRadarClick}
-        onSettingsClick={onSettingsClick}
-        householdId={household.id}
-        supportsFederatedLogout={supportsFederatedLogout}
-        email={email}
-      />
+      <NavChrome placement="bottom" {...navProps} />
 
       <MeterRegressionPromptDialog prompt={openRegressionPrompt} onResolved={onRegressionResolved} />
     </main>

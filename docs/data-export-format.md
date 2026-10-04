@@ -198,7 +198,7 @@ enum fields in this export:
 | `taggedEntityType` | string or null | `"Room"` \| `"PowerPoint"` \| `"Device"` \| null. |
 | `taggedEntityId` | guid or null | |
 | `taggedEntityName` | string or null | By-value snapshot at write time — never re-derived from the live tagged entity, even after a rename/archive/re-parent. |
-| `correlationDirection` | string or null | `"Bump"` \| `"Dip"` \| null (no correlation). Set once by the AI correlation job, never recomputed. |
+| `correlationDirection` | string or null | `"Bump"` \| `"Dip"` \| null (no correlation). Written by the AI correlation job; the latest evaluation wins (re-evaluated when Meter Readings in the ±7-day window change). Both fields are null or both set; a restore copies them as stored. |
 | `correlationComputedAtUtc` | datetime or null | |
 
 ### `rooms[]` / `powerPoints[]` / `devices[]`

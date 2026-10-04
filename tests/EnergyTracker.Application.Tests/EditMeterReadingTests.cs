@@ -11,6 +11,13 @@ public class EditMeterReadingTests
     private readonly IAuditCorrectionRecorder _auditCorrectionRecorder = Substitute.For<IAuditCorrectionRecorder>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IStatusRecomputeService _statusRecomputeService = Substitute.For<IStatusRecomputeService>();
+    private readonly IHouseholdRepository _householdRepository = Substitute.For<IHouseholdRepository>();
+    private readonly IEventRepository _eventRepository = Substitute.For<IEventRepository>();
+    private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
+
+    private RequeueEventCorrelations Requeue() => new(
+        _householdRepository, _eventRepository, _readingRepository, _jobQueue,
+        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>());
 
     private EditMeterReading Sut()
     {
@@ -19,7 +26,7 @@ public class EditMeterReadingTests
         _unitOfWork
             .ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<MeterReading>>>(), Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<Func<CancellationToken, Task<MeterReading>>>()(callInfo.Arg<CancellationToken>()));
-        return new(_readingRepository, _auditCorrectionRecorder, _unitOfWork, _statusRecomputeService);
+        return new(_readingRepository, _auditCorrectionRecorder, _unitOfWork, _statusRecomputeService, Requeue());
     }
 
     private static MeterReading NewReading(Guid householdId, decimal kwhValue, int version = 0, Guid? id = null) => new()
@@ -160,5 +167,38 @@ public class EditMeterReadingTests
         await sut.ExecuteAsync(householdId, reading.Id, 100m, 3, TestContext.Current.CancellationToken);
 
         await _statusRecomputeService.DidNotReceive().RecomputeAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    // Story 10.2 (AC #3)
+    [Fact]
+    public async Task A_real_change_requeues_Event_correlations_for_the_readings_window()
+    {
+        var householdId = Guid.NewGuid();
+        var reading = NewReading(householdId, 100m, version: 3);
+        var updated = NewReading(householdId, 150m, version: 4, id: reading.Id);
+        _readingRepository.FindByIdAsync(reading.Id, Arg.Any<CancellationToken>()).Returns(reading);
+        _readingRepository.UpdateKwhValueAsync(reading.Id, 150m, 3, Arg.Any<CancellationToken>()).Returns(updated);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
+        {
+            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+        });
+
+        await Sut().ExecuteAsync(householdId, reading.Id, 150m, 3, TestContext.Current.CancellationToken);
+
+        await _eventRepository.Received(1).GetByOccurredAtRangeAsync(
+            updated.ReadingTimestamp.AddDays(-7), updated.ReadingTimestamp.AddDays(7), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_no_op_edit_does_not_requeue()
+    {
+        var householdId = Guid.NewGuid();
+        var reading = NewReading(householdId, 100m, version: 3);
+        _readingRepository.FindByIdAsync(reading.Id, Arg.Any<CancellationToken>()).Returns(reading);
+
+        await Sut().ExecuteAsync(householdId, reading.Id, 100m, 3, TestContext.Current.CancellationToken);
+
+        await _householdRepository.DidNotReceiveWithAnyArgs().FindByIdAsync(default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
     }
 }

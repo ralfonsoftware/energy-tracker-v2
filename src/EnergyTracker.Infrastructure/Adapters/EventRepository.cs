@@ -40,7 +40,20 @@ public class EventRepository(EnergyTrackerDbContext dbContext) : IEventRepositor
         return (items, totalCount);
     }
 
-    public async Task SetCorrelationAsync(Guid eventId, string? direction, DateTimeOffset computedAtUtc, CancellationToken cancellationToken)
+    public async Task<Event?> FindByIdAsync(Guid eventId, CancellationToken cancellationToken) =>
+        await dbContext.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, cancellationToken);
+
+    // Served by the existing (HouseholdId, OccurredAt, CreatedAtUtc) index; no manual HouseholdId
+    // predicate (AD-3's query filter applies).
+    public async Task<IReadOnlyList<Event>> GetByOccurredAtRangeAsync(
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+        await dbContext.Events.AsNoTracking()
+            .Where(e => e.OccurredAt >= from && e.OccurredAt <= to)
+            .OrderBy(e => e.OccurredAt)
+            .ThenBy(e => e.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task SetCorrelationAsync(Guid eventId, string? direction, DateTimeOffset? computedAtUtc, CancellationToken cancellationToken)
     {
         // ExecuteUpdateAsync bypasses the change tracker entirely — no fetch-modify-save round
         // trip needed for a terminal, fire-and-forget write from the job-processing loop, and a

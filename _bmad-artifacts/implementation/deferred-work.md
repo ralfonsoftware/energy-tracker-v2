@@ -1,522 +1,376 @@
-## Deferred from: code review of 8-5-settings-desktop-tablet-layout (2026-09-28)
+# Deferred work
 
-- Room/Power Point item-count summary renders "— 0 Power Points"/"— 0 Devices" with no zero-guard for an empty parent [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx:580-582,656-658] — deferred, cosmetic copy preference, not a functional defect; this exact case was already observed and accepted during Task 6's live verification ("HiFi — 0 Devices"). Raised by adversarial review (Blind Hunter).
-- `InviteMemberRow`'s `Dialog` doesn't auto-close when the viewport crosses back below 660px while open, and each width variant mounts its own independent `InviteGeneratePanel` state [web/src/components/household-invite/invite-member-row.tsx] — deferred, narrow reachability (most common tablet rotations don't cross 660px either direction) and low consequence (user just regenerates the link). Raised by the Edge Case Hunter.
-- `InviteGeneratePanel`'s `handleGenerate` has no abort-on-unmount guard for its in-flight `POST /api/household-invites`, so closing the wide-mode dialog mid-request discards the server-created invite token client-side [web/src/components/household-invite/invite-generate-panel.tsx:20-44] — deferred, pre-existing behavior of a component this story intentionally left unmodified; newly reachable via the new Dialog call site but low probability/consequence. Raised by the Edge Case Hunter.
-- Dual-render narrow/wide test assertions across this story's new/extended tests are disambiguated only by DOM-order indexing (`getAllByRole(...)[0]`/`.last()`) [web/src/components/settings/settings-page.test.tsx, web/src/components/household-invite/invite-member-row.test.tsx, web/src/components/tagging-scaffold/tagging-scaffold-manager.test.tsx, web/e2e/app-shell.spec.ts] — deferred, established codebase-wide convention (the `NavChrome` dual-render precedent) predating this diff; a project-wide fix is out of scope for a single story. Raised by adversarial review (Blind Hunter).
+Triaged 2026-10-02 against baseline `8c6a90e` (Epic 8 retro action #6, `spec-deferred-work-triage.md`). This file holds **open** and **promoted** items only. Resolved entries were removed; accepted trade-offs moved to `deferred-work-accepted.md`.
 
-## Deferred from: code review of spec-household-export-oom-fix (2026-09-25)
+Conventions: append new sections at the end, chronological (see `project-context.md`). Mark each entry `[open]`, `[resolved: <story>]` or `[accepted: <reason>]`; review open items at each epic retro.
 
-- source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
-  summary: The paged rewrite reads each collection across independent, non-transactional keyset pages (one query per 500 rows) rather than the old code's single query per collection, so a concurrent write to that household mid-export (e.g. an in-flight Smart Plug import writing SmartPlugReadings) could leave that one collection internally inconsistent across its own page boundary.
-  evidence: Raised by adversarial review (Blind Hunter); human-confirmed 2026-09-25 as an accepted trade-off rather than a merge blocker (see Design Notes) — wrapping the read in a snapshot-isolated transaction would hold a longer-lived read against the exact write-heavy table this fix exists to relieve pressure on. Worth a follow-up (e.g. snapshot-isolated read, or a documented "export reflects a best-effort, not point-in-time-consistent, snapshot" note in docs/data-export-format.md) if this is ever reported as a real-world discrepancy.
-- source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
-  summary: The new `(HouseholdId, IntervalStart, Id)` composite index on `SmartPlugReadings` makes the pre-existing standalone `HouseholdId` index largely redundant (leftmost-prefix rule), but that older index wasn't removed, adding a fourth index's write overhead to the highest-ingest-volume table in the schema — the very table whose volume caused this incident.
-  evidence: Raised by adversarial review (Blind Hunter). Real but out of this bugfix's stated Code Map scope (which only asked for the new composite index); dropping an index other query paths might still rely on deserves its own explicit look, not a silent removal bundled into an incident fix.
-- source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
-  summary: `HouseholdExportReaderDoesNotBypassTenantIsolationTests` (the new AD-3 guard test) is a source-text substring scan for four forbidden identifiers; it can't catch a semantically-equivalent bypass that avoids those literal tokens, and it never positively asserts that the correct `HouseholdId` filter clause is actually present — a future paginated collection reader that simply omits the household filter (without using any of the four banned APIs) would pass it silently.
-  evidence: Raised by adversarial review (Blind Hunter). Matches this codebase's pre-existing guard-test convention exactly (e.g. `PatternDetectiveDoesNotReferenceSmartPlugOrEventDataTests`), so not unique to this diff — a broader rethink of the guard-test style (positive-assertion vs. forbidden-token scan) is a separate, codebase-wide investment.
-- source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
-  summary: `HouseholdExportStream`'s write side (`HouseholdExportEndpoints.WriteExportAsync`) hardcodes top-level JSON property-name string literals that must stay in sync with `HouseholdExportResult`'s property names (the untouched import/restore wire contract) by convention only — no test deserializes streamed output back into `HouseholdExportResult` to catch future drift if either side is renamed.
-  evidence: Raised by adversarial review (Blind Hunter). Real but narrow: both records are currently structurally identical and were introduced together in this same diff (see the Spec Change Log's "Ask First" resolution); a round-trip parity test would close this permanently but was judged lower priority than the flush-cadence fix and the Events pagination gap given this fix's time budget.
+## Index
 
-## Deferred from: code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
+**test-coverage (18)**
 
-- No overall poll timeout / indefinite polling on a repeated 404 in `useHouseholdImportJobPoll` [web/src/components/data-import/use-household-import-job.ts:22] — faithfully mirrors `use-smart-plug-import-job.ts`'s own established, unchanged-by-this-diff convention; not a regression introduced by this story. Raised by adversarial + edge-case review.
-- No client-side file-size pre-check or size hint before a long upload that the server may reject at 250MB [web/src/components/data-import/data-import-panel.tsx:130] — minor UX nicety, not required by any AC. Raised by adversarial review (Blind Hunter).
-- No `aria-live` region on the error/validation-failure states [web/src/components/data-import/data-import-panel.tsx:142] — pre-existing systemic gap: `DataExportPanel`'s identical error-rendering pattern has the same gap, unrelated to this story. Raised by adversarial review (Blind Hunter).
+- Export stream property names vs HouseholdExportResult, no round-trip test — code review of spec-household-export-oom-fix (2026-09-25)
+- No test distinguishes recompute inside/outside txn — code review of story-4-3-correcting-a-meter-reading (2026-09-10)
+- No middleware-ordering regression test — code review of 1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress (2026-08-14)
+- Uneven length-validation tests — code review of 1-9-room-power-point-device-management (2026-08-14)
+- IDOR test claim inaccurate — code review of story-2.2 (2026-08-15)
+- No double-dispose test for lock — code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
+- act() warnings in full suite — code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
+- TZ not pinned in Vitest — code review of spec-trend-chart-time-axis (2026-08-30)
+- Logout ACs only manually verified — code review of story-1.12 (2026-09-17)
+- No chained-call test for timeout carry-over — code review of spec-db-command-timeout-scope (2026-09-17)
+- Mixed-batch test only; one entry path tested — code review of spec-power-point-mapping-duplicate-timeout (2026-09-18)
+- AC3 archive coverage only Room — code review of story-6.2 (2026-09-19)
+- e2e locators hardcode English — code review of story-8.2 (2026-09-26)
+- No test for CTA adjacency — code review of story-8.2 (2026-09-26)
+- e2e does not assert centering — code review of story-8.4 (2026-09-28)
+- No unit assertion of max-w class on Settings/Tariff — code review of story-8-6-wide-column-increase-across-all-surfaces (2026-09-29)
+- Spinner motion and inline theme script drift — code review of 8-10-theme-toggle-profile-menu (2026-09-30)
+- No guard forcing new order classes into spec — keyboard tab-order check (spec-tab-order-check, 2026-10-02)
 
-## Deferred from: code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 1/backend)
+**a11y (7)**
 
-- `HouseholdRestoreWriter.UpdateHouseholdSettingsAsync`'s `SingleAsync` throws an unhandled, non-diagnostic exception if the Household row doesn't exist [src/EnergyTracker.Infrastructure/Adapters/HouseholdRestoreWriter.cs:160] — currently unreachable: no household-deletion capability exists anywhere in this codebase; revisit if one is ever added. Raised by adversarial + edge-case review.
-- Single outer transaction spanning the full delete+insert doesn't bound transaction duration or lock-hold time for a household with a large history [src/EnergyTracker.Infrastructure/Adapters/HouseholdRestoreWriter.cs:25] — deliberate, disclosed trade-off (Dev Notes) required to guarantee "never partially applied" atomicity; worth monitoring on very large households (same incident shape as the Epic 6 retro's bulk-write lessons this story cites), not actionable without redesigning the atomicity guarantee itself. Raised by adversarial review (Blind Hunter).
-- No rate limiting / concurrency bound on `/household-import`'s synchronous upload+validate path [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs:38] — no rate-limiting layer exists anywhere in this codebase; not introduced by this story beyond adding one more large-body endpoint. Raised by adversarial review (Blind Hunter).
-- `OriginalFileName` (user-supplied, unsanitized) flows into `HouseholdImportValidationException`'s message and then `BackgroundJob.ErrorMessage` [src/EnergyTracker.Application/RestoreHouseholdData.cs:29] — needs Pass 2 (frontend) context to resolve whether `ErrorMessage` rendering is safe (React JSX auto-escapes by default, but not yet confirmed against `data-import-panel.tsx`). Raised by adversarial review (Blind Hunter).
+- No aria-live on import/export error states — code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
+- No focus mgmt across logoff dialog steps — code review of story-1.12 (2026-09-17)
+- No check shortLabel substring of entryPointLabel — code review of story-8.3 (2026-09-26)
+- Trailing action TableHead unlabeled — code review of story-8.3 (2026-09-26)
+- role=menu contains radiogroups — code review of 8-10-theme-toggle-profile-menu (2026-09-30)
+- Live region dropped on 660px cross — code review of 8-12-settings-preferences-card-mobile (2026-09-30)
+- Icon buttons 40px not 44px — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
-## Deferred from: story-3-6-smart-plug-import-job-status-history (2026-08-28)
+**infra-hardening (7)**
 
-- `GET /api/jobs/{id}` no longer 404s for a freshly-enqueued job [src/EnergyTracker.Application/GetBackgroundJobStatus.cs, src/EnergyTracker.Infrastructure/Adapters/BackgroundJobEnqueueRecorder.cs] — Task 1's enqueue-time `BackgroundJobStatus.Queued` row is inserted (and committed) synchronously before the `202 Accepted` response is returned, so the job row now always exists by the time the client starts polling; it returns `200` with `status: "queued"` immediately instead. `use-smart-plug-import-job.ts`'s per-session queue (Story 3.1/3.5) still relies on that old 404-means-queued heuristic to set its client-side `queued` flag (which drives the "Waiting" badge) — since the backend response is typed `'processing' | 'completed' | 'failed'` there and never checks for `"queued"`, that flag can now never flip true via the 404 path, so the per-session queue's "Waiting" badge degrades to always showing "Processing"/"Uploading" instead, even while a job is genuinely still queued behind another. Purely cosmetic (no functional break, no crash) and explicitly out of scope per this story's own Known Non-Goals ("No change to the per-session upload-queue UI"); worth a small follow-up (`job.status === 'queued'` case added to `use-smart-plug-import-job.ts`) whenever that file is next touched.
-- Task 2's OIDC `name`-claim → `HouseholdMember.DisplayName` mapping was verified end-to-end against this repo's `TestAuthHandler` test double (extended with an `X-Test-Name` header for this story) but **not against a real Auth0 test-user session** — this automated session had no live Chrome/Auth0 access. The story's own Dev Notes ask for that live check before assuming `ClaimTypes.Name` is really where Auth0's `name` claim lands after `GetClaimsFromUserInfoEndpoint`'s merge; worth doing before this ships to confirm "Queued by {member}" renders a real name and not the nullable fallback for every household member.
+- GH Actions pinned to tags, not SHAs — code review of 1-2-azure-infrastructure-as-code-resource-deployment-pipeline (2026-08-12)
+- Actions pinned by mutable tags — code review of 1-4-pull-request-review-workflow (2026-08-13)
+- Orphaned gh-actions-migrate-* firewall rules — code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
+- No timeout-minutes in infra-deploy — code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
+- OTel resource attrs minimal — code review of spec-otel-api-instrumentation (2026-08-15)
+- No cert renewal failure alerting — code review of spec-custom-domain-managed-cert (2026-08-16)
+- RecomputeLock depends on maxReplicas=1, unguarded — code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
 
-## Deferred from: code review of story-4-3-correcting-a-meter-reading (2026-09-10)
+**validation (6)**
 
-- Optimistic-concurrency check is bypassed entirely on the no-op path [src/EnergyTracker.Application/EditMeterReading.cs:32-35] — deferred, pre-existing (Story 2.8, untouched by this diff): `if (oldValue == kwhValue) return reading;` short-circuits before `UpdateKwhValueAsync` (the only place `expectedVersion` is checked), so a caller holding a stale `expectedVersion` whose submitted value happens to equal the *current* value gets a silent 200 instead of the 409 AC #2 promises. This story's Task 2 claims to fully regression-prove AC #2; the strengthened test only exercises a genuine value-differing race, not this edge. Raised by adversarial review (Blind Hunter).
-- No unit test distinguishes "`RecomputeAsync` called after the transaction commits" vs. "called inside it" [tests/EnergyTracker.Application.Tests/EditMeterReadingTests.cs] — deferred, pre-existing (identical gap already present in `CreateMeterReadingTests.cs`): the `ExecuteInTransactionAsync` NSubstitute stub is a synchronous passthrough, so it can't distinguish placement; the AD-7/AC #3 "must not be inside the transaction" requirement is enforced only by a code comment. Raised by adversarial + edge-case review.
-- Unhandled `RecomputeAsync` exception after the write transaction already committed [src/EnergyTracker.Application/EditMeterReading.cs:57-61] — deferred, pre-existing (identical, deliberately-mirrored pattern in `CreateMeterReading.cs:100`, per this story's own spec instructions to mirror that placement exactly): a transient failure in the recompute step surfaces to the caller as a failed edit even though the kwh correction and audit note were already durably persisted. Raised by edge-case review.
+- InviteGeneratePanel no abort-on-unmount — code review of 8-5-settings-desktop-tablet-layout (2026-09-28)
+- No KwhValue scale validation — code review of story-2.2 (2026-08-15)
+- Threshold/gap-days no range validation — code review of story-2.4 (2026-08-17)
+- No lower bound on estimated kWh — code review of story-3.3 (2026-08-20)
+- DST gap/ambiguous local time rewritten silently — code review of story-6.1 (2026-09-18)
+- Device clock >5min ahead rejects default timestamp — code review of story-6.1 (2026-09-18)
 
-## Deferred from: code review of story-3-6-smart-plug-import-job-status-history (2026-08-28)
+**ux-polish (6)**
 
-- `QueuedByHouseholdMemberId`'s tenant isolation for the new `FindMembersByIdsAsync` lookup is trust-based, not schema-enforced — `HouseholdMember` deliberately carries no AD-3 query filter (established codebase convention), and this new call site queries it with no household predicate, relying entirely on the caller (`CurrentHouseholdAccessor`) never supplying a cross-household id. Deferred, pre-existing convention: not exploitable via any current call path since the id always comes from the caller's own authenticated household context; worth hardening only if this method ever gets a second caller. Raised by adversarial review (Blind Hunter). [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobRepository.cs, src/EnergyTracker.Application/ListSmartPlugImportJobs.cs:55-58]
+- No retry after tagging-scaffold load failure — code review of 1-9-room-power-point-device-management (2026-08-14)
+- Can't cancel queue item while uploading/processing — code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
+- No cap on files per drop — code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
+- Shared DialogContent lacks max-h — code review of spec-power-point-mapping-list-scroll (2026-09-02)
+- No progress indication during cleanup — code review of spec-3-10-cleanup-async-job (2026-09-12)
+- Tariff history scrolls 10px at 659 de-DE — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
-## Deferred from: code review of story-1-1-deployable-application-skeleton-local-dev-self-host (2026-08-09)
+**perf (5)**
 
-- No automated path applies pending EF Core migrations at startup or in self-host docs [src/EnergyTracker.Api/Program.cs:37] — not blocking this story since the `InitialCreate` migration is currently empty (no domain entities yet), but Story 1.5+ (or whichever story first adds real entities) will need either a `dbContext.Database.MigrateAsync()` call at startup or a documented `dotnet ef database update` step for self-hosters, since there's currently no SDK-free way to apply a schema on a fresh volume.
+- Old HouseholdId index redundant on SmartPlugReadings — code review of spec-household-export-oom-fix (2026-09-25)
+- 3 sequential round-trips, contract unstated — code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
+- Unbounded StatusSnapshot read — story-4-1-trend-history-view (2026-08-29)
+- Cumulative row locks may escalate to table lock — code review of spec-3-10-cleanup-per-import-detach (2026-09-12)
+- Eager fetch in collapsed disclosure cards — code review of story-6.2 (2026-09-19)
+
+**concurrency (3)**
+
+- Unsequenced concurrent refreshStatus — code review of story-2-5-dashboard-status-display (2026-08-17)
+- SQL Server sweep SELECT can block on writer locks — code review of spec-3-10-cleanup-sweep-async (2026-09-17)
+- DeleteEligibleAsync (manual) takes no lock — code review of spec-3-10-cleanup-sweep-async (2026-09-17)
+
+**docs (2)**
+
+- Epic 2 Architecture header missing AD-15/10/3 — code review of spec-epic-2-header-ux-dr11 (2026-08-22)
+- Story 2.3 glass cites no UX-DR11 — code review of spec-epic-2-header-ux-dr11 (2026-08-22)
+
+**tech-debt (2)**
+
+- TryGetHouseholdId copy-pasted — code review of story-7.1 (2026-09-22)
+- Value-based, px-only; duplication remains — Breakpoint/column drift guard (spec-breakpoint-drift-test, Epic 8 retro action #3)
+
+**i18n (1)**
+
+- No de-DE test for toggle strings — code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
+
 
 ## Deferred from: code review of 1-2-azure-infrastructure-as-code-resource-deployment-pipeline (2026-08-12)
 
-- DB firewall rule allows all Azure-service traffic (`AllowAzureServices`, `0.0.0.0`-`0.0.0.0`) [infra/modules/database-postgres.bicep:54, infra/modules/database-sqlserver.bicep:51] — inherent to the non-VNet-integrated Consumption-plan architecture already committed to by AD-6/AD-7; revisit if/when VNet integration or private endpoints are ever adopted.
-- GitHub Actions pinned to floating version tags, not commit SHAs (`azure/login@v2`, `actions/checkout@v4`) [.github/workflows/infra-deploy.yml:22,28] — supply-chain hardening opportunity for a workflow with `id-token: write`; not required by any AC.
-- Public ingress with no auth/access-control gate [infra/modules/container-app.bicep:58-62] — expected at this stage since only the public placeholder image is deployed (no real app or data yet); revisit once Story 1.5 (household/OIDC auth) lands to confirm the gate is actually wired before real data is exposed.
-- No approval/environment-protection gate before the deploy step runs [.github/workflows/infra-deploy.yml] — matches AC #2/#3's literal push-to-main auto-deploy design; revisit if a staging environment or required-reviewer policy is ever wanted for this repo.
+- [open] GitHub Actions pinned to floating version tags, not commit SHAs (`azure/login@v2`, `actions/checkout@v4`) [.github/workflows/infra-deploy.yml:22,28] — supply-chain hardening opportunity for a workflow with `id-token: write`; not required by any AC.
 
-## Deferred from: code review of story-1-3-ci-build-test-cd-deploy-pipeline-app-to-azure (2026-08-12)
-
-- Re-adding the ACR `registries` entry unconditionally in `container-app.bicep` would reintroduce the exact eager-validation 401 race Story 1.2 removed it to avoid, if `infra-deploy.yml` is ever run against a brand-new environment (Container App + AcrPull role assignment not yet existing) rather than redeployed against the current live Story 1.2 environment [infra/modules/container-app.bicep:79-84] — zero current impact since the live environment already exists; only relevant to a future from-scratch/disaster-recovery redeploy, out of this story's scope.
 
 ## Deferred from: code review of 1-4-pull-request-review-workflow (2026-08-13)
 
-- `web/.oxlintrc.json`'s new `"no-unused-vars": "error"` has no ignore pattern for intentionally-unused vars (e.g. `_`-prefixed args) [web/.oxlintrc.json] — repo is clean today; revisit if it starts blocking legitimate code.
-- Branch-protection `required_status_checks.checks` entries omit `app_id`, so GitHub matches the required check by context string from any reporting source, not only this workflow's job [infra/README.md — branch protection `gh api` payload] — low practical risk for this repo's trust model; hardening improvement, not a defect.
-- GitHub's "require approval to run workflows for first-time/outside contributors" setting, if enabled, could leave a fork PR's Actions run never starting — both required checks stay perpetually pending, blocking merge indefinitely, with no code-level guard possible [.github/workflows/pr-review.yml — fork-handling design] — platform-level setting outside this diff's control; worth a doc note in a future pass.
-- All actions in `pr-review.yml` pinned by mutable major-version tags (`@v7`, `@v6`, `@v3`) rather than SHA [.github/workflows/pr-review.yml] — pre-existing convention from Story 1.2/1.3, propagated rather than introduced by this diff.
-- "Notice — infra changed but validation skipped (fork PR)" step's fork-skip condition relies on no earlier step being able to fail on that path — fine today, but fragile if a future edit inserts an unconditional failing step before it without adding `if: always()` [.github/workflows/pr-review.yml:120-122].
+- [open] All actions in `pr-review.yml` pinned by mutable major-version tags (`@v7`, `@v6`, `@v3`) rather than SHA [.github/workflows/pr-review.yml] — pre-existing convention from Story 1.2/1.3, propagated rather than introduced by this diff.
 
-## Deferred from: code review of story-1.5 (2026-08-13)
-
-- `GET /api/session`'s `SingleAsync` throws an unhandled exception if a resolved `HouseholdId` doesn't correspond to an existing `Households` row [src/EnergyTracker.Api/Endpoints/SessionEndpoints.cs:25] — pre-existing gap that only becomes reachable once a future household-deletion feature exists; no code path in this story can produce the inconsistent state today.
 
 ## Deferred from: code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
 
-- source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
   summary: No periodic sweep prunes orphaned `gh-actions-migrate-*` SQL firewall rules left behind by a killed/force-cancelled runner (the in-job `if: always()`+`continue-on-error` cleanup only covers normal step failure, not hard cancellation).
   evidence: Azure SQL server-level firewall rules have a hard cap (128); enough abandoned runs could eventually exhaust it and start blocking legitimate deploys. Building a reaper is a distinct, separately-scoped task, not part of this hotfix.
-- source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
-  summary: The CI migration step runs `dotnet ef database update` on every deploy with no pre-migration backup/snapshot and no expand/contract discipline documented — a bad migration commits directly against production with no rollback story.
-  evidence: This is a pre-existing characteristic of the overall "migrate on deploy" strategy (not introduced by this diff, which only makes migrations apply where none were applying before); worth a dedicated migration-safety pass once the app has real user data at stake, not blocking for a schema that today only adds new tables.
-- source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
-  summary: Running `infra-deploy.yml` resets the Container App's image back to `placeholderImage` (`mcr.microsoft.com/k8se/quickstart:latest`), reverting whatever `app-deploy.yml` last deployed, until `app-deploy.yml` is run again to restore the real image.
-  evidence: Confirmed as a live, real (not just theoretical) production outage window on 2026-08-13: running `infra-deploy.yml` to sync a rotated `DATABASE_ADMIN_PASSWORD` into the Container App's `db-connection-string` secret silently swapped the running image back to the placeholder, requiring a follow-up `app-deploy.yml` run to fix. `app-deploy.yml` already patches around two related gaps ("Ensure ACR pull credential and target port" step, itself referencing "the two gaps Story 1.2 deliberately left open") but does not restore the image — `infra-deploy.yml` should either thread through the currently-deployed image (e.g. read it via `az containerapp show` before redeploying) or `app-deploy.yml` should be documented as a mandatory follow-up after every `infra-deploy.yml` run.
+
 
 ## Deferred from: code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
 
-- `az containerapp list --query "[0].name"` silently picks an arbitrary Container App if more than one ever exists in the resource group, rather than filtering by an identifying name/tag [.github/workflows/infra-deploy.yml:55] — pre-existing pattern copied verbatim from `app-deploy.yml:255`'s identical lookup, which is itself justified by "Exactly one exists in this resource group by design"; this diff duplicates rather than introduces the assumption. Revisit if a second Container App is ever added to the resource group.
-- No `timeout-minutes` set on `infra-deploy.yml`'s job or any of its steps, including the new "Resolve current Container App image" step [.github/workflows/infra-deploy.yml] — pre-existing gap across the whole workflow file (only `app-deploy.yml`'s SQL-related steps set per-step timeouts); not unique to this diff.
+- [open] No `timeout-minutes` set on `infra-deploy.yml`'s job or any of its steps, including the new "Resolve current Container App image" step [.github/workflows/infra-deploy.yml] — pre-existing gap across the whole workflow file (only `app-deploy.yml`'s SQL-related steps set per-step timeouts); not unique to this diff.
+
 
 ## Deferred from: code review of 1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress (2026-08-14)
 
-- Unvalidated forwarded-header trust newly reachable in production [tests/EnergyTracker.Api.Tests/ForwardedHeadersTests.cs, src/EnergyTracker.Api/Program.cs:174-183] — clearing `KnownIPNetworks`/`KnownProxies` means `ForwardedHeadersMiddleware` now honors `X-Forwarded-Proto`'s raw value from any peer in production for the first time (previously the header was always ignored since Container Apps' peer never matched the loopback-only default). No validation restricts the value to exactly `"http"`/`"https"`, and no test covers a malformed or missing-header case. Reason for deferring: self-limited blast radius (only the requesting client's own scheme/cookie decision, no cross-user impact); keeps this story scoped to its stated four-line surgical fix. Revisit if the app ever adds logic that treats `Request.Scheme` as a trust signal beyond redirect_uri/cookie policy.
-- `ForwardLimit` left at its ASP.NET Core default (1), untested for multi-hop proxy chains [src/EnergyTracker.Api/Program.cs:174-177] — no multi-hop topology exists today (verified: no Front Door/App Gateway/CDN in `infra/`); revisit if an additional proxy hop is ever introduced in front of Container Apps' ingress.
-- Middleware pipeline ordering (`UseForwardedHeaders` must precede anything reading `Request.Scheme`, notably `UseAuthentication`) has no dedicated regression test [src/EnergyTracker.Api/Program.cs:183-190] — pre-existing pipeline structure, unchanged by this diff; a future reorder of `Program.cs`'s middleware chain could silently reintroduce this exact story's bug with nothing to catch it.
+- [open] Middleware pipeline ordering (`UseForwardedHeaders` must precede anything reading `Request.Scheme`, notably `UseAuthentication`) has no dedicated regression test [src/EnergyTracker.Api/Program.cs:183-190] — pre-existing pipeline structure, unchanged by this diff; a future reorder of `Program.cs`'s middleware chain could silently reintroduce this exact story's bug with nothing to catch it.
+
 
 ## Deferred from: code review of 1-9-room-power-point-device-management (2026-08-14)
 
-- Check-then-act race: `CreatePowerPoint`/`CreateDevice` check the parent's `ArchivedAt` and then save separately with no transaction, so a concurrent Archive of the parent between check and save still lets the child get created [src/EnergyTracker.Application/CreatePowerPoint.cs, CreateDevice.cs] — no transactional guards used anywhere else in this codebase either, and impact is low given the soft-delete architecture is self-healing (the orphaned child can simply be archived too).
-- `EnergyTrackerDbContext` constructed with a stand-in `ICurrentHouseholdAccessor` (`null!`, both migration factories, and `PostgresMigrationTests`/`SqlServerMigrationTests`) will throw a `NullReferenceException` if anything ever queries Room/PowerPoint/Device through it [src/EnergyTracker.Infrastructure.Migrations.Postgres/EnergyTrackerDbContextFactory.cs, tests/EnergyTracker.Infrastructure.Tests/PostgresMigrationTests.cs] — currently safe since migration tooling never queries the model, but the exact construction pattern is already copy-pasted in test code; revisit when the next story adds a repository-level integration test against Room/PowerPoint/Device. (Updated 2026-08-14: a same-day DI refactor replaced the original `IServiceProvider`-based construction this item was first written against with direct `ICurrentHouseholdAccessor` injection — the underlying "never queried in practice at design time" risk is unchanged, just via a different failure mode.) **Re-checked 2026-09-17 (architect review ahead of Epic 6):** the named trigger has since fired — `PostgresMigrationTests.cs`, `SqlServerMigrationTests.cs`, `SmartPlugImportRepositoryTests.cs`, `SmartPlugImportRepositoryAddAsyncDualProviderTests.cs`, and `SmartPlugImportRepositoryAddAsyncMinimalSqlServerPermissionsTests.cs` all now run real Testcontainers-backed queries against `dbContext.Rooms`/`dbContext.PowerPoints`. In every one of them, the author correctly swapped in a real `FixedHouseholdAccessor(householdId)` instead of `null!` for the DbContext instance actually used for those queries — `null!` survives only in the migration-history-only test methods that never touch domain tables (e.g. `Postgres_migrations_apply_cleanly_to_a_real_database`) and in the two design-time `IDesignTimeDbContextFactory` implementations, which `dotnet ef migrations add` never queries either. So the NRE has not occurred, not because of a structural guard, but because five independent test authors have each manually avoided the trap. No live bug and no code change proposed; downgraded from "revisit on next trigger" to low priority since the trigger has recurred multiple times without incident. Worth a lint/analyzer rule only if this pattern ever bites for real.
-- No retry action in the tagging-scaffold UI after the initial load fails [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx] — nice-to-have, not blocking.
-- Uneven length-validation test coverage: only `CreateRoomTests` asserts the >200-char rejection; `CreatePowerPointTests`/`CreateDeviceTests`/all three `Rename*Tests` don't, despite sharing `TaggingScaffoldNameValidator` [tests/EnergyTracker.Application.Tests/] — shared-validator logic makes an actual regression unlikely.
-- Settings navigation bypasses browser back-button history (no `react-router`, local `view` state) [web/src/App.tsx] — consistent with the pre-existing pattern already used by the Invite panel, not a new regression introduced by this story.
+- [open] No retry action in the tagging-scaffold UI after the initial load fails [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx] — nice-to-have, not blocking.
+
+- [open] Uneven length-validation test coverage: only `CreateRoomTests` asserts the >200-char rejection; `CreatePowerPointTests`/`CreateDeviceTests`/all three `Rename*Tests` don't, despite sharing `TaggingScaffoldNameValidator` [tests/EnergyTracker.Application.Tests/] — shared-validator logic makes an actual regression unlikely.
+
 
 ## Deferred from: code review of spec-otel-api-instrumentation (2026-08-15)
 
-- source_spec: `_bmad-artifacts/implementation/spec-otel-api-instrumentation.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-otel-api-instrumentation.md`
   summary: OTel resource attributes are minimal — `ConfigureResource(r => r.AddService("EnergyTracker.Api"))` with no `serviceVersion`, `deployment.environment`, or instance identifier, duplicated across both exporter branches with no shared factory.
   evidence: Once local, self-host, and multiple Azure environments all land in a shared backend under one bare service name, telling their telemetry apart becomes guesswork. Real future value, but out of scope for a spec whose job was getting OTel wired up at all — richer resource tagging is a natural, separately-scoped follow-up once there's more than one environment's telemetry to actually distinguish.
 
-## Deferred from: code review of spec-design-token-wiring (2026-08-15)
-
-- source_spec: `_bmad-artifacts/implementation/spec-design-token-wiring.md`
-  summary: No visual-regression/screenshot-diff safety net exists anywhere in the project despite `test:e2e` (Playwright) already being configured, so a global theme change like this one ships with no automated check that palette/contrast didn't break elsewhere.
-  evidence: Real gap, but pre-existing and disproportionate to this story's scope (a CSS-variable remap) — standing up visual regression tooling from scratch is a separately-scoped investment, worth doing once there's more themed UI (Epic 2's Status card, Trend chart, etc.) to actually protect.
-
-## Deferred from: code review of story-2.1 (2026-08-15)
-
-- Unhandled not-found path on `Household` lookups — `GET /households/{id}` and `HouseholdRepository.UpdateYearlyBaselineAsync` both use `SingleAsync` with no not-found guard; a missing row throws an uncaught `InvalidOperationException` → 500 instead of a `ProblemDetails` 404 [src/EnergyTracker.Api/Endpoints/HouseholdEndpoints.cs:90, src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs:96] — currently unreachable (no Household-deletion feature exists anywhere in the app) and mirrors the pre-existing `AcceptInviteAsync` `SingleAsync` pattern already in the codebase; not a new anti-pattern introduced by this diff.
 
 ## Deferred from: code review of story-2.2 (2026-08-15)
 
-- `IdempotencyKey` unique index is global, not Household-scoped; combined with the AD-3 query filter, a cross-Household key collision would surface as an unhandled 500 instead of a controlled response [src/EnergyTracker.Infrastructure/Adapters/MeterReadingRepository.cs:65] — probability is negligible with `crypto.randomUUID()` (122 bits of entropy); no realistic trigger path.
-- No server-side rounding/scale validation on `KwhValue` — a value with more than 2 decimal places is accepted, and the response echoes the un-rounded value before the `decimal(18,2)` column silently truncates it on write, so the confirmation text can diverge from what was actually stored [src/EnergyTracker.Application/CreateMeterReading.cs:22] — mitigated in the normal UI flow by the kWh field's `step="0.01"` browser constraint validation; only reachable via direct API use.
-- Dev Agent Record claims a cross-Household IDOR test exists for the meter-reading endpoint; the actual test only covers a principal with no Household at all, not a genuine cross-Household access attempt [tests/EnergyTracker.Api.Tests/MeterReadingEndpointsTests.cs:124] — documentation/test-accuracy gap only, not a functional security gap; AD-3's query-filter pattern is already covered elsewhere (Room/PowerPoint/Device).
-- No bounds validation on `ReadingTimestamp` — a far-future or `DateTimeOffset.MinValue` timestamp is accepted without complaint, which could distort Story 2.3/2.4's baseline and regression logic that will rely on timestamp ordering [src/EnergyTracker.Application/CreateMeterReading.cs:18] — no AC in this story requires it, and the story's own task notes explicitly favor not pre-emptively adding validation later stories will own.
+- [open] No server-side rounding/scale validation on `KwhValue` — a value with more than 2 decimal places is accepted, and the response echoes the un-rounded value before the `decimal(18,2)` column silently truncates it on write, so the confirmation text can diverge from what was actually stored [src/EnergyTracker.Application/CreateMeterReading.cs:22] — mitigated in the normal UI flow by the kWh field's `step="0.01"` browser constraint validation; only reachable via direct API use.
+
+- [open] Dev Agent Record claims a cross-Household IDOR test exists for the meter-reading endpoint; the actual test only covers a principal with no Household at all, not a genuine cross-Household access attempt [tests/EnergyTracker.Api.Tests/MeterReadingEndpointsTests.cs:124] — documentation/test-accuracy gap only, not a functional security gap; AD-3's query-filter pattern is already covered elsewhere (Room/PowerPoint/Device).
+
 
 ## Deferred from: code review of spec-custom-domain-managed-cert (2026-08-16)
 
-- source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
   summary: No renewal-failure alerting exists for the custom-domain managed certificate — an indirect CNAME or a missing CAA record silently blocks issuance/renewal (per D5), and nothing surfaces that until TLS actually starts failing in production.
   evidence: This story only scaffolds the dormant Bicep constructs (customDomainName defaults to ''); the feature has no live consumer yet, so there's nothing to alert on today. The existing `monitorAlert`/`otelAlertNotificationEmail` pattern in `infra/main.bicep` is the natural template to extend once a real custom domain is actually bound and worth monitoring.
-- source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
-  summary: The "never add customDomainName to infra/main.bicepparam" rule (docs/local-vs-azure-deltas.md#D5) has no guard at all in `infra/main.bicepparam` itself — unlike every other "leave blank for now" param there (oidcAuthority, otelAlertNotificationEmail), which carries an inline comment explaining why. No bicep-lint rule, CI check, or pre-commit guard stops a future story from adding a live value either.
-  evidence: This story's own spec explicitly forbids touching `infra/main.bicepparam` at all (frozen Boundaries, approved at Checkpoint 1), so even an explanatory comment-only addition is out of scope here without a human-approved spec change. A future story revisiting `main.bicepparam` should add that comment (mirroring the oidcAuthority/otelAlertNotificationEmail style) and/or build an automated guard (lint rule or `validate-infra` check) if this class of "blank-by-convention-only" param proliferates further.
+
 
 ## Deferred from: code review of story-2-5-dashboard-status-display (2026-08-17)
 
-- Concurrent `refreshStatus()` calls (e.g. offline-sync flush racing the mount-effect fetch) aren't sequenced — a slower, earlier-triggered response can resolve after a newer one and silently overwrite Status with stale data [web/src/App.tsx:49-58,148-160] — identical unsequenced-fetch pattern already exists in `refreshOpenRegressionPrompt`, not introduced by this diff; revisit both together if this class of bug is ever prioritized.
+- [open] Concurrent `refreshStatus()` calls (e.g. offline-sync flush racing the mount-effect fetch) aren't sequenced — a slower, earlier-triggered response can resolve after a newer one and silently overwrite Status with stale data [web/src/App.tsx:49-58,148-160] — identical unsequenced-fetch pattern already exists in `refreshOpenRegressionPrompt`, not introduced by this diff; revisit both together if this class of bug is ever prioritized.
+
 
 ## Deferred from: code review of story-2.4 (2026-08-17)
 
-- Full-history read/walk on every meter-reading save is a latent NFR1 Tier-1 (≤2s) performance risk that grows unboundedly for long-lived households, compounding the lifetime-anchoring design question raised in this review [src/EnergyTracker.Application/GetCurrentStatus.cs:36, src/EnergyTracker.Application/CreateMeterReading.cs:107] — pre-existing pattern extended, not yet a measured problem at current data volumes.
-- `TrendingThresholdKwh`/`LowConfidenceGapDays` have no range/bound validation, unlike the bound-checking discipline Story 2.3's own review called for [src/EnergyTracker.Domain/Household.cs:23,29] — currently unreachable since no endpoint in this diff writes to these columns; revisit when FR-21's settings-editing UI ships.
-- Resolving a `MeterRegressionPrompt` doesn't trigger a Status recompute, leaving a `StatusSnapshot` audit-trail gap at classification-resolution events [src/EnergyTracker.Application/CreateMeterReading.cs — contrast with Story 2.3's resolve-prompt use case] — in-spec per AD-7's two-call-site rule; revisit once FR-8 Trend History is built.
-- Concurrent `RecomputeAsync` calls for the same household race with no per-household serialization; a later insert from a stale read can leave the most recent `StatusSnapshot` row not reflecting the newest data [src/EnergyTracker.Infrastructure/Adapters/StatusRecomputeService.cs:9-35] — no consumer of `StatusSnapshot` ordering exists yet (Trend History is Epic 4); revisit before that ships.
+- [open] `TrendingThresholdKwh`/`LowConfidenceGapDays` have no range/bound validation, unlike the bound-checking discipline Story 2.3's own review called for [src/EnergyTracker.Domain/Household.cs:23,29] — currently unreachable since no endpoint in this diff writes to these columns; revisit when FR-21's settings-editing UI ships.
 
-## Deferred from: code review of story-3.2 (2026-08-20)
-
-- No optimistic-concurrency protection on SmartPlugImport mapping — concurrent/double-submit requests can race [src/EnergyTracker.Application/MapSmartPlugImportToPowerPoint.cs:16-45] — no Application-layer use case in this codebase carries a concurrency token beyond `Household`/`HouseholdInvite`; fixing this is a broader architectural decision, not specific to this diff.
-- Mapping endpoint isn't idempotent — retrying after a lost response on a successful mapping returns 409 instead of the original success [src/EnergyTracker.Application/MapSmartPlugImportToPowerPoint.cs:16-20] — no idempotency-key pattern exists anywhere in this codebase.
-- `ListReadingsByImportIdAsync`/`UpdateMappingAsync` load and update an import's full reading set unpaged [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:415-431] — mirrors `ProcessSmartPlugImport`'s existing bulk-write pattern from Story 3.1, not introduced by this diff.
-
-## Deferred from: code review of spec-epic-2-header-ux-dr11 (2026-08-22)
-
-- source_spec: `_bmad-artifacts/implementation/spec-epic-2-header-ux-dr11.md`
-  summary: Epic 2's `**Architecture:**` rollup header (line 7: `AD-4, AD-7, AD-12, AD-14, AD-16`) is missing AD-15 (cited in the body at lines 20, 28), AD-10 (line 244), and AD-3 (line 252) — the same header/body drift class this diff fixed for `UX-DRs:`, left unfixed on the neighboring line.
-  evidence: Same defect, same file, same review pass; not fixed here to keep this change a single-line, single-concern edit matching its spec trace. Worth a follow-up pass across all epic files' rollup headers rather than a second one-line patch.
-- source_spec: `_bmad-artifacts/implementation/spec-epic-2-header-ux-dr11.md`
-  summary: Story 2.3's regression-prompt AC (epic-2 file, line 116) describes "the neutral/informational glass treatment" but cites only `(UX-DR4, UX-DR18)`, not UX-DR11 — unclear whether this is a second missing citation for the same glass-elevation system or a deliberate exclusion.
-  evidence: Flagged by adversarial review of this diff; requires a judgment call on whether Story 2.3's glass treatment is actually governed by UX-DR11 (out of scope to decide as part of a trivial header-consistency fix) — a UX-designer or spec-owner call, not a mechanical correction.
 
 ## Deferred from: code review of story-3.3 (2026-08-20)
 
-- `SmartPlugCoverageSignal.HasCoverageDuringAsync` derives calendar-date boundaries from UTC `DateTimeOffset`s via `.DateTime`, while `SmartPlugImportGap.StartDate`/`EndDate` are local-time dates per AD-9 [src/EnergyTracker.Infrastructure/Adapters/SmartPlugCoverageSignal.cs:25-26] — can misalign by a day near local midnight for non-UTC households, nudging the low-confidence corroboration boundary. No household-timezone concept exists anywhere else in the codebase to fix this properly against; a point fix here would be inconsistent with the rest of the app.
-- Concurrently-processed imports for the same Power Point can each compute gaps against a stale view of the other's not-yet-committed readings, persisting a phantom `Missing`/`Estimated` gap for dates the other import actually fills [src/EnergyTracker.Application/CompleteSmartPlugImportProcessing.cs] — same accepted tradeoff as this story's own documented "No retroactive gap re-detection" non-goal; no locking/serialization primitive exists anywhere else in the codebase for background-job concurrency either (mirrors the already-deferred Story 2.4 concurrent-`RecomputeAsync` race).
-- No lower-bound guard on `SmartPlugGapDetector`'s computed `EstimatedTotalKwh` — a negative `precedingDaysWithData.Average()` would be silently persisted and displayed as an "estimate" [src/EnergyTracker.Domain/Calculations/SmartPlugGapDetector.cs:123] — pre-existing: neither `MerossCsvParser` nor `EveHomeXlsxParser` (Story 3.1) validates against negative `KwhValue` on the way in, so this is a symptom of an existing parser-level gap, not something newly introduced by this diff's averaging logic.
+- [open] No lower-bound guard on `SmartPlugGapDetector`'s computed `EstimatedTotalKwh` — a negative `precedingDaysWithData.Average()` would be silently persisted and displayed as an "estimate" [src/EnergyTracker.Domain/Calculations/SmartPlugGapDetector.cs:123] — pre-existing: neither `MerossCsvParser` nor `EveHomeXlsxParser` (Story 3.1) validates against negative `KwhValue` on the way in, so this is a symptom of an existing parser-level gap, not something newly introduced by this diff's averaging logic.
 
-## Deferred from: code review of story-3.4 (2026-08-23)
 
-- Watermark is computed as `MAX(IntervalStart)` across all vendors for a Power Point, regardless of which import wrote it [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:301-306] — if a Power Point ever received imports from both Eve Home (~10-min granularity) and Meross (day-level granularity), e.g. after a hardware swap, a fine-grained watermark could silently suppress a genuinely-new coarser-grained row or vice versa. Deferred: narrow/unlikely scenario, no vendor-swap use case exists today (a physical Smart Plug is either Eve Home or Meross for its lifetime).
-- No test exercises a true concurrent watermark race (two workers reading the same stale watermark before either commits) [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:12-50] — explicitly an accepted trade-off per this story's own Dev Notes Open Question #2 ("protects paths the optimization can't reach"), same class as Story 3.3's own already-deferred concurrent-import race.
-- Eve Home's early-stop assumes `IntervalStart` order tracks `RowIndex` order 1:1 — a file with ascending `RowIndex` but non-monotonic timestamps would silently break early, dropping genuinely-new rows [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs:126-131] — already explicitly identified and accepted as a documented trade-off in this story's own Completion Notes.
-- `AnyExistingReadingAtSameKeyAsync`/`AnyMappingConflictAsync` derive the whole batch's `PowerPointId`/`HouseholdId` from `readings[0]` alone, unenforced [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:52-73,242-257] — true today by construction (every reading in a batch always shares the same values, per `ProcessSmartPlugImport`'s assignment loop), no live call site can violate it currently.
+## Deferred from: code review of spec-epic-2-header-ux-dr11 (2026-08-22)
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-epic-2-header-ux-dr11.md`
+  summary: Epic 2's `**Architecture:**` rollup header (line 7: `AD-4, AD-7, AD-12, AD-14, AD-16`) is missing AD-15 (cited in the body at lines 20, 28), AD-10 (line 244), and AD-3 (line 252) — the same header/body drift class this diff fixed for `UX-DRs:`, left unfixed on the neighboring line.
+  evidence: Same defect, same file, same review pass; not fixed here to keep this change a single-line, single-concern edit matching its spec trace. Worth a follow-up pass across all epic files' rollup headers rather than a second one-line patch.
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-epic-2-header-ux-dr11.md`
+  summary: Story 2.3's regression-prompt AC (epic-2 file, line 116) describes "the neutral/informational glass treatment" but cites only `(UX-DR4, UX-DR18)`, not UX-DR11 — unclear whether this is a second missing citation for the same glass-elevation system or a deliberate exclusion.
+  evidence: Flagged by adversarial review of this diff; requires a judgment call on whether Story 2.3's glass treatment is actually governed by UX-DR11 (out of scope to decide as part of a trivial header-consistency fix) — a UX-designer or spec-owner call, not a mechanical correction.
+
 
 ## Deferred from: code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
 
-- No test exercises the German (`de-DE`) toggle strings specifically — every assertion in `tagging-scaffold-manager.test.tsx` hardcodes the English string, and this diff's new `hideArchivedToggle`/`showArchivedToggle` keys inherit that gap [web/src/components/tagging-scaffold/tagging-scaffold-manager.test.tsx] — pre-existing whole-file test convention (no test in this file has ever asserted against `de-DE` strings), not something introduced by this diff specifically; a mismatched or garbled German translation would ship undetected regardless of which story adds it.
+- [open] No test exercises the German (`de-DE`) toggle strings specifically — every assertion in `tagging-scaffold-manager.test.tsx` hardcodes the English string, and this diff's new `hideArchivedToggle`/`showArchivedToggle` keys inherit that gap [web/src/components/tagging-scaffold/tagging-scaffold-manager.test.tsx] — pre-existing whole-file test convention (no test in this file has ever asserted against `de-DE` strings), not something introduced by this diff specifically; a mismatched or garbled German translation would ship undetected regardless of which story adds it.
 
-## Deferred from: code review of story-2.7 (2026-08-23)
-
-- Duplicate "Close" accessible name inside `StatusDetailDialog` [web/src/components/dashboard/status-detail-dialog.tsx:141-145] — the footer `Close` button and shadcn `DialogContent`'s built-in "X" close button share the accessible name "Close"; `status-detail-dialog.test.tsx` already works around it by DOM order. Same pattern exists in every `DialogFooter` usage in `tagging-scaffold-manager.tsx` — pre-existing codebase-wide shadcn Dialog pattern, not introduced by this diff.
 
 ## Deferred from: code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
 
-- source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
-  summary: If `GetRecentByMainMeterAsync`'s `mustIncludeReadingId` lookup ever fails (the repository falls back gracefully to the base window) while the open prompt's own trigger reading is itself older than that un-widened base window, `PatternDetectiveCalculator.ExcludeFromOpenPrompt` throws `InvalidOperationException` — caught/logged on the `StatusRecomputeService.RecomputeAsync` path, but uncaught on `GET /api/status`/`/api/status/detail` (`StatusEndpoints.cs`), surfacing as a 500.
-  evidence: Currently unreachable by construction — `mustIncludeReadingId` is always `openPrompt.PreviousMeterReadingId`, which `CreateMeterReading.cs`'s `FindImmediatelyPrecedingAsync` always scopes to the same `MainMeterId` as the prompt itself, and no delete path exists for `MeterReading` anywhere in the repository, so the lookup cannot fail for real prompt data today. Same class of "structurally unreachable, defensive code exists anyway" gap as several prior entries in this file (e.g. Story 1.9's `ICurrentHouseholdAccessor` entry). Raised by adversarial review, round 4.
-- source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
   summary: `GetRecentByMainMeterAsync` issues three sequential, non-transactional DB round-trips (latest-timestamp, must-include-timestamp, final range query) rather than one query — a missed optimization given the story's own performance motivation, and its true contract ("windowDays trailing whatever was latest at the time of the *first* sub-query, plus anything inserted later, since the final query has no upper bound") isn't stated anywhere as a load-bearing property.
   evidence: Benign today only because the final query has no upper timestamp bound; a future edit adding one could reintroduce a subtle staleness bug between the three round-trips with nothing to catch it. Collapsing to a single correlated-subquery (as round 2's query shape did, before round 3's rewrite) would close both the round-trip count and the documentation gap simultaneously, but round 4 prioritized closing the correctness bug over re-optimizing the query shape. Raised by adversarial review, round 4.
-- source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
   summary: `HouseholdRecomputeLock`'s in-process locking correctness rests entirely on `infra/modules/container-app.bicep`'s `maxReplicas = 1`, documented only in a source comment — no test or startup assertion fails loudly if that value is ever changed to allow horizontal scaling, which would silently reintroduce the exact race this story fixes.
   evidence: Same "documented but not guarded" pattern already accepted for other infra/code couplings in this codebase (e.g. the OTel/Application-Insights dual-logging constraint in project-context.md). A guard would most naturally live as an integration/smoke check against the deployed Bicep output rather than unit-testable C#, which is why round 4 didn't add one inline. Raised by adversarial review, round 4.
-- source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
   summary: `HouseholdRecomputeLock`'s internal `Releaser.DisposeAsync` double-dispose guard (`Interlocked.Exchange`) has no test calling `DisposeAsync` twice to prove it actually prevents a double-release.
   evidence: Low-risk — the guard is a standard, well-understood idiom, and `await using` in every real call site only ever disposes once. Worth a quick test if this type is ever reused outside its current single call site. Raised by adversarial review, round 4.
 
-## Deferred from: code review of story-3-7-smart-plug-reading-duplicate-cleanup-on-late-mapping (2026-08-26)
-
-- TOCTOU window between `UpdateMappingPerRowWithConflictToleranceAsync`'s conflict-confirmation read and the delete/skip decision it drives [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:303-330] — nothing pins the colliding "already-mapped" row in place between the read and the write, so a genuinely concurrent mutation/removal of that row in the gap could make the delete-vs-skip decision against stale data. Deferred, pre-existing: this check-then-act pattern already existed in this method (and in `AnyMappingConflictAsync`'s pre-check ahead of the `ExecuteUpdateAsync` fast path) before this story — Story 3.7 only changed what happens *after* the conflict is confirmed (delete vs. skip), not the underlying race. Raised by adversarial review (Blind Hunter).
-
-## Deferred from: story-4-1-trend-history-view (2026-08-29)
-
-- `GetStatusHistory`/`StatusSnapshotRepository.GetForHouseholdAsync` reads a household's entire `StatusSnapshot` lifetime with no pagination or trailing-window bound, unlike `GetCurrentStatus`'s bounded-window read (Epic 3 Retro Action Item #2, PR #21) — a latent NFR1 perf risk for a long-lived household with years of recompute history. Deliberately not addressed here: no AC requires bounding, and Trend History's whole point is showing the full trend, not a windowed one. Mirrors the "pre-existing pattern extended, not yet a measured problem at current data volumes" framing already used for the identical class of issue elsewhere in this file (Story 2.4's entry above). [src/EnergyTracker.Application/GetStatusHistory.cs, src/EnergyTracker.Infrastructure/Adapters/StatusSnapshotRepository.cs]
 
 ## Deferred from: code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 
-- `act()` warnings appear when the new queue test file runs as part of the full suite (not in isolation), indicating unflushed async state from the polling/upload effects. Deferred, pre-existing: the pre-diff single-file panel's own test file produced the same class of warning; this story's per-item hook extraction just multiplies the exposure (N concurrent instances instead of one) rather than introducing the underlying pattern. Raised by adversarial review (Blind Hunter). [web/src/components/smart-plug-import/use-smart-plug-import-job.ts]
-- No affordance exists to remove/cancel a queue item while it's `uploading`/`processing` (`dismissable` only covers `completed`/`flaggedForReview`/`failed`). Deferred, pre-existing gating logic: the old single-file panel's reset button was gated identically (`state !== 'uploading'/'processing'`), so this isn't a new restriction, but batching multiple files raises the stakes — one accidental file in a 5-file drop now can't be pulled back out until it resolves on its own. Worth a follow-up UX pass, not required by any AC. Raised by adversarial review (Blind Hunter) and edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:110-111]
-- If the backend ever returns `importStatus: 'awaitingpowerpointmapping'` with a null/empty `smartPlugImportId`, the mapping dialog never renders and, unlike the old panel's global reset button (available during `awaitingMapping` too), the new per-item "Remove from queue" button also excludes `awaitingMapping`. Deferred, pre-existing: this exact null-check gate is copied byte-for-byte from the pre-diff panel, not introduced by this diff. Raised by edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:110-111,158; web/src/components/smart-plug-import/use-smart-plug-import-job.ts:91-94]
-- No upper bound on how many files one selection/drop can enqueue — a household member selecting an entire folder of exports fires that many concurrent uploads and mounts that many permanently-polling hook instances, against a backend that Dev Notes itself confirms processes jobs strictly one at a time; a large batch leaves most items sitting in "Waiting" for a long stretch with no soft cap or warning. Deferred: not required by any AC, worth tracking for a future hardening pass. Raised by adversarial review (Blind Hunter) and edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:33-38]
+- [open] `act()` warnings appear when the new queue test file runs as part of the full suite (not in isolation), indicating unflushed async state from the polling/upload effects. Deferred, pre-existing: the pre-diff single-file panel's own test file produced the same class of warning; this story's per-item hook extraction just multiplies the exposure (N concurrent instances instead of one) rather than introducing the underlying pattern. Raised by adversarial review (Blind Hunter). [web/src/components/smart-plug-import/use-smart-plug-import-job.ts]
 
-## Deferred from: code review of spec-power-point-mapping-list-scroll (2026-09-02)
+- [open] No affordance exists to remove/cancel a queue item while it's `uploading`/`processing` (`dismissable` only covers `completed`/`flaggedForReview`/`failed`). Deferred, pre-existing gating logic: the old single-file panel's reset button was gated identically (`state !== 'uploading'/'processing'`), so this isn't a new restriction, but batching multiple files raises the stakes — one accidental file in a 5-file drop now can't be pulled back out until it resolves on its own. Worth a follow-up UX pass, not required by any AC. Raised by adversarial review (Blind Hunter) and edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:110-111]
 
-- source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
-  summary: Shared `DialogContent` (`web/src/components/ui/dialog.tsx`) has no viewport-relative height constraint (`max-h-[...vh]`/`overflow-y-auto`) of its own, so a Dialog with enough content in total (header + body copy + inputs + this now-capped list + error text) can still overflow a short viewport even though the "many Power Points" failure mode this diff targets is fixed.
-  evidence: Pre-existing gap in the shared Dialog primitive, affecting every `DialogContent` consumer in the app, not introduced by this diff — fixing it here would mean changing shared UI behavior for every dialog in the codebase, well beyond this one-shot's scope of the Power Point mapping list specifically. Raised by adversarial review (Blind Hunter).
-- source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
-  summary: `overflow-y-auto` on the mapping list can introduce a vertical scrollbar only once the row count crosses the `max-h-64` threshold, narrowing row content width at that exact moment (including the live "just-created Power Point appended to the list" flow) with no `scrollbar-gutter`/reserved padding to prevent the shift.
-  evidence: Minor cosmetic edge case with no established scrollbar-gutter convention anywhere else in the codebase (this is the first scrollable content region inside a `DialogContent` in this repo); not worth introducing new, untested cross-browser CSS for a one-shot bug fix. Raised by adversarial review (Blind Hunter).
+- [open] No upper bound on how many files one selection/drop can enqueue — a household member selecting an entire folder of exports fires that many concurrent uploads and mounts that many permanently-polling hook instances, against a backend that Dev Notes itself confirms processes jobs strictly one at a time; a large batch leaves most items sitting in "Waiting" for a long stretch with no soft cap or warning. Deferred: not required by any AC, worth tracking for a future hardening pass. Raised by adversarial review (Blind Hunter) and edge-case review. [web/src/components/smart-plug-import/smart-plug-import-page.tsx:33-38]
 
-## Deferred from: code review of spec-background-job-changetracker-orphan-fix (2026-09-05)
 
-- source_spec: `_bmad-artifacts/implementation/spec-background-job-changetracker-orphan-fix.md`
-  summary: `Program.cs`'s `ConfigureDbContext` sets `CommandTimeout(120)` globally on the whole `DbContextOptionsBuilder`, applying to every command on every request app-wide, rather than scoping the elevated timeout to just the Smart Plug import write path the way `SmartPlugImportRepository.UpdateMappingAsync` already does via `dbContext.Database.SetCommandTimeout(...)` for its own elevated-timeout need.
-  evidence: An unrelated slow/blocked query elsewhere in the app now waits up to 120s instead of failing fast at 30s. Raised by adversarial review (Blind Hunter) and edge-case review. Not fixed in this pass: the frozen spec explicitly named `Program.cs`'s provider configuration as the target (mirroring how `MaxBatchSize` is already set there), and switching to the narrower per-call pattern is a real design change worth its own scoped decision rather than folding into an incident hotfix. [src/EnergyTracker.Api/Program.cs:124-153] **Queued 2026-09-17 as `spec-db-command-timeout-scope.md` (status: ready-for-dev)** — the scoped decision this entry deferred, ahead of Epic 6.
+## Deferred from: story-4-1-trend-history-view (2026-08-29)
+
+- [open] `GetStatusHistory`/`StatusSnapshotRepository.GetForHouseholdAsync` reads a household's entire `StatusSnapshot` lifetime with no pagination or trailing-window bound, unlike `GetCurrentStatus`'s bounded-window read (Epic 3 Retro Action Item #2, PR #21) — a latent NFR1 perf risk for a long-lived household with years of recompute history. Deliberately not addressed here: no AC requires bounding, and Trend History's whole point is showing the full trend, not a windowed one. Mirrors the "pre-existing pattern extended, not yet a measured problem at current data volumes" framing already used for the identical class of issue elsewhere in this file (Story 2.4's entry above). [src/EnergyTracker.Application/GetStatusHistory.cs, src/EnergyTracker.Infrastructure/Adapters/StatusSnapshotRepository.cs]
+
 
 ## Deferred from: code review of spec-trend-chart-time-axis (2026-08-30)
 
-- source_spec: `_bmad-artifacts/implementation/spec-trend-chart-time-axis.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-trend-chart-time-axis.md`
   summary: `TrendChart`'s new month/week tick generation (`getMonthBoundaries`, `getWeekBoundaries`, `lastLabeledYear`) computes calendar boundaries via `Date.prototype.getFullYear()/getMonth()`, i.e. the viewer's local time zone, against `entries[].computedAtUtc` — so two viewers in different time zones can see a different *number* of ticks for identical data, not just different label text. No `TZ` is pinned in the Vitest config, so the suite's hardcoded tick-count assertions implicitly assume the CI runner's local zone stays close to UTC.
   evidence: This mirrors an already-deliberate codebase convention (the pre-existing `gapDateFormat` in the same file already formats UTC timestamps in local time, same as AD-9's Eve Home local-time parsing) — not a new pattern introduced by this change, just a new place where it affects tick *count*, not only display text. A correct fix means pinning `TZ` in the shared Vitest config, which is outside this spec's file boundary (`trend-chart.tsx`/`trend-chart.test.tsx` only). Raised by adversarial review (Blind Hunter).
 
-## Deferred from: code review of spec-3-10-cleanup-batch-delete-fix (2026-09-12)
 
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-batch-delete-fix.md`
-  summary: `DeleteEligibleAsync`'s batched delete has no upper bound on total chunk count per call — an extremely large household could still fail to complete "clean up everything" within an HTTP/ingress idle timeout even though no single chunk hits `CommandTimeout`, since the fix intentionally preserves one all-or-nothing transaction across every chunk (relaxing that atomicity guarantee, e.g. via partial commits or moving to the async job queue, is an explicit non-goal of this fix).
-  evidence: Raised by Edge Case Hunter and adversarial review (Blind Hunter) independently. Not exercised by the reported 2026-09-12 incident (the reported household's eligible set was resolved by batching alone); worth a follow-up if a future incident shows the *request*, not a single command, timing out. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:749-773]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-batch-delete-fix.md`
-  summary: The shared outer transaction now stays open for longer wall-clock time (one round trip per chunk instead of one big command), which would hold row locks and block Postgres `autovacuum` on every table it touches for that whole duration if this code ever runs against a Postgres-backed deployment.
-  evidence: Currently inert — the deployed production database is Azure SQL (SqlServer), not Postgres (AD-2 dual-provider, config-selected) — but real if `databaseProvider` is ever switched back to Postgres. Raised by adversarial review (Blind Hunter). **Updated round 4 (2026-09-12):** the per-import batched reading-detach fix (`spec-3-10-cleanup-per-import-detach.md`) substantially increases how long this transaction stays open for a large single import (~1,200 additional sequential round trips for a 122,158-row import), further widening this same risk if Postgres is ever adopted. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:749-773]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-batch-delete-fix.md`
-  summary: `DeleteJobsAsync`'s eligibility query runs once, before `DeleteEligibleAsync` opens its transaction; batching makes the delete phase take meaningfully longer in wall-clock terms than the previous single-command version, widening (not introducing) the existing gap between "what was eligible at query time" and "what actually gets deleted."
-  evidence: Same class of gap that already existed pre-fix, just wider in degree now. Raised by adversarial review (Blind Hunter). [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:704-738]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-batch-delete-fix.md`
-  summary: `DeleteBatchSize = 200` has no benchmarked basis (chosen from the 2026-09-12 incident's Azure Monitor DTU/Log IO evidence, not a measured per-import reading count) and nothing in this fix logs or alerts if it turns out to still be too large for a future household's data shape.
-  evidence: Raised by adversarial review (Blind Hunter); the constant's own doc comment already says "revisit if a future incident shows it's still too large" but there's no mechanism to detect that other than a repeat production 500. Same open concern now also applies to `DeleteReadingVolumeThreshold = 20_000` (spec-3-10-cleanup-batch-delete-fix-2) — also unbenchmarked, also undetectable except by a repeat 500. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:749-773]
+## Deferred from: code review of spec-power-point-mapping-list-scroll (2026-09-02)
 
-## Deferred from: code review of spec-3-10-cleanup-batch-delete-fix-2 (2026-09-12)
+- [open] source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
+  summary: Shared `DialogContent` (`web/src/components/ui/dialog.tsx`) has no viewport-relative height constraint (`max-h-[...vh]`/`overflow-y-auto`) of its own, so a Dialog with enough content in total (header + body copy + inputs + this now-capped list + error text) can still overflow a short viewport even though the "many Power Points" failure mode this diff targets is fixed.
+  evidence: Pre-existing gap in the shared Dialog primitive, affecting every `DialogContent` consumer in the app, not introduced by this diff — fixing it here would mean changing shared UI behavior for every dialog in the codebase, well beyond this one-shot's scope of the Power Point mapping list specifically. Raised by adversarial review (Blind Hunter).
 
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-batch-delete-fix-2.md`
-  summary: Reading counts driving `ChunkImportIdsByReadingVolume`'s packing decisions are measured once, entirely before `DeleteEligibleAsync`'s transaction opens. An import still `Processing`/`AwaitingPowerPointMapping` (both eligible per `DeleteJobsAsync`'s own deliberately-non-terminal-states design) could still be accumulating `SmartPlugReading` rows via `AddAsyncCore` between that measurement and the actual delete of its chunk — so a chunk could be sized against a stale, too-low count and still trigger the very cascade-volume problem this fix exists to bound.
-  evidence: Raised independently by adversarial review (Blind Hunter) and edge-case review, round 2. Same class of gap as the pre-existing "eligibility computed once before the transaction" TOCTOU already accepted for round 1 (`DeleteJobsAsync`/`SweepExpiredAsync` at `SmartPlugImportRepository.cs:704-738`), but more consequential here since staleness affects a *safety* guarantee (chunk sizing) rather than just completeness (which rows get swept up). Not structurally fixed: a real fix (re-measuring per chunk, or snapshot isolation) is disproportionate to this incident's evidence — no observed case of an in-flight import actually growing large enough mid-cleanup to matter. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs:833-850]
+
+## Deferred from: code review of story-4-3-correcting-a-meter-reading (2026-09-10)
+
+- [open] No unit test distinguishes "`RecomputeAsync` called after the transaction commits" vs. "called inside it" [tests/EnergyTracker.Application.Tests/EditMeterReadingTests.cs] — deferred, pre-existing (identical gap already present in `CreateMeterReadingTests.cs`): the `ExecuteInTransactionAsync` NSubstitute stub is a synchronous passthrough, so it can't distinguish placement; the AD-7/AC #3 "must not be inside the transaction" requirement is enforced only by a code comment. Raised by adversarial + edge-case review.
+
 
 ## Deferred from: code review of spec-3-10-cleanup-async-job (2026-09-12)
 
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-async-job.md`
-  summary: A `CleanUpSmartPlugImportJobs` job that legitimately runs past `AzureStorageQueueJobQueue`'s 60-minute message visibility timeout gets redelivered and reprocessed concurrently with itself, duplicating deletes — the same redelivery/reprocessing design `BackgroundJobProcessor.ProcessAsync` already applies uniformly to every job type (deliberately, so a genuinely crashed worker's job still gets retried).
-  evidence: Raised independently by adversarial review (Blind Hunter) and edge-case review. Pre-existing AD-6 characteristic of the shared processor/queue infrastructure, not introduced by this diff — `ProcessSmartPlugImport` has carried the identical exposure since Story 3.6. Not addressed here: this round's round-trip-guard fix (reusing an already-Queued/Processing cleanup job instead of enqueueing a second one, see `SmartPlugImportEndpoints.cs`'s DELETE handler) closes the *client-triggered* concurrency path; the redelivery path would need per-job-type visibility-timeout extension or renewal, a broader AD-6 change out of scope for an incident hotfix. This incident's actual data (487,380 rows across 51 imports) is not expected to approach a 60-minute runtime. **Updated round 4 (2026-09-12):** the per-import batched reading-detach fix (`spec-3-10-cleanup-per-import-detach.md`) adds roughly `readingCount / 200` sequential round trips per import (~1,200 for the confirmed 122,158-row import) — meaningfully more overhead than round 3's assumption accounted for, though still not expected to approach 60 minutes for any household's data seen so far. Worth re-checking if a future household's cleanup runs noticeably long. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs:75-120, src/EnergyTracker.Infrastructure/Adapters/AzureStorageQueueJobQueue.cs]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-async-job.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-async-job.md`
   summary: The cleanup dialog shows no progress indication for the entire poll duration — just a disabled Delete button, for a wait that (per this incident) can run minutes long.
   evidence: Raised by adversarial review (Blind Hunter). Not fixed here: the frozen spec's own Boundaries explicitly say "Existing `cleaningUp` dialog state extends to cover polling — no new UI states," and a progress affordance worth shipping (elapsed time, spinner copy) is a UX decision, not a mechanical fix, disproportionate to an incident hotfix's scope. Worth a follow-up UX pass. [web/src/components/smart-plug-import/job-history-list.tsx]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-async-job.md`
-  summary: `DELETE /api/smart-plug-import-jobs` always enqueues (now: or reuses) a background job round-trip even when the household has zero eligible import jobs — a latency regression for what used to be an instant synchronous no-op.
-  evidence: Raised by adversarial review (Blind Hunter). Correct behavior, not a bug; a fast-path (check eligibility count before enqueueing) would add complexity for a case with no reported user impact. Not required by the spec's Boundaries. [src/EnergyTracker.Api/Endpoints/SmartPlugImportEndpoints.cs]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-async-job.md`
-  summary: `GET /api/jobs/{id}`'s response never exposes its own `JobType`, even though `BackgroundJobProcessor`/`GetBackgroundJobStatus` both branch internally on it — now two job types share this one polling endpoint instead of one.
-  evidence: Raised by adversarial review (Blind Hunter). Harmless today (the frontend only ever polls a job it itself just enqueued, so it already knows what kind of job it's polling), but an increasingly implicit contract as more job types are added. Worth exposing if a third job type or a generic "in-progress jobs" view is ever built. [src/EnergyTracker.Application/GetBackgroundJobStatus.cs]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-async-job.md`
-  summary: An in-flight cleanup job's id lives only in a local variable inside `handleConfirmCleanup` — navigating away or reloading mid-poll loses all client-side trace of it, so the user could believe cleanup isn't running and re-trigger it.
-  evidence: Raised by adversarial review (Blind Hunter) and edge-case review. Largely mitigated by this round's server-side dedup guard (a re-triggered DELETE reuses the still-active job instead of enqueueing a duplicate), so the practical risk is stale/confusing UI state, not duplicate work. Full resume-on-reload (persisting jobId client-side, e.g. localStorage, and resuming the poll on mount) is a UX enhancement out of scope for this hotfix.
+
+
 ## Deferred from: code review of spec-3-10-cleanup-per-import-detach (2026-09-12)
 
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-per-import-detach.md`
-  summary: **High priority.** `SweepExpiredAsync` (the automatic sweep behind `GET /api/smart-plug-import-jobs`, polled every 8s by `job-history-list.tsx`, and run on every mount/mapping-completion) shares `DeleteEligibleAsync` with the manual "clean up everything" endpoint, but was never moved off the synchronous HTTP request path by CAP-5 (round 3) — only the manual endpoint was. This round's per-import batched reading-detach fix now also runs synchronously, inline, inside that GET request whenever the sweep catches a terminal-state import old enough to be eligible and large enough to need many detach batches — reintroducing the exact "operation too slow for a synchronous HTTP request" failure mode round 3 was built to eliminate, through a completely different, unaddressed entry point.
-  evidence: Raised by adversarial review (Blind Hunter). Not yet confirmed as a live incident (no household has hit it yet), but the mechanism is identical to three of this feature's four confirmed incidents, and the entry point (an 8-second polling loop) fires far more often than the manual cleanup button. The natural fix is either moving `SweepExpiredAsync` onto the same async-job pattern (fire-and-forget, not user-facing), or bounding its per-invocation work (sweep at most one chunk per call, catching up incrementally across polls) — both are meaningfully larger changes than this hotfix's scope. Recommend prioritizing this as the next piece of work on this feature. [src/EnergyTracker.Application/ListSmartPlugImportJobs.cs, src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — SweepExpiredAsync/DeleteEligibleAsync] **Queued 2026-09-17 as `spec-3-10-cleanup-sweep-async.md` (status: draft — the fire-and-forget vs. bounded-chunking choice above is still an open Ask First decision)**, ahead of Epic 6.
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-per-import-detach.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-per-import-detach.md`
   summary: Issuing on the order of hundreds of sequential row-level `UPDATE`s against `SmartPlugReadings` within one long-lived transaction (this round's per-import detach loop) could, on SQL Server, cross the automatic lock-escalation threshold (~5,000 locks) and upgrade to a table-level lock — blocking every household's reads/writes against that shared table (AD-3 multi-tenant architecture) for the job's full duration, not just the household being cleaned up.
   evidence: Raised by adversarial review (Blind Hunter). Plausible but not confirmed against production Azure SQL Basic-tier — SQL Server's escalation check is documented as per-statement (each of this loop's `UPDATE`s only touches ≤200 rows, well under the threshold), but locks held by earlier statements in the same uncommitted transaction are not released until commit, so the *cumulative* row-lock count against `SmartPlugReadings` grows across the whole loop; whether that alone triggers escalation (vs. only a single statement's own count) is genuinely uncertain without a load test against Azure SQL Basic-tier at incident scale. A confirmed fix (e.g. `ALTER TABLE SmartPlugReadings SET (LOCK_ESCALATION = DISABLE)`) is a schema change with its own memory-overhead tradeoff, deserving its own dedicated investigation rather than a same-day guess under incident pressure. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — DetachReadingsForImportAsync]
-- source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-per-import-detach.md`
-  summary: Concurrent `DeleteJobsAsync` (manual) and `SweepExpiredAsync` (automatic) executions targeting overlapping rows could now deadlock more easily than before — this round replaces one coarse FK cascade per import with many small sequential `UPDATE`s, each acquiring/releasing lock-manager attention in a different order than a concurrent execution's own loop, widening the interleaving window compared to one atomic operation.
-  evidence: Raised by edge-case review. Same underlying class of risk as already exists (two independent calls to `DeleteEligibleAsync` could already target overlapping rows before this fix — nothing in this codebase serializes cleanup runs per household), not newly introduced by this diff — only its granularity/lock-interleaving profile changed. No confirmed occurrence. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
 
-## Deferred from: code review of story-5-1-tariff-configuration (2026-09-13)
-
-- `GetTariffHistory`'s second "full-history" fetch reuses the first query's `totalCount` as the second query's page size — a Tariff entry created concurrently between the two queries can be silently excluded from that response's `IsCurrent`/`EffectiveUntil` computation. Narrow race window, no data loss, self-corrects on the next read; the code's own comment already documents the small-history-set assumption behind this shape, just not this race. Raised by edge-case review. [src/EnergyTracker.Application/GetTariffHistory.cs:46-48]
-
-## Deferred from: code review of story-5-2-candidate-tariff-comparison-bonus-decay-normalized-savings (2026-09-14)
-
-- `annualPaceKwh` extrapolation trusts `statusResult.PaceToDateKwh` without a non-negative guard — a negative pace (e.g. from an unusual resolved-rollover edge case) would flow unguarded into the annual cost math. Pre-existing behavior inherited from Pattern Detective's already-shipped `PatternDetectiveCalculator`/`GetCurrentStatus`, not introduced by this story. Raised by edge-case review. [src/EnergyTracker.Application/CompareTariff.cs:47]
-
-## Deferred from: code review of story-5-3-two-way-attractiveness-signal (2026-09-15)
-
-- `compareTariff`'s response is cast via a bare `JSON.parse(text) as TariffComparisonDto` with no runtime validation — deferred, pre-existing: identical unchecked-cast pattern used by every other function in this file (`createTariff`, `updateTariff`, `fetchTariffHistory`), not introduced by this story. Raised by edge-case review. [web/src/lib/tariff-api.ts:141]
-- No responsive/mobile layout verification for the new three-panel result layout (current-tariff summary, candidate-tariff summary, two-way signal card) — deferred, pre-existing: uses the same established `GlassCard`/flex-col conventions already in use elsewhere in this codebase; no manual/automated responsive check exists for any prior story's UI either. Raised by adversarial review (Blind Hunter). [web/src/components/tariff/tariff-comparison-form.tsx]
-
-## Deferred from: code review of story-5-4-tariff-check-reminder (2026-09-17)
-
-- `refreshTariffCheck`'s catch-all collapses network errors and "no Tariff configured" into the same `null` state, indistinguishable in the UI — deferred, pre-existing: mirrors `refreshStatus`'s identical existing pattern two functions above in the same file, not introduced by this story. Raised by adversarial review (Blind Hunter). [web/src/App.tsx:90-97]
-- `TariffCheckCard`'s `locale` prop drives only `Intl.DateTimeFormat`, not the i18next-resolved copy itself, so a household whose configured locale differs from the app's active UI language could see the date and surrounding sentence in two different languages — deferred, pre-existing: an existing app-wide pattern (e.g. `status-card.tsx`), not introduced by this story. Raised by adversarial review (Blind Hunter). **Resolved by Story 8.11** (once a Household is ready, `Household.Locale` drives both the i18next language and the `locale` prop). [web/src/components/tariff/tariff-check-card.tsx:21-24]
-- The new `GET /api/tariff-check` endpoint carries no `.Produces<T>()`/OpenAPI metadata — deferred, pre-existing: matches the existing pattern for every other route in the same file. Raised by adversarial review (Blind Hunter). [src/EnergyTracker.Api/Endpoints/TariffEndpoints.cs]
 
 ## Deferred from: code review of story-1.12 (2026-09-17)
 
-- No automated coverage of the real DI `.Get(OpenIdConnectDefaults.AuthenticationScheme)` resolution path — `SessionEndpointsTests.cs` calls `ResolveSupportsFederatedLogoutAsync` directly with a hand-built `OpenIdConnectOptions`, never exercising the actual `IOptionsMonitor<OpenIdConnectOptions>.Get(...)` scheme lookup performed in `SessionEndpoints.cs`'s handler [tests/EnergyTracker.Api.Tests/SessionEndpointsTests.cs, src/EnergyTracker.Api/Endpoints/SessionEndpoints.cs:22]. Deferred: low realistic risk (the OIDC scheme is registered via `AddOpenIdConnect`'s default-scheme overload in `Program.cs`, so both registration and lookup rely on the same framework constant rather than a duplicated string literal that could drift), and no existing test infrastructure in this repo mocks OIDC discovery through a real DI/`WebApplicationFactory` path yet. Raised by adversarial review (Blind Hunter).
-- AC #2/#5/#6 (RP-initiated logout actually terminating both sessions, and landing back on the login step) have zero automated regression coverage — proven only by a one-time manual Auth0 + Chrome verification (Task 7), never re-run in CI [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]. Deferred, pre-existing: `/logout`'s implementation is unchanged by this diff (built in Story 1.5); this story only adds a frontend signal and control around an already-existing, unmodified backend mechanism. Raised by adversarial review (Blind Hunter).
-- No focus/accessibility management across the logoff dialog's three steps — `confirm` → `queue-warning`/`federated-warning` swaps content inside the same mounted `Dialog` with no focus move or live-region announcement telling a screen-reader user the content changed underneath them [web/src/components/settings/settings-page.tsx:108-134]. Deferred, pre-existing pattern: no multi-step dialog anywhere in this codebase establishes focus-management conventions yet, so this isn't a regression specific to this diff. Raised by adversarial review (Blind Hunter) and edge-case review.
+- [open] AC #2/#5/#6 (RP-initiated logout actually terminating both sessions, and landing back on the login step) have zero automated regression coverage — proven only by a one-time manual Auth0 + Chrome verification (Task 7), never re-run in CI [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]. Deferred, pre-existing: `/logout`'s implementation is unchanged by this diff (built in Story 1.5); this story only adds a frontend signal and control around an already-existing, unmodified backend mechanism. Raised by adversarial review (Blind Hunter).
+
+- [open] No focus/accessibility management across the logoff dialog's three steps — `confirm` → `queue-warning`/`federated-warning` swaps content inside the same mounted `Dialog` with no focus move or live-region announcement telling a screen-reader user the content changed underneath them [web/src/components/settings/settings-page.tsx:108-134]. Deferred, pre-existing pattern: no multi-step dialog anywhere in this codebase establishes focus-management conventions yet, so this isn't a regression specific to this diff. Raised by adversarial review (Blind Hunter) and edge-case review.
+
 
 ## Deferred from: code review of spec-3-10-cleanup-sweep-async (2026-09-17)
 
-- On SQL Server (the production provider — Azure SQL, no `READ_COMMITTED_SNAPSHOT`/RCSI configured anywhere in this repo), `SweepExpiredAsync`'s eligibility `SELECT` can itself block on row locks held by another household poll's still-in-flight, uncommitted bounded-chunk transaction — SQL Server's default (locking) Read Committed lets a reader block on an uncommitted writer's exclusive locks, unlike Postgres's MVCC (non-blocking reads), which this spec's own concurrency guard (`pg_try_advisory_xact_lock`/`sp_getapplock`) does not address since it only gates the *delete* phase, not this earlier read. Bounded impact: the block, when it happens, is bounded by the winning poll's own one-chunk duration (the same latency this spec's design already accepts for the poll that legitimately does the work) and self-heals on the next poll — not unbounded, not data-corrupting. A full fix (e.g. a scoped `READPAST` table hint on this specific query, or enabling database-wide RCSI) has its own tradeoffs and blast radius (RCSI is a database-wide isolation change) better suited to a dedicated follow-up spec than folding into this bugfix. Raised by adversarial review (Blind Hunter), loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `SweepExpiredAsync`'s eligibility query, `TryAcquireHouseholdSweepLockSqlServerAsync`]
-- The new per-household advisory lock only guards `SweepExpiredAsync`'s bounded-chunk path; `DeleteEligibleAsync` — shared via the extracted `DeleteImportChunkAsync` helper but also called directly by `DeleteJobsAsync` (the manual "clean up everything" endpoint) — acquires no lock. A concurrent manual cleanup and an in-flight automatic sweep chunk for the same household can still contend on real DB row locks, reproducing this spec's own target latency-spike shape for that specific caller pair. Deferred rather than fixed here: this spec's own frozen "Never" boundary explicitly excludes touching `DeleteJobsAsync`'s call path, so closing this gap requires renegotiating that scope, not a patch to the current diff. Raised by edge-case review, loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `DeleteEligibleAsync`, `DeleteJobsAsync`]
+- [open] On SQL Server (the production provider — Azure SQL, no `READ_COMMITTED_SNAPSHOT`/RCSI configured anywhere in this repo), `SweepExpiredAsync`'s eligibility `SELECT` can itself block on row locks held by another household poll's still-in-flight, uncommitted bounded-chunk transaction — SQL Server's default (locking) Read Committed lets a reader block on an uncommitted writer's exclusive locks, unlike Postgres's MVCC (non-blocking reads), which this spec's own concurrency guard (`pg_try_advisory_xact_lock`/`sp_getapplock`) does not address since it only gates the *delete* phase, not this earlier read. Bounded impact: the block, when it happens, is bounded by the winning poll's own one-chunk duration (the same latency this spec's design already accepts for the poll that legitimately does the work) and self-heals on the next poll — not unbounded, not data-corrupting. A full fix (e.g. a scoped `READPAST` table hint on this specific query, or enabling database-wide RCSI) has its own tradeoffs and blast radius (RCSI is a database-wide isolation change) better suited to a dedicated follow-up spec than folding into this bugfix. Raised by adversarial review (Blind Hunter), loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `SweepExpiredAsync`'s eligibility query, `TryAcquireHouseholdSweepLockSqlServerAsync`]
+
+- [open] The new per-household advisory lock only guards `SweepExpiredAsync`'s bounded-chunk path; `DeleteEligibleAsync` — shared via the extracted `DeleteImportChunkAsync` helper but also called directly by `DeleteJobsAsync` (the manual "clean up everything" endpoint) — acquires no lock. A concurrent manual cleanup and an in-flight automatic sweep chunk for the same household can still contend on real DB row locks, reproducing this spec's own target latency-spike shape for that specific caller pair. Deferred rather than fixed here: this spec's own frozen "Never" boundary explicitly excludes touching `DeleteJobsAsync`'s call path, so closing this gap requires renegotiating that scope, not a patch to the current diff. Raised by edge-case review, loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `DeleteEligibleAsync`, `DeleteJobsAsync`]
+
 
 ## Deferred from: code review of spec-db-command-timeout-scope (2026-09-17)
 
-- source_spec: `_bmad-artifacts/implementation/spec-db-command-timeout-scope.md`
-  summary: `ConfigureDbContext` also drives EF Core migrations (and `HouseholdMembershipDbContext`, via the same `AddDbContextFactory<HouseholdMembershipDbContext>(ConfigureDbContext)` registration) — neither ever inherited the removed 120s app-wide `CommandTimeout` in a way this spec re-provisions, so a slow/DTU-throttled migration on a constrained tier (the same failure mode this spec's own incident narrative describes) would now fail at the 30s default instead of 120s, with no explicit `SetCommandTimeout` call anywhere in the migration path.
-  evidence: Raised by edge-case review. Not confirmed as a live incident — migrations run once at deploy/startup, not on the hot request/job path this spec is scoped to (the frozen Boundaries' "Always" section enumerates only `ProcessSmartPlugImport` job call sites) — but the risk mechanism is the same DTU-throttling scenario that motivated the original global bump. Worth revisiting if a migration ever times out on Basic-tier Azure SQL. [src/EnergyTracker.Api/Program.cs:124-156]
-- source_spec: `_bmad-artifacts/implementation/spec-db-command-timeout-scope.md`
-  summary: `ProcessSmartPlugImport.ExecuteAsync`'s reads before `AddAsyncCore` is ever called (`ListPowerPointsAsync`, `FindRoomAsync`, `FindLatestReadingWatermarkByPowerPointAsync`) run on the same scoped `dbContext` this spec elevates to 120s, but execute *before* `AddAsyncCore`'s `SetCommandTimeout` call sets it — so they're exposed to the 30s default, unlike under the old global 120s setting.
-  evidence: Raised by adversarial review (Blind Hunter). The frozen Boundaries' "Always" section explicitly enumerates only write call sites (`AddAsyncCore`, `PersistFailedImportAsync`, `CompleteSmartPlugImportProcessing`) as needing coverage, so this narrower scope appears to be a deliberate design choice rather than an oversight — but it wasn't explicitly reasoned through for these specific lightweight point-queries. Low risk (small/indexed lookups, not the bulk-insert the incident targeted), not fixed here since moving `SetCommandTimeout` any earlier than `ProcessSmartPlugImport.ExecuteAsync` itself (outside `SmartPlugImportRepository` entirely) would be a larger structural change than this spec's scope. Worth reconsidering if DTU throttling is ever observed against these specific reads. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs:38,55,57]
-- source_spec: `_bmad-artifacts/implementation/spec-db-command-timeout-scope.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-db-command-timeout-scope.md`
   summary: No test proves `SetCommandTimeout(120)`'s "carries forward for the rest of this scoped DbContext's job" claim across an actual second method call on the same `DbContext` instance (e.g. `AddAsyncCore` followed by `CompleteSmartPlugImportProcessing`'s `AddGapsAsync`/`RecomputeAsync`) — the new test only asserts the timeout immediately after `AddAsyncCore` returns.
   evidence: Raised by edge-case review and adversarial review (Blind Hunter) independently. Same test-shape convention already accepted for `UpdateMappingAsync`'s existing 180s assertion (immediate, not chained) — not a new gap introduced by this diff's own testing standard, but a real one: the whole design leans on `SetCommandTimeout` persisting on the DbContext instance across later, unrelated method calls, which nothing in this repo's test suite directly exercises end-to-end. Worth a chained-call test if this pattern is ever reused a third time. [tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs]
 
+
 ## Deferred from: code review of spec-power-point-mapping-duplicate-timeout (2026-09-18)
 
-- `UpdateMappingSetBasedWithConflictToleranceAsync`'s new large-mixed-batch test exercises all three classification outcomes only combined in one batch, and only the `KwhValue` branch of the three-way divergence condition (`DeviceName`/`KwhValue`/`IntervalEnd`) — no isolated all-no-conflict, all-exact-duplicate, or all-divergent test exists, and a regression specific to the `DeviceName`-only or `IntervalEnd`-only divergence comparison would not be caught. Separately, the method is reachable via two entry points in `UpdateMappingAsync` (the `AnyMappingConflictAsync` pre-check, and the fast-path's `catch (DbUpdateException or DbException)` race-triggered fallback) but only the pre-check entry point is exercised by any test. Raised by edge-case review. [tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs, src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
-- No test exercises `UpdateMappingSetBasedWithConflictToleranceAsync`'s `importReadings.Count == 0` early-return branch (the fallback triggered for an import with zero readings). Low realistic risk — `AnyMappingConflictAsync`'s own `hasAnyExistingForPowerPoint`/`intervalStarts` checks make this branch hard to reach with zero readings in the first place — but currently silent if it regresses. Raised by adversarial review (Blind Hunter). [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
+- [open] `UpdateMappingSetBasedWithConflictToleranceAsync`'s new large-mixed-batch test exercises all three classification outcomes only combined in one batch, and only the `KwhValue` branch of the three-way divergence condition (`DeviceName`/`KwhValue`/`IntervalEnd`) — no isolated all-no-conflict, all-exact-duplicate, or all-divergent test exists, and a regression specific to the `DeviceName`-only or `IntervalEnd`-only divergence comparison would not be caught. Separately, the method is reachable via two entry points in `UpdateMappingAsync` (the `AnyMappingConflictAsync` pre-check, and the fast-path's `catch (DbUpdateException or DbException)` race-triggered fallback) but only the pre-check entry point is exercised by any test. Raised by edge-case review. [tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs, src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
+
 
 ## Deferred from: code review of story-6.1 (2026-09-18)
 
-- source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
-  summary: Npgsql rejects a `DateTimeOffset` with a non-zero offset written to `timestamp with time zone` (`"only offset 0 (UTC) is supported"`), while SQL Server's `datetimeoffset` accepts it — so a legal ISO 8601 wire value with an explicit offset (e.g. `2026-08-01T09:15:00+02:00`, exactly what project-context.md:100 mandates on the wire) is a 500 on Postgres and a successful write on SQL Server. An AD-2 dual-provider behavioral divergence.
-  evidence: Verified by live probe against a real `postgres:18-alpine` Testcontainer: `DbUpdateException` → `ArgumentException: Cannot write DateTimeOffset with Offset=02:00:00 to PostgreSQL type 'timestamp with time zone', only offset 0 (UTC) is supported.` Raised by edge-case review against `Event`, but **not introduced by story 6.1**: `grep -rn --include="*.cs" -E "ToUniversalTime|UtcDateTime|ToOffset\(" src/` returns zero hits project-wide, so `MeterReading.ReadingTimestamp` and `SmartPlugReading.IntervalStart/End` carry the identical exposure. The React clients all send `Z`, so no current browser path triggers it; any other client, an import path, or a future mobile client would. Fixing it belongs in one place (normalize at the API boundary or on write) across all entities, not as a story-6.1 patch. **Queued 2026-09-18 as `spec-datetimeoffset-utc-normalization.md`** (EF `ConfigureConventions` value converter normalizing to UTC on write, one place, no migration). **Resolved by `spec-datetimeoffset-utc-normalization.md`.** [src/EnergyTracker.Infrastructure/Adapters/EventRepository.cs, src/EnergyTracker.Application/CreateMeterReading.cs]
-- source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
+- [open] source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
   summary: `new Date(datetimeLocalValue).toISOString()` silently rewrites DST-transition local times — a spring-forward gap time (`2026-03-29T02:30` in Europe/Berlin) is normalized forward an hour, and a fall-back ambiguous time resolves to the first (DST) instance. The value posted is not the value the user picked, with no warning on either side.
   evidence: Raised by edge-case review. Pre-existing pattern shared with `log-reading-sheet.tsx`, which uses the same `toDateTimeLocalValue` helper and the same `new Date(...)` conversion — so this is a project-wide backfill-entry characteristic, not a story-6.1 regression. Server-side timestamp checks are only the future-skew and year-2000 floor, neither of which catches it. [web/src/components/event/log-event-sheet.tsx:194, web/src/components/meter-reading/log-reading-sheet.tsx]
-- source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
+
+- [open] source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
   summary: A device clock running more than 5 minutes ahead of the server makes the sheet's *untouched default* timestamp fail validation — the prefill comes from `new Date()` and the server rejects `occurredAt > UtcNow + 5min`, so the user gets a 400 without having edited anything. No client-side `max` on the input and no clamp before send.
   evidence: Raised by edge-case review. Pre-existing: `CreateMeterReading` uses the identical `MaxFutureClockSkew` constant against an identically prefilled `datetime-local` field, so the Log Reading sheet has the same behavior. Worth one shared fix (clamp client-side, or widen/relax the skew rule) rather than a per-feature patch. [web/src/components/event/log-event-sheet.tsx:87, src/EnergyTracker.Application/CreateEvent.cs:38]
-- source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
-  summary: `Events` carries only `HasIndex(e => e.HouseholdId)` — no time-ordered index, whereas the analogous `MeterReading` has `HasIndex(MainMeterId, ReadingTimestamp)` and `AuditCorrection` carries a composite second index. An event log exists to be read chronologically, so the index the eventual timeline read needs is absent.
-  evidence: Raised by adversarial review (Blind Hunter). Not actionable now: story 6.1 deliberately ships no GET/list endpoint (spec Task 3.1 — "nothing in Epic 6 needs a history view yet; don't build one speculatively"), so there is no query to index for yet. Should be added in the same migration as whichever story introduces the Event read path, so it does not require a second standalone migration. [src/EnergyTracker.Infrastructure/Configurations/EventConfiguration.cs:43]
 
-## Deferred from: code review of spec-datetimeoffset-utc-normalization (2026-09-18)
-
-- source_spec: `_bmad-artifacts/implementation/spec-datetimeoffset-utc-normalization.md`
-  summary: `UtcDateTimeOffsetConverter`'s write side (`v.ToUniversalTime()`) can throw `ArgumentOutOfRangeException` for a `DateTimeOffset` near `DateTimeOffset.MinValue`/`MaxValue` combined with a non-zero offset, since shifting the offset can push the instant outside the representable range — trading Npgsql's own "offset 0 only" failure for a different unhandled exception on a narrower input.
-  evidence: Raised by adversarial review (Blind Hunter), loop 1. Not reachable today: both current write paths that accept a client-supplied `DateTimeOffset` (`CreateEvent`, `CreateMeterReading`) already enforce a year-2000 floor and a `+5min` clock-skew ceiling, both far inside the representable range. Would matter for any future write path (e.g. an importer) that accepts an unranged timestamp. [src/EnergyTracker.Infrastructure/Converters/UtcDateTimeOffsetConverter.cs]
-- source_spec: `_bmad-artifacts/implementation/spec-datetimeoffset-utc-normalization.md`
-  summary: EF Core's default `DateTimeOffset` value comparer compares only the UTC instant, ignoring offset (`DateTimeOffset.Equals(DateTimeOffset)` semantics) — so a future write that reassigns an existing non-zero-offset SQL Server row's property to an instant-equal value with a different offset (e.g. an attempted backfill/normalization of legacy data) would be seen as "no change" by EF's change tracking and silently skipped, never reaching the database.
-  evidence: Raised by edge-case review, loop 1. Not reachable today: this spec explicitly does no backfill/rewrite of existing rows (its own I/O matrix: "Existing SQL Server rows with a stored non-zero offset ... no backfill, no rewrite"). Must be considered (e.g. via an explicit `SetValueComparer` keyed on both `UtcTicks` and `Offset`, or an `ExecuteUpdate`/raw-SQL write that bypasses change tracking) before any future story attempts to backfill or normalize existing non-zero-offset rows. [src/EnergyTracker.Infrastructure/EnergyTrackerDbContext.cs]
-- source_spec: `_bmad-artifacts/implementation/spec-datetimeoffset-utc-normalization.md`
-  summary: `EventRepository.AddAsync`/`MeterReadingRepository.AddAsync`/`TariffRepository.AddAsync`/`UpdateAsync`'s post-save `Entry(...).ReloadAsync(...)` (added to make the returned instance reflect the normalized offset) introduces a second DB round trip after the row is already committed — if that reload call itself throws (cancellation, a transient connection blip) the caller sees a failed create/update even though the row persisted; and if the row were ever deleted by a concurrent operation between the save and the reload, the reload would leave the original, non-normalized in-memory value in place with no error.
-  evidence: Raised by edge-case review, loop 2. Not reachable today for the delete scenario: `grep` confirms no code path deletes an `Event`, `MeterReading`, or `Tariff` row anywhere in this codebase (all are append-only/edit-only). The reload-throws scenario is an instance of the same generic two-sequential-DB-call risk `SaveChangesAsync` itself already carries everywhere in this codebase (nothing here specially guards against a network blip between an operation completing server-side and its response reaching the caller) — not a materially new risk, but worth reconsidering if a delete path for any of these three entities is ever added. [src/EnergyTracker.Infrastructure/Adapters/EventRepository.cs, src/EnergyTracker.Infrastructure/Adapters/MeterReadingRepository.cs, src/EnergyTracker.Infrastructure/Adapters/TariffRepository.cs]
 
 ## Deferred from: code review of story-6.2 (2026-09-19)
 
-- source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
-  summary: Non-numeric `page`/`pageSize` query values (e.g. `?page=abc`) fail ASP.NET's minimal-API model binding before `GetEventHistory`'s own guards run, returning a generic ProblemDetails with no `errorCode` extension — the frontend's `messageForEventError` then falls back to a generic message.
-  evidence: Raised by edge-case review and adversarial review (Blind Hunter) independently. Pre-existing pattern, identical in `MeterReadingEndpoints` (this story's own "match precisely" instruction for Task 4.3 established the idiom being mirrored), not introduced by this diff. [src/EnergyTracker.Api/Endpoints/EventEndpoints.cs:61]
-- source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
-  summary: `EventRepository.GetPageForHouseholdAsync`'s `CountAsync` and `Skip`/`Take` are two separate round trips with no transaction/snapshot isolation — a concurrent insert between them can make `TotalCount` and the returned page briefly inconsistent.
-  evidence: Raised by edge-case review. Standard pattern, mirrors the existing `GetMeterReadingHistory` precedent this story was told to follow. [src/EnergyTracker.Infrastructure/Adapters/EventRepository.cs:30]
-- source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
+- [open] source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
   summary: `EventsCard` eager-fetches `GET /api/events` on mount regardless of whether the collapsed-by-default `<details>` is ever expanded, matching `MeterReadingsCard`'s existing idiom — now the 3rd disclosure card on Trend History doing this, so the page issues 3 unconditional collection fetches on every visit.
   evidence: Raised by adversarial review (Blind Hunter). Pre-existing pattern (this story's Task 4.3 explicitly says to match `MeterReadingsCard` precisely), not introduced by this diff, but worth revisiting the eager-fetch idiom itself now that a third instance exists. [web/src/components/trend-history/trend-history-page.tsx]
-- source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
+
+- [open] source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
   summary: AC #3's "still displays after archive" automated coverage only exercises the `Room` tag type — `PowerPoint`/`Device` are only covered for the creation-time archived-rejection path (409), not the persists-after-archive-at-display-time path.
   evidence: Raised by adversarial review (Blind Hunter). Functional risk is low since the display code path (`GetEventHistory`/`EventRepository`/`events-card.tsx`) never branches on tag type — only test coverage is missing. Worth a parametrized test across all 3 types in a follow-up. [tests/EnergyTracker.Infrastructure.Tests/EventRepositoryTests.cs, tests/EnergyTracker.Api.Tests/EventEndpointsTests.cs]
-- source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
-  summary: `EventsCard`'s `page` state has no guard against landing out-of-range if `totalCount` shrinks below the current page (e.g. once an Event-delete feature ships, or another tab mutates data while this card sits open on page 2+).
-  evidence: Raised by adversarial review (Blind Hunter). Not reachable today — no delete affordance exists for Events yet. Worth a guard (clamp `page` or re-fetch page 1) whenever a delete/edit path is added. [web/src/components/event/events-card.tsx:18]
-- source_story: `_bmad-artifacts/implementation/6-2-event-history-view.md`
-  summary: Story 6.1's status flip to `done` (this story's own Task 6) is bundled into the same diff/PR as 6.2's new feature code, coupling the two stories' lifecycle state.
-  evidence: Raised by adversarial review (Blind Hunter). Process/documentation observation, not a code defect — if 6.2 needed a substantial revert post-review, 6.1 would revert alongside it even though none of 6.1's already-shipped code changed in this diff.
 
-## Deferred from: code review of spec-ssh-net-cve-fix (2026-09-20)
 
-- source_spec: `_bmad-artifacts/implementation/spec-ssh-net-cve-fix.md`
-  summary: No CI step turns a NuGet vulnerable-transitive-package advisory (NU1903) into a build failure — `dotnet restore`/`build` only ever emits a non-blocking warning, so the next routine dependency bump could silently reintroduce a vulnerable transitive package (SSH.NET or otherwise) with nothing in `pr-review.yml` to catch it.
-  evidence: Raised by adversarial review (Blind Hunter) against an earlier local-pin approach to this same fix; the gap is systemic (`NuGetAuditMode`/`WarningsAsErrors` configured nowhere in the repo) and pre-existing, not introduced by this fix, which instead tracks Testcontainers' own upstream SSH.NET bump (4.15.0) rather than adding a local override. Worth a dedicated `NuGetAuditMode`/`NuGetAuditLevel` (or `dotnet list package --vulnerable` CI gate) pass covering the whole solution, not just this one advisory.
+## Deferred from: code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
 
-## Deferred from: code review of story-6.3 (2026-09-21)
+- [open] No `aria-live` region on the error/validation-failure states [web/src/components/data-import/data-import-panel.tsx:142] — pre-existing systemic gap: `DataExportPanel`'s identical error-rendering pattern has the same gap, unrelated to this story. Raised by adversarial review (Blind Hunter).
 
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: **RESOLVED — live-verified same session, 2026-09-21, after a user-requested retry.** The Claude-in-Chrome extension initially reported "not connected"; on retry it connected successfully. The AI-disabled path (toggle off, correct "no backend configured" messaging, clean console) and the toggle-on-but-unconfigured-backend path (a real Event logged, `CorrelateEvent` job ran and completed cleanly with no `YearlyBaselineKwh` set, no correlation rendered, no console/network errors) were both confirmed in a real render. Still **not** verified: a real AI classification round-trip and its rendered "Roughly matches the bump/dip seen." copy — no `AiPlausibility:BaseUrl` is configured in this environment, so `IAiPlausibilityClient` resolves to the no-op regardless of the toggle. That narrower gap is covered by `OpenAiCompatibleClientTests` (stubbed HTTP) and `events-card.test.tsx`'s bump/dip component tests, not a live render.
-  evidence: First attempt: `mcp__claude-in-chrome__tabs_context_mcp` → "Browser extension is not connected." Retry: connected; `GET/PUT /api/households/{id}/ai-plausibility` → 200 (network-verified), `POST /api/events` → 200, API log confirmed the `CorrelateEvent` background job transitioned Queued→Processing→Completed with no exception. [N/A — verification gap, not a code location]
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: `CorrelateEvent`/`WindowedDeviationCalculator` do not apply AD-12's "exclude readings at/after an open MeterRegressionPrompt" filter that `GetCurrentStatus` applies via `PatternDetectiveCalculator.ExcludeFromOpenPrompt` — a household with an open regression prompt whose triggering reading falls inside an Event's ±7-day window could have its rough correlation computed from a raw, not-yet-corrected meter delta (e.g. a rollover/reset artifact).
-  evidence: Deliberate scope simplification, not caught by any test (none exists for this interaction). Reasoned low-risk given AC #1's own "rough/approximate signal" framing and UX-DR17's no-false-precision stance — a correlation that's occasionally derived from an uncorrected delta is consistent with the feature's own explicitly-approximate nature — but worth applying the same exclusion `GetCurrentStatus` uses if this proves to generate visibly wrong Bump/Dip results in practice. [src/EnergyTracker.Application/CorrelateEvent.cs, src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: Correlation is computed exactly once, right after `CreateEvent` enqueues the job — a Meter Reading backfilled later with a `ReadingTimestamp` that lands inside an already-correlated Event's ±7-day window never triggers a recompute, so that Event's correlation can permanently understate a deviation that a backfilled reading would otherwise reveal.
-  evidence: Deliberate scope simplification (mirrors AD-10's "derive once, read back forever" discipline this story was told to follow) — no recompute trigger exists in this codebase for any backfill-shaped edit today (e.g. a backfilled Meter Reading doesn't retroactively recompute Pattern Detective's StatusSnapshot history either). Not reachable by any current test. [src/EnergyTracker.Application/CorrelateEvent.cs]
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: For a real-time-logged Event (`OccurredAt` ≈ now), the ±7-day window's forward half has no `MeterReading`s yet when `CorrelateEvent` runs seconds later, since those readings haven't been taken — and because correlation is computed exactly once and never revisited, this is the common case for real-time-logged Events, not just a backfill edge case.
-  evidence: Reinforces the item above (same root cause: no recompute trigger exists in this codebase). Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Application/CorrelateEvent.cs:45-49]
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: `GET`/`PUT /households/{id}/ai-plausibility` call `dbContext.Households.SingleAsync(h => h.Id == id, ...)` with no not-found guard — if the Household row were deleted between authorization and this query, this throws `InvalidOperationException` (unhandled 500) instead of a clean 404.
-  evidence: Pre-existing pattern copied verbatim from the existing GET endpoint (`HouseholdEndpoints.cs:97`), not introduced by this diff, and unreachable today since Households are never deleted in this app. Raised by Edge Case Hunter during code review. [src/EnergyTracker.Api/Endpoints/HouseholdEndpoints.cs:145]
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: AI classification round-trips (`OpenAiCompatibleClient`'s 10s timeout) add contention to the single-worker background job queue (AD-6) — a user backfilling several historical Events in a row could serialize multiple 10-second AI round trips ahead of unrelated queued jobs (e.g. Smart Plug import), with no rate limiting or priority.
-  evidence: Pre-existing AD-6 single-worker limitation this feature exercises more than prior features did; feature is opt-in and defaults off (`Household.AiPlausibilityEnabled` defaults `false`). Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Infrastructure/Adapters/OpenAiCompatibleClient.cs:20-24]
-- source_story: `_bmad-artifacts/implementation/6-3-wattage-plausibility-correlation.md`
-  summary: AC #5 states the choice between a local model and a cloud/external API is "a Household-level setting." The implementation makes only the on/off toggle (`Household.AiPlausibilityEnabled`) Household-scoped; which backend is used is one deployment-wide config value (`AiPlausibility:BaseUrl`/`ApiKey`/`BackendLabel`) read once at the composition root, shared by every Household in the deployment.
-  evidence: Deferred with reason (Ralf, code review 2026-09-21): accepted trade-off vs. AD-8 — deployment-wide backend selection is the correct read of AD-8's "one config value at composition root" rule; AC #5's wording will be corrected to match the code, not the other way around. Raised by the Acceptance Auditor during code review. [src/EnergyTracker.Api/Program.cs:346-363, src/EnergyTracker.Domain/Household.cs]
 
 ## Deferred from: code review of story-7.1 (2026-09-22)
 
-- source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
-  summary: No transactional/snapshot consistency across `HouseholdExportReader.GetExportDataAsync`'s ~12 sequential queries — a concurrent write between, say, the `Rooms` query and the `Events` query can produce an internally inconsistent export document.
-  evidence: Pre-existing pattern: no other multi-query read use case in this codebase (e.g. `GetCurrentStatus`) wraps its reads in a transaction/snapshot either. Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Infrastructure/Adapters/HouseholdExportReader.cs]
-- source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
-  summary: No streaming/size cap on the unbounded full-household JSON export — `Results.File` buffers the entire response into one in-memory `byte[]` (already 32MB/117,770 rows for one real household) before sending, and a disconnecting client doesn't short-circuit the already-completed DB read + serialization work.
-  evidence: Explicitly disclosed trade-off in this story's own Dev Notes "Tier/sync decision": synchronous Tier 2 was the deliberate choice, with the story itself naming the revisit trigger ("if real data volume ever risks the ~240s Container Apps ingress ceiling, that's a reason to revisit, not a reason to default to async now"). Raised by adversarial review (Blind Hunter) and Edge Case Hunter independently during code review. [src/EnergyTracker.Api/Endpoints/HouseholdExportEndpoints.cs]
-- source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
-  summary: `Households.SingleAsync`/`MainMeters.SingleOrDefaultAsync` have no guard against a data-integrity multi-row violation — surfaces as an unhandled `InvalidOperationException` (500) instead of a diagnosable error.
-  evidence: Identical to the existing codebase-wide convention — `HouseholdRepository.cs:99,126` and `MeterReadingRepository.cs:15,41,104` use the same unguarded `SingleAsync`/`SingleOrDefaultAsync` pattern on the same DbSets — not introduced by this diff. Raised by adversarial review (Blind Hunter) and Edge Case Hunter independently during code review. [src/EnergyTracker.Infrastructure/Adapters/HouseholdExportReader.cs:17-26]
-- source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
+- [open] source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
   summary: `TryGetHouseholdId` copy-pasted verbatim into yet another endpoint file — now duplicated across at least `MeterReadingEndpoints`, `EventEndpoints`, and this new `HouseholdExportEndpoints`.
   evidence: Pre-existing pattern this diff extends rather than introduces; a future bugfix to that logic requires remembering to touch every copy. Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Api/Endpoints/HouseholdExportEndpoints.cs]
-- source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
-  summary: Completion Notes claim "no new architecture-test assertion was needed... existing tests already enforce structurally" the `Application/Ports`/`Infrastructure/Adapters` placement convention for the new port/adapter — no `EnergyTracker.Architecture.Tests` file actually does; the four existing ones cover unrelated concerns (Domain isolation, frontend auth tokens, Pattern Detective data isolation, Eve Home parser convention).
-  evidence: Documentation-accuracy nit only, not a functional gap — Task 2's phrasing was conditional ("if... needs a new architecture-test assertion... add it"), so skipping this isn't a requirement violation. Raised by the Acceptance Auditor during code review.
+
+
+## Deferred from: code review of spec-household-export-oom-fix (2026-09-25)
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
+  summary: The new `(HouseholdId, IntervalStart, Id)` composite index on `SmartPlugReadings` makes the pre-existing standalone `HouseholdId` index largely redundant (leftmost-prefix rule), but that older index wasn't removed, adding a fourth index's write overhead to the highest-ingest-volume table in the schema — the very table whose volume caused this incident.
+  evidence: Raised by adversarial review (Blind Hunter). Real but out of this bugfix's stated Code Map scope (which only asked for the new composite index); dropping an index other query paths might still rely on deserves its own explicit look, not a silent removal bundled into an incident fix.
+
+- [open] source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
+  summary: `HouseholdExportStream`'s write side (`HouseholdExportEndpoints.WriteExportAsync`) hardcodes top-level JSON property-name string literals that must stay in sync with `HouseholdExportResult`'s property names (the untouched import/restore wire contract) by convention only — no test deserializes streamed output back into `HouseholdExportResult` to catch future drift if either side is renamed.
+  evidence: Raised by adversarial review (Blind Hunter). Real but narrow: both records are currently structurally identical and were introduced together in this same diff (see the Spec Change Log's "Ask First" resolution); a round-trip parity test would close this permanently but was judged lower priority than the flush-cadence fix and the Events pagination gap given this fix's time budget.
+
 
 ## Deferred from: code review of story-8.2 (2026-09-26)
 
-- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
-  summary: Cross-surface inconsistency — `trend-history-page.tsx`'s identical Smart Plug Import button stays icon-only/unlabeled while the Dashboard's version now shows a visible "Import" label, until Story 8.3 reuses the same `smartPlugImport.shortLabel` i18n key.
-  evidence: Deliberate per this story's own Dev Notes (the key was placed for Story 8.3 to reuse), but no in-code comment on `trend-history-page.tsx` flags the asymmetry as time-boxed. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/trend-history-page.tsx:82-86]
-- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
-  summary: `shrink-0` retained unconditionally on the header-icon buttons now that they become auto-width pills at ≥660px — no wrap/truncation fallback if header content grows (a longer future locale string, an added icon).
-  evidence: Pre-existing shape convention extended rather than introduced fresh; currently unreached since both labels are short in both locales. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/dashboard/dashboard-page.tsx:143,158]
-- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
   summary: New Playwright locators hardcode English translation strings (`'Log an Event'`, `'Import Smart Plug data'`), coupling a layout/breakpoint regression test to content text — any future copy change unrelated to layout would break it.
   evidence: Same fragility pattern already present in the nav-chrome spec this test is modeled on, propagated rather than fixed. Raised by adversarial review (Blind Hunter) during code review. [web/e2e/app-shell.spec.ts]
-- source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
+
+- [open] source_story: `_bmad-artifacts/implementation/8-2-dashboard-desktop-tablet-layout.md`
   summary: No automated (unit or e2e) regression coverage for AC #2's CTA-adjacency claim ("Log reading" renders directly following the cards, not floating).
   evidence: Acknowledged gap in the story's own Debug Log/Completion Notes — a fully populated `StatusCard` state (needed to exercise the real `showPopulated` branch) wasn't reachable in the dev sandbox. Raised by the Acceptance Auditor during code review. [web/src/components/dashboard/dashboard-page.tsx]
 
+
 ## Deferred from: code review of story-8.3 (2026-09-26)
 
-- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
   summary: No automated check ties the translated `shortLabel` to being a case-insensitive substring of the translated `entryPointLabel` (WCAG 2.5.3, Label in Name) — holds for the current en-US/de-DE strings (manually verified in Story 8.2) but nothing would catch a future locale or copy edit that breaks the relationship.
   evidence: Pre-existing pattern from Story 8.2, not introduced fresh here. Raised by adversarial review (Blind Hunter) during code review. [web/src/locales/en-US/translation.json, web/src/locales/de-DE/translation.json]
-- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
-  summary: All new/extended tests for this story (unit and e2e) exercise only English copy — no coverage proves the Import label or the 660px column survive a longer translated string (e.g. German) without overflow at the `wide:` breakpoint.
-  evidence: Same gap already present since Story 8.2's identical Import-button pattern, not specific to this diff. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/trend-history-page.test.tsx, web/e2e/app-shell.spec.ts]
-- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
+
+- [open] source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
   summary: `MeterReadingsCard`'s trailing action-column `<TableHead />` remains unlabeled (no accessible column name for screen readers) — this diff only added `w-px` to it.
   evidence: Missing label predates this story; pre-existing gap not caused by this change. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/meter-reading/meter-readings-card.tsx:97]
-- source_story: `_bmad-artifacts/implementation/8-3-trend-history-desktop-tablet-layout.md`
-  summary: No visual-regression/screenshot testing exists anywhere in this repo to actually verify the claimed visual outcomes (Meter Readings dead-space elimination, quiet-vs-glass tier flattening) — automated coverage only checks class names and bounding-box numbers, never a rendered comparison.
-  evidence: Repo-wide tooling gap, not something one story should introduce alone. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/trend-history/per-plug-data-card.tsx, web/src/components/meter-reading/meter-readings-card.tsx]
+
+
+## Deferred from: code review of 8-5-settings-desktop-tablet-layout (2026-09-28)
+
+- [open] `InviteGeneratePanel`'s `handleGenerate` has no abort-on-unmount guard for its in-flight `POST /api/household-invites`, so closing the wide-mode dialog mid-request discards the server-created invite token client-side [web/src/components/household-invite/invite-generate-panel.tsx:20-44] — deferred, pre-existing behavior of a component this story intentionally left unmodified; newly reachable via the new Dialog call site but low probability/consequence. Raised by the Edge Case Hunter.
+
 
 ## Deferred from: code review of story-8.4 (2026-09-28)
 
-- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
   summary: The new e2e case only asserts `tariff-radar-content`'s width is bounded (`>600px` and `<=660px`), never that the column is actually centered (`wide:mx-auto`) — an accidental `mr-auto`/removed `mx-auto` leaving it capped-but-left-aligned would still pass.
   evidence: Pre-existing pattern — `dashboard-content`/`trend-history-content`'s own e2e assertions (Story 8.2/8.3) have the identical width-only gap. Raised by adversarial review (Blind Hunter) during code review. [web/e2e/app-shell.spec.ts]
-- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
-  summary: All new/extended tests for this story (unit and e2e) exercise only English copy and short EUR/USD-style currency codes — no coverage proves the paired `wide:flex-1` fields survive a longer localized label/unit (e.g. German "Wechselbonus") without wrapping or clipping right at the 660px boundary.
-  evidence: Same gap Story 8.3's own Review Findings already deferred for its Import label/660px column, not specific to this diff. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/tariff/tariff-configuration-form.test.tsx, web/src/components/tariff/tariff-comparison-form.test.tsx, web/e2e/app-shell.spec.ts]
-- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
-  summary: The new Tariff Radar e2e case is one 150-line `test()` covering five unrelated concerns (narrow stacking, exact-boundary check, wide pairing, column width, post-submit card-tier/backdropFilter) with no checkpoints — an early failure prevents every later assertion, including the fully independent AC #3 card-tier check, from running in that CI pass.
-  evidence: Pre-existing structure inherited verbatim from the Dashboard/Trend History cases (Stories 8.2/8.3) this one mirrors, not introduced fresh here. Raised by adversarial review (Blind Hunter) during code review. [web/e2e/app-shell.spec.ts]
-- source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
-  summary: Nothing in this diff or its tests confirms keyboard tab order survived wrapping previously-sibling field divs in new intermediate row-wrapper divs at ≥660px.
-  evidence: No story in this codebase tests keyboard tab order anywhere; a repo-wide gap, not something one story should introduce alone. Raised by adversarial review (Blind Hunter) during code review. [web/src/components/tariff/tariff-configuration-form.tsx, web/src/components/tariff/tariff-comparison-form.tsx]
+
 
 ## Deferred from: code review of story-8-6-wide-column-increase-across-all-surfaces (2026-09-29)
 
-- source_story: `_bmad-artifacts/implementation/8-6-wide-column-increase-across-all-surfaces.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-6-wide-column-increase-across-all-surfaces.md`
   summary: Settings and Tariff Radar wrappers have no unit-level assertion of the `wide:max-w-[900px]` class (Tariff Radar has no page test file at all); the cap on those two pages is guarded only by e2e.
   evidence: Pre-existing coverage gap noted in the story's Dev Notes. Raised by Edge Case Hunter during code review. [web/src/components/settings/settings-page.test.tsx, web/src/components/tariff/tariff-radar-page.tsx]
 
-## Deferred from: code review of story-8-7-meter-readings-events-tariff-history-entry-grid (2026-09-29)
-
-- source_story: `_bmad-artifacts/implementation/8-7-meter-readings-events-tariff-history-entry-grid.md`
-  summary: When `totalCount > 0` but `items` is empty (current page beyond the last after a deletion), Meter Readings, Events and Tariff History render an empty table/grid with no message.
-  evidence: Pre-existing in the table branch; the new grid branch copies the same guard. Raised by Edge Case Hunter during code review. [web/src/components/meter-reading/meter-readings-card.tsx, web/src/components/event/events-card.tsx, web/src/components/tariff/tariff-history-list.tsx]
-
-- source_story: `_bmad-artifacts/implementation/8-7-meter-readings-events-tariff-history-entry-grid.md`
-  summary: `Intl.DateTimeFormat.format(new Date(item.occurredAt))` throws `RangeError` on an unparseable `occurredAt`, which would blank the whole Events card.
-  evidence: Pre-existing in the table row; the tile branch repeats it. Raised by Edge Case Hunter during code review. [web/src/components/event/events-card.tsx]
 
 ## Deferred from: code review of 8-10-theme-toggle-profile-menu (2026-09-30)
 
-- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
-  summary: `PreferenceStrip` does not guard input while `pendingValue` is set (double clicks/arrows fire concurrent `onChange`), announces no "saving" state, and computes the arrow index from `value` rather than the focused segment.
-  evidence: Only matters once Story 8.11 makes the strip async. **Resolved by Story 8.11** (input ignored while pending, focused-index arrows, no-checked fallback; the saving state is announced via the Profile menu's live region). [web/src/components/preferences/preference-strip.tsx]
-
-- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Radix `role="menu"` now contains non-menuitem radiogroups (wrapped in `role="none"`); screen-reader menu navigation may skip them. Popover fallback not evaluated.
   evidence: Design-level; revisit with 8.11/8.12. Still open after 8.12 (Profile-menu-specific; the Settings card is plain-page context with correct radiogroup semantics). [web/src/components/dashboard/profile-menu.tsx]
 
-- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
-  summary: `PreferenceRow` uses `whitespace-nowrap` on label and sub-label with no truncation/wrap fallback; will overflow in the Settings card below 660px.
-  evidence: Deferred to Story 8.12. **Resolved by Story 8.12** (in-card rows drop horizontal padding via `rowClassName`; Playwright proves no wrap/overflow at 320/340px in en-US and de-DE, online and offline — no truncation needed). [web/src/components/preferences/preference-row.tsx]
-
-- source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Spinner ignores `prefers-reduced-motion`; nothing asserts `index.html`'s inline theme script (key, colours) stays in sync with `color-scheme.ts`.
   evidence: Low. **Spinner half resolved by Story 8.11** (`motion-safe:animate-spin`); the inline-script drift test is still open. [web/src/components/preferences/preference-strip.tsx, web/index.html]
 
+
 ## Deferred from: code review of 8-12-settings-preferences-card-mobile (2026-09-30)
 
-- source_story: `_bmad-artifacts/implementation/8-12-settings-preferences-card-mobile.md`
+- [open] source_story: `_bmad-artifacts/implementation/8-12-settings-preferences-card-mobile.md`
   summary: Crossing 660px while a Language save is in flight unmounts the Preferences card, dropping the screen-reader announcement and any error alert.
   evidence: Low, rare. Fix would lift the live region above the `!wide` gate in `SettingsPage`. [web/src/components/preferences/preferences-card.tsx]
 
-- source_story: `_bmad-artifacts/implementation/8-12-settings-preferences-card-mobile.md`
-  summary: The 660px breakpoint is duplicated in CSS `--breakpoint-wide`, `WIDE_QUERY` in `use-wide-breakpoint.ts`, and the e2e viewport sizes, with no enforcement that they stay in sync.
-  evidence: Low, pre-existing (hook predates 8.12). [web/src/hooks/use-wide-breakpoint.ts]
 
 ## Deferred from: locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
@@ -528,34 +382,48 @@
   summary: Icon-only header buttons below 660px (Import in `trend-history-page.tsx`, and the Dashboard Event/Import equivalents) are `size-10` (40px) with no `::before` hit-area extension, so the touch target is 40px, not the 44px the sweep spec and Stories 8.2/8.3 assumed.
   evidence: Hit-testing 2px outside each edge of the 659px Import button lands outside the button on all four sides; the e2e test pins the 40px box. Fix is `size-11` or a `::before` extension, a visual change deferred for a decision. [web/src/components/trend-history/trend-history-page.tsx:84]
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
-  summary: Sweep audit depth gaps: ancestor opacity, backdrop-filter and pseudo-element backgrounds are not modelled in the contrast backdrop; placeholder/input-value text, WCAG 1.4.11 non-text (UI component) contrast and vertical clipping are not audited; per-cell layout identity covers only the nav chrome (not the Settings Preferences card); locale number/date formatting is not asserted beyond `<html lang>`; translucent layers resolve via a 1×1 canvas with premultiplied-alpha precision loss.
-  evidence: Raised by the quick-dev review of the sweep; none produced a false result in the 48-cell run, and elements over gradients/images are skipped and counted in the `contrast-skipped` annotation. [web/e2e/locale-theme-sweep.spec.ts]
 
 ## Deferred from: keyboard tab-order check (spec-tab-order-check, 2026-10-02)
-
-- [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
-  summary: At ≥660px NavChrome (top nav + Profile avatar) is visually first but last in the DOM, so keyboard users Tab through the whole page before reaching it (WCAG 2.4.3 Focus Order). Kept deliberately by Story 8.1 (`wide:order-first`) so phones keep the bottom bar last.
-  evidence: Pinned by `web/e2e/tab-order.spec.ts` on all four screens (it fails if the nav moves in the DOM, so the fix must update the pin). Candidate fixes: render the nav first in the DOM at ≥660px via `useWideBreakpoint` (touches `nav-chrome.tsx` and the four page mounts; watch the 660px boundary), or add a skip link plus `<nav aria-label>` landmarks (new UI and strings in both catalogs). Needs its own story. [web/src/components/dashboard/nav-chrome.tsx:48]
-
-- [resolved: spec-tab-order-check] source_story: `_bmad-artifacts/implementation/8-4-tariff-radar-desktop-tablet-layout.md`
-  summary: Earlier entry "Nothing … confirms keyboard tab order survived wrapping previously-sibling field divs in new intermediate row-wrapper divs at ≥660px" (Tariff configuration and comparison forms) and the repo-wide "no tab-order tests" gap.
-  evidence: `web/e2e/tab-order.spec.ts` now asserts tab order = visual order for the paired Tariff fields (add and compare forms), Settings `wide:order-N` sections incl. the AI Plausibility + Household pair, the entry grids and the Profile menu cycle (Epic 8 retro action #2). No divergence found apart from the NavChrome entry above.
 
 - [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
   summary: Nothing enforces that a new `wide:order-*` / reordering class gets a tab-order test; the rule in `project-context.md` is prose only.
   evidence: Raised by the quick-dev review. A source-scan guard test (every file using `wide:order-`/`order-first` must be named in `tab-order.spec.ts`) would close it, like the architecture guard tests. [web/e2e/tab-order.spec.ts]
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
-  summary: Tab-order coverage gaps: the tagging-scaffold wide grid (expanded `col-span-full` tiles), Dashboard reordering, Events tiles (no focusable controls), Settings at 659px, the Profile menu below 900px and other close paths (outside click), and non-Chromium browsers.
-  evidence: Review-found; none has a known defect (tagging grid sets no `dense` flow, Dashboard has no `wide:order-*`). The current spec covers the surfaces named in Epic 8 retro action #2. [web/e2e/tab-order.spec.ts]
 
 ## Breakpoint/column drift guard (spec-breakpoint-drift-test, Epic 8 retro action #3)
-
-- [resolved: spec-breakpoint-drift-test] source_spec: `_bmad-artifacts/implementation/spec-breakpoint-drift-test.md`
-  summary: Resolves the Story 8.12 deferral that the 660px breakpoint lives in `--breakpoint-wide`, `WIDE_QUERY` and e2e with no sync check, and the repetition of `max-w-[900px]` across four pages. `web/src/layout-constants.drift.test.ts` now fails naming any copy that drifts.
-  evidence: Verified by mutation (breakpoint 700px, one wrapper 880px): the test fails naming the stale copies. The earlier entry on Settings and Tariff Radar lacking unit-level `wide:max-w-[900px]` assertions stays [open]; the drift test only checks the class value, not that each page has a unit test.
 
 - [open] source_spec: `_bmad-artifacts/implementation/spec-breakpoint-drift-test.md`
   summary: The drift test is value-based and px-only; the underlying duplication remains. A shared exported breakpoint constant (hook `WIDE_QUERY`, `wide-viewport.ts` stub) would remove two copies outright, but needed a production change that the spec's Ask First reserved.
   evidence: Review-found. Not scanned: rem/em units, `max-width` queries, `min-[Npx]:` variants, column assertions outside `app-shell.spec.ts`. [web/src/layout-constants.drift.test.ts]
+
+## Deferred from: story creation for Epic 10 (10-1-migration-safety-on-deploy, 2026-10-02)
+
+- [open] source_story: `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md`
+  summary: Self-hosters may have no documented way to apply EF Core migrations: grep finds no migration step in `docker-compose.yml`, `Dockerfile` or `docs/self-hosting.md`, and the API never calls `Migrate()`/`MigrateAsync()` (only `scripts/migrate.sh` is documented, in `docs/local-development.md`).
+  evidence: Found while grounding story 10.1 (originally the Story 1.1 entry, marked resolved on the strength of `docs/local-development.md:32` alone). Not verified end to end against a fresh self-host install; kept out of 10.1's scope. [docs/self-hosting.md, docker-compose.yml]
+
+## Deferred from: code review of 10-1-migration-safety-on-deploy (2026-10-02)
+
+- [open] Expand/contract rule in `project-context.md` is advisory prose only: no lint, review-checklist item or test, and the destructive-change list omits index/constraint drops, type changes, data-modifying `Sql()` and unique indexes on existing data.
+- [open] No long-term retention (LTR) configured: a bad migration noticed after the 7-day PITR window is unrecoverable; not documented as an accepted risk.
+- [open] Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name the Azure role needed for `az sql db restore`/`rename`.
+- [open] Pending-migrations list in the restore-point block runs once before the retry loop and can read "unavailable" while the firewall rule is still propagating.
+
+## Deferred from: story 10-2-event-correlation-forward-window-recompute (2026-10-02)
+
+- [open] `CorrelateEvent` `BackgroundJob` rows are never swept (the 30-day sweep only covers `ProcessSmartPlugImport` rows, `SmartPlugImportRepository.cs`); story 10.2 adds a handful more per Meter Reading write inside an Event window. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
+- [open] After a regression-prompt resolve, the re-evaluated set is "Events since the trigger", uncapped; typically a handful. [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs]
+- [open] A correlation can flip or disappear as readings arrive (latest evaluation wins); by design, but not announced in the UI.
+- [open] When the AI answers "None" for a persisting deviation, every later in-window reading costs one AI call: the two persisted columns cannot distinguish "evaluated, no match" from "never evaluated". Bounded by readings per ±7-day window. Epic 9 stories 9.3/9.4 live verification should include one forward-window recompute against the real backend.
+- [open] The requeue trigger skips AI-off Households (documented AD-8 exception, Ask First #3, Ralf 2026-10-02), so enabling the Settings toggle does not re-evaluate existing Events until a Meter Reading in their window next changes. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+
+## Deferred from: code review of story-10-2 (2026-10-02)
+
+- Same-timestamp tiebreak in `WindowedDeviationCalculator.ExcludeAtOrAfter` (and the in-memory ordering in `CorrelateEvent`) uses .NET `Guid.CompareTo`, which can differ from the database `uuid` ordering; only matters for readings with an identical `ReadingTimestamp` at the open-prompt boundary. [src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
+- Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event, and the job rows are never swept (overlaps the existing `[open]` sweep entry). [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+- Per-Event dedup of requeued `CorrelateEvent` jobs (review decision 2c) needs an Event reference on `BackgroundJob` (new column/migration); not possible inside story 10.2 (AC #10: no migration). Concurrent jobs for one Event remain last-write-wins. [src/EnergyTracker.Application/RequeueEventCorrelations.cs] Reason: Ralf accepts last-write-wins (2026-10-02).
+
+## Deferred from: code review of story 10-3-navchrome-dom-order-tab-order (2026-10-04)
+
+- [open] An open Account menu stays open when the window is resized below 660px, because its trigger sits in the top nav, which becomes `display:none`; the same behaviour existed before 10.3. Seen in the 10.3 live gate. [web/src/components/dashboard/profile-menu.tsx]
+- [open] No automated guard that the bottom tab bar stays pinned to the viewport bottom (`mt-auto`) on a short page at <660px; `tab-order.spec.ts` only checks it sits below the content, and unit tests check the class string. [web/src/components/dashboard/nav-chrome.tsx]

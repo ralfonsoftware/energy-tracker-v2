@@ -170,10 +170,9 @@ describe('DashboardPage', () => {
   })
 
   it('renders the top nav chrome variant through the real page prop chain, and its Settings tap also calls onSettingsClick (Story 8.1)', async () => {
-    // Regression guard: every other test in this file resolves the ambiguous duplicate nav
-    // buttons via getAllByRole(...)[0], which is always the bottom-tab-bar instance — the
-    // wide:flex top-nav variant (index [1]) was previously only exercised by nav-chrome.test.tsx's
-    // isolated unit test with mocked callbacks, never through a real page's prop chain.
+    // Regression guard: most tests in this file click whichever nav variant getAllByRole(...)[0]
+    // returns. This one scopes to the wide:flex top-nav variant by data-slot (DOM order flipped in
+    // Story 10.3, so an index no longer identifies it) and drives it through the real page prop chain.
     const user = userEvent.setup()
     const onSettingsClick = vi.fn()
     render(
@@ -199,13 +198,44 @@ describe('DashboardPage', () => {
       />,
     )
 
-    const settingsButtons = screen.getAllByRole('button', { name: 'Settings' })
-    expect(settingsButtons).toHaveLength(2)
-    await user.click(settingsButtons[1])
+    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(2)
+    const topNav = document.querySelector<HTMLElement>('nav[data-slot="nav-chrome-top"]')!
+    await user.click(within(topNav).getByRole('button', { name: 'Settings' }))
     expect(onSettingsClick).toHaveBeenCalledOnce()
 
     await user.click(screen.getByRole('button', { name: 'Account menu' }))
     expect(await screen.findByText('member@example.com')).toBeInTheDocument()
+  })
+
+  it('mounts the top nav first and the bottom nav last in <main>, so focus order follows reading order (Story 10.3)', () => {
+    render(
+      <DashboardPage
+        household={household}
+        supportsFederatedLogout={true}
+        email={null}
+        status={null}
+        statusLoading={false}
+        tariffCheck={null}
+        playStatusEntranceAnimation={true}
+        logSheetOpen={false}
+        onLogSheetOpenChange={noop}
+        logEventOpen={false}
+        onLogEventOpenChange={noop}
+        onReadingSaved={noop}
+        openRegressionPrompt={null}
+        onRegressionResolved={noop}
+        onSettingsClick={noop}
+        onTrendHistoryClick={noop}
+        onTariffRadarClick={noop}
+        onSmartPlugImportClick={noop}
+      />,
+    )
+
+    const main = screen.getByRole('main')
+    expect(main.firstElementChild).toHaveAttribute('data-slot', 'nav-chrome-top')
+    const navs = main.querySelectorAll(':scope > nav[data-slot]')
+    expect(navs[navs.length - 1]).toHaveAttribute('data-slot', 'nav-chrome-bottom')
+    expect(main.querySelectorAll('nav[data-slot]')).toHaveLength(2)
   })
 
   it('tapping Trend History in the nav chrome calls onTrendHistoryClick (Story 4.1 — the standalone History trigger it replaces was removed)', async () => {

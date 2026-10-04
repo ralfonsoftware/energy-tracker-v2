@@ -1,6 +1,6 @@
 # generated: 2026-08-09
 # last_updated: 2026-10-02
-# Dated change history prior to 2026-09-23 archived to sprint-status-history.md (token optimization; none of it was machine-read by any BMAD skill).
+# Dated change history prior to 2026-09-23 archived to sprint-status-history.md, as are done action items (removed 2026-10-02) (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
 # ==================
@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-10-02
+last_updated: 2026-10-04
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -132,202 +132,15 @@ development_status:
   9-4-production-implementation-self-hosting: backlog
   epic-9-retrospective: optional
 
+  epic-10: in-progress
+  10-1-migration-safety-on-deploy: done
+  10-2-event-correlation-forward-window-recompute: done
+  10-3-navchrome-dom-order-tab-order: done
+  epic-10-retrospective: optional
+
 action_items:
-  - epic: 7
-    action: "Add observability to the household-export success path (duration, per-collection row counts, page round trips) — the OOM incident went undetected until it actually crashed; nothing today would show a future household trending toward the same danger zone before it repeats"
-    owner: "Winston/Amelia"
-    status: done
-    note: "2026-09-26 epic-7 retro, Epic 8 kickoff check. Traces to spec-household-export-oom-fix.md's own deferred-work entry (production OOM incident 2026-09-25, PR #70)."
-  - epic: 7
-    action: "Define a new epic for the Wattage Plausibility AI backend decision, sequenced: (1) spike narrowing Azure AI Foundry vs. self-hosted vs. cloud API, (2) deeper research/evaluation of production rollout + self-hosting options, (3) production implementation (Azure-hosted), (4) production implementation (self-hosting)"
-    owner: "John (epic definition)/Ralf"
-    status: done
-    note: "2026-09-26 epic-7 retro. Escalated from Epic 6 Action Item #2 (open 2 epics without a decision) at Ralf's explicit direction — no longer tracked as a lingering action item, promoted to its own epic before Epic 8 sequencing locks in. Closed same day (John): epics/epic-9-wattage-plausibility-ai-backend-decision.md created (4 stories as sequenced), epic-list.md/requirements-inventory.md cross-referenced, PRD updated (FR-17 consequence note + Open Question 5), sprint-status.yaml epic-9 backlog added. Backend choice itself remains open pending Story 9.1's spike — tracked there, not here."
-  - epic: 4
-    action: "No fix to already-shipped code merges without a linked spec/story doc, regardless of size or urgency — hard gate at PR merge, no exceptions"
-    owner: "PR authors/reviewers"
-    status: done
-    note: "2026-09-11 epic-4 retro. PR #40/#41 both fixed real production-surfaced integration gaps with zero spec/story trail beforehand, unlike three sibling one-shots in the same window that used spec-*.md fine. Root cause: timing pressure during/after an incident, not missing machinery. Verified 2026-09-23: never had a durable mechanism (no project-context.md entry, no CI/PR gate) — same 'held on attentiveness, not a mechanism' gap already called out on the i18n/unmounted-guard action item above — and it recurred at smaller scale since the retro (1b1960c, ee178cc, b40902a: CI/test-flakiness fixes merged to main with no linked spec). Closed by adding it to project-context.md's Critical Don't-Miss Rules directly (new 'Process gates' subsection), the same durable-mechanism fix already used for the i18n/unmounted-guard item, since that file is an auto-loaded persistent_fact for bmad-dev-story and bmad-code-review."
-  - epic: 4
-    action: "A story with OIDC/claim/browser-dependent behavior cannot move review->done without live Auth0/Chrome verification actually performed during that review session; if Chrome isn't available in that session, the story stays blocked in review — it never ships anyway"
-    owner: "code reviewers"
-    status: done
-    note: "2026-09-11 epic-4 retro. 3.5/3.6/4.1/4.2 all deferred live verification with no follow-up mechanism; the one time it was checked (3.6, during code review) it found a real live-broken bug (ClaimTypes.Name never populates against this app's Auth0 config) that automated tests couldn't catch. Verified 2026-09-23: the gate held without a single exception across every OIDC/browser-dependent story since — 6.1/6.2/6.3 (epic-6 retro readiness note), 7.1, and 7.2 (this story's own Task 7/8) each performed a genuine live Auth0/Chrome session before reaching done; Story 6.2's near-miss (Task 7 checked off on a component test alone, caught in review) is what produced the sharper epic-6 Action Item #1 dev-story-time refinement — still open separately, out of scope here. Closed by adding it to project-context.md's Critical Don't-Miss Rules 'Process gates' subsection, the same durable-mechanism fix already used for the hotfix-gate item above."
-  - epic: 4
-    action: "Add non-blocking checklist reminders to dev-story/review: verify locale/date/number formatting goes through Intl.* (never hardcoded); verify effect cleanup/unmounted-guards on async operations (uploads, polling, fetches)"
-    owner: "story authors/reviewers"
-    status: done
-    note: "2026-09-11 epic-4 retro. i18n-hardcoding recurred 3x (3.6, 4.1, 4.2) and missing-unmounted-guard bugs recurred 3x (3.5, 3.6, 4.3) — always caught in review, never reached production, so a lightweight non-blocking reminder rather than a hard gate. Closed 2026-09-17 (epic-5/1.12 retro) — zero recurrence of either pattern across any Epic 5 or Story 1.12 review finding, BUT this action item was itself never actually materialized anywhere durable (no project-context.md entry, no customize.toml override) — it held on attentiveness, not a mechanism. Corrected going forward: the two new epic-5 checklist-reminder action items below were added to project-context.md's Critical Don't-Miss Rules directly, since that file is already an auto-loaded persistent_fact for both bmad-dev-story and bmad-code-review — don't repeat this item's gap of leaving a 'reminder' unwritten."
-  - epic: 5
-    action: "At Story 5.1 kickoff, verify the AuditCorrection/IAuditCorrectionRecorder + AD-4 concurrency abstraction (built generic in Story 2.8) holds up unmodified for Tariff — its second real consumer after Meter Reading"
-    owner: "story author (create-story)"
-    status: done
-    note: "2026-09-11 epic-4 retro, next-epic prep. Closed 2026-09-17 (epic-5 retro) — held, needed one additive IAuditCorrectionRecorder port method (GetLatestPerFieldForEntitiesAsync) for Tariff's 5 independently-correctable fields; MeterReading's existing single-field usage untouched."
-  - epic: 5
-    action: "At Story 5.2 kickoff, verify Domain.Calculations.BonusDecayNormalizer (AD-5) as its first real consumer — nothing has called it yet"
-    owner: "story author (create-story)"
-    status: done
-    note: "2026-09-11 epic-4 retro, next-epic prep. Closed 2026-09-17 (epic-5 retro) — verified line-for-line against mockups/key-tariff-radar.html's own worked numbers before being trusted."
-  - epic: 5
-    action: "For any Epic 5 story touching production writes, verify AD-21's actual Azure permission grants against the real operation early, not after deploy"
-    owner: "story author/dev"
-    status: done
-    note: "2026-09-11 epic-4 retro, next-epic prep. Closed 2026-09-17 (epic-5 retro) as not-applicable — no Epic 5 story added new bulk-write or infra surface; Tariff CRUD used the existing, already-provisioned EF Core write path."
-  - epic: 1
-    action: "Add a required, blocking 'verified against the real deployed environment' AC for any story touching auth, ingress, proxy config, or the deploy pipeline"
-    owner: "story authors/reviewers"
-    status: done
-    note: "Closed 2026-08-23 (epic-3 retro) as superseded — the Auth0 test-user + live-Chrome verification capability from Epic 2's retro closes the underlying gap this AC-gate targeted."
-  - epic: 1
-    action: "Document known local-vs-Azure behavior deltas (forwarded headers/HTTPS, Postgres region restrictions, ACR credential timing, empty-secret ACA validation) in one place for story-definition-time reference"
-    owner: "Winston (architecture)"
-    status: done
-  - epic: 1
-    action: "Add OpenTelemetry (logs/metrics/traces) to the API, OTLP-exportable; local dev wired to a .NET Aspire dashboard via docker-compose.yml"
-    owner: "Amelia/Winston"
-    status: done
-  - epic: 1
-    action: "Provision Application Insights on Azure as the OTel export target, layered on the existing Log Analytics workspace"
-    owner: "Winston"
-    status: done
-  - epic: 1
-    action: "Add a daily ingestion cap (Bicep param, default 1 GB/day) on Application Insights and Log Analytics"
-    owner: "Winston"
-    status: done
-  - epic: 1
-    action: "Add a cap-triggered alert (Azure Monitor action group) emailing a Bicep-param-defined notification address"
-    owner: "Winston"
-    status: done
-  - epic: 1
-    action: "Document the OTel/App Insights/ingestion-cap additions as an extension of AD-19 in the architecture spine"
-    owner: "Winston"
-    status: done
-  - epic: 1
-    action: "Wire DESIGN.md's real design tokens (surface-glass, brand-accent, status badge colors, typography scale) into web/src/index.css, replacing stock shadcn defaults"
-    owner: "Sally/Amelia"
-    status: done
-  - epic: 1
-    action: "Sweep existing Epic 1 UI (household creation/invite, settings, room/power-point/device management) to use the real design tokens instead of shadcn defaults"
-    owner: "Sally/Amelia"
-    status: done
-  - epic: 2
-    action: "Add a story for Room/PowerPoint/Device re-parenting near the end of Epic 2 (deferred in Story 1.9, reintroduced due to real daily use surfacing reorganization needs)"
-    owner: "John (epic definition)"
-    status: done
-  - epic: 1
-    action: "Document that the local Auth0 client registration referenced by .env is intentionally separate from the production registration (setup already correct, just undocumented)"
-    owner: "Amelia (doc-only)"
-    status: done
-  - epic: 2
-    action: "Create a dedicated Auth0 test user for the local dev app registration and document it in docs/local-development.md/.env.example, enabling real browser-driven live verification (Ralf will ensure Chrome availability going forward)"
-    owner: "Winston/Amelia"
-    status: done
-  - epic: 2
-    action: "Root-cause the npx shadcn add CLI alias-misresolution bug (writes to web/@/components/ui/ instead of web/src/components/ui/, hit 3x this epic) — fix the underlying config or wrap it in a script that fails loudly on wrong output path"
-    owner: "Amelia"
-    status: done
-  - epic: 2
-    action: "Before drafting Story 3.3's tasks, read deferred-work.md's Story 2.4 entries on the RecomputeAsync concurrency race and the full-history-walk performance risk — both become directly relevant once Smart Plug import is the second IStatusRecomputeService call site"
-    owner: "Story 3.3 author"
-    status: done
-    note: "Confirmed 2026-08-23 (epic-3 retro) — 3.3's own deferred-work entry explicitly references and considers both items, deliberately keeping the race deferred as a documented tradeoff. Superseded by epic-3 retro action item below (fix now, ahead of Epic 4)."
-  - epic: 3
-    action: "Add per-household serialization to IStatusRecomputeService, fixing the concurrent-recompute race deferred since Story 2.4 and re-confirmed in 3.3/3.4 — fix before Epic 4 starts, since Trend History will read StatusSnapshot rows directly"
-    owner: "Winston/Amelia"
-    status: done
-    note: "Done 2026-08-25 — IHouseholdRecomputeLock (per-household in-process async lock, justified by this app's single-replica maxReplicas=1 Container App topology) wraps StatusRecomputeService.RecomputeAsync. PR #21 merged to main and deployed. Took 4 implementation rounds — 2 independent adversarial reviewers caught 3 distinct correctness bugs in the bounded/widened history-query arithmetic (bundled with action item #2) before it landed clean. Full history in spec-status-recompute-serialization-perf.md's Spec Change Log."
-  - epic: 3
-    action: "Address the full-history-walk-on-every-recompute latent NFR1 performance risk (same subsystem as the serialization fix, same trigger-frequency growth from periodic Smart Plug re-imports)"
-    owner: "Winston/Amelia"
-    status: done
-    note: "Done 2026-08-25, same PR #21 as action item #1. GetCurrentStatus now fetches a bounded, trailing window of MeterReading history (dynamically widened to cover an open MeterRegressionPrompt's PreviousMeterReadingId) instead of an unbounded full-history walk, backed by a new composite (MainMeterId, ReadingTimestamp) index."
-  - epic: 3
-    action: "Standardize running 'git add -N' before generating any adversarial-review diff, to stop git diff's untracked-files omission from recurring (hit in both Story 2.7 and 2.8 reviews)"
-    owner: "Amelia"
-    status: done
-    note: "Applied consistently across all 4 review rounds of the action item #1/#2 fix (spec-status-recompute-serialization-perf.md) — no untracked-files-omission recurrence."
-  - epic: 3
-    action: "Update Epic 4's definition (Stories 4.1 and 4.3) before drafting Story 4.1: Story 4.1 (Trend History) absorbs Story 2.8's Meter Reading History List/edit functionality as its single surface; Story 4.3 keeps its ACs as specified (edit via the merged surface, AD-4 409 + AD-11 audit-trail already built and reusable from 2.8, net-new forward-recompute-through-present via IStatusRecomputeService); remove the Dashboard Status card's standalone History text-link once merged"
-    owner: "John (epic definition)/Sally (UX placement)"
-    status: done
-    note: "John's half done 2026-08-23 — epic-4-trend-history-per-plug-insight.md updated (Stories 4.1/4.3 + header), cross-referenced from epic-2's Story 2.8 section, epic-list.md, and 2-8's own review-findings entry. Sally's half done 2026-08-23 — new mockups/key-trend-history.html (Dark+Light) places the absorbed Meter Readings list as a third card between the Trend chart and the Room->Power Point->Device tree, collapsed by default, reusing 2.8's row content/edit dialog unmodified; EXPERIENCE.md (IA row, new Component Patterns row, State Patterns row) and DESIGN/components.md (new component section) updated and cross-linked; .memlog.md entry added. Unblocks Story 4.1 drafting on the UX side — action item #1/#2 (recompute-race fix) is the remaining gate."
-  - epic: 5
-    action: "At Story 6.2 kickoff, explicitly verify IAiPlausibilityClient's no-op-when-unconfigured degradation (AD-8) — its first real consumer, mirroring how 5.1/5.2 kickoff-verified AuditCorrection/BonusDecayNormalizer"
-    owner: "story author (create-story)"
-    status: done
-    note: "2026-09-17 epic-5/1.12 retro, next-epic prep. Closed 2026-09-21 (epic-6 retro) — landed in the *renumbered* Story 6.3 (the mid-epic 6.1-review insertion of Story 6.2 'Event History View' bumped the correlation story from 6.2 to 6.3); verified live: toggle-on + unconfigured backend -> CorrelateEvent job completes clean, no correlation rendered, no product-wide branch on AI availability."
-  - epic: 5
-    action: "Add a non-blocking checklist reminder for multi-field edit use cases: capture every 'old' field value into a local before any repository write call, not just the first one touched"
-    owner: "story authors/reviewers"
-    status: done
-    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's EditTariff read 'old' values after the repository update call — EF Core's identity map returned the same tracked instance, so audit-correction rows briefly recorded old == new. Only caught by a real-DbContext API test, not the mocked unit test. Closed 2026-09-17 same session — added to project-context.md's Critical Don't-Miss Rules > Edge cases agents should handle, auto-loaded by both bmad-dev-story and bmad-code-review via their persistent_facts glob."
-  - epic: 5
-    action: "Add a non-blocking checklist reminder for any 'lock field X unless condition Y' gate: explicitly test bypass via a different field's edit in the same or a sequential request"
-    owner: "story authors/reviewers"
-    status: done
-    note: "2026-09-17 epic-5/1.12 retro. Story 5.1's locked-price-field override could be bypassed by pairing a ContractStartDate change with a price edit in the same request, evaluated against the stale pre-edit date. Closed 2026-09-17 same session — added to project-context.md's Critical Don't-Miss Rules > Edge cases agents should handle, auto-loaded by both bmad-dev-story and bmad-code-review via their persistent_facts glob."
-  - epic: 5
-    action: "Build an automated WCAG contrast-ratio check (unit test or lint step) covering every existing --color-* token pair (Status triad, --attractiveness-*, --tariff-check-card-*)"
-    owner: "Winston/Murat"
-    status: done
-    note: "2026-09-17 epic-5/1.12 retro. Escalated from defer to a real, owned action item after three consecutive retro cycles (Story 2.2b 2026-08-16, Story 5.3 2026-09-15, Story 5.4 2026-09-17) deferred the identical gap as 'pre-existing.' No further deferring — Ralf's decision. Closed 2026-09-17 21:09, commit 366722d ('feat: implement automated WCAG contrast checks for color tokens and add related utility functions') — added web/src/lib/contrast.ts (WCAG relative-luminance/contrast-ratio calc) + web/src/color-tokens.contrast.test.ts, asserting 4.5:1+ AA on every token pair named in this action item. 32/32 tests passing as of 2026-09-18 verification. Note: this landed as a direct commit to main 10 minutes after the retro, without a story file or updating this status — went untracked until Ralf asked Winston to check on 2026-09-18."
-  - epic: 6
-    action: "When the Claude-in-Chrome extension reports 'not connected' during dev-story's live-verification step, raise it immediately and pause for the user to start/connect Chrome, then resume — don't check the task off and let code review catch the skip later"
-    owner: "story authors/dev-story workflow"
-    status: done
-    note: "2026-09-21 epic-6 retro. Story 6.2's Task 7 (live verification, AC #5 empty state) was checked off complete on a component test alone, contradicting its own 'does not defer' instruction — caught in code review, not before. Ralf: catch it earlier, at the 'not connected' moment itself, as a hard dev-story-time gate. Verified 2026-09-23 already closed by a durable mechanism, same pattern as the two epic-4-retro process-gate items above: project-context.md's Critical Don't-Miss Rules > Process gates (hard, no exceptions) states this exact rule verbatim — auto-loaded persistent_fact for bmad-dev-story and bmad-code-review, so it's enforced at dev-story time, not left to review to catch."
   - epic: 6
     action: "Decide the real AI backend for Wattage Plausibility (Azure AI Foundry vs. self-hosted LMStudio vs. cloud API) — cost/latency/privacy tradeoffs are still fully open; only the no-op-when-unconfigured path has ever been verified live"
     owner: "Ralf/Winston"
     status: open
     note: "2026-09-21 epic-6 retro. Story 6.3 shipped the full AD-8 plumbing (port, adapter, Household toggle, background job, graceful degradation) but no AiPlausibility:BaseUrl is configured anywhere in this environment, so the real classification round-trip has never run. Not blocking Epic 6's done — AD-8's degradation is honest by design — but flagged as a deliberate mid-term decision, not something to leave implicit."
-  - epic: 6
-    action: "At Story 7.2 kickoff, apply Stories 3.8-3.10's bulk-write/chunking/command-timeout-scoping lessons — a full-household restore is the same 'large bulk write' shape that caused 4 real production incidents in Epic 3"
-    owner: "story author (create-story)"
-    status: done
-    note: "2026-09-21 epic-6 retro, next-epic prep. Surfaced by a full deferred-work.md review requested by Ralf ahead of Epic 7. Closed by Story 7.2: HouseholdRestoreWriter.cs reuses SmartPlugImportRepository's proven numbers/patterns — ChunkSize = 200, a per-call CommandTimeout bump to 120s, one outer transaction spanning every chunk, and SmartPlugReading explicitly deleted before PowerPoint/Device/Room to avoid an unbounded cascade. Verified against a Testcontainers-backed suite (HouseholdRestoreWriterTests.cs). Verified 2026-09-23 by re-reading the shipped code, not just the story's own claim."
-  - epic: 6
-    action: "At Story 7.2 kickoff, resolve the EF DateTimeOffset value-comparer gap flagged in spec-datetimeoffset-utc-normalization's own review (comparer ignores stored offset, so a write reassigning an existing row to an instant-equal value with a different offset is silently skipped by change tracking) before it becomes reachable via restore/migration writes"
-    owner: "story author (create-story)"
-    status: done
-    note: "2026-09-21 epic-6 retro, next-epic prep. Filed at the time as 'not reachable today, no backfill path exists yet' — Story 7.2's restore is that backfill path. Surfaced by the same deferred-work.md review. Closed by Story 7.2: resolved by design — every entity except Household is deleted then inserted fresh (an INSERT is unaffected by the value-comparer gap), and Household's one in-place UPDATE (HouseholdRestoreWriter.UpdateHouseholdSettingsAsync) never touches a DateTimeOffset field (CreatedAtUtc is never written). Verified 2026-09-23 by re-reading the shipped code, not just the story's own claim."
-  - epic: 6
-    action: "Add a CI gate that turns a NuGet vulnerable-transitive-package advisory (NU1903) into a build failure — NuGetAuditMode/NuGetAuditLevel or a 'dotnet list package --vulnerable' step across the whole solution"
-    owner: "Winston"
-    status: done
-    note: "2026-09-21 epic-6 retro. Raised in spec-ssh-net-cve-fix's own review as a systemic gap (the SSH.NET CVE shipped silently until manually caught); escalated to its own owned action item per Ralf's explicit request during this retro, rather than left as a quiet deferred-work entry."
-  - epic: 8
-    action: "Locale x theme sweep: de-DE/en-US x light/dark at 659/660/900px across all four screens (overflow, clipping, contrast, long German labels); e2e matrix plus one live pass"
-    owner: "Dana/Amelia"
-    status: done
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02 progress: spec-locale-theme-sweep (branch feature/locale-theme-sweep) — 48-cell e2e matrix + live pass done, 5 contrast token fixes; 2 findings logged in deferred-work.md (659px de-DE tariff table scroll, 40px icon buttons). Merged in PR #85 (2026-10-02); deployed. Follow-ups logged in deferred-work.md."
-  - epic: 8
-    action: "Keyboard tab-order check for wide:order-N Settings sections, paired Tariff fields, Profile menu, preference strips, NavChrome variants"
-    owner: "Dana/Charlie"
-    status: done
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: spec-tab-order-check (branch feature/tab-order-check) — web/e2e/tab-order.spec.ts, 22 tests; no divergence except NavChrome (visually first, last in tab order), pinned as intentional and logged in deferred-work.md as an open follow-up. Merged in PR #86."
-  - epic: 8
-    action: "Breakpoint/column single source of truth: drift test tying --breakpoint-wide, WIDE_QUERY, e2e boundary values and the max-w-[900px] literal"
-    owner: "Charlie"
-    status: done
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: spec-breakpoint-drift-test (branch chore/breakpoint-drift-test) — web/src/layout-constants.drift.test.ts, no production change; px-only, value-based. Shared-constant follow-up logged in deferred-work.md as open. Merged in PR #87."
-  - epic: 8
-    action: "Document the live-resize verification procedure (real tab at target width) in project-context.md process gates"
-    owner: "Amelia"
-    status: done
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: doc-only (branch doc/epic-8-live-resize-procedure) — project-context.md Process gates, new 'Live-resize verification procedure' bullet (fresh tab, resize before navigate, confirm innerWidth, per-width tabs, user-driven in-tab resize, non-acceptable substitutes)."
-  - epic: 8
-    action: "Record deferred-work.md convention (append new sections at the end, chronological) in project-context.md"
-    owner: "Amelia"
-    status: done
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md. 2026-10-02: doc-only, committed directly on main per Ralf's instruction — project-context.md Development Workflow Rules, new 'deferred-work.md convention' block (append at end, chronological, never insert at top)."
-  - epic: 8
-    action: "Triage all ~165 deferred-work.md entries into resolved/accepted/still-open (themed index)/promote; proposal for Ralf's approval before any deletion; needs a spec doc"
-    owner: "Amelia/Charlie/Dana"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
-  - epic: 8
-    action: "Add status marker ([open]/[resolved: story]/[accepted: reason]) to deferred-work entries going forward; review open items at each epic retro"
-    owner: "Amelia"
-    status: open
-    note: "2026-10-02 epic-8 retro. Runs alongside Epic 9, does not gate its start. See epic-8-retro-2026-10-02.md."
