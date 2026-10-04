@@ -4,7 +4,7 @@ baseline_commit: b503218
 
 # Story 10.3: NavChrome Document Order Matches Visual Order (Focus Order, WCAG 2.4.3)
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 10 "Deferred-work hardening" is new (created 2026-10-02 from the Epic 8 retro action #6 triage, `spec-deferred-work-triage.md`). Origin: deferred-work.md entry "NavChrome last in DOM at wide" (spec-tab-order-check, 2026-10-02), promoted by Ralf. -->
@@ -63,8 +63,8 @@ Test-first: Tasks 1 and 2 must be run and seen **red** against the current code 
   - [x] 8.2 The app requires Auth0 sign-in. Use the environment the previous Epic 8 live checks used (local dev via `./scripts/run-api.sh` or the deployed site) and ask Ralf to sign in if needed. If the Claude-in-Chrome extension is "not connected", raise it immediately and pause for Ralf, don't defer.
   - [x] 8.3 In each tab, on each of the four screens, press the **real Tab key** from a fresh load (blur first) and record `document.activeElement`'s accessible name and `getBoundingClientRect().top` for the first and last few stops. Expect: ≥660 → Dashboard, Trend History, Tariff Radar, Settings, Account menu, then content; 659 → content first, bottom bar last.
   - [x] 8.4 Measure, don't eyeball: `getBoundingClientRect()` of the top nav (above content, full width at ≥660), of the bottom bar at 659 (bottom of viewport on a short page, below content), and the `<main>` children's `display`/order.
-  - [ ] 8.5 In-tab live swap: an in-tab resize across 660 without reload can't be driven by automation, so **ask Ralf to resize the real window** across 660 and record what he observes (nav swaps, no flash, nothing remounts, page state such as a typed field survives). Don't skip it.
-  - [ ] 8.6 Record the evidence (widths read back, stops observed, Ralf's observation) in Completion Notes. Substitutes need Ralf's explicit acceptance recorded in the story (8.12 precedent).
+  - [x] 8.5 In-tab live swap: an in-tab resize across 660 without reload can't be driven by automation, so **ask Ralf to resize the real window** across 660 and record what he observes (nav swaps, no flash, nothing remounts, page state such as a typed field survives). Don't skip it.
+  - [x] 8.6 Record the evidence (widths read back, stops observed, Ralf's observation) in Completion Notes. Substitutes need Ralf's explicit acceptance recorded in the story (8.12 precedent).
 
 ## Dev Notes
 
@@ -175,7 +175,7 @@ claude-sonnet-5-5
   - 900 (read back 900; a first 900 request read back 660 and was discarded): identical result; top nav width 868 above the content column.
   - Not done (optional): 500px.
   - Note: key presses only reached the page after a screenshot call focused it; plain Tab immediately after navigate registered no stops.
-  - **8.5 pending**: Ralf to resize the real window across 660 and report. Story stays in-progress until recorded.
+  - **8.5 (Ralf, real window resized across 660px, 2026-10-04):** nav swaps between top and bottom; no flash; typed text survives; the open Account (profile) menu stays open when sized down.
 
 ### File List
 
@@ -196,4 +196,5 @@ claude-sonnet-5-5
 
 ### Change Log
 
+- 2026-10-04: Live gate (Task 8) completed; status → review.
 - 2026-10-04: Split NavChrome placement so DOM/Tab order matches visual order; inverted e2e pin into guard; docs closed out (Tasks 1–7).
