@@ -62,6 +62,15 @@ restartable:
 2. **The API** — via `dotnet run` / `dotnet watch run`, not the Docker image
 3. **The frontend** — via the Vite dev server, not the built static files
 
+**One-command start/stop.** `./scripts/dev-up.sh` starts all three in the
+background (Postgres via compose, the API through `scripts/run-api.sh`, then
+Vite), waits until each answers, and prints the URLs. Pass `--watch` to run
+the API under `dotnet watch`. PIDs and logs go to `.dev-run/` (gitignored —
+`tail -f .dev-run/api.log`). `./scripts/dev-down.sh` stops all three and
+keeps the Postgres data volume; `--volumes` also deletes it. The steps below
+are the manual equivalent, still useful when you want one component in a
+foreground terminal or a debugger.
+
 This gives you hot reload on both sides and full debugger support, which the
 single Docker image build (used for self-hosting) doesn't.
 

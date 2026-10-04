@@ -447,3 +447,5 @@ web/blob-report/
 
 # Local Data Protection dev certificates (see .env.example: DATA_PROTECTION_CERTIFICATE_BASE64)
 certs/
+# Local dev stack PID/log files (scripts/dev-up.sh)
+.dev-run/
