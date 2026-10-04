@@ -58,7 +58,7 @@ Test-first: Tasks 1 and 2 must be run and seen **red** against the current code 
   - [x] 7.1 Confirm `git grep "wide:order-first"` returns nothing in `web/`.
   - [x] 7.2 Confirm there is no JS breakpoint branch added (`useWideBreakpoint` is not used here); the swap stays CSS-only.
   - [x] 7.3 Confirm `en-US`/`de-DE` catalogs are unchanged (`git diff --stat web/src/locales`).
-- [ ] Task 8: **Live verification gate** (AC: #9). The story cannot move review → done without this.
+- [x] Task 8: **Live verification gate** (AC: #9). The story cannot move review → done without this.
   - [x] 8.1 Follow the `project-context.md` "Live-resize verification procedure" exactly: close prior tabs, `tabs_create_mcp` a fresh tab, `resize_window` **before** the first `navigate`, then read back `window.innerWidth` via `javascript_tool` and require it to equal the target. One tab per width: **659**, **660**, **900** (add 500 if cheap). A 659 request that reads back 660 is the clamp floor, not a 659px check; retry in a fresh tab group or ask Ralf.
   - [x] 8.2 The app requires Auth0 sign-in. Use the environment the previous Epic 8 live checks used (local dev via `./scripts/run-api.sh` or the deployed site) and ask Ralf to sign in if needed. If the Claude-in-Chrome extension is "not connected", raise it immediately and pause for Ralf, don't defer.
   - [x] 8.3 In each tab, on each of the four screens, press the **real Tab key** from a fresh load (blur first) and record `document.activeElement`'s accessible name and `getBoundingClientRect().top` for the first and last few stops. Expect: ≥660 → Dashboard, Trend History, Tariff Radar, Settings, Account menu, then content; 659 → content first, bottom bar last.
