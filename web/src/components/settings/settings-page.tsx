@@ -58,9 +58,22 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
     navigateToLogout,
   } = useLogoff(householdId, supportsFederatedLogout)
 
+  const navProps = {
+    active: 'settings' as const,
+    onDashboardClick: onBack,
+    onTrendHistoryClick,
+    onTariffRadarClick,
+    onSettingsClick: () => {},
+    householdId,
+    supportsFederatedLogout,
+    email,
+  }
+
   return (
     <main className="flex min-h-svh flex-col gap-6 p-4">
-      <div data-slot="settings-content" className="flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[900px]">
+      <NavChrome placement="top" {...navProps} />
+
+      <div id="main-content" tabIndex={-1} data-slot="settings-content" className="outline-none flex flex-col gap-6 wide:mx-auto wide:w-full wide:max-w-[900px]">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{t('settings.heading')}</h1>
           <Button variant="outline" onClick={onBack}>
@@ -167,16 +180,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
         </DialogContent>
       </Dialog>
 
-      <NavChrome
-        active="settings"
-        onDashboardClick={onBack}
-        onTrendHistoryClick={onTrendHistoryClick}
-        onTariffRadarClick={onTariffRadarClick}
-        onSettingsClick={() => {}}
-        householdId={householdId}
-        supportsFederatedLogout={supportsFederatedLogout}
-        email={email}
-      />
+      <NavChrome placement="bottom" {...navProps} />
     </main>
   )
 }
