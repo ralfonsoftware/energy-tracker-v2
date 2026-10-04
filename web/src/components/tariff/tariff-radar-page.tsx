@@ -57,8 +57,21 @@ export function TariffRadarPage({
     setCurrentTariffCurrency(page.items.find((item) => item.isCurrent)?.currency ?? null)
   }, [])
 
+  const navProps = {
+    active: 'tariffRadar' as const,
+    onDashboardClick: onBack,
+    onTrendHistoryClick,
+    onSettingsClick,
+    onTariffRadarClick: () => {},
+    householdId,
+    supportsFederatedLogout,
+    email,
+  }
+
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
+      <NavChrome placement="top" {...navProps} />
+
       {/* Story 8.4/Task 1: constrains the page's own content — header, Tariff Check card, and
           the card stack — to a centered 900px column at >=660px (UX-DR19), mirroring
           dashboard-content (Story 8.2) and trend-history-content (Story 8.3). NavChrome is
@@ -89,16 +102,7 @@ export function TariffRadarPage({
         </div>
       </div>
 
-      <NavChrome
-        active="tariffRadar"
-        onDashboardClick={onBack}
-        onTrendHistoryClick={onTrendHistoryClick}
-        onSettingsClick={onSettingsClick}
-        onTariffRadarClick={() => {}}
-        householdId={householdId}
-        supportsFederatedLogout={supportsFederatedLogout}
-        email={email}
-      />
+      <NavChrome placement="bottom" {...navProps} />
     </main>
   )
 }

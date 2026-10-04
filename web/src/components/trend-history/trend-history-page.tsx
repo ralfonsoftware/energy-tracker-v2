@@ -72,8 +72,21 @@ export function TrendHistoryPage({
     }
   }, [loadStatusHistory])
 
+  const navProps = {
+    active: 'trendHistory' as const,
+    onDashboardClick: onBack,
+    onTrendHistoryClick: () => {},
+    onTariffRadarClick,
+    onSettingsClick,
+    householdId,
+    supportsFederatedLogout,
+    email,
+  }
+
   return (
     <main className="flex min-h-svh flex-col gap-4 p-4">
+      <NavChrome placement="top" {...navProps} />
+
       {/* Story 8.3/Task 1: constrains the page's own content — header row and the card stack — to
           a centered 900px column at >=660px (UX-DR19), mirroring dashboard-page.tsx's Story 8.2
           wrapper verbatim. NavChrome is deliberately outside this wrapper: its top-nav variant is
@@ -110,16 +123,7 @@ export function TrendHistoryPage({
         </div>
       </div>
 
-      <NavChrome
-        active="trendHistory"
-        onDashboardClick={onBack}
-        onTrendHistoryClick={() => {}}
-        onTariffRadarClick={onTariffRadarClick}
-        onSettingsClick={onSettingsClick}
-        householdId={householdId}
-        supportsFederatedLogout={supportsFederatedLogout}
-        email={email}
-      />
+      <NavChrome placement="bottom" {...navProps} />
     </main>
   )
 }

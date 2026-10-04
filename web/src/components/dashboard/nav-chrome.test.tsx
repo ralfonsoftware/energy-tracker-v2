@@ -5,9 +5,16 @@ import { NavChrome } from './nav-chrome'
 
 const householdId = '11111111-1111-1111-1111-111111111111'
 
-function renderNavChrome(active: 'dashboard' | 'trendHistory' | 'tariffRadar' | 'settings', overrides: Partial<Parameters<typeof NavChrome>[0]> = {}) {
+type Placement = 'top' | 'bottom'
+
+function renderNavChrome(
+  placement: Placement,
+  active: 'dashboard' | 'trendHistory' | 'tariffRadar' | 'settings',
+  overrides: Partial<Parameters<typeof NavChrome>[0]> = {},
+) {
   return render(
     <NavChrome
+      placement={placement}
       active={active}
       onDashboardClick={vi.fn()}
       onTrendHistoryClick={vi.fn()}
@@ -21,97 +28,98 @@ function renderNavChrome(active: 'dashboard' | 'trendHistory' | 'tariffRadar' | 
   )
 }
 
-// jsdom does not evaluate real CSS media queries (Task 7's own note) — index.css is never
-// imported into the test environment (src/test/setup.ts), so both the <660px bottom-tab-bar and
-// the >=660px top-nav markup variants are simultaneously present and "visible" to Testing
-// Library's role queries here, regardless of their wide:hidden/hidden wide:flex classes. Every
-// assertion below therefore expects TWO matches (one per variant) rather than one — proving both
-// variants render with the right classes/active state is exactly what this file can prove; which
-// one a real browser actually shows at a given width is Task 7's Playwright viewport-resize spec's
-// job (web/e2e/app-shell.spec.ts), not this file's.
-describe('NavChrome', () => {
-  it('renders both the bottom-tab-bar and top-nav variants, each with all four top-level entries', () => {
-    renderNavChrome('dashboard')
+// jsdom does not evaluate real CSS media queries — index.css is never imported into the test
+// environment (src/test/setup.ts). Since Story 10.3 each NavChrome mount renders exactly ONE
+// variant (placement="top" or "bottom"), so these tests render one at a time and assert one
+// match. Which variant a real browser shows at a given width, and where it sits in Tab order, is
+// the job of web/e2e/app-shell.spec.ts and web/e2e/tab-order.spec.ts.
+const ENTRIES = ['Dashboard', 'Trend History', 'Tariff Radar', 'Settings'] as const
 
-    expect(screen.getAllByRole('button', { name: 'Dashboard' })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Trend History' })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Tariff Radar' })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(2)
-  })
+describe.each<Placement>(['top', 'bottom'])('NavChrome placement="%s"', (placement) => {
+  const otherPlacement: Placement = placement === 'top' ? 'bottom' : 'top'
 
-  it('marks the bottom-tab-bar wide:hidden and the top-nav hidden wide:flex (Tasks 1 and 2 shared 660px breakpoint)', () => {
-    const { container } = renderNavChrome('dashboard')
+  it('renders exactly one nav for its own placement, with all four top-level entries', () => {
+    const { container } = renderNavChrome(placement, 'dashboard')
 
-    expect(container.querySelector('nav[data-slot="nav-chrome-bottom"]')).toHaveClass('wide:hidden')
-    expect(container.querySelector('nav[data-slot="nav-chrome-top"]')).toHaveClass('hidden', 'wide:flex')
-  })
-
-  it('applies the brand-accent-tinted active state to the active tab in both variants, never a status color', () => {
-    renderNavChrome('dashboard')
-
-    for (const dashboardTab of screen.getAllByRole('button', { name: 'Dashboard' })) {
-      expect(dashboardTab).toHaveClass('bg-nav-chrome-active-bg')
-      expect(dashboardTab).toHaveClass('text-nav-chrome-active-foreground')
+    expect(container.querySelectorAll('nav[data-slot]')).toHaveLength(1)
+    expect(container.querySelector(`nav[data-slot="nav-chrome-${placement}"]`)).toBeInTheDocument()
+    expect(container.querySelector(`nav[data-slot="nav-chrome-${otherPlacement}"]`)).not.toBeInTheDocument()
+    for (const name of ENTRIES) {
+      expect(screen.getAllByRole('button', { name })).toHaveLength(1)
     }
   })
 
-  it('tapping either Settings entry calls onSettingsClick', async () => {
-    const user = userEvent.setup()
-    const onSettingsClick = vi.fn()
-    renderNavChrome('dashboard', { onSettingsClick })
+  it('applies the brand-accent-tinted active state and aria-current to the active tab only, never a status color', () => {
+    renderNavChrome(placement, 'dashboard')
 
-    const [mobileSettings] = screen.getAllByRole('button', { name: 'Settings' })
-    await user.click(mobileSettings)
-
-    expect(onSettingsClick).toHaveBeenCalledOnce()
+    const dashboardTab = screen.getByRole('button', { name: 'Dashboard' })
+    expect(dashboardTab).toHaveAttribute('aria-current', 'page')
+    expect(dashboardTab).toHaveClass('bg-nav-chrome-active-bg')
+    expect(dashboardTab).toHaveClass('text-nav-chrome-active-foreground')
+    expect(screen.getByRole('button', { name: 'Settings' })).not.toHaveAttribute('aria-current')
   })
 
-  it('tapping either Dashboard entry calls onDashboardClick — how a Settings-active bar navigates back', async () => {
+  it.each([
+    ['Dashboard', 'onDashboardClick', 'settings'],
+    ['Trend History', 'onTrendHistoryClick', 'dashboard'],
+    ['Tariff Radar', 'onTariffRadarClick', 'dashboard'],
+    ['Settings', 'onSettingsClick', 'dashboard'],
+  ] as const)('tapping %s calls %s', async (name, handlerName, active) => {
     const user = userEvent.setup()
-    const onDashboardClick = vi.fn()
-    renderNavChrome('settings', { onDashboardClick })
+    const handler = vi.fn()
+    renderNavChrome(placement, active, { [handlerName]: handler })
 
-    const [mobileDashboard] = screen.getAllByRole('button', { name: 'Dashboard' })
-    await user.click(mobileDashboard)
+    await user.click(screen.getByRole('button', { name }))
 
-    expect(onDashboardClick).toHaveBeenCalledOnce()
+    expect(handler).toHaveBeenCalledOnce()
   })
 
-  it('reflects Trend History as active in both variants and tapping either calls onTrendHistoryClick (Story 4.1)', async () => {
-    const user = userEvent.setup()
-    const onTrendHistoryClick = vi.fn()
-    renderNavChrome('trendHistory', { onTrendHistoryClick })
+  it.each([
+    ['trendHistory', 'Trend History'],
+    ['tariffRadar', 'Tariff Radar'],
+    ['settings', 'Settings'],
+  ] as const)('reflects %s as active', (active, name) => {
+    renderNavChrome(placement, active)
 
-    const trendHistoryTabs = screen.getAllByRole('button', { name: 'Trend History' })
-    expect(trendHistoryTabs).toHaveLength(2)
-    for (const tab of trendHistoryTabs) {
-      expect(tab).toHaveAttribute('aria-current', 'page')
-      expect(tab).toHaveClass('bg-nav-chrome-active-bg')
-    }
+    const tab = screen.getByRole('button', { name })
+    expect(tab).toHaveAttribute('aria-current', 'page')
+    expect(tab).toHaveClass('bg-nav-chrome-active-bg')
+  })
+})
 
-    await user.click(trendHistoryTabs[0])
-    expect(onTrendHistoryClick).toHaveBeenCalledOnce()
+describe('NavChrome placement classes (Story 10.3: no wrapper, no CSS order)', () => {
+  it('top: hidden wide:flex, with no mt-auto and no wide:order-first', () => {
+    const { container } = renderNavChrome('top', 'dashboard')
+    const nav = container.querySelector('nav[data-slot="nav-chrome-top"]')
+
+    expect(nav).toHaveClass('hidden', 'wide:flex')
+    expect(nav).not.toHaveClass('mt-auto')
+    expect(container.innerHTML).not.toContain('wide:order-first')
   })
 
-  it('reflects Tariff Radar as active in both variants and tapping either calls onTariffRadarClick (Story 5.1)', async () => {
-    const user = userEvent.setup()
-    const onTariffRadarClick = vi.fn()
-    renderNavChrome('tariffRadar', { onTariffRadarClick })
+  it('bottom: mt-auto wide:hidden, and is the root element (no wrapper div that would become an empty flex item)', () => {
+    const { container } = renderNavChrome('bottom', 'dashboard')
+    const nav = container.querySelector('nav[data-slot="nav-chrome-bottom"]')
 
-    const tariffRadarTabs = screen.getAllByRole('button', { name: 'Tariff Radar' })
-    expect(tariffRadarTabs).toHaveLength(2)
-    for (const tab of tariffRadarTabs) {
-      expect(tab).toHaveAttribute('aria-current', 'page')
-      expect(tab).toHaveClass('bg-nav-chrome-active-bg')
-    }
-
-    await user.click(tariffRadarTabs[0])
-    expect(onTariffRadarClick).toHaveBeenCalledOnce()
+    expect(nav).toHaveClass('mt-auto', 'wide:hidden')
+    expect(container.firstElementChild).toBe(nav)
   })
 
-  it('mounts the Profile menu only once — the top-nav variant, with no bottom-tab-bar equivalent (Task 3)', () => {
-    renderNavChrome('dashboard')
+  it('top is the root element too', () => {
+    const { container } = renderNavChrome('top', 'dashboard')
 
+    expect(container.firstElementChild).toBe(container.querySelector('nav[data-slot="nav-chrome-top"]'))
+  })
+})
+
+describe('NavChrome Account menu', () => {
+  it('mounts the Profile menu in the top placement only (Story 8.1 Task 3)', () => {
+    renderNavChrome('top', 'dashboard')
     expect(screen.getAllByRole('button', { name: 'Account menu' })).toHaveLength(1)
+  })
+
+  it('does not mount the Profile menu in the bottom placement', () => {
+    renderNavChrome('bottom', 'dashboard')
+    expect(screen.queryByRole('button', { name: 'Account menu' })).not.toBeInTheDocument()
   })
 })

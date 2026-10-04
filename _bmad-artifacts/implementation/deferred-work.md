@@ -6,10 +6,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Index
 
-**Promoted (story created 2026-10-02, Epic 10)**
-
-- NavChrome last in DOM at wide (keyboard tab-order check (spec-tab-order-check, 2026-10-02))
-
 **test-coverage (18)**
 
 - Export stream property names vs HouseholdExportResult, no round-trip test — code review of spec-household-export-oom-fix (2026-09-25)
@@ -388,10 +384,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 
 ## Deferred from: keyboard tab-order check (spec-tab-order-check, 2026-10-02)
-
-- [promoted: 10-3-navchrome-dom-order-tab-order] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
-  summary: At ≥660px NavChrome (top nav + Profile avatar) is visually first but last in the DOM, so keyboard users Tab through the whole page before reaching it (WCAG 2.4.3 Focus Order). Kept deliberately by Story 8.1 (`wide:order-first`) so phones keep the bottom bar last.
-  evidence: Pinned by `web/e2e/tab-order.spec.ts` on all four screens (it fails if the nav moves in the DOM, so the fix must update the pin). Candidate fixes: render the nav first in the DOM at ≥660px via `useWideBreakpoint` (touches `nav-chrome.tsx` and the four page mounts; watch the 660px boundary), or add a skip link plus `<nav aria-label>` landmarks (new UI and strings in both catalogs). Needs its own story. [web/src/components/dashboard/nav-chrome.tsx:48]
 
 - [open] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
   summary: Nothing enforces that a new `wide:order-*` / reordering class gets a tab-order test; the rule in `project-context.md` is prose only.
