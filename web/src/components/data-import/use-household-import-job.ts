@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { translateJobError } from '@/lib/job-error'
 import { ApiError, fetchJobStatus } from '@/lib/smart-plug-import-api'
 
 export type HouseholdImportJobState = 'processing' | 'completed' | 'failed'
@@ -46,7 +47,7 @@ export function useHouseholdImportJobPoll(jobId: string | null): HouseholdImport
           if (job.status === 'completed') {
             setState('completed')
           } else if (job.status === 'failed') {
-            setErrorMessage(job.errorMessage ?? t('settings.dataImport.errorGeneric'))
+            setErrorMessage(translateJobError(t, job.errorMessage, t('settings.dataImport.errorGeneric')))
             setState('failed')
           }
           // 'queued'/'processing' — keep polling, no state change needed beyond the initial

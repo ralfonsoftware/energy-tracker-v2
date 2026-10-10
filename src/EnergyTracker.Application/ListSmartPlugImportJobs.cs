@@ -27,7 +27,8 @@ public record SmartPlugImportJobResult(
     IReadOnlyList<SmartPlugImportGap> Gaps);
 
 /// <summary>Lists every Smart Plug import job queued by any member of the caller's Household, deriving each row's six-state value and sweeping expired terminal-state records first (AC #1, #2, #5, #6, #7, #8).</summary>
-public class ListSmartPlugImportJobs(IBackgroundJobRepository backgroundJobRepository, ISmartPlugImportRepository smartPlugImportRepository)
+public class ListSmartPlugImportJobs(
+    IBackgroundJobRepository backgroundJobRepository, ISmartPlugImportRepository smartPlugImportRepository, IBackgroundJobLifecycle lifecycle)
 {
     // FR-32/AD-6 extension: Success/Error/Flagged for Review records fade out 30 days after
     // completion; Waiting/Processing/Needs Mapping never auto-clear (AC #6, #7). Internal (not
@@ -37,9 +38,17 @@ public class ListSmartPlugImportJobs(IBackgroundJobRepository backgroundJobRepos
 
     public async Task<IReadOnlyList<SmartPlugImportJobResult>> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {
+        // Orphaned Processing rows are failed first (AD-6, Story 11.2) so they show as Error, not Processing forever.
+        await lifecycle.FailStaleAsync(householdId, cancellationToken);
+
         // Lazy, read-triggered sweep (AD-7) — runs first so a swept row never appears in the same
         // response that triggered its own sweep.
-        await smartPlugImportRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow - RetentionWindow, cancellationToken);
+        var cutoffUtc = DateTimeOffset.UtcNow - RetentionWindow;
+        await smartPlugImportRepository.SweepExpiredAsync(householdId, cutoffUtc, cancellationToken);
+
+        // Story 11.2 (AC #7): terminal CorrelateEvent rows are never member-visible but would
+        // otherwise grow without bound. One bounded batch per read; any remainder goes on the next.
+        await backgroundJobRepository.DeleteTerminalByJobTypeAsync(householdId, JobTypes.CorrelateEvent, cutoffUtc, cancellationToken);
 
         var jobs = await backgroundJobRepository.ListByJobTypeAsync(householdId, JobTypes.ProcessSmartPlugImport, cancellationToken);
 

@@ -169,6 +169,7 @@ public static class SmartPlugImportEndpoints
             ICurrentHouseholdAccessor householdAccessor,
             IBackgroundJobQueue jobQueue,
             IBackgroundJobRepository backgroundJobRepository,
+            IBackgroundJobLifecycle backgroundJobLifecycle,
             bool deleteAll,
             CancellationToken cancellationToken) =>
         {
@@ -182,6 +183,10 @@ public static class SmartPlugImportEndpoints
             // reintroducing exactly the DB contention this three-round incident has been chasing.
             // Reusing the still-active job is idempotent from the caller's point of view: it's the
             // same 202+jobId contract either way, and the client polls the same endpoint.
+            //
+            // Story 11.2: a cleanup row orphaned by a restart is failed first (stale heartbeat), so
+            // it no longer pins this endpoint to a job that will never finish.
+            await backgroundJobLifecycle.FailStaleAsync(householdId, cancellationToken);
             var existingCleanupJobs = await backgroundJobRepository.ListByJobTypeAsync(
                 householdId, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken);
             var activeCleanupJob = existingCleanupJobs.FirstOrDefault(

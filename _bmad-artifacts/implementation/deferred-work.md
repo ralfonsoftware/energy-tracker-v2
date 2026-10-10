@@ -411,7 +411,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: story 10-2-event-correlation-forward-window-recompute (2026-10-02)
 
-- [open] `CorrelateEvent` `BackgroundJob` rows are never swept (the 30-day sweep only covers `ProcessSmartPlugImport` rows, `SmartPlugImportRepository.cs`); story 10.2 adds a handful more per Meter Reading write inside an Event window. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]
 - [open] After a regression-prompt resolve, the re-evaluated set is "Events since the trigger", uncapped; typically a handful. [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs]
 - [open] A correlation can flip or disappear as readings arrive (latest evaluation wins); by design, but not announced in the UI.
 - [open] When the AI answers "None" for a persisting deviation, every later in-window reading costs one AI call: the two persisted columns cannot distinguish "evaluated, no match" from "never evaluated". Bounded by readings per ±7-day window. Epic 9 stories 9.3/9.4 live verification should include one forward-window recompute against the real backend.
@@ -420,7 +419,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: code review of story-10-2 (2026-10-02)
 
 - Same-timestamp tiebreak in `WindowedDeviationCalculator.ExcludeAtOrAfter` (and the in-memory ordering in `CorrelateEvent`) uses .NET `Guid.CompareTo`, which can differ from the database `uuid` ordering; only matters for readings with an identical `ReadingTimestamp` at the open-prompt boundary. [src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
-- Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event, and the job rows are never swept (overlaps the existing `[open]` sweep entry). [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+- Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
 - Per-Event dedup of requeued `CorrelateEvent` jobs (review decision 2c) needs an Event reference on `BackgroundJob` (new column/migration); not possible inside story 10.2 (AC #10: no migration). Concurrent jobs for one Event remain last-write-wins. [src/EnergyTracker.Application/RequeueEventCorrelations.cs] Reason: Ralf accepts last-write-wins (2026-10-02).
 
 - source_spec: `_bmad-artifacts/implementation/spec-local-dev-start-stop-scripts.md`
@@ -431,3 +430,8 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] An open Account menu stays open when the window is resized below 660px, because its trigger sits in the top nav, which becomes `display:none`; the same behaviour existed before 10.3. Seen in the 10.3 live gate. [web/src/components/dashboard/profile-menu.tsx]
 - [open] No automated guard that the bottom tab bar stays pinned to the viewport bottom (`mt-auto`) on a short page at <660px; `tab-order.spec.ts` only checks it sits below the content, and unit tests check the class string. [web/src/components/dashboard/nav-chrome.tsx]
+
+## Deferred from: code review of story-11-2-job-lifecycle-conditional-transitions-stale-recovery (2026-10-10)
+
+- [open] Heartbeat "ownership lost" only stops the heartbeat, and a stale takeover can run a job twice at once while the original owner is still alive; the ownership token protects the status row, not the side effects. Relevant to multi-replica Azure redelivery, fold into Story 11.3. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs]
+- [open] Stale comments in `SmartPlugImportRepository` (lines 38 and 62) say `BackgroundJobProcessor` tracks its own `BackgroundJob`; the rewritten processor does not. Comment-only fix, held back because the file is off-limits to 11.2 (see 11.19/11.4). [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]

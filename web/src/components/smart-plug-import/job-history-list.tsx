@@ -9,6 +9,7 @@ import { GapCard } from '@/components/smart-plug-import/gap-card'
 import { PowerPointMappingDialog } from '@/components/smart-plug-import/power-point-mapping-dialog'
 import { formatRelativeTime } from '@/lib/format-relative-time'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
+import { translateJobError } from '@/lib/job-error'
 import {
   ApiError,
   cleanUpSmartPlugImportJobs,
@@ -149,7 +150,7 @@ export function JobHistoryList() {
         if (status.status !== 'queued' && status.status !== 'processing') {
           if (status.status === 'failed') {
             if (mountedRef.current) {
-              setCleanupError(status.errorMessage ?? t('smartPlugImport.jobHistory.cleanup.error'))
+              setCleanupError(translateJobError(t, status.errorMessage, t('smartPlugImport.jobHistory.cleanup.error')))
             }
             return
           }
@@ -212,7 +213,7 @@ export function JobHistoryList() {
             // where it previously always showed (unlocalized) text. `errorGeneric` is the same
             // fallback use-smart-plug-import-job.ts's own live-polling failed state already uses.
             const metaLine = `${t('smartPlugImport.jobHistory.queuedBy', { member: displayName })} · ${formatRelativeTime(job.queuedAtUtc, i18n.language)}${
-              job.state === 'error' ? ` · ${job.errorMessage ?? t('smartPlugImport.errorGeneric')}` : ''
+              job.state === 'error' ? ` · ${translateJobError(t, job.errorMessage, t('smartPlugImport.errorGeneric'))}` : ''
             }`
 
             const rowContent = (

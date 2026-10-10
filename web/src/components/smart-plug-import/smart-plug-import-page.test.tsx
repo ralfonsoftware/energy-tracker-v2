@@ -293,6 +293,29 @@ describe('SmartPlugImportPage', () => {
     expect(screen.getByText('boom')).toBeInTheDocument()
   })
 
+  it('shows the translated sentence, not the raw code, when the job failed as job-interrupted', async () => {
+    const fetchMock = vi.fn(withJobHistoryStub((url) => {
+      if (url === '/api/smart-plug-imports') {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+
+      return Promise.resolve(
+        jsonResponse({ id: 'job-1', status: 'failed', errorMessage: 'job-interrupted', createdAtUtc: '', completedAtUtc: '' }),
+      )
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SmartPlugImportPage onBack={() => {}} />)
+
+    await selectFiles(makeFile('export.xlsx'))
+    await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
+
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await waitFor(() => expect(screen.getByText('Import failed')).toBeInTheDocument())
+    expect(screen.getByText(/This was interrupted before it finished/)).toBeInTheDocument()
+    expect(screen.queryByText('job-interrupted')).not.toBeInTheDocument()
+  })
+
   it('shows a needs-mapping badge and the create/map dialog when the import completes without a Power Point match', async () => {
     const fetchMock = vi.fn(withJobHistoryStub((url) => {
       if (url === '/api/smart-plug-imports') {

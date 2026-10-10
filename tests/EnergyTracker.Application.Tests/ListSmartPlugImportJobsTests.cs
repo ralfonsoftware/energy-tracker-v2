@@ -9,6 +9,7 @@ public class ListSmartPlugImportJobsTests
 {
     private readonly IBackgroundJobRepository _backgroundJobRepository = Substitute.For<IBackgroundJobRepository>();
     private readonly ISmartPlugImportRepository _smartPlugImportRepository = Substitute.For<ISmartPlugImportRepository>();
+    private readonly IBackgroundJobLifecycle _lifecycle = Substitute.For<IBackgroundJobLifecycle>();
     private readonly Guid _householdId = Guid.NewGuid();
 
     public ListSmartPlugImportJobsTests()
@@ -21,7 +22,7 @@ public class ListSmartPlugImportJobsTests
             .Returns((IReadOnlyList<SmartPlugImportGap>)[]);
     }
 
-    private ListSmartPlugImportJobs Sut() => new(_backgroundJobRepository, _smartPlugImportRepository);
+    private ListSmartPlugImportJobs Sut() => new(_backgroundJobRepository, _smartPlugImportRepository, _lifecycle);
 
     private BackgroundJob MakeJob(BackgroundJobStatus status, Guid? queuedByHouseholdMemberId = null, string? errorMessage = null) => new()
     {
@@ -276,5 +277,39 @@ public class ListSmartPlugImportJobsTests
             _householdId,
             Arg.Is<DateTimeOffset>(cutoff => cutoff >= before && cutoff <= after),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_fails_the_Households_stale_jobs_before_listing()
+    {
+        ReturnJobs();
+
+        await Sut().ExecuteAsync(_householdId, TestContext.Current.CancellationToken);
+
+        Received.InOrder(() =>
+        {
+            _lifecycle.FailStaleAsync(_householdId, Arg.Any<CancellationToken>());
+            _backgroundJobRepository.ListByJobTypeAsync(_householdId, JobTypes.ProcessSmartPlugImport, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_sweeps_terminal_CorrelateEvent_rows_with_the_same_retention_cutoff_as_the_import_sweep()
+    {
+        ReturnJobs();
+        DateTimeOffset? importCutoff = null;
+        DateTimeOffset? correlateCutoff = null;
+        _smartPlugImportRepository.SweepExpiredAsync(_householdId, Arg.Do<DateTimeOffset>(c => importCutoff = c), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _backgroundJobRepository
+            .DeleteTerminalByJobTypeAsync(_householdId, JobTypes.CorrelateEvent, Arg.Do<DateTimeOffset?>(c => correlateCutoff = c), Arg.Any<CancellationToken>())
+            .Returns(0);
+
+        await Sut().ExecuteAsync(_householdId, TestContext.Current.CancellationToken);
+
+        importCutoff.ShouldNotBeNull();
+        correlateCutoff.ShouldNotBeNull();
+        Math.Abs((correlateCutoff!.Value - importCutoff!.Value).TotalSeconds).ShouldBeLessThan(5);
+        Math.Abs((correlateCutoff.Value - DateTimeOffset.UtcNow.AddDays(-30)).TotalSeconds).ShouldBeLessThan(5);
     }
 }

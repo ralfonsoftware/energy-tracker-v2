@@ -81,6 +81,9 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("HeartbeatAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
@@ -93,6 +96,9 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 
                     b.Property<Guid?>("QueuedByHouseholdMemberId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");

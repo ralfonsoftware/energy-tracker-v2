@@ -107,6 +107,12 @@ docker compose down -v    # stop the stack AND delete the database volume
 Your data lives in a Docker-managed volume (`postgres-data`) that survives
 `docker compose down` (without `-v`) and container image rebuilds.
 
+Stopping or restarting the stack while an import, restore or history cleanup
+is running ends that job as failed the next time the app starts, and it has
+to be started again; your stored data is not affected. Run exactly one app
+container per database: the startup recovery assumes it is the only instance
+and would fail a second instance's running jobs.
+
 ## Running on modest hardware
 
 This is the same Compose file and container image used for local

@@ -288,6 +288,35 @@ If a future change ever turns any part of this into an "upsert instead of
 delete+insert" optimization, re-open this question before shipping it —
 that is precisely the shape the deferred item warns about.
 
+## If a restore is interrupted
+
+The restore job runs in the API process. If the app restarts or crashes
+while it is running, the job ends as **failed** and the member sees a
+message that it was interrupted before the restore finished.
+
+- **Nothing is half-restored.** The restore is one database transaction
+  (see "Restore semantics"), so a restore that is interrupted before it
+  commits changes nothing: the Household's data is exactly as it was
+  before. The one exception is a restore that had already committed when a
+  database outage longer than 5 minutes made it look dead (see below): the
+  data is then the restored data although the job is reported as
+  interrupted. Retrying gives the same result.
+- **Retrying is safe.** The member uploads the file again and confirms
+  again. A restore replaces everything wholesale, so running it a second
+  time gives the same result as running it once.
+- **Recovery is automatic.** With the default in-process job queue, jobs
+  left over from before a restart are marked failed when the app starts
+  (a single attempt at startup: if the database is unreachable at that
+  moment, a job that was still waiting stays blocked until the next
+  restart). With any queue, a job that has shown no sign of life (a
+  heartbeat is written every minute while it runs) for 5 minutes is marked
+  failed the next time its status is read, or when a new restore or
+  history cleanup is started. A restore that is still running and
+  heartbeating is not failed, and it keeps blocking a second restore for
+  the whole time. A job that only waits in a lost queue message is not
+  covered by the 5-minute check (the Azure queue's own recovery is a
+  separate piece of work).
+
 ## Backups and access
 
 A backup restores a Household's *data*. It never restores *who may see it*.

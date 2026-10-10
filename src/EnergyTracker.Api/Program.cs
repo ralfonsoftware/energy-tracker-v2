@@ -421,6 +421,10 @@ builder.Services.AddSingleton<BackgroundJobProcessor>();
 // themselves singletons and inject this directly (Story 3.6/AD-6 extension).
 builder.Services.AddSingleton<BackgroundJobEnqueueRecorder>();
 builder.Services.AddScoped<IBackgroundJobRepository, BackgroundJobRepository>();
+// AD-6 (amended 2026-10-10): the one writer of BackgroundJob.Status. Timings are operational
+// constants (1 min heartbeat, 5 min stale), not Household configuration.
+builder.Services.AddSingleton(JobLifecycleTimings.Default);
+builder.Services.AddScoped<IBackgroundJobLifecycle, BackgroundJobLifecycle>();
 builder.Services.AddScoped<GetBackgroundJobStatus>();
 builder.Services.AddScoped<ListSmartPlugImportJobs>();
 builder.Services.AddScoped<CleanUpSmartPlugImportJobs>();
@@ -448,6 +452,8 @@ switch (jobQueueProvider)
         // Database:Provider's hard-required default — the in-process adapter needs no external
         // config to function.
         builder.Services.AddSingleton<InProcessChannelJobQueue>();
+        // AD-24: process-local startup recovery; the Azure adapter never runs it.
+        builder.Services.AddSingleton<InProcessJobStartupSweep>();
         builder.Services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<InProcessChannelJobQueue>());
         builder.Services.AddHostedService<InProcessChannelJobProcessingService>();
         break;

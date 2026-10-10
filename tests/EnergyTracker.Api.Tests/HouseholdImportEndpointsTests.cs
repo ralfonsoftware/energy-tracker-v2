@@ -1,9 +1,13 @@
+using EnergyTracker.Application;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Domain;
+using EnergyTracker.Infrastructure.Adapters;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 
 namespace EnergyTracker.Api.Tests;
@@ -279,5 +283,77 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var secondConfirm = await client.PostAsync($"/api/household-import/{validateBody.Token}/confirm", null, TestContext.Current.CancellationToken);
 
         secondConfirm.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private static async Task<(HttpClient Client, Guid HouseholdId)> CreateClientWithHouseholdIdAsync(EnergyTrackerApiFactory factory)
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        var response = await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var created = await response.Content.ReadFromJsonAsync<HouseholdResponse>(TestContext.Current.CancellationToken);
+        return (client, created!.Id);
+    }
+
+    private static async Task<HttpResponseMessage> ValidateAndConfirmAsync(HttpClient client)
+    {
+        var exportResponse = await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken);
+        var exportBytes = await exportResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+        using var upload = BuildUpload(exportBytes);
+        var validateResponse = await client.PostAsync("/api/household-import", upload, TestContext.Current.CancellationToken);
+        var validateBody = await validateResponse.Content.ReadFromJsonAsync<HouseholdImportValidationResponse>(TestContext.Current.CancellationToken);
+        return await client.PostAsync($"/api/household-import/{validateBody!.Token}/confirm", null, TestContext.Current.CancellationToken);
+    }
+
+    // Story 11.2 / AC #4: a restore row orphaned by a restart blocked the Household forever (C8).
+    // The startup sweep is invoked explicitly: EnergyTrackerApiFactory builds the host (and so runs
+    // the automatic sweep) before MigrateAsync, so that automatic sweep has nothing to sweep here.
+    [Fact]
+    public async Task Confirm_is_rejected_while_an_orphaned_restore_row_exists_and_accepted_after_the_startup_sweep()
+    {
+        var (client, householdId) = await CreateClientWithHouseholdIdAsync(factory);
+        await factory.SeedBackgroundJobAsync(
+            householdId, JobTypes.RestoreHouseholdData, BackgroundJobStatus.Queued, DateTimeOffset.UtcNow.AddMinutes(-10));
+
+        (await ValidateAndConfirmAsync(client)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        // Simulates "the process restarted": every row created before now belonged to the previous process.
+        var sweep = factory.Services.GetRequiredService<InProcessJobStartupSweep>();
+        await sweep.SweepAsync(DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+
+        var confirm = await ValidateAndConfirmAsync(client);
+        confirm.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var confirmBody = await confirm.Content.ReadFromJsonAsync<HouseholdImportConfirmResponse>(TestContext.Current.CancellationToken);
+        (await PollJobToTerminalAsync(client, confirmBody!.JobId)).Status.ShouldBe("completed");
+    }
+
+    // AC #3: a long restore that is still heartbeating keeps the 409 guard for its whole run ...
+    [Fact]
+    public async Task Confirm_stays_rejected_for_a_Processing_restore_that_is_still_heartbeating_however_old_it_is()
+    {
+        var (client, householdId) = await CreateClientWithHouseholdIdAsync(factory);
+        var now = DateTimeOffset.UtcNow;
+        await factory.SeedBackgroundJobAsync(
+            householdId, JobTypes.RestoreHouseholdData, BackgroundJobStatus.Processing, now.AddMinutes(-10),
+            startedAtUtc: now.AddMinutes(-10), heartbeatAtUtc: now.AddSeconds(-30));
+
+        (await ValidateAndConfirmAsync(client)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    // ... and one whose heartbeat is older than five minutes is failed on the first read.
+    [Fact]
+    public async Task Confirm_fails_a_Processing_restore_with_a_stale_heartbeat_and_is_then_accepted()
+    {
+        var (client, householdId) = await CreateClientWithHouseholdIdAsync(factory);
+        var now = DateTimeOffset.UtcNow;
+        var staleJobId = await factory.SeedBackgroundJobAsync(
+            householdId, JobTypes.RestoreHouseholdData, BackgroundJobStatus.Processing, now.AddMinutes(-10),
+            startedAtUtc: now.AddMinutes(-10), heartbeatAtUtc: now.AddMinutes(-6));
+
+        var confirm = await ValidateAndConfirmAsync(client);
+
+        confirm.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var stale = await (await client.GetAsync($"/api/jobs/{staleJobId}", TestContext.Current.CancellationToken))
+            .Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
+        stale!.Status.ShouldBe("failed");
+        stale.ErrorMessage.ShouldBe("job-interrupted");
     }
 }
