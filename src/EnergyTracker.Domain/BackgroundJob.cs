@@ -13,6 +13,9 @@ public class BackgroundJob
 
     public required BackgroundJobStatus Status { get; set; }
 
+    // A user-facing validation message (SmartPlugImportValidationException /
+    // HouseholdImportValidationException), or a stable failure code the client translates
+    // (job-interrupted, job-retries-exhausted, upload-missing), or null for a generic failure.
     public string? ErrorMessage { get; set; }
 
     // Captured at enqueue time (Story 3.6/AD-6 extension), before a SmartPlugImport row exists —
@@ -25,6 +28,14 @@ public class BackgroundJob
     public required DateTimeOffset CreatedAtUtc { get; init; }
 
     public DateTimeOffset? CompletedAtUtc { get; set; }
+
+    // AD-6 (amended 2026-10-10): StartedAtUtc is the ownership token of the run that moved this
+    // row to Processing — only that run's heartbeat/complete/fail may change it afterwards.
+    // HeartbeatAtUtc is that run's liveness evidence; staleness is judged on read, never by a timer.
+    // Both stay null on rows written before the lifecycle existed.
+    public DateTimeOffset? StartedAtUtc { get; set; }
+
+    public DateTimeOffset? HeartbeatAtUtc { get; set; }
 }
 
 public enum BackgroundJobStatus

@@ -777,4 +777,22 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
             .CountAsync(j => j.HouseholdId == householdId && j.JobType == JobTypes.CleanUpSmartPlugImportJobs, TestContext.Current.CancellationToken);
         cleanupJobCount.ShouldBe(1);
     }
+
+    [Fact]
+    public async Task DELETE_smart_plug_import_jobs_ignores_a_stale_Processing_cleanup_job_and_enqueues_a_new_one()
+    {
+        // Story 11.2 / AC #3: a cleanup row orphaned by a restart used to make this endpoint return
+        // its id forever. A stale heartbeat now fails it on this very check.
+        var (client, householdId) = await CreateHouseholdAsync();
+        var now = DateTimeOffset.UtcNow;
+        var staleJobId = await factory.SeedBackgroundJobAsync(
+            householdId, JobTypes.CleanUpSmartPlugImportJobs, BackgroundJobStatus.Processing, now.AddMinutes(-20),
+            startedAtUtc: now.AddMinutes(-20), heartbeatAtUtc: now.AddMinutes(-7));
+
+        var deleteResponse = await client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=false", TestContext.Current.CancellationToken);
+
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var deleteBody = await deleteResponse.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(TestContext.Current.CancellationToken);
+        deleteBody!.JobId.ShouldNotBe(staleJobId);
+    }
 }

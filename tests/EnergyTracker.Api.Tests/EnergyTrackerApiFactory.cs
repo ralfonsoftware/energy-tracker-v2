@@ -112,4 +112,28 @@ public class EnergyTrackerApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
+
+    // Seeds a BackgroundJob row straight into the table so a test can put a job in a state the
+    // real in-process queue would never leave one in (an orphaned Queued/Processing row, a stale
+    // heartbeat). Story 11.2.
+    public async Task<Guid> SeedBackgroundJobAsync(
+        Guid householdId, string jobType, BackgroundJobStatus status, DateTimeOffset createdAtUtc,
+        DateTimeOffset? startedAtUtc = null, DateTimeOffset? heartbeatAtUtc = null)
+    {
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        var job = new BackgroundJob
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = jobType,
+            Status = status,
+            CreatedAtUtc = createdAtUtc,
+            StartedAtUtc = startedAtUtc,
+            HeartbeatAtUtc = heartbeatAtUtc,
+        };
+        dbContext.BackgroundJobs.Add(job);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return job.Id;
+    }
 }

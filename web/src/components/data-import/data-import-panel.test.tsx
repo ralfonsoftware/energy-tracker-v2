@@ -223,6 +223,45 @@ describe('DataImportPanel', () => {
     expect(await screen.findByText(/could not be found/i)).toBeInTheDocument()
   })
 
+  // Story 11.2 (AC #9): a failed job can carry a stable failure code; a member sees the translated
+  // sentence, never the raw code.
+  it('renders the translated sentence, not the raw code, for a job that failed as job-interrupted', async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/household-import') {
+        return Promise.resolve(jsonResponse(validationResponseBody))
+      }
+      if (url.endsWith('/confirm')) {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(jsonResponse({ id: 'job-1', status: 'processing', importStatus: null, errorMessage: null }))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<DataImportPanel />)
+    await selectFile(makeFile())
+    await screen.findByText(/replace all data with this file/i)
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(screen.getByRole('button', { name: 'Replace all data' }))
+    await screen.findByText(/restoring/i)
+
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(jsonResponse({ id: 'job-1', status: 'failed', importStatus: null, errorMessage: 'job-interrupted' }))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(await screen.findByText(/This was interrupted before it finished/)).toBeInTheDocument()
+    expect(screen.queryByText('job-interrupted')).not.toBeInTheDocument()
+  })
+
   // AC #4 (AD-25): after a restore, the file's member display names are listed next to the invite
   // action — a hint about whom to re-invite, never a comparison with current members.
   describe('"People in this backup" panel after a completed restore', () => {

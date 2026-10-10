@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { translateJobError } from '@/lib/job-error'
 import { ApiError, fetchJobStatus, uploadSmartPlugFile, type SmartPlugImportGapDto } from '@/lib/smart-plug-import-api'
 
 export type ImportJobState = 'uploading' | 'processing' | 'completed' | 'awaitingMapping' | 'flaggedForReview' | 'failed'
@@ -110,7 +111,7 @@ export function useSmartPlugImportJob(file: File): SmartPlugImportJob {
             setState('completed')
           }
         } else if (job.status === 'failed') {
-          setError(job.errorMessage ?? t('smartPlugImport.errorGeneric'))
+          setError(translateJobError(t, job.errorMessage, t('smartPlugImport.errorGeneric')))
           setState('failed')
         }
       } catch (err) {

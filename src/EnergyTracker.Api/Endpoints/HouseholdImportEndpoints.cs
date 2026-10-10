@@ -102,6 +102,7 @@ public static class HouseholdImportEndpoints
             ICurrentHouseholdAccessor householdAccessor,
             IHouseholdImportUploadRegistry uploadRegistry,
             IBackgroundJobRepository backgroundJobRepository,
+            IBackgroundJobLifecycle backgroundJobLifecycle,
             IBackgroundJobQueue jobQueue,
             CancellationToken cancellationToken) =>
         {
@@ -130,6 +131,11 @@ public static class HouseholdImportEndpoints
             // consumed once regardless, so this only rejects a second, genuinely different upload
             // racing an already-in-flight restore for the same Household, never a retry of the
             // same token (Code Review, Story 7.2 Pass 1).
+            //
+            // Story 11.2: a restore orphaned by a restart/crash used to hold this 409 forever. Rows
+            // whose heartbeat is older than 5 minutes are failed first (a restore that is still
+            // heartbeating keeps the guard for its whole run).
+            await backgroundJobLifecycle.FailStaleAsync(householdId, cancellationToken);
             var restoreJobs = await backgroundJobRepository.ListByJobTypeAsync(householdId, JobTypes.RestoreHouseholdData, cancellationToken);
             if (restoreJobs.Any(j => j.Status is BackgroundJobStatus.Queued or BackgroundJobStatus.Processing))
             {

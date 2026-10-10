@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Domain;
 using Shouldly;
 
 namespace EnergyTracker.Api.Tests;
@@ -63,5 +64,39 @@ public class JobEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<
         var response = await client.GetAsync($"/api/jobs/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GET_jobs_id_for_a_Processing_job_with_a_stale_heartbeat_returns_failed_with_the_job_interrupted_code()
+    {
+        var (client, householdId) = await CreateHouseholdAsync();
+        var now = DateTimeOffset.UtcNow;
+        var jobId = await factory.SeedBackgroundJobAsync(
+            householdId, "UnknownJobType", BackgroundJobStatus.Processing, now.AddMinutes(-30),
+            startedAtUtc: now.AddMinutes(-30), heartbeatAtUtc: now.AddMinutes(-6));
+
+        var response = await client.GetAsync($"/api/jobs/{jobId}", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
+        body!.Status.ShouldBe("failed");
+        body.ErrorMessage.ShouldBe("job-interrupted");
+        body.CompletedAtUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task GET_jobs_id_for_a_Processing_job_that_is_still_heartbeating_stays_processing()
+    {
+        var (client, householdId) = await CreateHouseholdAsync();
+        var now = DateTimeOffset.UtcNow;
+        var jobId = await factory.SeedBackgroundJobAsync(
+            householdId, "UnknownJobType", BackgroundJobStatus.Processing, now.AddHours(-2),
+            startedAtUtc: now.AddHours(-2), heartbeatAtUtc: now.AddSeconds(-20));
+
+        var body = await (await client.GetAsync($"/api/jobs/{jobId}", TestContext.Current.CancellationToken))
+            .Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
+
+        body!.Status.ShouldBe("processing");
+        body.ErrorMessage.ShouldBeNull();
     }
 }

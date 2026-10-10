@@ -508,5 +508,10 @@
     "due": "Tarifcheck — ein Blick lohnt sich. Die Mindestvertragslaufzeit ist beendet oder endet bald, daher könnte ein neuer Tarifvergleich sinnvoll sein.",
     "notDue": "Tarifcheck — aktuell nichts fällig. Nächster Check etwa am {{date}}.",
     "openLabel": "Tarifcheck, Tarifradar öffnen"
+  },
+  "jobError": {
+    "interrupted": "Das wurde unterbrochen, bevor es abgeschlossen war, und daher abgebrochen. Bitte versuche es erneut.",
+    "retriesExhausted": "Das konnte auch nach mehreren Versuchen nicht abgeschlossen werden. Bitte versuche es erneut.",
+    "uploadMissing": "Die hochgeladene Datei ist auf dem Server nicht mehr verfügbar. Bitte lade sie erneut hoch."
   }
 }

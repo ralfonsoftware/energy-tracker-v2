@@ -126,6 +126,17 @@ describe('JobHistoryList', () => {
     expect(screen.getByText(/Something went wrong uploading this file\. Please try again\./)).toBeInTheDocument()
   })
 
+  it('shows the translated sentence, not the raw code, for an error-state job that was job-interrupted', async () => {
+    const job = makeJob({ jobId: 'error', state: 'error', fileName: 'd.csv', errorMessage: 'job-interrupted' })
+    stubFetch([job])
+
+    render(<JobHistoryList />)
+
+    await waitFor(() => expect(screen.getByText('d.csv')).toBeInTheDocument())
+    expect(screen.getByText(/This was interrupted before it finished/)).toBeInTheDocument()
+    expect(screen.queryByText(/job-interrupted/)).not.toBeInTheDocument()
+  })
+
   it('renders the empty state, not blank space or an error, when the fetched list is empty', async () => {
     stubFetch([])
 
@@ -273,6 +284,20 @@ describe('JobHistoryList', () => {
       await waitFor(() => expect(screen.getByText('An unexpected error occurred while cleaning up the history.')).toBeInTheDocument())
       expect(screen.getByText('Clean up import history')).toBeInTheDocument()
       expect(screen.getByText('a.csv')).toBeInTheDocument()
+    })
+
+    it('shows the translated sentence, not the raw code, when the accepted cleanup job failed as job-interrupted', async () => {
+      const job = makeJob({ jobId: 'a', fileName: 'a.csv' })
+      stubFetch([job], { cleanupJobStatus: 'failed', cleanupErrorMessage: 'job-interrupted' })
+
+      render(<JobHistoryList />)
+      await waitFor(() => expect(screen.getByText('a.csv')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Clean up history' }))
+      await waitFor(() => expect(screen.getByText('Clean up import history')).toBeInTheDocument())
+      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(screen.getByText(/This was interrupted before it finished/)).toBeInTheDocument())
+      expect(screen.queryByText('job-interrupted')).not.toBeInTheDocument()
     })
 
     it('falls back to the localized generic error when a failed cleanup job carries no errorMessage', async () => {

@@ -171,8 +171,7 @@ public class HouseholdRestoreWriter(EnergyTrackerDbContext dbContext) : IHouseho
     // discipline as the deletes above. Detaches just this chunk's own newly-tracked entities
     // afterward, never a blanket ChangeTracker.Clear() — SmartPlugImportRepository.AddAsync's own
     // incident-fix comment documents exactly why a blanket clear is unsafe on this shared scoped
-    // DbContext: BackgroundJobProcessor tracks its own BackgroundJob row across this entire call,
-    // and a blanket clear would silently detach it too.
+    // DbContext: it would silently detach every other entity the scope is tracking.
     private async Task ChunkedInsertAsync<TEntity>(DbSet<TEntity> set, IReadOnlyList<TEntity> entities, CancellationToken cancellationToken)
         where TEntity : class
     {

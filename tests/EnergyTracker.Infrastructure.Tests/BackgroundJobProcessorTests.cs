@@ -1,17 +1,20 @@
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Shouldly;
 using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
-// Story 3.6/AD-6 extension: BackgroundJobEnqueueRecorder persists a Queued row at enqueue time;
-// BackgroundJobProcessor.ProcessAsync now looks that row up and transitions it, rather than
-// blindly inserting a fresh Processing row.
+// Story 3.6/AD-6 extension: BackgroundJobEnqueueRecorder persists a Queued row at enqueue time.
+// Story 11.2/AD-6 (amended): BackgroundJobProcessor.ProcessAsync drives every status change
+// through IBackgroundJobLifecycle (conditional update + ownership token), heartbeats from its own
+// scope, and never resurrects or overwrites a row.
 public class BackgroundJobProcessorTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
@@ -27,14 +30,67 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         public Guid? HouseholdMemberId => null;
     }
 
-    private ServiceProvider BuildServices(Guid householdId)
+    private readonly ISmartPlugImportRepository _smartPlugImportRepository = Substitute.For<ISmartPlugImportRepository>();
+
+    // A short heartbeat interval lets the heartbeat tests observe a tick without sleeping a minute.
+    private static readonly JobLifecycleTimings FastHeartbeat = new(TimeSpan.FromMilliseconds(50), TimeSpan.FromMinutes(5));
+
+    private ServiceProvider BuildServices(Guid householdId, JobLifecycleTimings? timings = null)
     {
         var services = new ServiceCollection();
         services.AddDbContext<EnergyTrackerDbContext>(o => o.UseNpgsql(
             _container.GetConnectionString(), n => n.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres")));
         services.AddScoped<JobHouseholdContext>();
         services.AddSingleton<ICurrentHouseholdAccessor>(new FixedHouseholdAccessor(householdId));
+        services.AddSingleton(timings ?? JobLifecycleTimings.Default);
+        services.AddScoped<IBackgroundJobLifecycle, BackgroundJobLifecycle>();
+        // The CleanUpSmartPlugImportJobs use case is the controllable stand-in for "a job that runs":
+        // its repository calls are NSubstitute ports the test can block, fail or cancel.
+        services.AddSingleton(_smartPlugImportRepository);
+        services.AddSingleton(Substitute.For<IBackgroundJobRepository>());
+        services.AddScoped<CleanUpSmartPlugImportJobs>();
         return services.BuildServiceProvider();
+    }
+
+    private static BackgroundJobProcessor NewProcessor(ServiceProvider provider, JobLifecycleTimings? timings = null) =>
+        new(provider.GetRequiredService<IServiceScopeFactory>(), timings ?? JobLifecycleTimings.Default, NullLogger<BackgroundJobProcessor>.Instance);
+
+    private const string CleanUpPayload = "{\"DeleteAll\":false}";
+
+    private static async Task<Guid> SeedJobAsync(
+        ServiceProvider provider, Guid householdId, BackgroundJobStatus status, string jobType,
+        DateTimeOffset? startedAt = null, DateTimeOffset? heartbeatAt = null, CancellationToken cancellationToken = default)
+    {
+        var jobId = Guid.NewGuid();
+        using var seedScope = provider.CreateScope();
+        var dbContext = seedScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        dbContext.BackgroundJobs.Add(new BackgroundJob
+        {
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = jobType,
+            Status = status,
+            OriginalFileName = "export.xlsx",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-20),
+            StartedAtUtc = startedAt,
+            HeartbeatAtUtc = heartbeatAt,
+            CompletedAtUtc = status is BackgroundJobStatus.Completed or BackgroundJobStatus.Failed ? DateTimeOffset.UtcNow.AddMinutes(-1) : null,
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return jobId;
+    }
+
+    private static async Task<BackgroundJob?> LoadAsync(ServiceProvider provider, Guid jobId, CancellationToken cancellationToken)
+    {
+        using var scope = provider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+        return await dbContext.BackgroundJobs.AsNoTracking().SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+    }
+
+    private static async Task<int> ThrowAfterYieldAsync(Func<Exception> exception)
+    {
+        await Task.Yield();
+        throw exception();
     }
 
     private static async Task MigrateAsync(ServiceProvider provider, CancellationToken cancellationToken)
@@ -118,109 +174,102 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ProcessAsync_transitions_an_existing_Queued_row_instead_of_inserting_a_second_row()
+    public async Task ProcessAsync_a_successful_run_ends_Completed_with_StartedAtUtc_and_HeartbeatAtUtc_set()
     {
+        var ct = TestContext.Current.CancellationToken;
         var householdId = Guid.NewGuid();
         await using var provider = BuildServices(householdId);
-        await MigrateAsync(provider, TestContext.Current.CancellationToken);
-        await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>()).Returns(2);
 
-        var jobId = Guid.NewGuid();
-        using (var seedScope = provider.CreateScope())
-        {
-            var dbContext = seedScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-            dbContext.BackgroundJobs.Add(new BackgroundJob
-            {
-                Id = jobId,
-                HouseholdId = householdId,
-                JobType = "UnknownJobType",
-                Status = BackgroundJobStatus.Queued,
-                OriginalFileName = "export.xlsx",
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            });
-            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
 
-        var processor = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
-        var message = new JobMessage(jobId, householdId, "UnknownJobType", "{}");
+        var job = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        job.Status.ShouldBe(BackgroundJobStatus.Completed);
+        job.StartedAtUtc.ShouldNotBeNull();
+        job.HeartbeatAtUtc.ShouldNotBeNull();
+        job.CompletedAtUtc.ShouldNotBeNull();
+        job.ErrorMessage.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_transitions_an_existing_Queued_row_instead_of_inserting_a_second_row()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, "UnknownJobType", cancellationToken: ct);
 
         // An unrecognized JobType throws inside ProcessAsync's own dispatch switch and is caught,
-        // ending in Failed — irrelevant to what this test verifies (the row-lookup+transition
-        // logic ahead of that switch, and that no second row is inserted for the same JobId).
-        await processor.ProcessAsync(message, TestContext.Current.CancellationToken);
+        // ending in Failed — irrelevant to what this test verifies (the transition ahead of that
+        // switch, and that no second row is inserted for the same JobId).
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, "UnknownJobType", "{}"), ct);
 
         using var verifyScope = provider.CreateScope();
         var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        var rows = await verifyDbContext.BackgroundJobs.Where(j => j.Id == jobId).ToListAsync(TestContext.Current.CancellationToken);
+        var rows = await verifyDbContext.BackgroundJobs.Where(j => j.Id == jobId).ToListAsync(ct);
         rows.ShouldHaveSingleItem();
         rows[0].Status.ShouldNotBe(BackgroundJobStatus.Queued);
         rows[0].CompletedAtUtc.ShouldNotBeNull();
     }
 
     [Fact]
-    public async Task ProcessAsync_two_concurrent_deliveries_of_an_existing_Queued_row_transition_it_exactly_once()
+    public async Task ProcessAsync_two_concurrent_deliveries_of_an_existing_Queued_row_run_the_job_exactly_once()
     {
-        // Review-round-2 patch regression guard: this is now the primary path (an enqueue-time
-        // Queued row always exists), unlike the defensive "job is null" fallback branch, which
-        // already handled concurrent redelivery via a conditional insert. Two redeliveries of the
-        // same message (e.g. Azure Storage Queue visibility-timeout expiry mid-processing) must
-        // resolve to exactly one surviving row in a consistent terminal state, not a lost update
-        // from an unguarded read-then-write race.
+        // Two redeliveries of the same message (e.g. Azure Storage Queue visibility-timeout expiry
+        // mid-processing) must resolve to one execution and one consistent terminal state — the
+        // conditional TryStart is the gate, not a read-then-write.
+        var ct = TestContext.Current.CancellationToken;
         var householdId = Guid.NewGuid();
         await using var provider = BuildServices(householdId);
-        await MigrateAsync(provider, TestContext.Current.CancellationToken);
-        await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>()).Returns(0);
+        var message = new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload);
 
-        var jobId = Guid.NewGuid();
-        using (var seedScope = provider.CreateScope())
-        {
-            var dbContext = seedScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-            dbContext.BackgroundJobs.Add(new BackgroundJob
-            {
-                Id = jobId,
-                HouseholdId = householdId,
-                JobType = "UnknownJobType",
-                Status = BackgroundJobStatus.Queued,
-                OriginalFileName = "export.xlsx",
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            });
-            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
+        await Task.WhenAll(NewProcessor(provider).ProcessAsync(message, ct), NewProcessor(provider).ProcessAsync(message, ct));
 
-        var processorA = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
-        var processorB = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
-        var message = new JobMessage(jobId, householdId, "UnknownJobType", "{}");
-
-        await Task.WhenAll(
-            processorA.ProcessAsync(message, TestContext.Current.CancellationToken),
-            processorB.ProcessAsync(message, TestContext.Current.CancellationToken));
-
-        using var verifyScope = provider.CreateScope();
-        var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        var rows = await verifyDbContext.BackgroundJobs.Where(j => j.Id == jobId).ToListAsync(TestContext.Current.CancellationToken);
-        rows.ShouldHaveSingleItem();
-        rows[0].Status.ShouldBe(BackgroundJobStatus.Failed);
-        rows[0].CompletedAtUtc.ShouldNotBeNull();
+        await _smartPlugImportRepository.Received(1).DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
+        var job = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        job.Status.ShouldBe(BackgroundJobStatus.Completed);
     }
 
     [Fact]
-    public async Task ProcessAsync_inserts_a_fresh_row_when_no_Queued_row_exists_for_the_message_defensive_fallback()
+    public async Task ProcessAsync_does_nothing_when_the_row_is_missing()
     {
+        var ct = TestContext.Current.CancellationToken;
         var householdId = Guid.NewGuid();
         await using var provider = BuildServices(householdId);
-        await MigrateAsync(provider, TestContext.Current.CancellationToken);
-        await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
-
-        var processor = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
         var jobId = Guid.NewGuid();
-        var message = new JobMessage(jobId, householdId, "UnknownJobType", "{}");
 
-        await processor.ProcessAsync(message, TestContext.Current.CancellationToken);
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
 
-        using var scope = provider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        var persisted = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == jobId, TestContext.Current.CancellationToken);
-        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        (await LoadAsync(provider, jobId, ct)).ShouldBeNull();
+        await _smartPlugImportRepository.DidNotReceiveWithAnyArgs().DeleteJobsAsync(default, default, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_does_nothing_for_a_Processing_row_whose_owner_is_still_heartbeating()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Processing, JobTypes.CleanUpSmartPlugImportJobs,
+            startedAt: DateTimeOffset.UtcNow.AddMinutes(-15), heartbeatAt: DateTimeOffset.UtcNow.AddSeconds(-10), cancellationToken: ct);
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        await _smartPlugImportRepository.DidNotReceiveWithAnyArgs().DeleteJobsAsync(default, default, TestContext.Current.CancellationToken);
+        (await LoadAsync(provider, jobId, ct))!.Status.ShouldBe(BackgroundJobStatus.Processing);
     }
 
     [Fact]
@@ -232,67 +281,284 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         // string via `errorMessage ?? t(...)`. A user reported the earlier hardcoded fallback
         // ("An unexpected error occurred while cleaning up the history.") rendering in English
         // regardless of their browser's locale.
+        var ct = TestContext.Current.CancellationToken;
         var householdId = Guid.NewGuid();
         await using var provider = BuildServices(householdId);
-        await MigrateAsync(provider, TestContext.Current.CancellationToken);
-        await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, "UnknownJobType", cancellationToken: ct);
 
-        var processor = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
-        var jobId = Guid.NewGuid();
         // "UnknownJobType" hits the dispatch switch's `default: throw new InvalidOperationException`
         // — a generic, non-validation failure, same as any unexpected internal error would be.
-        var message = new JobMessage(jobId, householdId, "UnknownJobType", "{}");
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, "UnknownJobType", "{}"), ct);
 
-        await processor.ProcessAsync(message, TestContext.Current.CancellationToken);
-
-        using var scope = provider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        var persisted = await dbContext.BackgroundJobs.SingleAsync(j => j.Id == jobId, TestContext.Current.CancellationToken);
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
         persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
         persisted.ErrorMessage.ShouldBeNull();
+        persisted.CompletedAtUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_a_validation_exception_message_is_forwarded_as_the_ErrorMessage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new SmartPlugImportValidationException("bad file")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe("bad file");
     }
 
     [Fact]
     public async Task ProcessAsync_skips_a_redelivered_message_against_an_already_terminal_row()
     {
+        var ct = TestContext.Current.CancellationToken;
         var householdId = Guid.NewGuid();
         await using var provider = BuildServices(householdId);
-        await MigrateAsync(provider, TestContext.Current.CancellationToken);
-        await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Completed, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        var before = (await LoadAsync(provider, jobId, ct))!;
 
-        var jobId = Guid.NewGuid();
-        // Truncated to microsecond precision (same fix as ArchiveRoom/ArchiveDevice/
-        // ArchivePowerPoint already apply before persisting) — Postgres' timestamptz column only
-        // stores microsecond precision, so an untruncated DateTimeOffset.UtcNow tick value can
-        // silently fail to round-trip exactly, making the ShouldBe(completedAt) assertion below
-        // flaky against a real Postgres round trip (CI-only: local clock resolution rarely
-        // produces the sub-microsecond ticks that expose this).
-        var rawCompletedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
-        var completedAt = rawCompletedAt.AddTicks(-(rawCompletedAt.Ticks % TimeSpan.TicksPerMicrosecond));
-        using (var seedScope = provider.CreateScope())
-        {
-            var dbContext = seedScope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-            dbContext.BackgroundJobs.Add(new BackgroundJob
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        await _smartPlugImportRepository.DidNotReceiveWithAnyArgs().DeleteJobsAsync(default, default, TestContext.Current.CancellationToken);
+        var persisted = (await LoadAsync(provider, jobId, ct))!;
+        persisted.Status.ShouldBe(BackgroundJobStatus.Completed);
+        persisted.CompletedAtUtc.ShouldBe(before.CompletedAtUtc);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_refreshes_HeartbeatAtUtc_while_the_use_case_is_still_running_and_stops_after_completion()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId, FastHeartbeat);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        var release = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
             {
-                Id = jobId,
-                HouseholdId = householdId,
-                JobType = "UnknownJobType",
-                Status = BackgroundJobStatus.Completed,
-                CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
-                CompletedAtUtc = completedAt,
+                started.TrySetResult();
+                return release.Task;
             });
-            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var run = NewProcessor(provider, FastHeartbeat)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+
+        var firstSeen = (await LoadAsync(provider, jobId, ct))!.HeartbeatAtUtc.ShouldNotBeNull();
+        DateTimeOffset? advanced = null;
+        for (var attempt = 0; attempt < 100 && advanced is null; attempt++)
+        {
+            await Task.Delay(100, ct);
+            var current = (await LoadAsync(provider, jobId, ct))!.HeartbeatAtUtc;
+            if (current > firstSeen)
+            {
+                advanced = current;
+            }
         }
 
-        var processor = new BackgroundJobProcessor(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundJobProcessor>.Instance);
-        var message = new JobMessage(jobId, householdId, "UnknownJobType", "{}");
+        advanced.ShouldNotBeNull("HeartbeatAtUtc never advanced while the use case was still running");
+        release.SetResult(1);
+        await run;
 
-        await processor.ProcessAsync(message, TestContext.Current.CancellationToken);
+        var done = (await LoadAsync(provider, jobId, ct))!;
+        done.Status.ShouldBe(BackgroundJobStatus.Completed);
+        var heartbeatAtCompletion = done.HeartbeatAtUtc;
+        await Task.Delay(300, ct);
+        (await LoadAsync(provider, jobId, ct))!.HeartbeatAtUtc.ShouldBe(heartbeatAtCompletion);
+    }
 
-        using var scope = provider.CreateScope();
-        var dbContext2 = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        var persisted = await dbContext2.BackgroundJobs.SingleAsync(j => j.Id == jobId, TestContext.Current.CancellationToken);
-        persisted.Status.ShouldBe(BackgroundJobStatus.Completed);
-        persisted.CompletedAtUtc.ShouldBe(completedAt);
+    [Fact]
+    public async Task ProcessAsync_an_OperationCanceledException_not_caused_by_shutdown_ends_the_job_Failed()
+    {
+        // C7, processor half: an HttpClient/command timeout that surfaces as a cancellation is a
+        // failure, not a shutdown — it must not leave the job Processing forever.
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new TaskCanceledException("timeout")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBeNull();
+        persisted.CompletedAtUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_a_shutdown_cancellation_is_rethrown_and_leaves_the_job_Processing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                stopping.Cancel();
+                return ThrowAfterYieldAsync(() => new OperationCanceledException(stopping.Token));
+            });
+
+        await Should.ThrowAsync<OperationCanceledException>(() => NewProcessor(provider)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), stopping.Token));
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Processing);
+        persisted.CompletedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_a_job_whose_row_was_deleted_mid_run_resurrects_nothing_and_throws_nothing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(async _ =>
+            {
+                // What cleanup's deleteAll does to an in-flight job row.
+                using var scope = provider.CreateScope();
+                scope.ServiceProvider.GetRequiredService<JobHouseholdContext>().HouseholdId = householdId;
+                var db = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+                await db.BackgroundJobs.Where(j => j.Id == jobId).ExecuteDeleteAsync(ct);
+                return 1;
+            });
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        (await LoadAsync(provider, jobId, ct)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_an_exception_from_TryHeartbeat_does_not_stop_the_job_or_the_heartbeat_loop()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var token = DateTimeOffset.UtcNow;
+        var lifecycle = Substitute.For<IBackgroundJobLifecycle>();
+        lifecycle.TryStartAsync(jobId, Arg.Any<CancellationToken>()).Returns(token);
+        lifecycle.TryHeartbeatAsync(jobId, token, Arg.Any<CancellationToken>()).Returns<Task<bool>>(_ => throw new InvalidOperationException("db blip"));
+        lifecycle.TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>()).Returns(true);
+        var release = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>()).Returns(release.Task);
+
+        var services = new ServiceCollection();
+        services.AddScoped<JobHouseholdContext>();
+        services.AddSingleton(lifecycle);
+        services.AddSingleton(_smartPlugImportRepository);
+        services.AddSingleton(Substitute.For<IBackgroundJobRepository>());
+        services.AddScoped<CleanUpSmartPlugImportJobs>();
+        await using var provider = services.BuildServiceProvider();
+
+        var run = NewProcessor(provider, FastHeartbeat)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+        for (var attempt = 0; attempt < 100 && lifecycle.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IBackgroundJobLifecycle.TryHeartbeatAsync)) < 2; attempt++)
+        {
+            await Task.Delay(50, ct);
+        }
+
+        release.SetResult(0);
+        await run;
+
+        lifecycle.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IBackgroundJobLifecycle.TryHeartbeatAsync))
+            .ShouldBeGreaterThanOrEqualTo(2, "the loop must keep ticking after a heartbeat exception");
+        await lifecycle.Received(1).TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>());
+    }
+
+    private static readonly JobLifecycleTimings FastRetry = JobLifecycleTimings.Default with { TransitionRetryDelay = TimeSpan.FromMilliseconds(1) };
+
+    private ServiceProvider BuildLifecycleSubstituteServices(IBackgroundJobLifecycle lifecycle)
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<JobHouseholdContext>();
+        services.AddSingleton(lifecycle);
+        services.AddSingleton(_smartPlugImportRepository);
+        services.AddSingleton(Substitute.For<IBackgroundJobRepository>());
+        services.AddScoped<CleanUpSmartPlugImportJobs>();
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_retries_a_terminal_transition_that_hits_a_transient_database_error()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var token = DateTimeOffset.UtcNow;
+        var lifecycle = Substitute.For<IBackgroundJobLifecycle>();
+        lifecycle.TryStartAsync(jobId, Arg.Any<CancellationToken>()).Returns(token);
+        lifecycle.TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException<bool>(new InvalidOperationException("db blip")), _ => Task.FromResult(true));
+        await using var provider = BuildLifecycleSubstituteServices(lifecycle);
+
+        await NewProcessor(provider, FastRetry)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        await lifecycle.Received(2).TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>());
+        await lifecycle.DidNotReceive().TryFailAsync(jobId, token, Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_retries_TryStart_after_a_transient_database_error_and_still_runs_the_job()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var token = DateTimeOffset.UtcNow;
+        var lifecycle = Substitute.For<IBackgroundJobLifecycle>();
+        lifecycle.TryStartAsync(jobId, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException<DateTimeOffset?>(new InvalidOperationException("db blip")), _ => Task.FromResult<DateTimeOffset?>(token));
+        lifecycle.TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>()).Returns(true);
+        await using var provider = BuildLifecycleSubstituteServices(lifecycle);
+
+        await NewProcessor(provider, FastRetry)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        await lifecycle.Received(2).TryStartAsync(jobId, Arg.Any<CancellationToken>());
+        await lifecycle.Received(1).TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_gives_up_after_three_attempts_and_surfaces_the_error_for_a_persistent_database_outage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var token = DateTimeOffset.UtcNow;
+        var lifecycle = Substitute.For<IBackgroundJobLifecycle>();
+        lifecycle.TryStartAsync(jobId, Arg.Any<CancellationToken>()).Returns(token);
+        lifecycle.TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException<bool>(new InvalidOperationException("db down")));
+        await using var provider = BuildLifecycleSubstituteServices(lifecycle);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => NewProcessor(provider, FastRetry)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct));
+
+        await lifecycle.Received(3).TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>());
     }
 }

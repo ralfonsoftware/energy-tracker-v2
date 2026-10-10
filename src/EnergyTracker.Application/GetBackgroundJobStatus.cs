@@ -4,10 +4,15 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>Reads a Background Job's current status for the caller's own Household, the poll target AC #2's completion signal relies on (AC #2, #6).</summary>
-public class GetBackgroundJobStatus(IBackgroundJobRepository repository, ISmartPlugImportRepository smartPlugImportRepository)
+public class GetBackgroundJobStatus(
+    IBackgroundJobRepository repository, ISmartPlugImportRepository smartPlugImportRepository, IBackgroundJobLifecycle lifecycle)
 {
     public async Task<BackgroundJobStatusResult?> ExecuteAsync(Guid householdId, Guid jobId, CancellationToken cancellationToken)
     {
+        // Lazy, read-time staleness check (AD-6/AD-7): first, so the row read below is never a
+        // tracked entity with stale values (ExecuteUpdateAsync bypasses the change tracker).
+        await lifecycle.FailStaleAsync(householdId, cancellationToken);
+
         var job = await repository.FindByIdAsync(householdId, jobId, cancellationToken);
         if (job is null)
         {

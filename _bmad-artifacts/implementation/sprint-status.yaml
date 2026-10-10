@@ -140,7 +140,7 @@ development_status:
 
   epic-11: in-progress
   11-1-restore-export-never-carry-access-grants: done
-  11-2-job-lifecycle-conditional-transitions-stale-recovery: backlog
+  11-2-job-lifecycle-conditional-transitions-stale-recovery: done
   11-3-azure-queue-consumer-resilience: backlog
   11-4-unmapped-smart-plug-readings-keyed-by-device: backlog
   11-5-ci-identity-split-supply-chain-hygiene: backlog

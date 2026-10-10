@@ -30,11 +30,29 @@ public class InProcessChannelJobQueue(BackgroundJobEnqueueRecorder enqueueRecord
 // Paired hosted BackgroundService — reads envelopes off InProcessChannelJobQueue's channel and
 // hands each to the shared BackgroundJobProcessor dispatch loop.
 public class InProcessChannelJobProcessingService(
-    InProcessChannelJobQueue queue, BackgroundJobProcessor processor, ILogger<InProcessChannelJobProcessingService> logger)
+    InProcessChannelJobQueue queue, BackgroundJobProcessor processor, InProcessJobStartupSweep startupSweep,
+    ILogger<InProcessChannelJobProcessingService> logger)
     : BackgroundService
 {
+    // Captured at construction, before the host serves a request: a row enqueued by this process
+    // has CreatedAtUtc >= this and is never swept.
+    private readonly DateTimeOffset _processStartedAtUtc = DateTimeOffset.UtcNow;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // AD-24: the channel (and every message in it) died with the previous process. A faulted
+        // ExecuteAsync stops the host by default and the database may be unreachable or not yet
+        // migrated right now, so a failed sweep is logged and the loop starts regardless; single
+        // attempt, the residual (Queued rows stay until the next restart) is accepted.
+        try
+        {
+            await startupSweep.SweepAsync(_processStartedAtUtc, stoppingToken);
+        }
+        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Startup job sweep failed; continuing without it.");
+        }
+
         await foreach (var message in queue.Reader.ReadAllAsync(stoppingToken))
         {
             try
