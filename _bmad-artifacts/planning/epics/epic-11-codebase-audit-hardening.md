@@ -110,6 +110,10 @@ So that one bad message or storage hiccup doesn't stop every request (audit C7).
 **When** the error propagates,
 **Then** the original exception is logged first and is not masked.
 
+**Given** a `Queued` job older than 12 hours, for example because its queue message was lost (AD-6, amended 2026-10-11),
+**When** `GET /api/jobs/{id}`, the job list, restore-confirm or the cleanup check runs,
+**Then** that Household's such jobs are first marked failed with code `job-interrupted`, with the same conditional update as stale `Processing` jobs. `Queued` jobs under 12 hours are never failed for age. *(Added at Story 11.3 create-story, 2026-10-11; Ralf's decision. This revises Story 11.2's "`Queued` rows are never failed for age".)*
+
 *Depends on 11.2.*
 
 ## Story 11.4: Unmapped Smart Plug Readings Keyed by Device

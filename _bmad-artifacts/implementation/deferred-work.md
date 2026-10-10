@@ -433,5 +433,4 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of story-11-2-job-lifecycle-conditional-transitions-stale-recovery (2026-10-10)
 
-- [open] Heartbeat "ownership lost" only stops the heartbeat, and a stale takeover can run a job twice at once while the original owner is still alive; the ownership token protects the status row, not the side effects. Relevant to multi-replica Azure redelivery, fold into Story 11.3. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs]
 - [open] Stale comments in `SmartPlugImportRepository` (lines 38 and 62) say `BackgroundJobProcessor` tracks its own `BackgroundJob`; the rewritten processor does not. Comment-only fix, held back because the file is off-limits to 11.2 (see 11.19/11.4). [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs]

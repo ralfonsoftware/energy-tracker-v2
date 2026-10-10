@@ -391,3 +391,8 @@ Archived 2026-10-02 from `deferred-work.md` (Epic 8 retro action #6, `spec-defer
 - [accepted: No known defect] source_spec: `_bmad-artifacts/implementation/spec-tab-order-check.md`
   summary: Tab-order coverage gaps: the tagging-scaffold wide grid (expanded `col-span-full` tiles), Dashboard reordering, Events tiles (no focusable controls), Settings at 659px, the Profile menu below 900px and other close paths (outside click), and non-Chromium browsers.
   evidence: Review-found; none has a known defect (tagging grid sets no `dense` flow, Dashboard has no `wide:order-*`). The current spec covers the surfaces named in Epic 8 retro action #2. [web/e2e/tab-order.spec.ts]
+
+
+## Deferred from: code review of story-11-2-job-lifecycle-conditional-transitions-stale-recovery (2026-10-10)
+
+- [accepted: single instance (AD-24) and 60 min queue visibility timeout vs 5 min staleness, Ralf 2026-10-11 at Story 11.3 create-story; revisit if `maxReplicas` is ever raised above 1, together with the deferred shared-state work] Heartbeat "ownership lost" only stops the heartbeat, and a stale takeover can run a job twice at once while the original owner is still alive; the ownership token protects the status row, not the side effects. A second run needs the message redelivered (60 min) and the original silent for over 5 min, and with one instance there is no second replica to race. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs]
