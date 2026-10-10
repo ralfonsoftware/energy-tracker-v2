@@ -10,7 +10,14 @@ interface HouseholdInviteResponse {
   expiresAtUtc: string
 }
 
-export function InviteGeneratePanel() {
+interface InviteGeneratePanelProps {
+  // Renders the content flat (no GlassCard) for use inside another card, e.g. the restore result in
+  // DataImportPanel (Story 11.1, Task 7.4: a nested glass card read as card-in-card). Default false,
+  // so Settings and InviteMemberRow keep the card exactly as before.
+  bare?: boolean
+}
+
+export function InviteGeneratePanel({ bare = false }: InviteGeneratePanelProps) {
   const { t } = useTranslation()
   const [generating, setGenerating] = useState(false)
   const [link, setLink] = useState<string | null>(null)
@@ -56,10 +63,10 @@ export function InviteGeneratePanel() {
     }
   }
 
-  return (
-    <GlassCard className="flex w-full max-w-sm flex-col gap-2">
+  const content = (
+    <>
       {!link && (
-        <Button variant="glass-primary" onClick={handleGenerate} disabled={generating}>
+        <Button variant="glass-primary" className={bare ? 'self-start' : undefined} onClick={handleGenerate} disabled={generating}>
           {generating ? t('householdInvite.generating') : t('householdInvite.generateButton')}
         </Button>
       )}
@@ -83,6 +90,12 @@ export function InviteGeneratePanel() {
       )}
 
       {error && <p className="text-destructive text-sm">{error}</p>}
-    </GlassCard>
+    </>
   )
+
+  if (bare) {
+    return <div className="flex flex-col gap-2">{content}</div>
+  }
+
+  return <GlassCard className="flex w-full max-w-sm flex-col gap-2">{content}</GlassCard>
 }

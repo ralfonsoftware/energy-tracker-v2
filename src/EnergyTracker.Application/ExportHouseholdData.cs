@@ -59,8 +59,9 @@ public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibi
         aiPlausibilityBackendOptions.Configured,
         aiPlausibilityBackendOptions.Label);
 
-    private static HouseholdMemberExportDto ToDto(HouseholdMember member) => new(
-        member.Id, member.ExternalIssuer, member.ExternalSubjectId, member.DisplayName, member.CreatedAtUtc);
+    // AD-25 / audit S12: only the Id and the display name leave the server. The member's OIDC
+    // issuer/subject (personal data, and the raw material for a forged restore) are never exported.
+    private static HouseholdMemberExportDto ToDto(HouseholdMember member) => new(member.Id, member.DisplayName);
 
     private static MainMeterExportDto ToDto(MainMeter mainMeter) => new(mainMeter.Id, mainMeter.CreatedAtUtc, mainMeter.DigitCapacityKwh);
 
@@ -182,7 +183,11 @@ public record HouseholdSettingsExportDto(
     bool AiPlausibilityBackendConfigured,
     string? AiPlausibilityBackendLabel);
 
-public record HouseholdMemberExportDto(Guid Id, string ExternalIssuer, string ExternalSubjectId, string? DisplayName, DateTimeOffset CreatedAtUtc);
+// AD-25 / audit S12: exactly { id, displayName } on the wire. The login identity (ExternalIssuer,
+// ExternalSubjectId) and CreatedAtUtc are deliberately absent: the entry only feeds the "people in
+// this backup" list shown after a restore. Pre-change files that still carry those fields
+// deserialize fine (System.Text.Json ignores unmapped properties) and the fields are ignored.
+public record HouseholdMemberExportDto(Guid Id, string? DisplayName);
 
 public record MainMeterExportDto(Guid Id, DateTimeOffset CreatedAtUtc, decimal? DigitCapacityKwh);
 

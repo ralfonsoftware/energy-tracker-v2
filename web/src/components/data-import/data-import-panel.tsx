@@ -19,6 +19,7 @@ import {
   type HouseholdImportSummary,
 } from '@/lib/household-import-api'
 import { useHouseholdImportJobPoll } from '@/components/data-import/use-household-import-job'
+import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
 
 // Story 7.2: the import half of "Data export & import" (DataExportPanel ships only the export
 // half, Story 7.1). No dedicated UX mockup exists for this screen (same "No UX mockup" precedent
@@ -183,6 +184,39 @@ export function DataImportPanel() {
       {step === 'success' && (
         <div className="flex flex-col gap-2">
           <p className="text-sm">{t('settings.dataImport.success')}</p>
+          {/* AD-25: a restore never grants access. The file's member names are only a hint of whom
+              to re-invite, so they sit next to the invite action and are never compared with the
+              current members (display names are nullable and editable, not identities). They ride
+              along in the validate response (summary), because the temp file is gone and the job
+              status carries no result payload; if the member leaves Settings during the restore the
+              panel state is lost, but the restore itself still completes. Names come from an
+              uploaded file: plain text children only. */}
+          {summary && summary.householdMembers > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="font-semibold">{t('settings.dataImport.peopleHeading')}</h3>
+              <p className="text-muted-foreground text-sm">{t('settings.dataImport.peopleHint')}</p>
+              {/* `?? []`: web and API deploy separately, an older API omits the field. */}
+              {(summary.memberDisplayNames ?? []).length > 0 && (
+                <ul className="list-disc pl-5 text-sm">
+                  {(summary.memberDisplayNames ?? []).map((name, index) => (
+                    <li key={`${index}-${name}`} className="break-words">{name}</li>
+                  ))}
+                </ul>
+              )}
+              {summary.householdMembers > (summary.memberDisplayNames ?? []).length && (
+                <p className="text-sm">
+                  {t('settings.dataImport.peopleUnnamed', {
+                    count: summary.householdMembers - (summary.memberDisplayNames ?? []).length,
+                  })}
+                </p>
+              )}
+              {/* Flat (bare), under a hairline: the import card is already the glass card, a nested
+                  one read as card-in-card (Story 11.1 Task 7.4, UX option B). */}
+              <div className="mt-1 border-t border-[rgba(40,70,50,0.12)] pt-3 dark:border-[rgba(210,235,220,0.1)]">
+                <InviteGeneratePanel bare />
+              </div>
+            </div>
+          )}
           <Button type="button" variant="outline" className="self-start" onClick={resetToIdle}>
             {t('settings.dataImport.successAction')}
           </Button>
@@ -199,7 +233,6 @@ export function DataImportPanel() {
             <div className="flex flex-col gap-1 text-sm">
               <p className="font-semibold">{t('settings.dataImport.confirmSummaryHeading')}</p>
               <ul className="list-disc pl-5">
-                <li>{t('settings.dataImport.confirmSummaryHouseholdMembers', { count: summary.householdMembers })}</li>
                 {summary.hasMainMeter && <li>{t('settings.dataImport.confirmSummaryHasMainMeter')}</li>}
                 <li>{t('settings.dataImport.confirmSummaryMeterReadings', { count: summary.meterReadings })}</li>
                 <li>{t('settings.dataImport.confirmSummaryMeterRegressionPrompts', { count: summary.meterRegressionPrompts })}</li>
@@ -212,6 +245,8 @@ export function DataImportPanel() {
                 <li>{t('settings.dataImport.confirmSummaryStatusSnapshots', { count: summary.statusSnapshots })}</li>
                 <li>{t('settings.dataImport.confirmSummaryAuditCorrections', { count: summary.auditCorrections })}</li>
               </ul>
+              {/* AD-25: restore never touches membership, so say so instead of listing members as replaced. */}
+              <p className="text-muted-foreground">{t('settings.dataImport.confirmAccessUnchanged')}</p>
             </div>
           )}
           <DialogFooter>

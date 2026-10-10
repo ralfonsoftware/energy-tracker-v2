@@ -34,6 +34,16 @@ own requirement (FR-23) is explicit that this is a v2-to-v2 concern only.
 `formatVersion` exists so a future format change has somewhere to signal
 itself, not because a v1 reader needs to exist today.
 
+`formatVersion` stays `"v2"` across the AD-25 change to `householdMembers[]`
+(members shrank to `id` and `displayName`, see below). The compatibility
+rule is therefore about releases, not versions: **the restore target must
+run the same or a newer release than the one that produced the export.** An
+older release's validator still requires `externalIssuer` on each member and
+rejects a newer export with an explicit validation failure; nothing is
+changed. A newer release accepts older files, including ones that still
+carry the identity fields (they are ignored). See
+[`data-import-restore.md`](./data-import-restore.md), "Compatibility rule".
+
 ## Entity scope
 
 15 Domain types carry a `HouseholdId` (i.e. are Household-scoped data). Of
@@ -46,7 +56,7 @@ what Story 7.1 actually shipped.
 | Entity | Why |
 |---|---|
 | Household (settings only) | Locale, Currency, YearlyBaselineKwh, TrendingThresholdKwh, LowConfidenceGapDays, TariffCheckCadenceMonths, AiPlausibilityEnabled — this is Household *state*, not just rows. |
-| HouseholdMember | Needed to know who belongs to the Household on restore. |
+| HouseholdMember (display names only) | For the "People in this backup" list shown after a restore. Identities (OIDC issuer/subject) are deliberately not exported, and a restore never writes members (AD-25). |
 | MainMeter | The Household's single meter (v2 has exactly one). |
 | MeterReading | Core consumption history. |
 | MeterRegressionPrompt | Rollover/reset classification history. |
@@ -138,10 +148,15 @@ enum fields in this export:
 | Field | Type | Notes |
 |---|---|---|
 | `id` | guid | |
-| `externalIssuer` | string | OIDC `iss` claim at membership-creation time. |
-| `externalSubjectId` | string | OIDC `sub` claim at membership-creation time. |
-| `displayName` | string or null | Captured from the OIDC `name` claim; null if the provider never returned one. |
-| `createdAtUtc` | datetime | |
+| `displayName` | string or null | Captured from the OIDC `name` claim; null if the provider never returned one. Always present as a key (`null` when unset). |
+
+There is deliberately **no** `externalIssuer`, `externalSubjectId` or
+`createdAtUtc`: a member's login identity is personal data, and restoring a
+file must never be able to grant or revoke access (AD-25, audit S12/S1). The
+list exists only so a restore can show "People in this backup" next to the
+invite action. Files produced by earlier releases still carry those three
+fields; a restore accepts such files and ignores the fields (they are not
+validated either).
 
 ### `mainMeter` (or `null`)
 
@@ -274,10 +289,7 @@ A Household with one Room/Power Point, one Meter Reading, and one Tariff:
   "householdMembers": [
     {
       "id": "b6f1f6b0-6b8b-4d3a-9b1a-000000000002",
-      "externalIssuer": "https://example-oidc.test/",
-      "externalSubjectId": "auth0|abc123",
-      "displayName": "Ralf",
-      "createdAtUtc": "2026-01-05T08:00:00+00:00"
+      "displayName": "Ralf"
     }
   ],
   "mainMeter": {

@@ -1,3 +1,4 @@
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
@@ -37,10 +38,10 @@ public abstract class HouseholdRestoreWriterTestsBase
         AiPlausibilityEnabled = false,
     };
 
-    // A minimal but complete restore data set covering every one of the 12 entity categories plus
-    // the Household settings patch, all internally cross-referenced — used by every test below so
+    // A minimal but complete restore data set covering every restorable entity category (membership
+    // is deliberately not one of them, AD-25) plus the Household settings patch, all internally cross-referenced — used by every test below so
     // a single shared fixture proves both AD-3 rewriting and wholesale replacement together.
-    private static HouseholdRestoreData BuildRestoreData(Guid householdId, Guid? householdMemberIssuerSubjectSeed = null)
+    private static HouseholdRestoreData BuildRestoreData(Guid householdId)
     {
         var mainMeterId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
@@ -49,20 +50,9 @@ public abstract class HouseholdRestoreWriterTestsBase
         var readingId = Guid.NewGuid();
         var previousReadingId = Guid.NewGuid();
 
-        var member = new HouseholdMember
-        {
-            Id = Guid.NewGuid(),
-            HouseholdId = householdId,
-            ExternalIssuer = "https://issuer.test/",
-            ExternalSubjectId = householdMemberIssuerSubjectSeed?.ToString() ?? "sub-imported",
-            DisplayName = "Imported Member",
-            CreatedAtUtc = DateTimeOffset.UtcNow,
-        };
-
         return new HouseholdRestoreData(
             householdId,
             new HouseholdSettingsPatch("de-DE", "EUR", 3500m, 100m, 45, 3, true),
-            [member],
             new MainMeter { Id = mainMeterId, HouseholdId = householdId, CreatedAtUtc = DateTimeOffset.UtcNow, DigitCapacityKwh = null },
             [new Room { Id = roomId, HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = DateTimeOffset.UtcNow }],
             [new PowerPoint { Id = powerPointId, HouseholdId = householdId, RoomId = roomId, Name = "Outlet", CreatedAtUtc = DateTimeOffset.UtcNow }],
@@ -142,7 +132,8 @@ public abstract class HouseholdRestoreWriterTestsBase
         household.YearlyBaselineKwh.ShouldBe(3500m);
         household.AiPlausibilityEnabled.ShouldBeTrue();
 
-        (await dbContext.HouseholdMembers.Where(m => m.HouseholdId == householdId).ToListAsync(TestContext.Current.CancellationToken)).ShouldHaveSingleItem();
+        // AD-25: restore never writes HouseholdMember rows (none were seeded here, so none exist).
+        (await dbContext.HouseholdMembers.Where(m => m.HouseholdId == householdId).ToListAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
         (await dbContext.MainMeters.SingleAsync(TestContext.Current.CancellationToken)).HouseholdId.ShouldBe(householdId);
         (await dbContext.Rooms.SingleAsync(TestContext.Current.CancellationToken)).HouseholdId.ShouldBe(householdId);
         (await dbContext.PowerPoints.SingleAsync(TestContext.Current.CancellationToken)).HouseholdId.ShouldBe(householdId);
@@ -157,7 +148,8 @@ public abstract class HouseholdRestoreWriterTestsBase
     }
 
     // AC #1/#4: restoring onto a Household with pre-existing data leaves zero pre-existing rows
-    // behind afterward — a true wholesale replace, never a merge.
+    // behind afterward — a true wholesale replace, never a merge. HouseholdMember is the one
+    // exception: restore never touches membership (AD-25, audit S1), so the member survives.
     [Fact]
     public async Task Restoring_onto_a_Household_with_existing_data_leaves_no_pre_existing_rows_behind()
     {
@@ -182,9 +174,9 @@ public abstract class HouseholdRestoreWriterTestsBase
 
         (await dbContext.Rooms.AnyAsync(r => r.Id == preExistingRoom.Id, TestContext.Current.CancellationToken)).ShouldBeFalse();
         (await dbContext.MainMeters.AnyAsync(m => m.Id == preExistingMainMeter.Id, TestContext.Current.CancellationToken)).ShouldBeFalse();
-        (await dbContext.HouseholdMembers.AnyAsync(m => m.Id == preExistingMember.Id, TestContext.Current.CancellationToken)).ShouldBeFalse();
         (await dbContext.Rooms.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
         (await dbContext.MainMeters.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+        (await dbContext.HouseholdMembers.AnyAsync(m => m.Id == preExistingMember.Id, TestContext.Current.CancellationToken)).ShouldBeTrue();
         (await dbContext.HouseholdMembers.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
     }
 
@@ -214,29 +206,73 @@ public abstract class HouseholdRestoreWriterTestsBase
         (await dbContext.Rooms.IgnoreQueryFilters().AnyAsync(r => r.Id == otherRoom.Id, TestContext.Current.CancellationToken)).ShouldBeTrue();
     }
 
-    // Dev Notes "Restore write-target design": the current session's own (ExternalIssuer,
-    // ExternalSubjectId) is present among the imported members, so CurrentHouseholdAccessor's
-    // issuer+subject lookup still resolves the same Household on the very next request.
+    private sealed record MemberSnapshot(Guid Id, Guid HouseholdId, string ExternalIssuer, string ExternalSubjectId, string? DisplayName, DateTimeOffset CreatedAtUtc);
+
+    private static Task<List<MemberSnapshot>> ReadMembersAsync(EnergyTrackerDbContext dbContext, CancellationToken cancellationToken) =>
+        dbContext.HouseholdMembers.AsNoTracking()
+            .OrderBy(m => m.Id)
+            .Select(m => new MemberSnapshot(m.Id, m.HouseholdId, m.ExternalIssuer, m.ExternalSubjectId, m.DisplayName, m.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+
+    // AD-25 / audit S1 (the headline test): a restore file can neither grant access to a stranger
+    // nor lock the members out. The file below omits both real members and lists a foreign OIDC
+    // identity (legacy export shape, identity fields present); after the real use case + writer ran
+    // against a real database, the membership rows are field-for-field what they were before and no
+    // row for the foreign identity exists.
     [Fact]
-    public async Task A_HouseholdMember_present_in_the_imported_data_still_resolves_via_CurrentHouseholdAccessor_afterward()
+    public async Task A_restore_file_listing_foreign_or_no_members_leaves_the_Households_membership_untouched()
     {
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         dbContext.Households.Add(NewHousehold(householdId));
+        dbContext.HouseholdMembers.AddRange(
+            new HouseholdMember
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://real.test/", ExternalSubjectId = "auth0|alice",
+                DisplayName = "Alice", CreatedAtUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+            },
+            new HouseholdMember
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://real.test/", ExternalSubjectId = "auth0|bob",
+                DisplayName = null, CreatedAtUtc = new DateTimeOffset(2026, 2, 3, 4, 5, 6, TimeSpan.Zero),
+            });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var writer = new HouseholdRestoreWriter(dbContext);
-        var data = BuildRestoreData(householdId);
+        var membersBefore = await ReadMembersAsync(dbContext, TestContext.Current.CancellationToken);
+        membersBefore.Count.ShouldBe(2);
 
-        await writer.RestoreAsync(data, TestContext.Current.CancellationToken);
+        var foreignMemberId = Guid.NewGuid();
+        var json =
+            $$"""
+            {
+              "formatVersion": "v2",
+              "exportedAtUtc": "2026-09-22T10:00:00+00:00",
+              "household": {
+                "id": "{{Guid.NewGuid()}}", "createdAtUtc": "2026-01-05T08:00:00+00:00", "locale": "de-DE", "currency": "EUR",
+                "yearlyBaselineKwh": null, "trendingThresholdKwh": 100.0, "lowConfidenceGapDays": 45, "tariffCheckCadenceMonths": 3,
+                "aiPlausibilityEnabled": false, "aiPlausibilityBackendConfigured": false, "aiPlausibilityBackendLabel": null
+              },
+              "householdMembers": [{
+                "id": "{{foreignMemberId}}", "externalIssuer": "https://attacker.test/", "externalSubjectId": "evil|mallory",
+                "displayName": "Mallory", "createdAtUtc": "2026-01-05T08:00:00+00:00"
+              }],
+              "mainMeter": null, "meterReadings": [], "meterRegressionPrompts": [], "tariffs": [], "events": [],
+              "rooms": [], "powerPoints": [], "devices": [], "smartPlugReadings": [], "statusSnapshots": [], "auditCorrections": []
+            }
+            """;
+        var tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        await File.WriteAllTextAsync(tempFilePath, json, TestContext.Current.CancellationToken);
 
-        var importedMember = data.HouseholdMembers.Single();
-        var resolved = await dbContext.HouseholdMembers
-            .Where(m => m.ExternalIssuer == importedMember.ExternalIssuer && m.ExternalSubjectId == importedMember.ExternalSubjectId)
-            .Select(m => new { m.HouseholdId })
-            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        await new RestoreHouseholdData(new HouseholdRestoreWriter(dbContext)).ExecuteAsync(
+            householdId, new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
 
-        resolved.ShouldNotBeNull();
-        resolved!.HouseholdId.ShouldBe(householdId);
+        var membersAfter = await ReadMembersAsync(dbContext, TestContext.Current.CancellationToken);
+        membersAfter.ShouldBe(membersBefore);
+        (await dbContext.HouseholdMembers.AsNoTracking().AnyAsync(
+            m => m.Id == foreignMemberId || m.ExternalIssuer == "https://attacker.test/" || m.ExternalSubjectId == "evil|mallory",
+            TestContext.Current.CancellationToken)).ShouldBeFalse();
+        // The restore itself did run (not a vacuous pass): the Household's settings were replaced.
+        (await dbContext.Households.AsNoTracking().SingleAsync(h => h.Id == householdId, TestContext.Current.CancellationToken))
+            .Locale.ShouldBe("de-DE");
     }
 
     // Code Review, Story 7.2 Pass 1: the single outer transaction spanning delete+insert is the

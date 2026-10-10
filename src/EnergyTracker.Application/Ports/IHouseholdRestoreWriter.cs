@@ -19,10 +19,10 @@ public record HouseholdSettingsPatch(
 // has already set HouseholdId explicitly on every entity and mapped every DTO enum-string field
 // (Classification/Status) back to its real enum by the time this reaches the writer — the writer's
 // only job is the chunked delete-then-insert mechanics (AD-2/AD-6), never entity construction.
+// There is deliberately no HouseholdMember list: restore never writes membership (AD-25).
 public record HouseholdRestoreData(
     Guid HouseholdId,
     HouseholdSettingsPatch HouseholdSettings,
-    IReadOnlyList<HouseholdMember> HouseholdMembers,
     MainMeter? MainMeter,
     IReadOnlyList<Room> Rooms,
     IReadOnlyList<PowerPoint> PowerPoints,

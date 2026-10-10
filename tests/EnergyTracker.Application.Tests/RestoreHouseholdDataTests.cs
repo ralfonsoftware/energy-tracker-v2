@@ -135,7 +135,10 @@ public class RestoreHouseholdDataTests
 
         captured.ShouldNotBeNull();
         captured!.MainMeter!.HouseholdId.ShouldBe(currentHouseholdId);
-        captured.HouseholdMembers.Single().HouseholdId.ShouldBe(currentHouseholdId);
+        // AD-25: restore never writes HouseholdMember rows, so the restore data has no member
+        // property at all (even though this fixture's file lists a legacy-shape member).
+        typeof(HouseholdRestoreData).GetProperties()
+            .ShouldNotContain(p => p.PropertyType.ToString().Contains("HouseholdMember"));
         captured.MeterReadings.Single().HouseholdId.ShouldBe(currentHouseholdId);
         captured.Tariffs.Single().HouseholdId.ShouldBe(currentHouseholdId);
         captured.Events.Single().HouseholdId.ShouldBe(currentHouseholdId);
@@ -151,6 +154,26 @@ public class RestoreHouseholdDataTests
         captured.SmartPlugReadings.Single().PowerPointId.ShouldBe(powerPointId);
         // SmartPlugImportId is always null on insert — the field isn't in the export at all.
         captured.SmartPlugReadings.Single().SmartPlugImportId.ShouldBeNull();
+    }
+
+    // AD-25: the post-change export shape lists members as { id, displayName } only.
+    [Fact]
+    public async Task Restores_a_file_whose_members_use_the_new_id_and_displayName_shape()
+    {
+        var currentHouseholdId = Guid.NewGuid();
+        var json = ValidJson(Guid.NewGuid()).Replace(
+            "\"householdMembers\": []",
+            $$"""
+            "householdMembers": [{ "id": "{{Guid.NewGuid()}}", "displayName": "Ralf" }, { "id": "{{Guid.NewGuid()}}", "displayName": null }]
+            """);
+        // Guard against Replace silently doing nothing if the fixture text changes.
+        json.ShouldContain("\"displayName\": \"Ralf\"");
+        var tempFilePath = WriteTempFile(json);
+
+        await Sut().ExecuteAsync(currentHouseholdId, new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
+
+        await _writer.Received(1).RestoreAsync(
+            Arg.Is<HouseholdRestoreData>(d => d.HouseholdId == currentHouseholdId), Arg.Any<CancellationToken>());
     }
 
     [Fact]

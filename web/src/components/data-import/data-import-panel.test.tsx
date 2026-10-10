@@ -31,7 +31,40 @@ const validationResponseBody = {
     smartPlugReadings: 0,
     statusSnapshots: 3,
     auditCorrections: 0,
+    memberDisplayNames: ['Alice'],
   },
+}
+
+function withSummary(overrides: Record<string, unknown>) {
+  return { ...validationResponseBody, summary: { ...validationResponseBody.summary, ...overrides } }
+}
+
+// Drives the panel through upload -> confirm -> restoring -> completed, so a test can assert on
+// the success state. `validation` is the body the validate endpoint returns.
+async function restoreToSuccess(validation: object) {
+  const fetchMock = vi.fn((input: string | URL | Request) => {
+    const url = String(input)
+    if (url === '/api/household-import') {
+      return Promise.resolve(jsonResponse(validation))
+    }
+    if (url.endsWith('/confirm')) {
+      return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+    }
+    if (url === '/api/jobs/job-1') {
+      return Promise.resolve(jsonResponse({ id: 'job-1', status: 'completed', importStatus: null, errorMessage: null }))
+    }
+    throw new Error(`Unexpected fetch: ${url}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  render(<DataImportPanel />)
+  await selectFile(makeFile())
+  await screen.findByText(/replace all data with this file/i)
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  await user.click(screen.getByRole('button', { name: 'Replace all data' }))
+  await vi.advanceTimersByTimeAsync(2000)
+  await screen.findByText(/restore complete/i)
+  return { user, fetchMock }
 }
 
 describe('DataImportPanel', () => {
@@ -90,7 +123,10 @@ describe('DataImportPanel', () => {
     await selectFile(makeFile())
 
     expect(await screen.findByText(/replace all data with this file/i)).toBeInTheDocument()
-    expect(screen.getByText('1 Household Member')).toBeInTheDocument()
+    // AD-25: restore never touches who can access the Household, so the dialog no longer lists
+    // Household Members as something that gets replaced and says access stays as it is.
+    expect(screen.queryByText(/Household Member/)).not.toBeInTheDocument()
+    expect(screen.getByText('Who can access your Household does not change.')).toBeInTheDocument()
     expect(screen.getByText('A Main Meter')).toBeInTheDocument()
     expect(screen.getByText('5 Meter Readings')).toBeInTheDocument()
     expect(screen.getByText('2 Events')).toBeInTheDocument()
@@ -185,5 +221,59 @@ describe('DataImportPanel', () => {
     await vi.advanceTimersByTimeAsync(2000)
 
     expect(await screen.findByText(/could not be found/i)).toBeInTheDocument()
+  })
+
+  // AC #4 (AD-25): after a restore, the file's member display names are listed next to the invite
+  // action — a hint about whom to re-invite, never a comparison with current members.
+  describe('"People in this backup" panel after a completed restore', () => {
+    it('lists the files member display names next to the invite action', async () => {
+      await restoreToSuccess(withSummary({ householdMembers: 2, memberDisplayNames: ['Alice', 'Bob'] }))
+
+      expect(screen.getByRole('heading', { name: 'People in this backup' })).toBeInTheDocument()
+      expect(screen.getByText('Alice')).toBeInTheDocument()
+      expect(screen.getByText('Bob')).toBeInTheDocument()
+      expect(screen.getByText(/Restoring does not give anyone access/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Invite a member' })).toBeInTheDocument()
+    })
+
+    // Task 7.4 (option B): the invite action is part of the import card, not a second card in it.
+    it('shows the invite action without nesting a second glass card in the import card', async () => {
+      await restoreToSuccess(withSummary({ householdMembers: 1, memberDisplayNames: ['Alice'] }))
+
+      expect(screen.getByRole('button', { name: 'Invite a member' })).toBeInTheDocument()
+      expect(document.querySelectorAll('[data-slot="glass-card"]')).toHaveLength(1)
+    })
+
+    it('renders display names as literal text, never as markup', async () => {
+      const hostile = '<img src=x onerror=alert(1)>'
+      await restoreToSuccess(withSummary({ householdMembers: 1, memberDisplayNames: [hostile] }))
+
+      expect(screen.getByText(hostile)).toBeInTheDocument()
+      expect(document.querySelector('img')).toBeNull()
+    })
+
+    it('counts members without a name on a separate line', async () => {
+      await restoreToSuccess(withSummary({ householdMembers: 3, memberDisplayNames: ['Alice'] }))
+
+      expect(screen.getByText('Alice')).toBeInTheDocument()
+      expect(screen.getByText('2 people without a name')).toBeInTheDocument()
+    })
+
+    it('shows no panel when the file lists no members', async () => {
+      await restoreToSuccess(withSummary({ householdMembers: 0, memberDisplayNames: [] }))
+
+      expect(screen.queryByRole('heading', { name: 'People in this backup' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Invite a member' })).not.toBeInTheDocument()
+    })
+
+    it('is cleared by "Import another file"', async () => {
+      const { user } = await restoreToSuccess(withSummary({ householdMembers: 1, memberDisplayNames: ['Alice'] }))
+      expect(screen.getByText('Alice')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Import another file' }))
+
+      expect(screen.queryByRole('heading', { name: 'People in this backup' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Alice')).not.toBeInTheDocument()
+    })
   })
 })

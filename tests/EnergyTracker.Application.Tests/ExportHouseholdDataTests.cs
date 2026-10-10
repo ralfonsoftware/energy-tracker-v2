@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using NSubstitute;
@@ -398,5 +399,62 @@ public class ExportHouseholdDataTests
     public void SmartPlugReadingExportDto_has_no_SmartPlugImportId_field()
     {
         typeof(SmartPlugReadingExportDto).GetProperty("SmartPlugImportId").ShouldBeNull();
+    }
+
+    // AD-25 / audit S12: a member's login identity (OIDC issuer + subject) is personal data and the
+    // raw material for a forged restore, so the export carries exactly { id, displayName }.
+    [Fact]
+    public async Task Maps_a_HouseholdMember_to_a_DTO_with_only_Id_and_DisplayName()
+    {
+        var householdId = Guid.NewGuid();
+        var household = NewHousehold(householdId);
+        var member = new HouseholdMember
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            ExternalIssuer = "https://issuer.test/",
+            ExternalSubjectId = "sub-secret-1",
+            DisplayName = "Ralf",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        var data = EmptyExportData(household) with { HouseholdMembers = ToAsyncEnumerable([member]) };
+        _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
+
+        var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        var dto = (await ToListAsync(result.HouseholdMembers)).Single();
+        dto.Id.ShouldBe(member.Id);
+        dto.DisplayName.ShouldBe("Ralf");
+        typeof(HouseholdMemberExportDto).GetProperties().Select(p => p.Name).Order().ShouldBe(["DisplayName", "Id"]);
+
+        var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var document = JsonDocument.Parse(json);
+        document.RootElement.EnumerateObject().Select(p => p.Name).Order().ShouldBe(["displayName", "id"]);
+        json.ShouldNotContain("sub-secret-1");
+        json.ShouldNotContain("issuer.test");
+    }
+
+    [Fact]
+    public async Task A_HouseholdMember_without_a_DisplayName_serializes_displayName_as_null_not_absent()
+    {
+        var householdId = Guid.NewGuid();
+        var household = NewHousehold(householdId);
+        var member = new HouseholdMember
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            ExternalIssuer = "https://issuer.test/",
+            ExternalSubjectId = "sub-2",
+            DisplayName = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        var data = EmptyExportData(household) with { HouseholdMembers = ToAsyncEnumerable([member]) };
+        _reader.GetExportDataAsync(householdId, Arg.Any<CancellationToken>()).Returns(data);
+
+        var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        var json = JsonSerializer.Serialize((await ToListAsync(result.HouseholdMembers)).Single(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var document = JsonDocument.Parse(json);
+        document.RootElement.GetProperty("displayName").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 }
