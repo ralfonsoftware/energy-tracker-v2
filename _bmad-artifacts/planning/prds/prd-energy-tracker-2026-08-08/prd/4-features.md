@@ -59,7 +59,9 @@ Imported Smart Plug data refines Pattern Detective's baseline/Status as an addit
 The system computes a single Status — *within range*, *below baseline*, or *trending* — from the current pace vs. the Yearly Baseline and the household's threshold setting.
 
 **Consequences (testable):**
-- *Trending* fires when pace exceeds Yearly Baseline pace by more than the household's configured threshold (default ~100 kWh over baseline pace-to-date, editable in settings).
+- *Trending* fires when pace exceeds Yearly Baseline pace by more than the household's configured threshold (default ~100 kWh, editable in settings).
+- The threshold is an **annual** overshoot: "on track to exceed the Yearly Baseline by more than X kWh over a year". It is compared against the difference to date after scaling it to the same elapsed period as baseline-to-date, so Status has the same relative sensitivity in a household's first months as after a full year. Every consumer of the threshold (Status, Event correlation's bump/dip check) uses this one meaning. *(Clarified 2026-10-10, codebase audit C12: Status had compared the unscaled value, so it warned only at ~20 % over after two months versus 3.3 % after a year.)*
+- *Below baseline* fires on any shortfall below baseline-to-date. No threshold band applies. The asymmetry is intended: it is good news, so showing it early does no harm.
 - Status recomputes on every new Meter Reading or completed Smart Plug import — never on a fixed schedule alone.
 - With fewer than two Meter Readings, or no Yearly Baseline set, Status is undefined rather than defaulting to any of the three states — FR-7 shows an onboarding empty state instead.
 - Pace exactly equal to Yearly Baseline pace plus the threshold resolves to *within range*, not *trending* — ties resolve to the calmer state throughout the product.
@@ -80,7 +82,7 @@ The main dashboard shows the current Status as the primary, glanceable element. 
 A Household member can open a details view from the dashboard Status card showing how the displayed pace-vs-baseline figure was calculated. Realizes UJ-2 (dashboard status check, transparency extension).
 
 **Consequences (testable):**
-- Shows pace-to-date, baseline-to-date (and the elapsed period it covers), the difference driving the headline figure, and the household's configured trending threshold — the aggregate figures already computed for Status, not a list of individual contributing Meter Readings.
+- Shows pace-to-date, baseline-to-date (and the elapsed period it covers), the difference driving the headline figure, and the household's configured trending threshold, both as configured (per year) and as scaled to the elapsed period the difference is compared against (FR-6). These are the aggregate figures already computed for Status, not a list of individual contributing Meter Readings.
 - When the low-confidence flag (FR-6) is active, the detail view explains why (stale last reading, not corroborated by Smart Plug coverage) rather than surfacing the flag with no explanation.
 - No chart is required — same legible-as-text principle as FR-7; this is a secondary drill-down, not a replacement for the primary Status element.
 - Only available when Status itself is computable (per FR-6) — the undefined/onboarding case (FR-7) has no detail view, since there is no calculation yet to explain.

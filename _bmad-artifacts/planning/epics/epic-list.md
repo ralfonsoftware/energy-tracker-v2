@@ -41,6 +41,10 @@ Decides and stands up the real AI backend behind Wattage Plausibility Correlatio
 Three stories promoted from the 2026-10-02 `deferred-work.md` triage: migration safety on deploy (restore point, rollback runbook, expand/contract rule), event-correlation recompute once the forward window has readings, and NavChrome document order matching visual order (WCAG 2.4.3). No new FR; independent of Epic 9.
 **FRs covered:** none (hardens FR-17 correctness and Epic 8's accessibility intent)
 
+## Epic 11: Codebase Audit Hardening
+Fixes the findings of the 2026-10-10 codebase audit (`docs/codebase-audit-2026-10-10.md`), implementing the architecture decisions recorded the same day (AD-6/AD-17/AD-20 amendments, AD-24–AD-27) and the FR-6 trending-threshold clarification. Nineteen stories in three tiers — Now (restore access grants, job pipeline liveness, unmapped Smart Plug key, Data Protection key encryption and its CI-identity prerequisite), Soon (HTTP hardening, auth hardening, member removal and revocable invites, upload hardening, container and config correctness), Later (performance, documentation, maintainability). No new FR; hardens FR-17, FR-22/23, FR-26–28, FR-33 and clarifies FR-6/FR-30.
+**FRs covered:** none new — FR-6/FR-30 clarified (C12); hardens FR-4, FR-22, FR-23, FR-26–FR-28, FR-33
+
 **Deferred — not decomposed into an epic:**
 - FR-19 (Custom Event/Plausibility Rules) — Could-have, explicitly out of MVP scope per PRD §6.2; no rule engine designed yet
 - FR-20 (Generic Data-Source Column Mapping) — Could-have, explicitly out of MVP scope per PRD §6.2; PRD itself flags as low-confidence pending a feasibility spike (Open Question 1)

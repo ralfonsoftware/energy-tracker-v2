@@ -1,6 +1,6 @@
 # Epic 9: Wattage Plausibility AI Backend Decision
 
-Decides and stands up the real AI backend behind Wattage Plausibility Correlation (FR-17) — the one thing Epic 6 built the full plumbing for (port, adapter, Household toggle, background job, graceful degradation — AD-8) but never actually exercised. Since Story 6.3, only `NoOpAiPlausibilityClient` has ever run in any environment; no `AiPlausibility:BaseUrl` has ever been configured. Delivers no new domain capability and no new FR — FR-17 already specifies the household-level backend choice ("a locally hosted model... or a cloud/external API") and NFR14 already constrains it (no paid third-party service required for a basic self-hosted instance). This epic closes the gap between that specification and a real, running backend.
+Decides and stands up the real AI backend behind Wattage Plausibility Correlation (FR-17) — the one thing Epic 6 built the full plumbing for (port, adapter, Household toggle, background job, graceful degradation — AD-8) but never actually exercised. Since Story 6.3, only `NoOpAiPlausibilityClient` has ever run in any environment; no AI endpoint (`Ai:Endpoint`, unified by Story 11.11) has ever been configured. Delivers no new domain capability and no new FR — FR-17 already specifies the household-level backend choice ("a locally hosted model... or a cloud/external API") and NFR14 already constrains it (no paid third-party service required for a basic self-hosted instance). This epic closes the gap between that specification and a real, running backend.
 
 **Origin:** Flagged as an open decision at Epic 6's retrospective (2026-09-21, Action Item #2) and carried, still undecided, through Epic 7. Escalated from a lingering retro action item to its own epic at Epic 7's retrospective (2026-09-26) at Ralf's explicit direction — see `_bmad-artifacts/implementation/epic-7-retro-2026-09-26.md`, "Significant Discovery."
 
@@ -74,7 +74,7 @@ So that Wattage Plausibility correlation genuinely happens instead of always deg
 **When** an Event is logged near a real observed consumption deviation,
 **Then** a genuine (non-no-op) correlation is computed and stored — live-verified via the Claude-in-Chrome extension per this project's live-verification gate (`project-context.md` — Process gates), not asserted from a unit/component test alone.
 
-**Given** `AiPlausibility:BaseUrl` is unset (today's existing behavior),
+**Given** `Ai:Endpoint` is unset (today's existing behavior),
 **When** the correlation job runs,
 **Then** it still gracefully no-ops exactly as it does today (AD-8) — this story must not regress the existing degradation path for any household that hasn't opted in.
 
@@ -94,11 +94,11 @@ So that Wattage Plausibility correlation works without any paid third-party depe
 **When** implemented,
 **Then** `docs/self-hosting.md` gains a documented setup section for the AI backend, sufficient for a "found this on GitHub" Self-Hoster to follow with no direct support channel (NFR11).
 
-**Given** the self-hosted backend running locally and `AiPlausibility:BaseUrl` pointing at it,
+**Given** the self-hosted backend running locally and `Ai:Endpoint` pointing at it,
 **When** `AiPlausibilityEnabled` is toggled on for that Household,
 **Then** a genuine correlation is computed exactly as in the Azure path — same AD-8 adapter, no code fork — live-verified via the Claude-in-Chrome extension.
 
-**Given** a self-hosted deployment where the toggle is on but `AiPlausibility:BaseUrl` is unset,
+**Given** a self-hosted deployment where the toggle is on but `Ai:Endpoint` is unset,
 **When** the correlation job runs,
 **Then** the existing no-op degradation still holds — must not regress.
 

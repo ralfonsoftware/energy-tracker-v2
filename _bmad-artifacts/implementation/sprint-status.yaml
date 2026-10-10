@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-10-02
+# last_updated: 2026-10-10
 # Dated change history prior to 2026-09-23 archived to sprint-status-history.md, as are done action items (removed 2026-10-02) (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-10-04
+last_updated: 2026-10-10
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -137,6 +137,28 @@ development_status:
   10-2-event-correlation-forward-window-recompute: done
   10-3-navchrome-dom-order-tab-order: done
   epic-10-retrospective: optional
+
+  epic-11: backlog
+  11-1-restore-export-never-carry-access-grants: backlog
+  11-2-job-lifecycle-conditional-transitions-stale-recovery: backlog
+  11-3-azure-queue-consumer-resilience: backlog
+  11-4-unmapped-smart-plug-readings-keyed-by-device: backlog
+  11-5-ci-identity-split-supply-chain-hygiene: backlog
+  11-6-data-protection-key-encryption: backlog
+  11-7-security-headers-csp-rate-limiting: backlog
+  11-8-auth-hardening-csrf-logout-session-cap: backlog
+  11-9-member-removal-revocable-invites: backlog
+  11-10-upload-hardening: backlog
+  11-11-container-config-correctness: backlog
+  11-12-async-per-request-household-resolution: backlog
+  11-13-single-instance-invariant-documentation: backlog
+  11-14-restore-id-collisions-active-job-guard: backlog
+  11-15-trending-threshold-scaled-to-elapsed: backlog
+  11-16-offline-queue-rejected-readings-attention: backlog
+  11-17-timeprovider-recompute-lock-eviction: backlog
+  11-18-backend-analyzer-format-gate: backlog
+  11-19-structural-cleanup: backlog
+  epic-11-retrospective: optional
 
 action_items:
   - epic: 6
