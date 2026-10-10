@@ -132,11 +132,11 @@ development_status:
   9-4-production-implementation-self-hosting: backlog
   epic-9-retrospective: optional
 
-  epic-10: in-progress
+  epic-10: done
   10-1-migration-safety-on-deploy: done
   10-2-event-correlation-forward-window-recompute: done
   10-3-navchrome-dom-order-tab-order: done
-  epic-10-retrospective: optional
+  epic-10-retrospective: done
 
   epic-11: backlog
   11-1-restore-export-never-carry-access-grants: backlog
@@ -166,3 +166,23 @@ action_items:
     owner: "Ralf/Winston"
     status: open
     note: "2026-09-21 epic-6 retro. Story 6.3 shipped the full AD-8 plumbing (port, adapter, Household toggle, background job, graceful degradation) but no AiPlausibility:BaseUrl is configured anywhere in this environment, so the real classification round-trip has never run. Not blocking Epic 6's done — AD-8's degradation is honest by design — but flagged as a deliberate mid-term decision, not something to leave implicit."
+  - epic: 10
+    action: "Amend ACs at decision time: when an Ask First or review decision changes an AC, mark it AMENDED <date, decision> with the old text struck through; add the rule to project-context.md process gates"
+    owner: "Amelia"
+    status: open
+    note: "2026-10-10 epic-10 retro. Before the first Epic 11 dev-story. See epic-10-retro-2026-10-10.md."
+  - epic: 10
+    action: "Add the Chrome tooling quirks (key presses need a screenshot to focus the page; a stale tab clamps width to 659/660) to the live-resize procedure in project-context.md"
+    owner: "Amelia"
+    status: open
+    note: "2026-10-10 epic-10 retro. Before Story 11.6 (first Epic 11 story with a live gate)."
+  - epic: 10
+    action: "Inspect the Summary tab of the first deploy with real pending migrations (pending list and patched restore-point block, Story 10.1)"
+    owner: "Ralf"
+    status: open
+    note: "2026-10-10 epic-10 retro. First migration-bearing Epic 11 deploy (probably 11.2). Only a local Postgres format check and a 'none pending' live run exist so far."
+  - epic: 10
+    action: "Triage deferred-work.md again (marker and index cleanup, drop entries closed by Epic 11 stories)"
+    owner: "Amelia + Charlie + Dana"
+    status: open
+    note: "2026-10-10 epic-10 retro. After Epic 11, per Ralf. Marker and index structure stays unchanged until then."

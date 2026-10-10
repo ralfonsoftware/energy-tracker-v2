@@ -76,6 +76,12 @@ So that I can retry a restore or cleanup instead of being blocked forever.
 **When** it escapes a job,
 **Then** the job ends `Failed`. Failure codes (`job-interrupted`, `job-retries-exhausted`, `upload-missing`) are translated in both locales.
 
+**Given** terminal `CorrelateEvent` `BackgroundJob` rows (added per Meter Reading write by Story 10.2, never swept today),
+**When** the existing 30-day job-history sweep runs,
+**Then** it also removes them, with the same retention and the same `JobHouseholdContext` handling as for `ProcessSmartPlugImport` rows. *(Added by Epic 10 retro, 2026-10-10; Ralf's decision.)*
+
+*Retro 10 note:* the stale-job recovery and the startup sweep also fail interrupted `CorrelateEvent` rows (`job-interrupted`, no retry). That is acceptable: the correlation re-evaluates the next time a Meter Reading in the Event's window changes (Story 10.2). Confirm at create-story that these rows do not surface in the member-visible job list; if they do, hide or label them.
+
 ## Story 11.3: Azure Queue Consumer Resilience
 
 As the operator of the Azure deployment,
@@ -134,6 +140,8 @@ So that no consumption data is silently overwritten before I map the plugs (audi
 **When** both are imported and later mapped,
 **Then** each keeps and is attributed its own readings, and re-uploading the same plug's file still updates in place.
 
+*Retro 10 note:* deploy N deliberately breaks the expand/contract rule from Story 10.1 (`project-context.md`, Migrations: narrowing `AlterColumn` ships in a later deploy). It is unavoidable: SQL Server cannot use `nvarchar(max)` as an index key, and N creates the new index. The safeguards are the stored-maximum pre-check (fails loudly, never truncates), the parser and validator bound shipped in the same deploy, and the 10.1 restore point plus rollback runbook. Record this as an explicit, justified exception in the story's Dev Notes and in the migration's comment. *(Added by Epic 10 retro, 2026-10-10.)*
+
 ## Story 11.5: CI Identity Split and Supply-Chain Hygiene
 
 As Ralf (operator),
@@ -157,6 +165,12 @@ So that a branch push can't act as the deploy identity, and vulnerable dependenc
 **Given** current dependencies,
 **When** this story is done,
 **Then** `npm audit fix` is applied, ASP.NET Core and EF Core are bumped together to the latest 10.0.x patch, and OpenTelemetry is bumped to current. `dotnet list package --vulnerable` and `npm audit --omit=dev` are clean or have documented exceptions.
+
+**Given** each workflow identity (the Reader-scoped PR identity and the Owner-scoped deploy identity),
+**When** this story is done,
+**Then** `infra/README.md` lists the exact permissions each one needs and why. Each workflow starts with a fail-fast preflight step that checks them by behaviour, with a harmless call: for example a read of the production database with the deploy identity, and a denied write with the Reader identity. A missing or excess right fails the run with a clear message before any migration or deployment step. *(Added by Epic 10 retro, 2026-10-10; Ralf's proposal.)*
+
+*Retro 10 note:* the Story 10.1 rollback runbook (`infra/README.md`) assumes the operator's own Azure login for `az sql db restore/rename`. It does not use the CI identity, and the drill was accepted on that basis. After the split, keep the runbook and the permission list consistent.
 
 ## Story 11.6: Data Protection Key Encryption (Key Vault, Fail Closed)
 
