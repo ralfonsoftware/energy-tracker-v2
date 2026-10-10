@@ -27,13 +27,11 @@ public class BackgroundJobConfiguration : IEntityTypeConfiguration<BackgroundJob
             .OnDelete(DeleteBehavior.Restrict);
 
         // Optional FK — no .IsRequired(), unlike every other FK to Household in this file.
-        // SetNull, not Restrict (changed in Story 7.2) — a HouseholdMember row is deleted and
-        // reinserted wholesale on restore/migration (RestoreHouseholdData), and BackgroundJob is
-        // explicitly out of that operation's scope (never deleted/reinserted, per
-        // docs/data-import-restore.md). Restrict would make every restore fail with a foreign-key
-        // violation the moment ANY BackgroundJob row still references a about-to-be-deleted
-        // member — including the very restore job's own row, which the confirm endpoint inserts
-        // (via IBackgroundJobQueue.EnqueueAsync) before the job even starts running. SetNull
+        // SetNull, not Restrict (changed in Story 7.2, when restore still deleted and reinserted
+        // HouseholdMember rows). Restore no longer touches members at all (AD-25, Story 11.1), but
+        // this stays SetNull: member removal (Story 11.9) will delete members while BackgroundJob
+        // rows (never deleted by it, per docs/data-import-restore.md) still reference them, and
+        // Restrict would make that removal fail with a foreign-key violation. SetNull
         // mirrors SmartPlugReading.SmartPlugImportId's own precedent: job/reading history survives
         // independently of the row it was attributed to at creation time — QueuedByDisplayName's
         // own "null renders a generic fallback, never fabricate a name" convention (UX-DR21)

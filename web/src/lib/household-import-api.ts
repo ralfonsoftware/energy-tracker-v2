@@ -35,6 +35,9 @@ export interface HouseholdImportSummary {
   smartPlugReadings: number
   statusSnapshots: number
   auditCorrections: number
+  // Display names listed in the file (trimmed, blanks dropped, file order). Untrusted text: render
+  // as plain text only. Feeds the "People in this backup" panel (AD-25).
+  memberDisplayNames: string[]
 }
 
 export interface HouseholdImportValidationResult {

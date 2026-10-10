@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EnergyTracker.Api.Endpoints;
 using Shouldly;
 
@@ -182,6 +183,83 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         afterRestoreBody.GetProperty("rooms")[0].GetProperty("name").GetString().ShouldBe("Kitchen");
         afterRestoreBody.GetProperty("meterReadings").GetArrayLength().ShouldBe(1);
         afterRestoreBody.GetProperty("meterReadings")[0].GetProperty("kwhValue").GetDecimal().ShouldBe(12345.6m);
+    }
+
+    // Replaces the export's householdMembers with the given raw JSON array text — used to hand-edit
+    // a "backup file" the way an uploader (or attacker) could.
+    private static byte[] WithHouseholdMembers(byte[] exportBytes, string membersJson)
+    {
+        var root = JsonNode.Parse(exportBytes)!.AsObject();
+        root["householdMembers"] = JsonNode.Parse(membersJson);
+        return Encoding.UTF8.GetBytes(root.ToJsonString());
+    }
+
+    // AD-25 / audit S1, end-to-end: a pre-change (legacy-shape) file that lists a foreign OIDC
+    // identity and omits the caller is accepted, restores fine, and changes nothing about who has
+    // access — the caller still resolves on the very next request and membership is unchanged.
+    [Fact]
+    public async Task Restoring_a_legacy_file_with_a_foreign_member_and_without_the_caller_leaves_membership_unchanged()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var exportResponse = await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken);
+        var exportBytes = await exportResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+        var membersBefore = JsonNode.Parse(exportBytes)!["householdMembers"]!.AsArray();
+        membersBefore.Count.ShouldBe(1);
+        var callerMemberId = membersBefore[0]!["id"]!.GetValue<Guid>();
+
+        var foreignMemberId = Guid.NewGuid();
+        var tampered = WithHouseholdMembers(exportBytes, $$"""
+            [{
+              "id": "{{foreignMemberId}}", "externalIssuer": "https://attacker.test/", "externalSubjectId": "evil|mallory",
+              "displayName": "Mallory", "createdAtUtc": "2026-01-05T08:00:00+00:00"
+            }]
+            """);
+
+        using var upload = BuildUpload(tampered);
+        var validateResponse = await client.PostAsync("/api/household-import", upload, TestContext.Current.CancellationToken);
+        validateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var validateBody = await validateResponse.Content.ReadFromJsonAsync<HouseholdImportValidationResponse>(TestContext.Current.CancellationToken);
+        var confirmResponse = await client.PostAsync($"/api/household-import/{validateBody!.Token}/confirm", null, TestContext.Current.CancellationToken);
+        confirmResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var confirmBody = await confirmResponse.Content.ReadFromJsonAsync<HouseholdImportConfirmResponse>(TestContext.Current.CancellationToken);
+
+        var terminalStatus = await PollJobToTerminalAsync(client, confirmBody!.JobId);
+        terminalStatus.Status.ShouldBe("completed");
+
+        var afterResponse = await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken);
+        afterResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var afterMembers = (await afterResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("householdMembers");
+        afterMembers.GetArrayLength().ShouldBe(1);
+        afterMembers[0].GetProperty("id").GetGuid().ShouldBe(callerMemberId);
+        afterMembers[0].GetProperty("id").GetGuid().ShouldNotBe(foreignMemberId);
+    }
+
+    // AC #4: the validate response carries the file's member display names (file order, trimmed,
+    // blanks dropped) for the "People in this backup" panel; the count keeps counting everyone.
+    [Fact]
+    public async Task POST_household_import_summary_lists_the_files_member_display_names()
+    {
+        var client = await CreateClientWithHouseholdAsync(factory);
+        var exportResponse = await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken);
+        var exportBytes = await exportResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+        var edited = WithHouseholdMembers(exportBytes, $$"""
+            [
+              { "id": "{{Guid.NewGuid()}}", "displayName": "  Alice " },
+              { "id": "{{Guid.NewGuid()}}", "displayName": null },
+              { "id": "{{Guid.NewGuid()}}", "displayName": "   " },
+              { "id": "{{Guid.NewGuid()}}" },
+              { "id": "{{Guid.NewGuid()}}", "displayName": "Bob" }
+            ]
+            """);
+
+        using var upload = BuildUpload(edited);
+        var response = await client.PostAsync("/api/household-import", upload, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var summary = (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("summary");
+        summary.GetProperty("householdMembers").GetInt32().ShouldBe(5);
+        summary.GetProperty("memberDisplayNames").EnumerateArray().Select(e => e.GetString()).ShouldBe(["Alice", "Bob"]);
     }
 
     // AC #4/#1: confirming the SAME token twice must not restore twice — the second confirm 404s

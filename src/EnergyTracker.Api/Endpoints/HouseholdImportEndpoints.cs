@@ -175,6 +175,10 @@ public static class HouseholdImportEndpoints
         return api;
     }
 
+    // memberDisplayNames feeds the "People in this backup" panel shown after the restore (AD-25).
+    // The temp file is gone by then and the job status carries no result payload, so the names ride
+    // along in this validate response instead. Names are untrusted file content: trimmed, blanks
+    // dropped, file order and duplicates kept; the client renders them as plain text only.
     private static HouseholdImportSummary BuildSummary(HouseholdExportResult data) => new(
         data.HouseholdMembers.Count,
         data.MainMeter is not null,
@@ -187,7 +191,12 @@ public static class HouseholdImportEndpoints
         data.Devices.Count,
         data.SmartPlugReadings.Count,
         data.StatusSnapshots.Count,
-        data.AuditCorrections.Count);
+        data.AuditCorrections.Count,
+        data.HouseholdMembers
+            .Select(m => m.DisplayName?.Trim())
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => name!)
+            .ToList());
 }
 
 public record HouseholdImportValidationResponse(Guid Token, HouseholdImportSummary Summary);
@@ -207,6 +216,7 @@ public record HouseholdImportSummary(
     int Devices,
     int SmartPlugReadings,
     int StatusSnapshots,
-    int AuditCorrections);
+    int AuditCorrections,
+    IReadOnlyList<string> MemberDisplayNames);
 
 public record HouseholdImportConfirmResponse(Guid JobId);

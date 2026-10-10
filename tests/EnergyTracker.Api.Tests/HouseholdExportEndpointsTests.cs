@@ -56,6 +56,28 @@ public class HouseholdExportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         body.GetProperty("rooms").GetArrayLength().ShouldBe(0);
     }
 
+    // AD-25 / audit S12: a member's OIDC identity never leaves the server, not even to a member of
+    // the same Household. The entry is exactly { id, displayName }.
+    [Fact]
+    public async Task GET_household_export_lists_each_member_as_exactly_id_and_displayName_and_never_leaks_the_login_identity()
+    {
+        var subject = $"auth0|export-identity-{Guid.NewGuid():N}";
+        var client = factory.CreateAuthenticatedClient(subject);
+        await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(text);
+        var members = document.RootElement.GetProperty("householdMembers");
+        members.GetArrayLength().ShouldBe(1);
+        members[0].EnumerateObject().Select(p => p.Name).Order().ShouldBe(["displayName", "id"]);
+        text.ShouldNotContain("externalIssuer");
+        text.ShouldNotContain("externalSubjectId");
+        text.ShouldNotContain(subject);
+    }
+
     [Fact]
     public async Task GET_household_export_includes_real_data_the_Household_actually_logged()
     {

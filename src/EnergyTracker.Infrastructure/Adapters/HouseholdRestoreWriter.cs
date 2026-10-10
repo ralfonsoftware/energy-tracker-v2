@@ -9,6 +9,9 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // story's scope). ChunkSize/CommandTimeout/one-outer-transaction all reuse
 // SmartPlugImportRepository's own Story 3.8-3.10 incident-derived numbers/patterns (Dev Notes
 // "Bulk-write lessons from Stories 3.8-3.10") rather than re-deriving new ones.
+//
+// AD-25 (audit S1): this writer never reads, deletes or inserts HouseholdMember rows. Who can
+// access a Household is decided by the server-side invite flow, never by an uploaded file.
 public class HouseholdRestoreWriter(EnergyTrackerDbContext dbContext) : IHouseholdRestoreWriter
 {
     internal const int ChunkSize = 200;
@@ -64,11 +67,6 @@ public class HouseholdRestoreWriter(EnergyTrackerDbContext dbContext) : IHouseho
             cancellationToken);
 
         await ChunkedDeleteAsync(
-            ct => dbContext.HouseholdMembers.AsNoTracking().Where(m => m.HouseholdId == householdId).Select(m => m.Id).Take(ChunkSize).ToListAsync(ct),
-            (ids, ct) => dbContext.HouseholdMembers.Where(m => ids.Contains(m.Id)).ExecuteDeleteAsync(ct),
-            cancellationToken);
-
-        await ChunkedDeleteAsync(
             ct => dbContext.MeterRegressionPrompts.AsNoTracking().Where(p => p.HouseholdId == householdId).Select(p => p.Id).Take(ChunkSize).ToListAsync(ct),
             (ids, ct) => dbContext.MeterRegressionPrompts.Where(p => ids.Contains(p.Id)).ExecuteDeleteAsync(ct),
             cancellationToken);
@@ -121,11 +119,12 @@ public class HouseholdRestoreWriter(EnergyTrackerDbContext dbContext) : IHouseho
     }
 
     // Household(update) → MainMeter → Room → PowerPoint → Device → MeterReading →
-    // MeterRegressionPrompt → HouseholdMember → Tariff → Event → SmartPlugReading →
-    // StatusSnapshot → AuditCorrection (Dev Notes, confirmed against the real *Configuration.cs
-    // Fluent API files) — every dependency (MainMeter before MeterReading/MeterRegressionPrompt,
+    // MeterRegressionPrompt → Tariff → Event → SmartPlugReading → StatusSnapshot →
+    // AuditCorrection (Dev Notes, confirmed against the real *Configuration.cs Fluent API files) —
+    // every dependency (MainMeter before MeterReading/MeterRegressionPrompt,
     // Room before PowerPoint, PowerPoint before Device/SmartPlugReading, MeterReading before
-    // MeterRegressionPrompt) is satisfied by this order.
+    // MeterRegressionPrompt) is satisfied by this order. HouseholdMember is deliberately absent from
+    // both phases: membership is access, and access is never carried by data (AD-25, audit S1).
     private async Task InsertImportedDataAsync(HouseholdRestoreData data, CancellationToken cancellationToken)
     {
         await UpdateHouseholdSettingsAsync(data.HouseholdId, data.HouseholdSettings, cancellationToken);
@@ -140,7 +139,6 @@ public class HouseholdRestoreWriter(EnergyTrackerDbContext dbContext) : IHouseho
         await ChunkedInsertAsync(dbContext.Devices, data.Devices, cancellationToken);
         await ChunkedInsertAsync(dbContext.MeterReadings, data.MeterReadings, cancellationToken);
         await ChunkedInsertAsync(dbContext.MeterRegressionPrompts, data.MeterRegressionPrompts, cancellationToken);
-        await ChunkedInsertAsync(dbContext.HouseholdMembers, data.HouseholdMembers, cancellationToken);
         await ChunkedInsertAsync(dbContext.Tariffs, data.Tariffs, cancellationToken);
         await ChunkedInsertAsync(dbContext.Events, data.Events, cancellationToken);
         await ChunkedInsertAsync(dbContext.SmartPlugReadings, data.SmartPlugReadings, cancellationToken);

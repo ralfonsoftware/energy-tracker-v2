@@ -138,11 +138,14 @@ This is a direct consequence of how Household resolution actually works in
 this codebase: `CurrentHouseholdAccessor` resolves the current Household by
 looking up the authenticated principal's `(ExternalIssuer,
 ExternalSubjectId)` against `HouseholdMembers` — never by a stored
-session/cookie Household id. On "move to new hosting," the very first
-authenticated visitor already went through FR-26 and got a **freshly
-created** Household with a new `Id` before ever reaching this Settings
-screen; restore replaces that fresh Household's *contents*, it does not
-resurrect the old deployment's Household row under its old id.
+session/cookie Household id. Restore never rebuilds or alters that
+membership (see "Session continuity across a restore" below). On "move to
+new hosting," the very first authenticated visitor already went through
+FR-26 and got a **freshly created** Household with a new `Id` before ever
+reaching this Settings screen; restore replaces that fresh Household's
+*contents*, it does not resurrect the old deployment's Household row under
+its old id. That first visitor is the Household's only member afterwards;
+everyone else is re-invited (see "Backups and access").
 
 Because `data-export-format.md`'s own format deliberately **excludes**
 `HouseholdId` from every child entity in the file (the whole document is
@@ -160,42 +163,47 @@ FK between these entity types is `DeleteBehavior.Restrict`, never
 
 ### Session continuity across a restore
 
-`HouseholdMember` rows are deleted and reinserted like everything else.
-Because `CurrentHouseholdAccessor` resolves by issuer+subject (not by a
-stable row id), the person performing the restore keeps a working session
-across the operation **as long as their own `(ExternalIssuer,
-ExternalSubjectId)` is present among the imported members** — true by
-construction for the disaster-recovery/self-restore case (same person,
-same OIDC provider) and for the move-to-new-hosting case (same identity,
-new deployment).
+Restore **never writes `HouseholdMember` rows** (AD-25, audit finding S1).
+The membership of the Household is exactly what it was before the restore,
+whatever the file says: the same rows with the same `Id`,
+`ExternalIssuer`, `ExternalSubjectId`, `DisplayName` and `CreatedAtUtc`.
+Because `CurrentHouseholdAccessor` resolves by issuer+subject, the person
+performing the restore therefore keeps a working session across the
+operation **unconditionally**. There is no caveat and no "disclosed edge
+case" any more.
 
-If it is ever *not* present (e.g. deliberately restoring someone else's
-export under a different identity), the current principal loses their
-Household on the very next request after the job completes and is routed
-back into FR-26's Household-creation flow. This is a real, disclosed edge
-case — not solved by this feature — rather than a bug: the restore's own
-DB work runs inside the async background job, which resolves `HouseholdId`
-from the job envelope (`JobHouseholdContext`), never from a live HTTP
-principal, so the destructive write itself never depends on a
-`HouseholdMember` row lookup mid-flight. Continuity only matters for the
-*next* request after the job finishes.
+This is deliberate. Before AD-25, restore deleted and reinserted members
+from the uploaded file, so any member could upload a file that granted
+arbitrary OIDC identities access to the Household, or one that omitted
+everyone and locked every member out. Access to a Household is now granted
+only by the server-side invite flow, never by data.
+
+The restore's own DB work runs inside the async background job, which
+resolves `HouseholdId` from the job envelope (`JobHouseholdContext`), never
+from a live HTTP principal, so the destructive write never depends on a
+`HouseholdMember` lookup mid-flight either.
+
+Residual file-controlled data is data, not access: the AI-consent flag,
+audit rows and entity ids come from the file, but none of them lets anyone
+into the Household.
 
 ### What gets replaced, and how
 
-Every in-scope entity **except Household itself** is fully deleted for the
-current Household, then every row from the file is inserted verbatim,
-reusing each row's original `Id` from the file:
+Every in-scope entity **except Household itself and its members** is fully
+deleted for the current Household, then every row from the file is
+inserted verbatim, reusing each row's original `Id` from the file.
+`HouseholdMember` is never touched (see above):
 
 ```
 delete order (children first):
   AuditCorrection → StatusSnapshot → SmartPlugReading → Event → Tariff →
-  HouseholdMember → MeterRegressionPrompt → MeterReading → Device →
-  PowerPoint → Room → MainMeter
+  MeterRegressionPrompt → MeterReading → Device → PowerPoint → Room →
+  MainMeter
 
 insert order (parents first):
   Household (updated in place) → MainMeter → Room → PowerPoint → Device →
-  MeterReading → MeterRegressionPrompt → HouseholdMember → Tariff →
-  Event → SmartPlugReading → StatusSnapshot → AuditCorrection
+  MeterReading → MeterRegressionPrompt → Tariff → Event →
+  SmartPlugReading → StatusSnapshot → AuditCorrection
 ```
 
 **Household's own row is the one exception.** Its settings fields
@@ -223,8 +231,8 @@ in-app Meter Reading/Tariff edit does.
 A full-household restore is structurally the same "large bulk write" shape
 that caused four real production incidents in Epic 3
 (`DELETE /api/smart-plug-import-jobs?deleteAll=true`, see
-`spec-3-10-cleanup-*.md`) — just across all 12 entity categories instead of
-one, plus an insert phase the cleanup story never had. This restore reuses
+`spec-3-10-cleanup-*.md`) — just across all the restorable entity
+categories instead of one, plus an insert phase the cleanup story never had. This restore reuses
 those incidents' concrete, proven fixes rather than re-deriving new ones:
 
 - **200-row chunks** for every delete and every insert
@@ -280,6 +288,38 @@ If a future change ever turns any part of this into an "upsert instead of
 delete+insert" optimization, re-open this question before shipping it —
 that is precisely the shape the deferred item warns about.
 
+## Backups and access
+
+A backup restores a Household's *data*. It never restores *who may see it*.
+
+- The file's `householdMembers[]` list (`id` and `displayName` only, see
+  [`data-export-format.md`](./data-export-format.md)) is used for one thing:
+  after a completed restore, the Settings screen shows the display names as
+  **"People in this backup"**, next to the existing invite action. Members
+  without a display name are counted ("2 people without a name"). The names
+  come from the validate response (`summary.memberDisplayNames`), because the
+  uploaded file is deleted once the restore job ends.
+- The list is **not compared** with the Household's current members.
+  Display names are nullable and editable and are not identities, so a
+  comparison would be guesswork presented as fact.
+- **Re-invitation is the only way to grant access.** Anyone in the list who
+  should have access again gets a fresh invite link from the invite action.
+- Files exported before this change still carry `externalIssuer`,
+  `externalSubjectId` and `createdAtUtc` on each member. They still validate
+  and restore: those fields are accepted and ignored (they are not even
+  type-checked), and the identities in them never reach the database.
+
+## Compatibility rule
+
+The restore target must run **the same or a newer release** than the one
+that produced the export. `formatVersion` stays `"v2"` across the AD-25
+change, so an *older* release's validator, which still requires
+`externalIssuer` on every member, rejects a newer export at validation
+time with an explicit message such as
+`householdMembers[0]: 'externalIssuer' must be a string.` Nothing is
+changed in that case. This is the intended behaviour, not a bug to work
+around.
+
 ## Validation failure reporting
 
 A `400` from `POST /api/household-import` reports **every** structural
@@ -307,4 +347,7 @@ would bury the one failure that actually matters.
 
 Same entity-scope decision as `data-export-format.md`: `HouseholdInvite`,
 `BackgroundJob`, `SmartPlugImport`, and `SmartPlugImportGap` are never
-read, written, or otherwise touched by a restore.
+read, written, or otherwise touched by a restore. `HouseholdMember` joins
+that list as of AD-25: its rows are never written or deleted by a restore
+(the export still lists each member's `id` and `displayName`, but restore
+only reads them for the "People in this backup" list).

@@ -144,11 +144,12 @@ public class ValidateHouseholdImport
 
     private static void ValidateHouseholdMember(JsonElement item, string path, List<string> failures)
     {
+        // AD-25: restore never writes members, so only `id` and the optional `displayName` (shown
+        // as "people in this backup") are validated. Pre-change files still carry externalIssuer,
+        // externalSubjectId and createdAtUtc; they are deliberately not validated (accepted and
+        // ignored), so an old export keeps restoring.
         RequireGuid(item, "id", path, failures);
-        RequireString(item, "externalIssuer", path, failures);
-        RequireString(item, "externalSubjectId", path, failures);
         RequireOptionalString(item, "displayName", path, failures);
-        RequireDateTimeOffset(item, "createdAtUtc", path, failures);
     }
 
     private static void ValidateMeterReading(JsonElement item, string path, List<string> failures, Guid? mainMeterId)

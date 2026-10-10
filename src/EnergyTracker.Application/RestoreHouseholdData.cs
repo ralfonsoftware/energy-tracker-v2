@@ -8,7 +8,7 @@ namespace EnergyTracker.Application;
 // never the file bytes (Azure Storage Queue caps a message at 64 KB).
 public record RestoreHouseholdDataPayload(string TempFilePath, string OriginalFileName);
 
-/// <summary>Wholesale-replaces the current Household's data with a previously-validated v2 export file (AC #1, #4, #5, #6) — a restore/migration, never a partial-merge edit; never calls IAuditCorrectionRecorder (AD-11's explicit carve-out).</summary>
+/// <summary>Wholesale-replaces the current Household's data with a previously-validated v2 export file (AC #1, #4, #5, #6) — a restore/migration, never a partial-merge edit; never calls IAuditCorrectionRecorder (AD-11's explicit carve-out); never writes HouseholdMember rows, so a file can neither grant nor revoke access (AD-25).</summary>
 public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -54,7 +54,6 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
             importData.Household.LowConfidenceGapDays,
             importData.Household.TariffCheckCadenceMonths,
             importData.Household.AiPlausibilityEnabled),
-        importData.HouseholdMembers.Select(m => ToEntity(m, householdId)).ToList(),
         importData.MainMeter is { } mainMeter ? ToEntity(mainMeter, householdId) : null,
         importData.Rooms.Select(r => ToEntity(r, householdId)).ToList(),
         importData.PowerPoints.Select(p => ToEntity(p, householdId)).ToList(),
@@ -66,16 +65,6 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
         importData.SmartPlugReadings.Select(r => ToEntity(r, householdId)).ToList(),
         importData.StatusSnapshots.Select(s => ToEntity(s, householdId)).ToList(),
         importData.AuditCorrections.Select(c => ToEntity(c, householdId)).ToList());
-
-    private static HouseholdMember ToEntity(HouseholdMemberExportDto dto, Guid householdId) => new()
-    {
-        Id = dto.Id,
-        HouseholdId = householdId,
-        ExternalIssuer = dto.ExternalIssuer,
-        ExternalSubjectId = dto.ExternalSubjectId,
-        DisplayName = dto.DisplayName,
-        CreatedAtUtc = dto.CreatedAtUtc,
-    };
 
     private static MainMeter ToEntity(MainMeterExportDto dto, Guid householdId) => new()
     {

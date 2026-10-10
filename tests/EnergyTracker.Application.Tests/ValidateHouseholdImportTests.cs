@@ -429,4 +429,113 @@ public class ValidateHouseholdImportTests
         result.Data.PowerPoints.Single().RoomId.ShouldBe(roomId);
         result.Data.SmartPlugReadings.Single().PowerPointId.ShouldBe(powerPointId);
     }
+
+    // --- householdMembers (AD-25 / audit S1, S12): the validator needs only `id`; `displayName` is
+    // optional; the legacy identity fields of pre-change exports are accepted and ignored. ---
+
+    private static Dictionary<string, object?> Member(Action<Dictionary<string, object?>>? mutate = null)
+    {
+        var member = new Dictionary<string, object?> { ["id"] = Guid.NewGuid().ToString(), ["displayName"] = "Ralf" };
+        mutate?.Invoke(member);
+        return member;
+    }
+
+    private HouseholdImportValidationResult ValidateWithMember(Dictionary<string, object?> member) =>
+        _sut.Execute(ValidDocument().With("householdMembers", new List<object?> { member }).Build());
+
+    [Fact]
+    public void A_member_in_the_new_id_and_displayName_shape_is_valid()
+    {
+        var member = Member();
+
+        var result = ValidateWithMember(member);
+
+        result.IsValid.ShouldBeTrue();
+        result.Data!.HouseholdMembers.Single().DisplayName.ShouldBe("Ralf");
+    }
+
+    [Fact]
+    public void A_member_with_only_an_id_is_valid_and_has_a_null_DisplayName()
+    {
+        var member = new Dictionary<string, object?> { ["id"] = Guid.NewGuid().ToString() };
+
+        var result = ValidateWithMember(member);
+
+        result.IsValid.ShouldBeTrue();
+        result.Data!.HouseholdMembers.Single().DisplayName.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_member_with_a_null_displayName_is_valid()
+    {
+        var result = ValidateWithMember(Member(m => m["displayName"] = null));
+
+        result.IsValid.ShouldBeTrue();
+        result.Data!.HouseholdMembers.Single().DisplayName.ShouldBeNull();
+    }
+
+    // Verbatim pre-change member shape: such files exist in the wild (Story 7.1 exports) and must
+    // still restore. The identity fields are deliberately not validated at all.
+    [Fact]
+    public void A_legacy_member_carrying_identity_fields_is_valid_and_the_identity_fields_are_ignored()
+    {
+        var member = Member(m =>
+        {
+            m["externalIssuer"] = "https://tenant.eu.auth0.com/";
+            m["externalSubjectId"] = "auth0|abc123";
+            m["createdAtUtc"] = "2026-01-05T08:00:00+00:00";
+        });
+
+        var result = ValidateWithMember(member);
+
+        result.IsValid.ShouldBeTrue();
+        result.Failures.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Legacy_identity_fields_of_any_JSON_type_are_ignored_not_validated()
+    {
+        var member = Member(m =>
+        {
+            m["externalIssuer"] = 42;
+            m["externalSubjectId"] = new List<object?>();
+            m["createdAtUtc"] = "not a date";
+        });
+
+        var result = ValidateWithMember(member);
+
+        result.IsValid.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("not-a-guid")]
+    public void A_member_without_a_valid_id_is_rejected(string idCase)
+    {
+        var member = Member(m =>
+        {
+            if (idCase == "missing")
+            {
+                m.Remove("id");
+            }
+            else
+            {
+                m["id"] = idCase;
+            }
+        });
+
+        var result = ValidateWithMember(member);
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.ShouldContain(f => f.Contains("householdMembers[0]") && f.Contains("'id'"));
+    }
+
+    [Fact]
+    public void A_non_string_displayName_is_rejected()
+    {
+        var result = ValidateWithMember(Member(m => m["displayName"] = 5));
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.ShouldContain("householdMembers[0]: 'displayName' must be a string or null.");
+    }
 }
