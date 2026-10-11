@@ -581,7 +581,8 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
 
                     b.Property<string>("DeviceName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uniqueidentifier");

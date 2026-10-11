@@ -237,7 +237,7 @@ Includes archived rows.
 | `powerPointId` | guid or null | Current Power Point attachment, if matched. |
 | `roomName` | string | By-value snapshot (AD-10) — never re-derived from the live Room, even after a rename/re-parent. |
 | `powerPointName` | string | Same, for Power Point. |
-| `deviceName` | string | The device tag as parsed from the source file. |
+| `deviceName` | string | The device tag as parsed from the source file. At most 200 characters (the restore validator rejects longer values). |
 | `intervalStart` | datetime | |
 | `intervalEnd` | datetime | |
 | `kwhValue` | decimal | |

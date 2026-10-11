@@ -717,4 +717,27 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
         persisted.ErrorMessage.ShouldBe(JobFailureCodes.UploadMissing);
     }
+
+    [Fact]
+    public async Task ProcessAsync_maps_DeviceTagTooLongException_to_the_stable_code_by_type_never_its_message_text()
+    {
+        // Story 11.4, AD-6/AD-20: a smart plug file whose device tag exceeds the bounded column ends Failed
+        // with a code the client translates; the English exception text must never reach ErrorMessage.
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new DeviceTagTooLongException("device tag of 201 characters exceeds 200")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.DeviceTagTooLong);
+        persisted.ErrorMessage.ShouldBe("device-tag-too-long");
+        persisted.CompletedAtUtc.ShouldNotBeNull();
+    }
 }

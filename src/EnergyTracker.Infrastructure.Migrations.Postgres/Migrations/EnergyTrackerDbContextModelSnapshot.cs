@@ -581,7 +581,8 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 
                     b.Property<string>("DeviceName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");

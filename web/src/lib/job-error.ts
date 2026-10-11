@@ -8,6 +8,7 @@ const CODE_KEYS: Record<string, string> = {
   'job-interrupted': 'jobError.interrupted',
   'job-retries-exhausted': 'jobError.retriesExhausted',
   'upload-missing': 'jobError.uploadMissing',
+  'device-tag-too-long': 'jobError.deviceTagTooLong',
 }
 
 export function translateJobError(t: TFunction, errorMessage: string | null | undefined, fallback: string): string {

@@ -13,6 +13,10 @@ describe('translateJobError', () => {
     ['job-interrupted', 'This was interrupted before it finished, so it was stopped. Please try again.'],
     ['job-retries-exhausted', 'This could not be completed after several attempts. Please try again.'],
     ['upload-missing', 'The uploaded file is no longer available on the server. Please upload it again.'],
+    [
+      'device-tag-too-long',
+      "The device name in this file is longer than 200 characters, so it can't be imported. Please shorten it in the app that created the file and upload it again.",
+    ],
   ])('renders the en-US sentence for the code %s', (code, sentence) => {
     expect(translateJobError(i18n.t, code, fallback)).toBe(sentence)
   })
@@ -25,6 +29,9 @@ describe('translateJobError', () => {
     )
     expect(translateJobError(i18n.t, 'upload-missing', fallback)).toBe(
       'Die hochgeladene Datei ist auf dem Server nicht mehr verfügbar. Bitte lade sie erneut hoch.',
+    )
+    expect(translateJobError(i18n.t, 'device-tag-too-long', fallback)).toBe(
+      'Der Gerätename in dieser Datei ist länger als 200 Zeichen und kann deshalb nicht importiert werden. Bitte kürze ihn in der App, mit der die Datei erstellt wurde, und lade sie erneut hoch.',
     )
   })
 

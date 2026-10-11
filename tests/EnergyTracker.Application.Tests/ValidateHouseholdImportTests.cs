@@ -1,4 +1,5 @@
 using System.Text.Json;
+using EnergyTracker.Domain;
 using Shouldly;
 
 namespace EnergyTracker.Application.Tests;
@@ -361,6 +362,46 @@ public class ValidateHouseholdImportTests
 
         result.IsValid.ShouldBeFalse();
         result.Failures.ShouldContain(f => f.Contains("meterReadings[0]") && f.Contains("kwhValue") && f.Contains("negative"));
+    }
+
+    // Story 11.4, AD-20: DeviceName is part of the unmapped-reading key and the column is bounded, so a
+    // restore must reject an over-long value up front instead of failing mid-write.
+    private static Dictionary<string, object?> SmartPlugReadingWithDeviceName(string deviceName) => new()
+    {
+        ["id"] = Guid.NewGuid().ToString(), ["powerPointId"] = null, ["roomName"] = "Kitchen",
+        ["powerPointName"] = "Outlet", ["deviceName"] = deviceName, ["intervalStart"] = "2026-09-01T00:00:00+00:00",
+        ["intervalEnd"] = "2026-09-01T00:15:00+00:00", ["kwhValue"] = 0.5,
+    };
+
+    [Fact]
+    public void A_smartPlugReading_deviceName_of_exactly_the_maximum_length_is_valid()
+    {
+        var document = ValidDocument()
+            .With("smartPlugReadings", new List<object?> { SmartPlugReadingWithDeviceName(new string('a', SmartPlugReading.DeviceNameMaxLength)) })
+            .Build();
+
+        var result = _sut.Execute(document);
+
+        result.Failures.ShouldBeEmpty();
+        result.IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_smartPlugReading_deviceName_over_the_maximum_length_is_reported_with_its_path_field_and_limit()
+    {
+        var document = ValidDocument()
+            .With("smartPlugReadings", new List<object?>
+            {
+                SmartPlugReadingWithDeviceName("Fridge"),
+                SmartPlugReadingWithDeviceName(new string('a', SmartPlugReading.DeviceNameMaxLength + 1)),
+            })
+            .Build();
+
+        var result = _sut.Execute(document);
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.Count.ShouldBe(1);
+        result.Failures.Single().ShouldBe("smartPlugReadings[1]: 'deviceName' must be at most 200 characters.");
     }
 
     [Fact]
