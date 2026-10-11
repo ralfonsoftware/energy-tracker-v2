@@ -82,11 +82,11 @@ Test-first: write each part's tests and see them **red** against the current cod
   - [x] A7.1 `docs/data-export-format.md`, `smartPlugReadings[]` table: `deviceName` row gets "At most 200 characters (the restore validator rejects longer values)." `docs/data-import-restore.md`: one sentence in the validation section if it lists per-field rules; skip if it does not (do not restructure it).
   - [x] A7.2 `invariants-rules.md`: add a short `[AMENDED 2026-10-11, Story 11.4]` note to the AD-2 exception bullet and the AD-23 "Two real unique indexes" bullet, pointing to AD-20's amendment (the key is `(HouseholdId, DeviceName, IntervalStart)`; the old key is dropped by N+1). Leave AD-20's own text as it is.
   - [x] A7.3 `docs/local-vs-azure-deltas.md`: only if it has a place for provider behaviour differences (see 11.3's note: its D1–D6 are deployment gotchas, so probably skip). The SQL Server case- and trailing-space-insensitive device key (Dev Notes) was **accepted by Ralf on 2026-10-11** and is already recorded in `deferred-work-accepted.md`; do not add an `[open]` entry for it.
-- [ ] Task A8: Regression and finish Part A
+- [x] Task A8: Regression and finish Part A
   - [x] A8.1 `dotnet test` (whole solution) green; `dotnet build` no new warnings (new tests pass `TestContext.Current.CancellationToken`); `npm test` and `npm run lint`/`tsc -b` in `web/` (locale + `job-error.ts` changed).
   - [x] A8.2 Search for tests that encoded the **old overwrite semantics** (two different device tags, same `IntervalStart`, both unmapped, expecting one row): `grep -rn "PowerPointId: null\|powerPointId: null" tests/…/SmartPlugImport*` and the Api tests that upload two sample files (`EnergyTrackerApiFactory`, `SmartPlugImportEndpointsTests`). Fix or invert them with a comment pointing at AD-20.
   - [x] A8.3 No live Auth0/Chrome gate applies (no auth, no browser behaviour). Optional manual check: upload two Eve sample files for different plugs (`sample-data/eve/`) against local Postgres, see both appear under "needs mapping" with their own readings.
-  - [ ] A8.4 Open the PR for deploy N. After merge, Ralf's steps (the dev does not run these): watch the App Deploy run; read the "Pre-migration restore point" block in the run summary (Story 10.1); confirm both indexes exist in production (queries in Dev Notes, "Deploy sequence"). Record the run id in Completion Notes. **Do not mark the story `done`.**
+  - [x] A8.4 Open the PR for deploy N (opened: PR #114; post-merge verification and run id are Ralf's steps, tracked in Completion Notes). After merge, Ralf's steps (the dev does not run these): watch the App Deploy run; read the "Pre-migration restore point" block in the run summary (Story 10.1); confirm both indexes exist in production (queries in Dev Notes, "Deploy sequence"). Record the run id in Completion Notes. **Do not mark the story `done`.**
 
 ### Part B: Deploy N+1 (second PR, new branch cut from `main` after N is deployed)
 
@@ -277,6 +277,8 @@ Claude Sonnet 5.5 (`claude-sonnet-5-5`), `bmad-dev-story`, 2026-10-11.
 - **A8.2.** No existing test encoded the old overwrite semantics (the full suite passed with no test edits beyond the additions); `SmartPlugImportEndpointsTests` and `SmartPlugReadingEndpointsTests` are unaffected. **A8.3:** no auth or browser behaviour, so no live Auth0/Chrome gate applies; the optional manual two-Eve-files check was not performed.
 - **Remaining (needs Ralf):** (1) A8.4: open the PR for deploy N (Story 11.4, AD-20, audit C9; I did not commit, push or open it without being asked); after merge, watch the App Deploy run, read the "Pre-migration restore point" block, confirm both indexes in production with the Dev Notes query, and record the run id here. (2) Part B (Tasks B0–B3): cut a new branch from `main` after N is verified, `scripts/add-migration.sh DropOldUnmappedSmartPlugReadingIndex`, drop the A1.2 helper, second PR, record the second deploy run id. (3) Only then `done`. Sprint status therefore stays `in-progress`, not `review`.
 
+- **A8.4 (2026-10-11):** Part A committed and pushed on `feature/11-4-unmaooed-smart-plug-readings`; PR #114 opened against `main`. Still open for Ralf after merge: App Deploy N run id `____`, restore-point block read, both unmapped indexes confirmed in production. Then Part B (B0 gate).
+
 ### File List
 
 Modified:
@@ -317,3 +319,4 @@ Added:
 ### Change Log
 
 - 2026-10-11: Part A (deploy N) implemented: `DeviceName` bounded to 200 (single constant, EF, parsers, restore validator), stable `device-tag-too-long` failure code with en-US/de-DE copy, migration `NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice` (pre-check, `AlterColumn`, new partial unique index beside the old one) for both providers, unmapped upsert and dedupe keyed by `(HouseholdId, DeviceName, IntervalStart)`, docs and AD notes, stale-comment fix. Tests added for every layer; whole solution 1102 passed. Part B and the PR/deploy steps are outstanding.
+- 2026-10-11: Part A committed and PR #114 opened (deploy N). Story stays `in-progress`: Part B and post-deploy verification outstanding.
