@@ -259,10 +259,12 @@ exist. Do not recreate or re-provision any of this — the commands below are re
 documentation for a *future* environment or fork that needs to set this up from scratch, and for
 the one-time Story 11.5 split.
 
-_Verified role mapping before the split (Story 11.5 task R0):_ fill in the output of `az role
-assignment list --assignee <deploy principalId> --all -o table` and `az identity
-federated-credential list --identity-name energy-tracker-devops-uami -g energy-tracker-devops-rg
--o table` here when R0 has been run.
+_Verified role mapping before the split (Story 11.5 task R0, 2026-10-11):_ the deploy identity
+(`energy-tracker-devops-uami`) has exactly one role assignment, **Owner** scoped to
+`/subscriptions/<subscription-id>/resourceGroups/energy-tracker-rg` (nothing at subscription scope,
+no extra roles), and two federated credentials in `energy-tracker-devops-rg`: `repo-branch-main`
+(`...:ref:refs/heads/main`) and `repo-pr` (`...:pull_request`). The `repo-pr` credential on the
+deploy identity is the one task R3 removes once the PR identity is proven.
 
 Both federated credentials' subjects use GitHub's **immutable subject format** (owner/repo
 database IDs appended after `@`, not just names) — this repository was created after GitHub's July
