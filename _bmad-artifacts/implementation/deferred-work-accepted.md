@@ -401,3 +401,8 @@ Archived 2026-10-02 from `deferred-work.md` (Epic 8 retro action #6, `spec-defer
 ## Deferred from: create-story of story-11-4-unmapped-smart-plug-readings-keyed-by-device (2026-10-11)
 
 - [accepted: Ralf 2026-10-11; far narrower than audit C9, a per-column collation cannot be put on an index; revisit if a household reports two plugs whose tags differ only by case or trailing spaces losing readings on SQL Server] On SQL Server (default case- and trailing-space-insensitive collation) the unmapped-reading key `(HouseholdId, DeviceName, IntervalStart)` treats tags differing only by case or trailing spaces as the same plug, so the later import overwrites the earlier one's values. Postgres treats them as distinct, and Power Point matching in `ProcessSmartPlugImport` is ordinal. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs, unmapped MERGE]
+
+
+## Deferred from: dev-story of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
+
+- [accepted: dev tooling only, never in the shipped bundle or the image; `npm audit --omit=dev` is clean and CI gates on it; npm's own fix is a major downgrade of `shadcn` (to 1.0.0), refused. Revisit when a `shadcn` release updates `fast-glob`, or if any of these moves into `--omit=dev`] Seven high `npm audit` advisories remain after `npm audit fix` (no `--force`), all reached through the `shadcn` CLI devDependency: `shadcn` -> `@shadcn/registry` and `fast-glob` -> `micromatch` -> `braces` (GHSA-vfj7-8cjw-p6xm), and `shadcn` -> `ts-morph` -> `@ts-morph/common` -> `fast-glob`. Measured 2026-10-11 on a clean `npm ci`. [web/package.json devDependencies `shadcn`]

@@ -16,6 +16,7 @@ on:
       - 'Dockerfile'
       - 'Directory.Packages.props'
       - '.github/workflows/app-deploy.yml'
+      - 'scripts/ci/**'
   workflow_dispatch: {}
 
 permissions:
@@ -43,11 +44,11 @@ jobs:
           exit 1
 
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # --- Build & test (AC #1) ---------------------------------------------------------------
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -68,13 +69,14 @@ jobs:
       # happened to pass locally when a stale wwwroot/ build from an earlier `npm run build`
       # was still sitting on disk.
       #
-      # node-version matches the Dockerfile's node:22-alpine build stage exactly. web/package.json's
-      # @types/node devDependency is ^24, but that's a type-checking version, not the actual Node
-      # runtime the shipped image builds/runs with.
+      # node-version must match the Dockerfile's frontend build stage (node:25-alpine) so CI tests
+      # and builds on the Node the image builds with. Change both together (Dependabot bumps the
+      # Dockerfile base image, not this value). web/package.json's @types/node devDependency is a
+      # type-checking version, not the runtime.
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '22'
+          node-version: '25'
 
       - name: Install frontend dependencies
         run: npm --prefix web ci
@@ -95,16 +97,35 @@ jobs:
 
       # --- Build & push Docker image (AC #2, #5) ------------------------------------------------
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # OIDC federated-credential login — no client-secret input, ever (AC #3). Reuses the same
-      # pre-provisioned identity/federated credential infra-deploy.yml already uses.
+      # OIDC federated-credential login — no client-secret input, ever (AC #3). Uses the deploy
+      # identity (Owner on the target resource group, federated credential for the main branch only)
+      # that infra-deploy.yml also uses; pull requests log in as a separate Reader identity.
       - name: Azure login (OIDC)
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Registry resolve + login sit right after the Azure login, before the migration (Story 11.5):
+      # a registry problem found after migrations have run is exactly the late failure the preflight
+      # below exists to avoid. ACR name embeds uniqueString(resourceGroup().id), a token not known at
+      # workflow-authoring time — always resolve it at runtime, never hardcode it. Exactly one ACR
+      # exists in this resource group by design.
+      - name: Resolve ACR login server
+        id: acr
+        run: |
+          LOGIN_SERVER=$(az acr list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].loginServer" -o tsv)
+          if [ -z "$LOGIN_SERVER" ]; then
+            echo "::error::No ACR found in resource group ${{ vars.AZURE_RESOURCE_GROUP_NAME }}"
+            exit 1
+          fi
+          echo "login_server=$LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+
+      - name: ACR login
+        run: az acr login --name $(echo "${{ steps.acr.outputs.login_server }}" | cut -d. -f1)
 
       # --- Apply pending EF Core migrations (fixes: production /login 500s when a schema change
       # ships without a corresponding migration-apply step) -------------------------------------
@@ -148,6 +169,18 @@ jobs:
             --name "gh-actions-migrate-${{ github.run_id }}" \
             --start-ip-address ${{ steps.runnerip.outputs.ip }} \
             --end-ip-address ${{ steps.runnerip.outputs.ip }}
+
+      # Fail-fast permission check (Story 11.5, AC #5) with harmless calls: the ARM reads this run
+      # depends on, a production-database read through the same Entra login the migration uses, and
+      # no reach beyond the target resource group. Placed after the firewall rule because the
+      # database read needs it, and before the migration: a wrong right surfaces here, not halfway
+      # through a deploy. Details: infra/README.md, "Workflow identities and their permissions".
+      - name: "Preflight: identity permissions"
+        timeout-minutes: 15
+        env:
+          AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: scripts/ci/azure-preflight.sh deploy-app
 
       # dotnet-ef is a local tool (.config/dotnet-tools.json) — must be restored before `dotnet ef`
       # is callable. Connection string mirrors infra/modules/database-sqlserver.bicep's
@@ -282,22 +315,6 @@ jobs:
             --name "gh-actions-migrate-${{ github.run_id }}" \
             || echo "::warning::Failed to remove temporary firewall rule gh-actions-migrate-${{ github.run_id }} — it may need manual cleanup on SQL Server ${{ steps.sqlserver.outputs.name }}"
 
-      # ACR name embeds uniqueString(resourceGroup().id), a token not known at workflow-authoring
-      # time — always resolve it at runtime, never hardcode it. Exactly one ACR exists in this
-      # resource group by design.
-      - name: Resolve ACR login server
-        id: acr
-        run: |
-          LOGIN_SERVER=$(az acr list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].loginServer" -o tsv)
-          if [ -z "$LOGIN_SERVER" ]; then
-            echo "::error::No ACR found in resource group ${{ vars.AZURE_RESOURCE_GROUP_NAME }}"
-            exit 1
-          fi
-          echo "login_server=$LOGIN_SERVER" >> "$GITHUB_OUTPUT"
-
-      - name: ACR login
-        run: az acr login --name $(echo "${{ steps.acr.outputs.login_server }}" | cut -d. -f1)
-
       # Computed once here and threaded through both the push step and the deploy step below —
       # recomputing `date -u +...` a second time in the deploy step would drift by a minute and
       # reference a tag that was never pushed.
@@ -308,7 +325,7 @@ jobs:
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile

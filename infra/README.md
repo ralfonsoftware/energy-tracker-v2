@@ -111,9 +111,9 @@ Container App's connection string names the database `energytracker`, which is w
      --time <marker-minus-1min, e.g. 2026-10-02T13:24:00Z> --service-objective Basic
    ```
 
-3. **Verify the restored database before swapping.** Connect as the CI identity (a temporary
-   firewall rule is needed — copy the pattern from `app-deploy.yml`, and remove it afterwards) and
-   check that `dotnet ef migrations list` shows the **pre-migration** set, with the bad migration
+3. **Verify the restored database before swapping.** Connect as yourself, with your own Entra
+   account (a temporary firewall rule is needed — copy the pattern from `app-deploy.yml`, and
+   remove it afterwards) and check that `dotnet ef migrations list` shows the **pre-migration** set, with the bad migration
    `(Pending)`:
 
    ```bash
@@ -149,6 +149,9 @@ Container App's connection string names the database `energytracker`, which is w
    scratch databases (`az sql db delete --yes ...`). Basic databases bill hourly, so a forgotten copy
    costs money. Confirm with `az sql db list`.
 
+This runbook uses the operator's own Azure login throughout. It uses neither CI identity and does
+not depend on the identity split (Story 11.5, "Workflow identities and their permissions" below).
+
 **Why not `dotnet ef database update <previous migration>`?** The `Down()` methods are scaffolded and
 never rehearsed, and they cannot restore data that a destructive `Up()` already dropped. PITR is the
 rollback mechanism; migrations are written to be safe instead (expand/contract, see
@@ -172,99 +175,190 @@ scratch database on the same server):_
 - The drill connected with the operator's own Entra identity, not `energy-tracker-devops-uami`; the
   CI identity's access was confirmed only by its contained user being present.
 
+## Workflow identities and their permissions
+
+Two Azure identities exist, one per trust level (Story 11.5, audit S11). A pull request must not be
+able to act as the deploy identity: anyone who can push a branch can edit a workflow on it, and
+workflow code on a branch is attacker-controlled by construction. So the fix is an identity with
+*less power*, not a guard inside the workflow.
+
+| Identity | Role | Federated credential (subject) | Repository secret | Used by | Database access |
+|---|---|---|---|---|---|
+| `energy-tracker-devops-uami` (deploy) | **Owner** on the target resource group | `repo-branch-main` (`main` push only) | `AZURE_CLIENT_ID` | `app-deploy.yml`, `infra-deploy.yml` | contained Entra user, `db_datareader`/`db_datawriter`/`db_ddladmin` (`infra/sql/grant-entra-db-users.sql`) |
+| `energy-tracker-pr-reader-uami` (PR) | **Reader** on the target resource group | `repo-pr` (`pull_request`) | `AZURE_PR_CLIENT_ID` | `pr-review.yml` job `validate-infra` | none |
+
+`AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` are shared. Fork pull requests never receive an OIDC
+token or secrets from GitHub, whatever credentials exist.
+
+Each workflow starts with a **preflight** step (`Preflight: identity permissions`, running
+[`scripts/ci/azure-preflight.sh`](../scripts/ci/azure-preflight.sh) with the mode below) that checks
+these rights by behaviour with harmless calls, before any migration, push or deployment. Every
+probe runs, so one failed run lists all problems; a missing right and an excess right both fail the
+run with a message that names the right and points at this section. A denied probe must be an
+authorization failure (`AuthorizationFailed`, 403, ...); any other error is reported as its own
+failure and never counts as a pass.
+
+### Deploy identity (`deploy-app` and `deploy-infra` modes)
+
+| Right | Needed by | Why | How the preflight checks it |
+|---|---|---|---|
+| Read the SQL server, container registry and container app in the target resource group | `app-deploy.yml` | resolves their generated names at runtime | `az sql server list`, `az acr list`, `az containerapp list`, each must return a name (`deploy-app`) |
+| Read the production database through the contained Entra user | `app-deploy.yml` migration step | `dotnet ef database update` connects as this identity (AD-21) | `dotnet ef migrations list` against the production database with the migration step's retry loop (5 x 30 s, firewall rule propagation) (`deploy-app`) |
+| Database write and DDL (`db_datawriter`, `db_ddladmin`) | `app-deploy.yml` migration step | applying migrations | **not probed**: no harmless write exists; the migration step itself fails if it is missing |
+| Push to the container registry (`AcrPush` or Owner) | `app-deploy.yml` | `docker push` of the new image | **not probed**: no harmless push; `az acr login` runs before the migration to catch the common failure early |
+| Update the container app and its registry/ingress settings | `app-deploy.yml` | deploy a new revision, ensure pull credential and port | **not probed**: no harmless probe; checked by the steps that use them |
+| Read role assignments on the resource group | `infra-deploy.yml` | the template creates role assignments (AcrPull) | `az role assignment list -g <rg>` (`deploy-infra`) |
+| Deployment and role-assignment write on the resource group | `infra-deploy.yml` | `az deployment group create` | `az deployment group what-if` at the **default** validation level, the only harmless call that checks deploy-class write rights (`deploy-infra`) |
+| **Not allowed:** any reach beyond the target resource group | | least privilege | `az group list` must show exactly the target resource group (both modes) |
+
+### PR identity (`pr` mode)
+
+| Right | Needed by | Why | How the preflight checks it |
+|---|---|---|---|
+| Read the target resource group and its container app | `validate-infra` | the what-if reads existing resources; the job also resolves the running image | `az group show`, `az containerapp list` |
+| **Not allowed:** any write | | a PR must not change anything | `az tag update --operation Delete --tags energy-tracker-preflight` on the resource group must be denied (deleting a tag key that does not exist changes nothing even if it were allowed) |
+| **Not allowed:** any reach beyond the target resource group | | least privilege | `az group list` must show exactly the target resource group |
+| Azure CLI 2.76.0 or newer on the runner | `validate-infra` | `--validation-level ProviderNoRbac` | `az version` |
+
+**Why Reader is enough for the PR what-if.** By Microsoft's documentation the what-if has the same
+permission requirements as the deployment itself at the default validation level (`Provider`), so a
+Reader would be denied. `--validation-level ProviderNoRbac` checks read permissions only (Azure CLI
+2.76.0+), and `pr-review.yml` uses it. The what-if does not evaluate `listKeys()` (used by
+`storage-queue.bicep` and `container-apps-environment.bicep`), so no key-listing right is needed.
+The PR what-if passes inert placeholders for `DATABASE_ADMIN_PASSWORD` and `OIDC_CLIENT_SECRET`
+instead of the repository secrets, because what-if never shows or deploys secure parameter values.
+
+**Fallback, only if `ProviderNoRbac` still denies a Reader.** Use a custom role "Reader +
+`Microsoft.Resources/deployments/*`" at the resource-group scope. **Never** Contributor or Owner, and
+never a right that lists keys: if a what-if ever demands one, stop and decide deliberately, because
+handing the PR identity a key-listing right defeats the split.
+
+**Running the preflight by hand** (this is also the drill that proves a denied probe really fires:
+signed in with your own, broader account, `pr` mode must **fail** with the "ALLOWED. Excess right"
+message):
+
+```bash
+export AZURE_RESOURCE_GROUP_NAME=<target-resource-group>
+scripts/ci/azure-preflight.sh pr
+# deploy-app also needs the firewall rule from app-deploy.yml for the database read; for a quick local
+# run without it: PREFLIGHT_DB_ATTEMPTS=1 scripts/ci/azure-preflight.sh deploy-app
+```
+
 ## One-time identity bootstrap (already done — reference only)
 
-The workflow authenticates to Azure via OIDC federated-credential login
-(`azure/login@v2`, no client secret). That identity necessarily has to exist *before* the
-workflow can run at all — Bicep can't create the identity that deploys it — so this is a manual,
-one-time step, done once outside of any pipeline.
+The workflows authenticate to Azure via OIDC federated-credential login (`azure/login`, pinned to a
+commit SHA, no client secret). The identities necessarily have to exist *before* a workflow can run
+at all — Bicep can't create the identity that deploys it — so this is a manual, one-time step, done
+once outside of any pipeline.
 
-**This has already been done for this repository.** The three GitHub repository secrets the
-workflow depends on (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) already exist,
-and the identity they point at already has **two** federated credentials, plus a role assignment
-scoping it to the target resource group. Do not recreate or re-provision any of this — the
-commands below are reference documentation for a *future* environment or fork that needs to set
-this up from scratch.
+**This has already been done for this repository** (deploy identity: 2026-08-12; PR identity split
+out under Story 11.5 — record the date here when its steps R1 and R3 are done). The GitHub
+repository secrets the workflows depend on (`AZURE_CLIENT_ID` for the deploy identity,
+`AZURE_PR_CLIENT_ID` for the PR identity, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) already
+exist. Do not recreate or re-provision any of this — the commands below are reference
+documentation for a *future* environment or fork that needs to set this up from scratch, and for
+the one-time Story 11.5 split.
 
-- `repo-branch-main` — trusts the `main`-branch push subject. Used by `infra-deploy.yml` and
-  `app-deploy.yml` (deploy-capable runs only).
-- `repo-pr` — trusts the `pull_request` subject. Used by `.github/workflows/pr-review.yml`'s
-  `validate-infra` job for read-only `what-if` validation on same-repo PRs only (fork-originated
-  `pull_request` runs never receive an OIDC token from GitHub regardless of this credential's
-  existence, so this cannot be used to deploy from a fork).
+_Verified role mapping before the split (Story 11.5 task R0):_ fill in the output of `az role
+assignment list --assignee <deploy principalId> --all -o table` and `az identity
+federated-credential list --identity-name energy-tracker-devops-uami -g energy-tracker-devops-rg
+-o table` here when R0 has been run.
 
-Both credentials' subjects use GitHub's **immutable subject format** (owner/repo database IDs
-appended after `@`, not just names) — this repository was created after GitHub's July 15, 2026
-cutover to that default, so `ref:refs/heads/main`/`pull_request` subjects are suffixed with
+Both federated credentials' subjects use GitHub's **immutable subject format** (owner/repo
+database IDs appended after `@`, not just names) — this repository was created after GitHub's July
+15, 2026 cutover to that default, so `ref:refs/heads/main`/`pull_request` subjects are suffixed with
 `@<owner-id>` / `@<repo-id>` rather than the plain `repo:owner/repo:...` form older docs and
 tooling may still show:
 
 ```text
-repo-branch-main:  repo:ralfonsoftware@121377414/energy-tracker-v2@1327052942:ref:refs/heads/main
-repo-pr:            repo:ralfonsoftware@121377414/energy-tracker-v2@1327052942:pull_request
+repo-branch-main (deploy identity):  repo:ralfonsoftware@121377414/energy-tracker-v2@1327052942:ref:refs/heads/main
+repo-pr (PR identity):               repo:ralfonsoftware@121377414/energy-tracker-v2@1327052942:pull_request
 ```
 
 Verified 2026-08-12 via `az identity federated-credential list --identity-name
 energy-tracker-devops-uami --resource-group energy-tracker-devops-rg`, cross-checked against
 `gh api repos/ralfonsoftware/energy-tracker-v2` (`owner.id` / `id`).
 
-This deployment uses a **user-assigned managed identity** as the OIDC subject rather than a
-classic Entra ID App Registration + service principal — `azure/login@v2` accepts either shape
-identically (it only cares about `client-id` / `tenant-id` / `subscription-id` plus a federated
-credential trusting the workflow's subject). The managed-identity route needs one fewer resource
-(no separate service principal object) and is used below; an App Registration would look
-functionally the same otherwise.
+These are **user-assigned managed identities** used as the OIDC subject rather than classic Entra
+ID App Registrations + service principals — `azure/login` accepts either shape identically (it
+only cares about `client-id` / `tenant-id` / `subscription-id` plus a federated credential trusting
+the workflow's subject). The managed-identity route needs one fewer resource (no separate service
+principal object) and is used below.
 
 ```bash
 # 1. Create the resource group this workflow deploys into (one-time; the workflow does not create it).
 az group create --name <resource-group-name> --location <region>
 
-# 2. Create the user-assigned managed identity that GitHub Actions authenticates as.
+# 2. Create the deploy identity (user-assigned managed identity) that main-branch workflows use.
 az identity create \
-  --name <identity-name> \
+  --name energy-tracker-devops-uami \
   --resource-group <bootstrap-resource-group>
 
-# 3. Grant it a role scoped to the target resource group (Owner used here since it also needs to
-#    create the AcrPull role assignment in Task 1's container-app.bicep — Contributor + User
-#    Access Administrator is an equally valid, more scoped alternative).
+# 3. Grant it Owner scoped to the target resource group (Owner since it also needs to create the
+#    AcrPull role assignment in container-app.bicep — Contributor + User Access Administrator is an
+#    equally valid, more scoped alternative). Never at subscription scope.
 az role assignment create \
-  --assignee-object-id <identity-principal-id> \
+  --assignee-object-id <deploy-identity-principal-id> \
   --assignee-principal-type ServicePrincipal \
   --role Owner \
   --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>
 
-# 4. Federated credential trusting this repo's main-branch subject — this is what lets
-#    azure/login@v2 exchange a GitHub Actions OIDC token for an Azure access token, with no
+# 4. Federated credential trusting this repo's main-branch subject ONLY — this is what lets the
+#    deploy workflows exchange a GitHub Actions OIDC token for an Azure access token, with no
 #    stored secret. For repos created after GitHub's July 15, 2026 cutover to the immutable
 #    subject format, use repo:<org>@<org-id>/<repo>@<repo-id>:ref:refs/heads/main instead —
 #    check with `gh api repos/<org>/<repo> --jq '{owner: .owner.id, repo: .id}'`.
 az identity federated-credential create \
   --name repo-branch-main \
-  --identity-name <identity-name> \
+  --identity-name energy-tracker-devops-uami \
   --resource-group <bootstrap-resource-group> \
   --issuer https://token.actions.githubusercontent.com \
   --subject repo:<org>/<repo>:ref:refs/heads/main \
   --audiences api://AzureADTokenExchange
 
-# 4b. Second federated credential trusting the pull_request subject — lets pr-review.yml's
-#     validate-infra job authenticate for read-only what-if validation on same-repo PRs. Fork
-#     PRs never receive an OIDC token from GitHub, so this credential alone cannot be used to
-#     authenticate a deploy-capable run from a fork. For repos created after GitHub's July 15,
-#     2026 cutover to the immutable subject format, use repo:<org>@<org-id>/<repo>@<repo-id>:
-#     pull_request instead — check with `gh api repos/<org>/<repo> --jq '{owner: .owner.id,
-#     repo: .id}'`.
+# 5. The PR identity (Story 11.5 task R1): a separate managed identity, Reader on the target
+#    resource group (not the subscription), nothing else, no database user.
+az identity create \
+  --name energy-tracker-pr-reader-uami \
+  --resource-group <bootstrap-resource-group>
+az role assignment create \
+  --assignee-object-id <pr-identity-principal-id> \
+  --assignee-principal-type ServicePrincipal \
+  --role Reader \
+  --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>
+
+# 5b. Its one federated credential, for the pull_request subject. Fork PRs never receive an OIDC
+#     token from GitHub, so this cannot authenticate a run from a fork. Immutable subject format as
+#     in step 4 (repo:<org>@<org-id>/<repo>@<repo-id>:pull_request).
 az identity federated-credential create \
   --name repo-pr \
-  --identity-name <identity-name> \
+  --identity-name energy-tracker-pr-reader-uami \
   --resource-group <bootstrap-resource-group> \
   --issuer https://token.actions.githubusercontent.com \
   --subject repo:<org>/<repo>:pull_request \
   --audiences api://AzureADTokenExchange
 
-# 5. Set the three GitHub repository secrets from the identity's IDs.
-gh secret set AZURE_CLIENT_ID --body <identity-client-id>
+# 6. Set the GitHub repository secrets from the identities' IDs.
+gh secret set AZURE_CLIENT_ID --body <deploy-identity-client-id>
+gh secret set AZURE_PR_CLIENT_ID --body <pr-identity-client-id>
 gh secret set AZURE_TENANT_ID --body <tenant-id>
 gh secret set AZURE_SUBSCRIPTION_ID --body <subscription-id>
+```
+
+**Story 11.5 rollout (one time, order matters).** Before the repo change merges: R0 (read-only
+check of the current role mapping), R1 (steps 5, 5b and the `AZURE_PR_CLIENT_ID` secret above).
+After it merges, once the first `app-deploy.yml` run with the preflight is green and a throw-away PR
+that edits a comment in `infra/main.bicep` has passed `validate-infra` as the PR identity: R3, which
+removes the old path from the deploy identity. Doing R3 earlier would make every infra PR fail on
+login.
+
+```bash
+az identity federated-credential delete \
+  --identity-name energy-tracker-devops-uami \
+  --resource-group energy-tracker-devops-rg \
+  --name repo-pr --yes
+az identity federated-credential list --identity-name energy-tracker-devops-uami \
+  --resource-group energy-tracker-devops-rg -o table   # must show only repo-branch-main
 ```
 
 The equivalent classic App Registration shape (`az ad app create`, `az ad sp create`, then the
@@ -322,7 +416,8 @@ recreating unchanged resources.
 request against `main` — build/test/lint always (`build-test-lint` job), and a read-only infra
 `what-if` validation (`validate-infra` job) when `infra/**` changed and the PR isn't from a fork.
 It never deploys anything; that stays exclusive to `infra-deploy.yml`/`app-deploy.yml` on push to
-`main`.
+`main`. `validate-infra` logs in as the Reader-scoped PR identity, not the deploy identity (see
+"Workflow identities and their permissions").
 
 `main` has GitHub branch protection requiring both `build-test-lint` and `validate-infra` as
 passing status checks before a PR can merge (`required_status_checks.strict: true`, no required
@@ -363,10 +458,13 @@ instead — see the workflow's own "Notice" step).
 updates are a separate repo setting and keep working as before.
 
 [`dependabot-automerge.yml`](../.github/workflows/dependabot-automerge.yml) enables GitHub
-auto-merge (squash) on Dependabot PRs that are patch or minor updates, so they merge once
-`build-test-lint` and `validate-infra` pass. Majors are never auto-merged. Because every merge to
-`main` that touches `src/**` or `web/**` deploys to production (`app-deploy.yml`), the allowed
-update types are the safety boundary; change them only together with the spec
+auto-merge (squash) on npm, NuGet and Docker Dependabot PRs that are patch or minor updates, so they
+merge once `build-test-lint` and `validate-infra` pass. Majors are never auto-merged. **GitHub
+Actions PRs are never auto-merged, whatever the update type** (Story 11.5): actions are pinned to
+commit SHAs, so Dependabot proposes minor and patch bumps too, and an action runs with the deploy
+identity's token once it is on `main`. Merge those by hand after reading the SHA diff. Because every
+merge to `main` that touches `src/**` or `web/**` deploys to production (`app-deploy.yml`), the
+allowed update types are the safety boundary; change them only together with the spec
 (`_bmad-artifacts/implementation/spec-dependabot-version-updates-auto-merge.md`).
 
 Branch protection keeps `strict: true`, so a Dependabot PR that falls behind `main` waits until
@@ -374,3 +472,31 @@ it is rebased. Rebase it by hand: comment `@dependabot rebase` on the PR. Auto-m
 completes on its own once the checks are green again.
 
 Repo prerequisite (already set): Settings → General → "Allow auto-merge".
+
+## Scanning and supply chain
+
+- **Actions are pinned to a commit SHA with a version comment**
+  (`uses: actions/checkout@<40-hex> # v7.0.1`). A mutable tag lets whoever controls the upstream
+  repo change what runs with this repo's OIDC token; the SHA does not move. The architecture test
+  `WorkflowActionsArePinnedToCommitShaTests` fails the build for any unpinned reference. To update:
+  merge the weekly Dependabot GitHub Actions PR **by hand** after reading the SHA diff (it updates the
+  SHA and the comment together). To pin a new action by hand, resolve the *commit* with
+  `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha` (not `git/ref/tags`, which can return an
+  annotated tag object). `aquasecurity/trivy-action` had its tags force-pushed to malicious commits
+  in March 2026: for that action check the SHA against the maintainers' advisory before updating.
+- **CodeQL** ([`codeql.yml`](../.github/workflows/codeql.yml)): C# and JavaScript/TypeScript on every
+  PR to `main` (not Dependabot PRs, which cannot upload results), every push to `main` and weekly.
+  Findings are under Security > Code scanning. Not a required check.
+- **Container image scan** ([`container-scan.yml`](../.github/workflows/container-scan.yml)): builds
+  the Dockerfile and runs Trivy for HIGH and CRITICAL findings that have a fix, on PRs touching the
+  image inputs, on `main` and weekly (new CVEs in unchanged base images). It is its own workflow
+  with no secrets and no `id-token`, so the scanner never shares a job with the deploy identity.
+  Not a required check: a base-image CVE should not block an unrelated PR. Ralf may make it
+  required later (Settings, branch protection, add `scan-image`).
+- **Dependencies:** NuGet advisories fail `dotnet restore` (NuGet Audit gate, `Directory.Build.props`);
+  `npm audit --omit=dev --audit-level=moderate` fails `build-test-lint` the same way for shipped
+  npm packages. Dev-only advisories are listed with a reason in
+  `_bmad-artifacts/implementation/deferred-work-accepted.md`.
+- **Triage:** fix the finding, or write an `[open]` entry in
+  `_bmad-artifacts/implementation/deferred-work.md`. Do not suppress silently; an ignore entry needs a
+  reason and a revisit trigger.

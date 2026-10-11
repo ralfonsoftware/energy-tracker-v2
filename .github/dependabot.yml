@@ -1,7 +1,7 @@
 # Dependabot version updates (security updates are enabled separately in the repo settings and
 # are not affected by this file). Patch and minor updates are grouped into one PR per ecosystem
-# per week and auto-merged by dependabot-automerge.yml once the required checks pass; majors
-# arrive as individual PRs and are reviewed and merged by hand. See
+# per week and auto-merged by dependabot-automerge.yml once the required checks pass (except
+# GitHub Actions, see below); majors arrive as individual PRs and are reviewed and merged by hand. See
 # _bmad-artifacts/implementation/spec-dependabot-version-updates-auto-merge.md.
 #
 # `cooldown` delays a freshly published version by a few days before Dependabot proposes it, so a
@@ -40,8 +40,11 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
 
-  # Actions are pinned to major tags (actions/checkout@v7), so Dependabot only proposes major
-  # bumps here: they never match the auto-merge rule and always need a manual merge.
+  # Actions are pinned to commit SHAs with a `# vX.Y.Z` comment (actions/checkout@<sha> # v7.0.1),
+  # so Dependabot proposes minor and patch bumps too, SHA and comment together. These PRs are
+  # never auto-merged (dependabot-automerge.yml skips github_actions): an action runs with the
+  # deploy identity's token on main, so read the SHA diff and merge by hand. The group below keeps
+  # it to one weekly PR for all action bumps.
   - package-ecosystem: github-actions
     directory: /
     schedule:
