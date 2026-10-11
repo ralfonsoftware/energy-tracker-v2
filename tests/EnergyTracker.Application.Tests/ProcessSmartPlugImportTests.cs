@@ -1,7 +1,9 @@
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Shouldly;
 
 namespace EnergyTracker.Application.Tests;
@@ -40,6 +42,11 @@ public class ProcessSmartPlugImportTests
         [_parser], _taggingScaffoldRepository, _smartPlugImportRepository,
         new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
         NullLogger<ProcessSmartPlugImport>.Instance);
+
+    private ProcessSmartPlugImport SutWith(ILogger<ProcessSmartPlugImport> logger) => new(
+        [_parser], _taggingScaffoldRepository, _smartPlugImportRepository,
+        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
+        logger);
 
     private ProcessSmartPlugImportPayload MakePayload(string deviceTag) =>
         new(Guid.NewGuid(), _tempFilePath, $"{deviceTag}.xlsx");
@@ -344,5 +351,53 @@ public class ProcessSmartPlugImportTests
             Arg.Any<IReadOnlyList<SmartPlugReading>>(),
             Arg.Any<CancellationToken>(),
             Arg.Is<SmartPlugReadingCorrection?>(c => c != null && c.ReadingId == watermark.Id && c.NewKwhValue == 0.75m));
+    }
+
+    [Fact]
+    public async Task A_missing_temp_file_throws_UploadMissingException_and_still_persists_a_Failed_import_row()
+    {
+        // Story 11.3 / AD-24: the replica that received the upload may have been replaced before the
+        // job ran. The member still sees the file in the job history, with the stable upload-missing code.
+        var missingPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.xlsx");
+        var payload = new ProcessSmartPlugImportPayload(Guid.NewGuid(), missingPath, "Living Room Lamp.xlsx");
+        var backgroundJobId = Guid.NewGuid();
+
+        await Should.ThrowAsync<UploadMissingException>(
+            () => Sut().ExecuteAsync(_householdId, backgroundJobId, payload, TestContext.Current.CancellationToken));
+
+        await _smartPlugImportRepository.Received(1).AddAsync(
+            Arg.Is<SmartPlugImport>(i => i.Id == payload.SmartPlugImportId && i.BackgroundJobId == backgroundJobId && i.Status == SmartPlugImportStatus.Failed),
+            Arg.Any<IReadOnlyList<SmartPlugReading>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<SmartPlugReadingCorrection?>());
+        _parser.DidNotReceive().ReadDeviceTag(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_failure_while_persisting_the_Failed_row_does_not_mask_the_original_exception_which_is_logged_first()
+    {
+        // Story 11.3 AC #5 / audit C7: before this, PersistFailedImportAsync's own exception replaced the
+        // real failure, so the processor recorded (and the logs showed) the wrong cause.
+        var payload = MakePayload("Living Room Lamp");
+        var original = new InvalidDataException("unreadable header");
+        var persistFailure = new TimeoutException("database timeout");
+        _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Throws(original);
+        _smartPlugImportRepository.AddAsync(
+                Arg.Any<SmartPlugImport>(), Arg.Any<IReadOnlyList<SmartPlugReading>>(), Arg.Any<CancellationToken>(), Arg.Any<SmartPlugReadingCorrection?>())
+            .ThrowsAsync(persistFailure);
+        var logger = Substitute.For<ILogger<ProcessSmartPlugImport>>();
+
+        var thrown = await Should.ThrowAsync<InvalidDataException>(
+            () => SutWith(logger).ExecuteAsync(_householdId, Guid.NewGuid(), payload, TestContext.Current.CancellationToken));
+
+        thrown.ShouldBeSameAs(original);
+        Received.InOrder(() =>
+        {
+            logger.Log(LogLevel.Error, Arg.Any<EventId>(), Arg.Any<Arg.AnyType>(), original, Arg.Any<Func<Arg.AnyType, Exception?, string>>());
+            _smartPlugImportRepository.AddAsync(
+                Arg.Any<SmartPlugImport>(), Arg.Any<IReadOnlyList<SmartPlugReading>>(), Arg.Any<CancellationToken>(), Arg.Any<SmartPlugReadingCorrection?>());
+        });
+        // The swallowed persist failure is logged too, not lost.
+        logger.Received(1).Log(LogLevel.Error, Arg.Any<EventId>(), Arg.Any<Arg.AnyType>(), persistFailure, Arg.Any<Func<Arg.AnyType, Exception?, string>>());
     }
 }

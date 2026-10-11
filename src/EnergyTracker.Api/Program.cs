@@ -442,8 +442,15 @@ switch (jobQueueProvider)
         var jobQueueConnectionString = builder.Configuration["JobQueue:ConnectionString"] ?? string.Empty;
         // Base64 message encoding so a JSON payload survives the queue message's XML envelope
         // untouched (the SDK's raw/"None" default is not XML-safe for arbitrary JSON text).
-        builder.Services.AddSingleton(_ => new QueueClient(
-            jobQueueConnectionString, "jobs", new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 }));
+        builder.Services.AddSingleton(sp =>
+        {
+            var queueOptions = new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 };
+            // A body that fails Base64 decoding would otherwise make ReceiveMessagesAsync throw forever (audit C7).
+            var decodingLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<AzureStorageQueueJobProcessingService>();
+            queueOptions.MessageDecodingFailed += args => QueueMessageDecodingFailureHandler.HandleAsync(args, decodingLogger);
+            return new QueueClient(jobQueueConnectionString, "jobs", queueOptions);
+        });
+        builder.Services.AddSingleton(QueueConsumerTimings.Default);
         builder.Services.AddSingleton<IBackgroundJobQueue, AzureStorageQueueJobQueue>();
         builder.Services.AddHostedService<AzureStorageQueueJobProcessingService>();
         break;

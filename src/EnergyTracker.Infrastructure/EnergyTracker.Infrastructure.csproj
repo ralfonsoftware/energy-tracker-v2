@@ -11,6 +11,9 @@
          to exercise the enqueue-time Queued row -> dequeue-time transition, same precedent as
          EnergyTracker.Api's own InternalsVisibleTo for OIDC claim-validation logic. -->
     <InternalsVisibleTo Include="EnergyTracker.Infrastructure.Tests" />
+    <!-- Story 11.3: NSubstitute (Castle DynamicProxy) cannot proxy the internal IJobMessageProcessor
+         seam unless its generated assembly can see Infrastructure's internals. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
   <ItemGroup>

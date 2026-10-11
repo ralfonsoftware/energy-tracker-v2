@@ -200,14 +200,16 @@ public class RestoreHouseholdDataTests
     }
 
     [Fact]
-    public async Task A_missing_temp_file_throws_a_HouseholdImportValidationException_with_a_user_facing_message()
+    public async Task A_missing_temp_file_throws_UploadMissingException_rather_than_a_validation_exception_with_English_text()
     {
+        // Story 11.3 / AD-6 / AD-24: the file vanished between enqueue and dequeue (replica or disk
+        // replaced). Not bad file content, so it is not a *ValidationException: the processor turns
+        // this type into the stable upload-missing code and never forwards a sentence to the client.
         var missingPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
 
-        var ex = await Should.ThrowAsync<HouseholdImportValidationException>(
+        await Should.ThrowAsync<UploadMissingException>(
             () => Sut().ExecuteAsync(Guid.NewGuid(), new RestoreHouseholdDataPayload(missingPath, "export.json"), TestContext.Current.CancellationToken));
 
-        ex.Message.ShouldContain("export.json");
         await _writer.DidNotReceive().RestoreAsync(Arg.Any<HouseholdRestoreData>(), Arg.Any<CancellationToken>());
     }
 

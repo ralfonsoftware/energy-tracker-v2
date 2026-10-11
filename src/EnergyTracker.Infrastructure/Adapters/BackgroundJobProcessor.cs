@@ -16,8 +16,45 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // job Completed/Failed. It never inserts or resurrects a row.
 public class BackgroundJobProcessor(
     IServiceScopeFactory scopeFactory, JobLifecycleTimings timings, ILogger<BackgroundJobProcessor> logger)
+    : IJobMessageProcessor
 {
     private const int TransitionAttempts = 3;
+
+    Task IJobMessageProcessor.ProcessAsync(JobMessage message, CancellationToken cancellationToken) =>
+        ProcessAsync(message, cancellationToken);
+
+    Task IJobMessageProcessor.FailRetriesExhaustedAsync(JobMessage message, CancellationToken cancellationToken) =>
+        FailRetriesExhaustedAsync(message, cancellationToken);
+
+    // The Azure queue's dequeue limit (AD-6, audit C7): a message delivered too many times is a poison
+    // message, so its job is failed instead of processed. Token-less because no attempt owns the row;
+    // limited to Queued/Processing so a terminal status is never overwritten. Returning normally (also
+    // for a missing or already-terminal row) tells the consumer to delete the message; an exception
+    // leaves it for the next delivery.
+    internal async Task FailRetriesExhaustedAsync(JobMessage message, CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+
+        // AD-3: same first step as ProcessAsync, before anything resolves EnergyTrackerDbContext.
+        scope.ServiceProvider.GetRequiredService<JobHouseholdContext>().HouseholdId = message.HouseholdId;
+        var lifecycle = scope.ServiceProvider.GetRequiredService<IBackgroundJobLifecycle>();
+
+        var failed = await RetryTransientAsync(
+            () => lifecycle.TryFailNonTerminalAsync(message.JobId, JobFailureCodes.RetriesExhausted, cancellationToken),
+            "fail-retries-exhausted", message.JobId, cancellationToken);
+        if (failed)
+        {
+            logger.LogError(
+                "Background job {JobId} ({JobType}) was delivered too many times; failed with {FailureCode}.",
+                message.JobId, message.JobType, JobFailureCodes.RetriesExhausted);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Background job {JobId} was delivered too many times but is already finished or missing; dropping the message.",
+                message.JobId);
+        }
+    }
 
     internal async Task ProcessAsync(JobMessage message, CancellationToken cancellationToken)
     {
@@ -71,9 +108,14 @@ public class BackgroundJobProcessor(
                 // (file paths, DB errors, etc.) must never be forwarded verbatim to the client that
                 // polls GET /api/jobs/{id}. A generic failure leaves ErrorMessage null: this backend has
                 // no concept of the client's locale, so the client supplies its own localized fallback
-                // (Round-4 incident fix). Stable codes (job-interrupted, ...) are the third kind of
-                // value and are written by the lifecycle, never from an exception message.
-                failureMessage = ex is SmartPlugImportValidationException or HouseholdImportValidationException ? ex.Message : null;
+                // (Round-4 incident fix). Stable codes (job-interrupted, upload-missing, ...) are the
+                // third kind of value: chosen from the exception's type, never from its message text.
+                failureMessage = ex switch
+                {
+                    UploadMissingException => JobFailureCodes.UploadMissing,
+                    SmartPlugImportValidationException or HouseholdImportValidationException => ex.Message,
+                    _ => null,
+                };
             }
         }
         finally
