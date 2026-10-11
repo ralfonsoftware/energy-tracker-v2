@@ -80,9 +80,9 @@ param customDomainName string = ''
 @description('Whether the managed certificate for customDomainName should be created. Must stay false on the first deploy that sets customDomainName (claims the hostname only) and only flip to true on a second, later deploy once that claim is live — Azure requires the hostname already registered before it will create a certificate for it (docs/local-vs-azure-deltas.md#D5). Deliberately not set in main.bicepparam.')
 param customDomainCertificateReady bool = false
 
-@description('OIDC provider Client Secret — supplied at deploy time from a GitHub Actions secret, never committed. Defaults to the non-empty \'unset\' sentinel container-app.bicep requires when no real value exists yet.')
+@description('OIDC provider Client Secret — supplied at deploy time from a GitHub Actions secret, never committed. Required (no default, so a missing value fails the deploy instead of silently shipping a placeholder); infra/main.bicepparam reads it from the OIDC_CLIENT_SECRET environment variable.')
 @secure()
-param oidcClientSecret string 
+param oidcClientSecret string
 
 @description('Port the ingress health-checks and routes traffic to. Matches the real app image (Dockerfile ASPNETCORE_HTTP_PORTS=8080), which Story 1.3\'s deploy workflow pushes and deploys; the placeholder image used before Story 1.3 listened on 80. Kept in sync by hand with the hardcoded `--target-port 8080` in .github/workflows/app-deploy.yml\'s "Ensure ACR pull credential and target port" step — that step reapplies 8080 on every push independent of this default, so update both if this value ever changes.')
 param containerAppTargetPort int = 8080
