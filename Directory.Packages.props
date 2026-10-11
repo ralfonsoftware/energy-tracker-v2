@@ -66,8 +66,8 @@
     <!-- 4.14.0+ bumps its own SSH.NET dependency to 2026.0.0, past 2025.1.0's two high-severity
          ScpClient advisories (GHSA-q939-rpr3-3284 path traversal, GHSA-mggc-4xg6-vcxf command
          injection) — no local override needed. -->
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
   </ItemGroup>
 
 </Project>
