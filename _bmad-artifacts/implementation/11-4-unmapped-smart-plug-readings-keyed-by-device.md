@@ -90,13 +90,13 @@ Test-first: write each part's tests and see them **red** against the current cod
 
 ### Part B: Deploy N+1 (second PR, new branch cut from `main` after N is deployed)
 
-- [ ] Task B0: Gate: deploy N is green in production, both indexes confirmed, no failed unmapped import since N that needs the user's attention. If the N deploy was rolled back or its migration failed, stop and re-plan; do not ship B on top of it.
-- [ ] Task B1: Test first, red (AC: #3, #5)
-  - [ ] B1.1 Migration tests (both providers): at the fully migrated schema, the old `(HouseholdId, IntervalStart) WHERE PowerPointId IS NULL` index **no longer exists**, the new one does, and the `(PowerPointId, IntervalStart)` mapped index is untouched (by definition, not name).
-  - [ ] B1.2 AC #5's main case (A1.2 a/b) runs on the fully migrated schema and passes. A1.2(c), the transitional-state test, stays pinned to N's checkpoint and keeps passing.
-- [ ] Task B2: `scripts/add-migration.sh DropOldUnmappedSmartPlugReadingIndex` (both providers). There is no model change, so the scaffold is an empty migration: write `Up()` as a single raw `DROP INDEX` per provider (Postgres `DROP INDEX IF EXISTS "IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull";`, which truncates to 63 bytes exactly as the original `CREATE` did; SQL Server `DROP INDEX [IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull] ON [SmartPlugReadings];`), verified by B1.1. `Down()` recreates the old index (comment: can fail if two devices now share an interval; rollback is the restore-point procedure, not `Down()`). Header comment: this is the contract half of the Story 11.4 expand/contract pair; the previous image (N) no longer needs the dropped index, and a rollback to an image **older than N** is no longer possible by image redeploy alone (its `ON CONFLICT` arbiter is gone), so that case is the restore-point procedure.
+- [x] Task B0: Gate: deploy N is green in production, both indexes confirmed, no failed unmapped import since N that needs the user's attention. If the N deploy was rolled back or its migration failed, stop and re-plan; do not ship B on top of it.
+- [x] Task B1: Test first, red (AC: #3, #5)
+  - [x] B1.1 Migration tests (both providers): at the fully migrated schema, the old `(HouseholdId, IntervalStart) WHERE PowerPointId IS NULL` index **no longer exists**, the new one does, and the `(PowerPointId, IntervalStart)` mapped index is untouched (by definition, not name).
+  - [x] B1.2 AC #5's main case (A1.2 a/b) runs on the fully migrated schema and passes. A1.2(c), the transitional-state test, stays pinned to N's checkpoint and keeps passing.
+- [x] Task B2: `scripts/add-migration.sh DropOldUnmappedSmartPlugReadingIndex` (both providers). There is no model change, so the scaffold is an empty migration: write `Up()` as a single raw `DROP INDEX` per provider (Postgres `DROP INDEX IF EXISTS "IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull";`, which truncates to 63 bytes exactly as the original `CREATE` did; SQL Server `DROP INDEX [IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull] ON [SmartPlugReadings];`), verified by B1.1. `Down()` recreates the old index (comment: can fail if two devices now share an interval; rollback is the restore-point procedure, not `Down()`). Header comment: this is the contract half of the Story 11.4 expand/contract pair; the previous image (N) no longer needs the dropped index, and a rollback to an image **older than N** is no longer possible by image redeploy alone (its `ON CONFLICT` arbiter is gone), so that case is the restore-point procedure.
 - [ ] Task B3: Close-out
-  - [ ] B3.1 Full `dotnet test` green. PR for N+1, opened promptly after N ("promptly" = once N has been verified, same day if possible; the transitional state means a second plug's overlapping unmapped import fails until then).
+  - [x] B3.1 Full `dotnet test` green. PR for N+1, opened promptly after N ("promptly" = once N has been verified, same day if possible; the transitional state means a second plug's overlapping unmapped import fails until then).
   - [ ] B3.2 After the N+1 deploy: confirm in production that only the new unmapped index exists (query below). Record both deploy run ids in Completion Notes.
   - [ ] B3.3 Update the sprint-status entry to `done` only now, and tick Part A and Part B. Append leftovers to `deferred-work.md` per project-context convention.
 
@@ -279,6 +279,9 @@ Claude Sonnet 5.5 (`claude-sonnet-5-5`), `bmad-dev-story`, 2026-10-11.
 
 - **A8.4 (2026-10-11):** Part A committed and pushed on `feature/11-4-unmaooed-smart-plug-readings`; PR #114 opened against `main`. Still open for Ralf after merge: App Deploy N run id `____`, restore-point block read, both unmapped indexes confirmed in production. Then Part B (B0 gate).
 
+- **Part B (2026-10-11).** B0 gate: App Deploy N run 38147146530 green (PR #114 merged as `65e5478`), Ralf's production query showed exactly the three filtered unique indexes: new `(HouseholdId,DeviceName,IntervalStart) WHERE PowerPointId IS NULL`, old `(HouseholdId,IntervalStart) WHERE PowerPointId IS NULL`, mapped `(PowerPointId,IntervalStart) WHERE PowerPointId IS NOT NULL`. Branch `feature/11-4-drop-old-unmapped-index` cut from `main`. Red first: the two new migration tests (`DropOldUnmappedSmartPlugReadingIndex_migration_…`, Postgres and SQL Server) failed 2/2 (no such migration). Migration `DropOldUnmappedSmartPlugReadingIndex` (Postgres `20261011145430`, SQL Server `20261011145433`) is a single raw `DROP INDEX` per provider, snapshot unchanged, header comment records the contract half and that a rollback to an image older than N is now the restore-point procedure; `Down()` recreates the old index (comment: can fail if devices share an interval). B1.2: `OpenDbContextWithoutOldUnmappedIndexAsync` and both `DropOldUnmappedIndexSql` overrides removed, AC #5 tests (a), (b) and the mapped-collision test now run on the genuinely migrated schema and pass; the deploy-N transitional test stays pinned to N's checkpoint. The code-review decision on AC #5 is therefore closed. Comments in `SmartPlugReadingConfiguration.cs` / `SmartPlugImportRepository.cs` and the AD-2/AD-23 notes changed to past tense. Full `dotnet test`: 1104 passed / 0 failed; build warnings are the 6 pre-existing `xUnit1051` ones.
+- **Remaining for Ralf (B3.2, B3.3):** merge the Part B PR, watch the App Deploy N+1 run, re-run the index query (expect only the new unmapped index plus the mapped one), record the run id here, then mark the story `done`.
+
 ### File List
 
 Modified:
@@ -309,6 +312,9 @@ Modified:
 - `_bmad-artifacts/implementation/deferred-work.md` (resolved entry deleted)
 - `_bmad-artifacts/implementation/sprint-status.yaml` (11-4 `in-progress`)
 
+Part B modified: `PostgresMigrationTests.cs`, `SqlServerMigrationTests.cs`, `SmartPlugImportRepositoryAddAsyncDualProviderTests.cs`, `SmartPlugReadingConfiguration.cs`, `SmartPlugImportRepository.cs` (comments), `invariants-rules.md` (AD-2/AD-23 notes).
+Part B added: `…Migrations.Postgres/Migrations/20261011145430_DropOldUnmappedSmartPlugReadingIndex.cs` (+ Designer), `…Migrations.SqlServer/Migrations/20261011145433_DropOldUnmappedSmartPlugReadingIndex.cs` (+ Designer).
+
 Added:
 - `src/EnergyTracker.Application/DeviceTagTooLongException.cs`
 - `src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20261011115653_NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice.cs` (+ `.Designer.cs`)
@@ -320,3 +326,4 @@ Added:
 
 - 2026-10-11: Part A (deploy N) implemented: `DeviceName` bounded to 200 (single constant, EF, parsers, restore validator), stable `device-tag-too-long` failure code with en-US/de-DE copy, migration `NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice` (pre-check, `AlterColumn`, new partial unique index beside the old one) for both providers, unmapped upsert and dedupe keyed by `(HouseholdId, DeviceName, IntervalStart)`, docs and AD notes, stale-comment fix. Tests added for every layer; whole solution 1102 passed. Part B and the PR/deploy steps are outstanding.
 - 2026-10-11: Part A committed and PR #114 opened (deploy N). Story stays `in-progress`: Part B and post-deploy verification outstanding.
+- 2026-10-11: Part B (deploy N+1) implemented: migration `DropOldUnmappedSmartPlugReadingIndex` for both providers, migration tests, AC #5 tests moved onto the genuinely migrated schema. Awaiting merge, deploy and production verification.

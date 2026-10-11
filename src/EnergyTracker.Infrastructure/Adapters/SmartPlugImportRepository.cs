@@ -335,10 +335,9 @@ public class SmartPlugImportRepository(
         // predicate must match IX_SmartPlugReadings_Household_Device_IntervalStart_Unmapped's own
         // columns and predicate exactly (Postgres arbiter-index inference) — same predicate text as
         // that index's own migration SQL (AD-20 amended 2026-10-10, Story 11.4: DeviceName is part
-        // of the key so two plugs' files covering the same period keep their own rows). During
-        // deploy N the old (HouseholdId, IntervalStart) index still exists: a different plug's
-        // overlapping row conflicts only on it, which is not the arbiter, so Postgres raises 23505
-        // (loud) instead of overwriting; deploy N+1 drops it. DeviceName is not in the DO UPDATE
+        // of the key so two plugs' files covering the same period keep their own rows). The old
+        // (HouseholdId, IntervalStart) index, which let a different plug's overlapping row conflict
+        // loudly (23505) during deploy N, was dropped by deploy N+1. DeviceName is not in the DO UPDATE
         // list: it is part of the key, so the assignment would be a no-op. PowerPointId is never
         // listed in the insert column list, so every new row lands with PowerPointId NULL,
         // matching the batch this method is only ever called for.
@@ -369,9 +368,8 @@ public class SmartPlugImportRepository(
         // target row with a non-null PowerPointId can never match, closing exactly the
         // cross-Power-Point collision Story 3.8 spike Finding #2 found with UpdateByProperties.
         // DeviceName is part of the match (AD-20 amended 2026-10-10, Story 11.4), so a different
-        // plug's row at the same interval is NOT MATCHED and is inserted; during deploy N the old
-        // (HouseholdId, IntervalStart) unique index then rejects it (error 2601, loud, never an
-        // overwrite) until deploy N+1 drops it. DeviceName is not in the UPDATE SET list: it is part
+        // plug's row at the same interval is NOT MATCHED and is inserted (during deploy N the old
+        // (HouseholdId, IntervalStart) unique index rejected it loudly; deploy N+1 dropped that index). DeviceName is not in the UPDATE SET list: it is part
         // of the key, and the default collation is case- and trailing-space-insensitive, so an
         // assignment could rewrite the by-value DeviceName snapshot (AD-10) of the row it matched.
         // WITH (HOLDLOCK) prevents a concurrent MERGE against the same key from racing this one
