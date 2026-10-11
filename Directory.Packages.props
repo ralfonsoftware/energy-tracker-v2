@@ -6,19 +6,19 @@
 
   <ItemGroup>
     <!-- EF Core — pinned to one version across every project to avoid transitive version conflicts -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 
     <!-- Auth — Data Protection key persistence, same 10.0.10 line as the rest of EF Core (AD-17) -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
     <!-- The OIDC handler's Microsoft.IdentityModel.* dependencies are heavy enough that this
          handler ships as a separate NuGet package rather than in the shared framework, unlike
          the cookie handler (which does ship in Microsoft.AspNetCore.App) — verified against
          NuGet at implementation time, not assumed. -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
 
     <!-- Logging -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
@@ -26,22 +26,22 @@
     <!-- Dependency-free logging abstraction — lets EnergyTracker.Application log a
          swallow-and-continue failure (CompleteSmartPlugImportProcessing) without pulling in
          ASP.NET Core or any concrete logging provider. -->
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
 
     <!-- OTel (AD-19 extension) -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.19.0" />
     <!-- Still beta-only upstream (OTel .NET Contrib has never shipped a stable release of this
          package — verified against NuGet at implementation time); accepted anyway since it's the
          only EF Core tracing option available, and only affects instrumentation, not reliability. -->
     <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.17.0-beta.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
 
     <!-- AD-6 async job queue cloud adapter (AzureStorageQueueJobQueue) -->
-    <PackageVersion Include="Azure.Storage.Queues" Version="12.22.0" />
+    <PackageVersion Include="Azure.Storage.Queues" Version="12.28.1" />
 
     <!-- AD-9 Eve Home .xlsx parser (EveHomeXlsxParser). The real sample files store their date
          column as OOXML's ISO-8601 "t=d" cell type (dimension A1:B57184) rather than the usual
@@ -61,8 +61,8 @@
     <!-- Testing -->
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <PackageVersion Include="NSubstitute" Version="6.1.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <!-- 4.14.0+ bumps its own SSH.NET dependency to 2026.0.0, past 2025.1.0's two high-severity
          ScpClient advisories (GHSA-q939-rpr3-3284 path traversal, GHSA-mggc-4xg6-vcxf command
          injection) — no local override needed. -->
