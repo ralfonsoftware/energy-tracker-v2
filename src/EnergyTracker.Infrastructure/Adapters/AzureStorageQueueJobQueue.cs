@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Azure.Storage.Queues;
+using Azure.Storage.Queues.Models;
 using EnergyTracker.Application.Ports;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -50,17 +51,37 @@ public class AzureStorageQueueJobQueue(
     }
 }
 
-// Paired hosted BackgroundService — polls the Storage Queue (no push-based API exists for it)
-// and hands each dequeued message to the shared BackgroundJobProcessor dispatch loop. A message
-// is deleted only after processing runs (success or a caught use-case failure — both are terminal
-// outcomes BackgroundJobProcessor already recorded on the BackgroundJob row); a message left
-// undeleted because of an unexpected crash naturally reappears after its visibility timeout
-// expires — no bespoke retry/backoff logic is built here.
-public class AzureStorageQueueJobProcessingService(
-    QueueClient queueClient, BackgroundJobProcessor processor, ILogger<AzureStorageQueueJobProcessingService> logger)
-    : BackgroundService
+// Paired hosted BackgroundService — polls the Storage Queue (no push-based API exists for it) one
+// message at a time and hands it to the shared BackgroundJobProcessor. Why the loop looks like this
+// (AD-6, audit C7): an exception escaping ExecuteAsync stops the whole host, so every storage or
+// network error is caught, logged and retried with a capped backoff; a message is deleted only after
+// a terminal decision (processed, dequeue limit reached, or unparseable); anything else stays in the
+// queue and reappears after its visibility timeout.
+public class AzureStorageQueueJobProcessingService : BackgroundService
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private readonly QueueClient queueClient;
+    private readonly IJobMessageProcessor processor;
+    private readonly QueueConsumerTimings timings;
+    private readonly ILogger<AzureStorageQueueJobProcessingService> logger;
+
+    // The public constructor is the one DI uses; the internal one takes the processor through its
+    // interface seam so the loop can be tested without a database.
+    public AzureStorageQueueJobProcessingService(
+        QueueClient queueClient, BackgroundJobProcessor processor, QueueConsumerTimings timings,
+        ILogger<AzureStorageQueueJobProcessingService> logger)
+        : this(queueClient, (IJobMessageProcessor)processor, timings, logger)
+    {
+    }
+
+    internal AzureStorageQueueJobProcessingService(
+        QueueClient queueClient, IJobMessageProcessor processor, QueueConsumerTimings timings,
+        ILogger<AzureStorageQueueJobProcessingService> logger)
+    {
+        this.queueClient = queueClient;
+        this.processor = processor;
+        this.timings = timings;
+        this.logger = logger;
+    }
 
     // ReceiveMessagesAsync's own visibilityTimeout parameter defaults to 30 seconds when omitted —
     // far shorter than a large Eve Home import's per-row conflict-tolerant insert loop
@@ -74,36 +95,124 @@ public class AzureStorageQueueJobProcessingService(
     // this long is only a delayed retry, while too short reintroduces this exact bug.
     private static readonly TimeSpan MessageVisibilityTimeout = TimeSpan.FromMinutes(60);
 
+    // A job is failed (job-retries-exhausted) on its sixth delivery. Reaching it takes at least five
+    // visibility-timeout cycles, i.e. five hours of a message that keeps crashing or failing to delete.
+    private const long MaxDequeueCount = 5;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
+        var queueEnsured = false;
+        var backoff = timings.InitialBackoff;
+        var consecutiveFailures = 0;
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var response = await queueClient.ReceiveMessagesAsync(
-                maxMessages: 8, visibilityTimeout: MessageVisibilityTimeout, cancellationToken: stoppingToken);
-            var messages = response.Value;
-
-            if (messages.Length == 0)
+            try
             {
-                await Task.Delay(PollInterval, stoppingToken);
-                continue;
+                // Inside the loop so a storage outage at startup is retried with backoff instead of
+                // taking the host down before it ever served a request.
+                if (!queueEnsured)
+                {
+                    await queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
+                    queueEnsured = true;
+                }
+
+                // One message per call: they are processed serially under one visibility timeout, so the
+                // later ones of a batch could become visible again before their turn came.
+                var response = await queueClient.ReceiveMessagesAsync(
+                    maxMessages: 1, visibilityTimeout: MessageVisibilityTimeout, cancellationToken: stoppingToken);
+                backoff = timings.InitialBackoff;
+                consecutiveFailures = 0;
+
+                var messages = response.Value;
+                if (messages.Length == 0)
+                {
+                    await Task.Delay(timings.PollInterval, stoppingToken);
+                    continue;
+                }
+
+                foreach (var queueMessage in messages)
+                {
+                    await HandleMessageAsync(queueMessage, stoppingToken);
+                }
             }
-
-            foreach (var queueMessage in messages)
+            catch (Exception ex)
             {
+                if (stoppingToken.IsCancellationRequested)
+                {
+                    // Shutdown, not a fault: whatever was in flight stays undeleted for the next instance.
+                    break;
+                }
+
+                consecutiveFailures++;
+                logger.LogError(
+                    ex, "Azure queue consumer failed (consecutive failures: {FailureCount}); retrying in {Delay}.",
+                    consecutiveFailures, backoff);
                 try
                 {
-                    var message = JsonSerializer.Deserialize<JobMessage>(queueMessage.MessageText)
-                        ?? throw new InvalidOperationException("Queue message deserialized to null.");
-                    await processor.ProcessAsync(message, stoppingToken);
-                    await queueClient.DeleteMessageAsync(queueMessage.MessageId, queueMessage.PopReceipt, stoppingToken);
+                    await Task.Delay(backoff, stoppingToken);
                 }
-                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                catch (OperationCanceledException)
                 {
-                    logger.LogError(ex, "Unhandled error processing queue message {MessageId}", queueMessage.MessageId);
+                    break;
                 }
+
+                backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, timings.MaxBackoff.Ticks));
             }
         }
+    }
+
+    // A failure here never drives the backoff: it is about one message, not about the queue.
+    private async Task HandleMessageAsync(QueueMessage queueMessage, CancellationToken stoppingToken)
+    {
+        try
+        {
+            var message = ParseJobMessage(queueMessage);
+            if (message is null)
+            {
+                // Can never succeed on a retry (foreign producer or corruption); don't wait for the dequeue limit.
+                await queueClient.DeleteMessageAsync(queueMessage.MessageId, queueMessage.PopReceipt, stoppingToken);
+                return;
+            }
+
+            if (queueMessage.DequeueCount > MaxDequeueCount)
+            {
+                await processor.FailRetriesExhaustedAsync(message, stoppingToken);
+            }
+            else
+            {
+                await processor.ProcessAsync(message, stoppingToken);
+            }
+
+            // Only after a terminal decision: an exception above leaves the message to reappear.
+            await queueClient.DeleteMessageAsync(queueMessage.MessageId, queueMessage.PopReceipt, stoppingToken);
+        }
+        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogError(
+                ex, "Unhandled error processing queue message {MessageId} (dequeue count {DequeueCount}); leaving it in the queue.",
+                queueMessage.MessageId, queueMessage.DequeueCount);
+        }
+    }
+
+    // The body is deliberately not logged: it is arbitrary data from whoever wrote to the queue.
+    private JobMessage? ParseJobMessage(QueueMessage queueMessage)
+    {
+        try
+        {
+            var message = JsonSerializer.Deserialize<JobMessage>(queueMessage.MessageText);
+            if (message is not null)
+            {
+                return message;
+            }
+        }
+        catch (JsonException ex)
+        {
+            logger.LogError(ex, "Queue message {MessageId} is not a valid job message; deleting it.", queueMessage.MessageId);
+            return null;
+        }
+
+        logger.LogError("Queue message {MessageId} deserialized to nothing; deleting it.", queueMessage.MessageId);
+        return null;
     }
 }

@@ -292,10 +292,82 @@ public abstract class BackgroundJobLifecycleTestsBase
         (await ReloadAsync(dbContext, job.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Failed);
     }
 
+    // ---- TryFailNonTerminal ----
+
+    [Theory]
+    [InlineData(BackgroundJobStatus.Queued, false)]
+    [InlineData(BackgroundJobStatus.Processing, false)]
+    [InlineData(BackgroundJobStatus.Processing, true)]
+    public async Task TryFailNonTerminal_fails_a_Queued_or_Processing_row_whatever_its_token_and_heartbeat(BackgroundJobStatus status, bool withLiveOwner)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var now = DateTimeOffset.UtcNow;
+        var job = withLiveOwner
+            ? await SeedJobAsync(dbContext, householdId, status, createdAt: now.AddHours(-2), startedAt: now.AddHours(-2), heartbeatAt: now.AddSeconds(-5), cancellationToken: ct)
+            : await SeedJobAsync(dbContext, householdId, status, cancellationToken: ct);
+
+        (await NewFixture(dbContext).Sut.TryFailNonTerminalAsync(job.Id, "job-retries-exhausted", ct)).ShouldBeTrue();
+
+        var reloaded = await ReloadAsync(dbContext, job.Id, ct);
+        reloaded.Status.ShouldBe(BackgroundJobStatus.Failed);
+        reloaded.ErrorMessage.ShouldBe("job-retries-exhausted");
+        reloaded.CompletedAtUtc.ShouldNotBeNull();
+    }
+
+    [Theory]
+    [InlineData(BackgroundJobStatus.Completed)]
+    [InlineData(BackgroundJobStatus.Failed)]
+    public async Task TryFailNonTerminal_returns_false_and_leaves_a_terminal_row_unchanged(BackgroundJobStatus terminal)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var job = await SeedJobAsync(dbContext, householdId, terminal, cancellationToken: ct);
+        var before = await ReloadAsync(dbContext, job.Id, ct);
+
+        (await NewFixture(dbContext).Sut.TryFailNonTerminalAsync(job.Id, "job-retries-exhausted", ct)).ShouldBeFalse();
+
+        var after = await ReloadAsync(dbContext, job.Id, ct);
+        after.Status.ShouldBe(terminal);
+        after.ErrorMessage.ShouldBe(before.ErrorMessage);
+        after.CompletedAtUtc.ShouldBe(before.CompletedAtUtc);
+    }
+
+    [Fact]
+    public async Task TryFailNonTerminal_returns_false_for_a_missing_id()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, _) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+
+        (await NewFixture(dbContext).Sut.TryFailNonTerminalAsync(Guid.NewGuid(), "job-retries-exhausted", ct)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryFailNonTerminal_never_touches_another_Households_row()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdA) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var householdB = Guid.NewGuid();
+        dbContext.Households.Add(NewHousehold(householdB));
+        await dbContext.SaveChangesAsync(ct);
+        await using var contextB = await OpenMigratedDbContextAsync(householdB, ct);
+        var queuedB = await SeedJobAsync(contextB, householdB, BackgroundJobStatus.Queued, cancellationToken: ct);
+        var sut = NewFixture(dbContext).Sut;
+
+        // dbContext is scoped to Household A by its accessor (AD-3 query filter), so B's id is invisible to it.
+        (await sut.TryFailNonTerminalAsync(queuedB.Id, "job-retries-exhausted", ct)).ShouldBeFalse();
+
+        (await ReloadAsync(contextB, queuedB.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Queued);
+    }
+
     // ---- FailStale ----
 
     [Fact]
-    public async Task FailStale_fails_only_Processing_rows_whose_heartbeat_is_older_than_five_minutes()
+    public async Task FailStale_fails_Processing_rows_with_a_stale_heartbeat_and_Queued_rows_older_than_twelve_hours()
     {
         var ct = TestContext.Current.CancellationToken;
         var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
@@ -306,24 +378,67 @@ public abstract class BackgroundJobLifecycleTestsBase
         // Headline "long but live job": created hours ago, still heartbeating.
         var longButLive = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Processing,
             createdAt: now.AddHours(-3), startedAt: now.AddHours(-3), heartbeatAt: now.AddSeconds(-30), cancellationToken: ct);
+        // AD-6 amended 2026-10-11: a Queued row younger than 12 h may still have a live queue message
+        // (five 60-minute redelivery cycles), so it is never failed; one older than that has outlived any message.
         var queuedForHours = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, createdAt: now.AddHours(-5), cancellationToken: ct);
-        var completed = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Completed, createdAt: now.AddHours(-5), cancellationToken: ct);
+        var queuedJustInside = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, createdAt: now.AddHours(-11).AddMinutes(-55), cancellationToken: ct);
+        var queuedExpired = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, createdAt: now.AddHours(-13), cancellationToken: ct);
+        var completed = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Completed, createdAt: now.AddHours(-13), cancellationToken: ct);
+        var failedEarlier = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Failed, createdAt: now.AddHours(-13), cancellationToken: ct);
         // Written by the previous image: no StartedAtUtc / HeartbeatAtUtc -> falls back to CreatedAtUtc.
         var legacyOrphan = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Processing, createdAt: now.AddMinutes(-10), cancellationToken: ct);
         var legacyFresh = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Processing, createdAt: now.AddMinutes(-1), cancellationToken: ct);
 
         var count = await NewFixture(dbContext).Sut.FailStaleAsync(householdId, ct);
 
-        count.ShouldBe(2);
+        count.ShouldBe(3);
         var staleAfter = await ReloadAsync(dbContext, stale.Id, ct);
         staleAfter.Status.ShouldBe(BackgroundJobStatus.Failed);
         staleAfter.ErrorMessage.ShouldBe("job-interrupted");
         staleAfter.CompletedAtUtc.ShouldNotBeNull();
+        var expiredAfter = await ReloadAsync(dbContext, queuedExpired.Id, ct);
+        expiredAfter.Status.ShouldBe(BackgroundJobStatus.Failed);
+        expiredAfter.ErrorMessage.ShouldBe("job-interrupted");
+        expiredAfter.CompletedAtUtc.ShouldNotBeNull();
         (await ReloadAsync(dbContext, legacyOrphan.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Failed);
         (await ReloadAsync(dbContext, longButLive.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Processing);
         (await ReloadAsync(dbContext, queuedForHours.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Queued);
+        (await ReloadAsync(dbContext, queuedJustInside.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Queued);
         (await ReloadAsync(dbContext, completed.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Completed);
+        (await ReloadAsync(dbContext, failedEarlier.Id, ct)).ErrorMessage.ShouldBeNull();
         (await ReloadAsync(dbContext, legacyFresh.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Processing);
+    }
+
+    [Fact]
+    public async Task FailStale_applies_the_configured_QueuedExpiresAfter_limit_instead_of_a_fixed_twelve_hours()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var job = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, createdAt: DateTimeOffset.UtcNow.AddHours(-2), cancellationToken: ct);
+        var sut = new BackgroundJobLifecycle(dbContext, Timings with { QueuedExpiresAfter = TimeSpan.FromHours(1) });
+
+        (await sut.FailStaleAsync(householdId, ct)).ShouldBe(1);
+
+        (await ReloadAsync(dbContext, job.Id, ct)).ErrorMessage.ShouldBe("job-interrupted");
+    }
+
+    [Fact]
+    public async Task A_Queued_row_failed_by_age_is_skipped_when_its_late_message_is_finally_delivered()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var job = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, createdAt: DateTimeOffset.UtcNow.AddHours(-13), cancellationToken: ct);
+        var sut = NewFixture(dbContext).Sut;
+        (await sut.FailStaleAsync(householdId, ct)).ShouldBe(1);
+
+        // TryStart and the age failure are both conditional on Queued, so exactly one of them wins.
+        (await sut.TryStartAsync(job.Id, ct)).ShouldBeNull();
+
+        var reloaded = await ReloadAsync(dbContext, job.Id, ct);
+        reloaded.Status.ShouldBe(BackgroundJobStatus.Failed);
+        reloaded.StartedAtUtc.ShouldBeNull();
     }
 
     [Fact]
@@ -343,15 +458,20 @@ public abstract class BackgroundJobLifecycleTestsBase
             createdAt: now.AddHours(-1), startedAt: now.AddHours(-1), heartbeatAt: now.AddMinutes(-30), cancellationToken: ct);
         var staleA = await SeedJobAsync(dbContext, householdA, BackgroundJobStatus.Processing,
             createdAt: now.AddHours(-1), startedAt: now.AddHours(-1), heartbeatAt: now.AddMinutes(-30), cancellationToken: ct);
+        var expiredQueuedB = await SeedJobAsync(contextB, householdB, BackgroundJobStatus.Queued, createdAt: now.AddHours(-13), cancellationToken: ct);
+        var expiredQueuedA = await SeedJobAsync(dbContext, householdA, BackgroundJobStatus.Queued, createdAt: now.AddHours(-13), cancellationToken: ct);
         var sut = NewFixture(dbContext).Sut;
 
         // Even when asked about B, the AD-3 query filter keeps Household A's context from reaching B's rows.
         (await sut.FailStaleAsync(householdB, ct)).ShouldBe(0);
         (await ReloadAsync(contextB, staleB.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Processing);
+        (await ReloadAsync(contextB, expiredQueuedB.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Queued);
 
-        (await sut.FailStaleAsync(householdA, ct)).ShouldBe(1);
+        (await sut.FailStaleAsync(householdA, ct)).ShouldBe(2);
         (await ReloadAsync(dbContext, staleA.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Failed);
+        (await ReloadAsync(dbContext, expiredQueuedA.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Failed);
         (await ReloadAsync(contextB, staleB.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Processing);
+        (await ReloadAsync(contextB, expiredQueuedB.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Queued);
     }
 
     // ---- FailInterruptedBefore ----

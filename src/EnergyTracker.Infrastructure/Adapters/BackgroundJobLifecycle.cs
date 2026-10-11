@@ -10,6 +10,8 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // isolation is the standard AD-3 query filter, which resolves the Household from JobHouseholdContext
 // on the job path; the two bulk methods that take a householdId (FailStale, FailInterruptedBefore)
 // also state it as an explicit predicate, the per-job methods are keyed by Id (+ status and token).
+// A Queued row is failed for age only after QueuedExpiresAfter (12 h): by then no queue message can
+// still be alive for it (AD-6, amended 2026-10-11).
 // Callers must run FailStaleAsync before reading the same rows in a scope: ExecuteUpdateAsync
 // bypasses the change tracker.
 public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecycleTimings timings) : IBackgroundJobLifecycle
@@ -65,14 +67,30 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
         return affected > 0;
     }
 
+    public async Task<bool> TryFailNonTerminalAsync(Guid jobId, string errorMessage, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var affected = await dbContext.BackgroundJobs
+            .Where(j => j.Id == jobId && (j.Status == BackgroundJobStatus.Queued || j.Status == BackgroundJobStatus.Processing))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(j => j.Status, BackgroundJobStatus.Failed)
+                .SetProperty(j => j.ErrorMessage, errorMessage)
+                .SetProperty(j => j.CompletedAtUtc, now), cancellationToken);
+        return affected > 0;
+    }
+
     public async Task<int> FailStaleAsync(Guid householdId, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
         var staleBefore = now - timings.StaleAfter;
+        var queuedExpiredBefore = now - timings.QueuedExpiresAfter;
+        // One statement for both rules: a Processing row whose owner went silent, and a Queued row that
+        // has outlived any queue message it could still have (QueuedExpiresAfter).
         return await dbContext.BackgroundJobs
             .Where(j => j.HouseholdId == householdId
-                && j.Status == BackgroundJobStatus.Processing
-                && (j.HeartbeatAtUtc ?? j.StartedAtUtc ?? j.CreatedAtUtc) < staleBefore)
+                && ((j.Status == BackgroundJobStatus.Processing
+                        && (j.HeartbeatAtUtc ?? j.StartedAtUtc ?? j.CreatedAtUtc) < staleBefore)
+                    || (j.Status == BackgroundJobStatus.Queued && j.CreatedAtUtc < queuedExpiredBefore)))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(j => j.Status, BackgroundJobStatus.Failed)
                 .SetProperty(j => j.ErrorMessage, JobFailureCodes.Interrupted)

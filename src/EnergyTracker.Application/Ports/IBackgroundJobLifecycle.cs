@@ -17,8 +17,14 @@ public interface IBackgroundJobLifecycle
 
     Task<bool> TryFailAsync(Guid jobId, DateTimeOffset token, string? errorMessage, CancellationToken cancellationToken);
 
-    // Read-path check: fails this Household's Processing rows whose heartbeat is stale with
-    // "job-interrupted". Queued rows are never failed for age. Returns the count.
+    // Queued/Processing -> Failed without an ownership token, for a decision made about the message
+    // rather than by a running attempt (the Azure queue's dequeue limit). A terminal row is never
+    // overwritten; false means the row was missing or already terminal.
+    Task<bool> TryFailNonTerminalAsync(Guid jobId, string errorMessage, CancellationToken cancellationToken);
+
+    // Read-path check: fails this Household's Processing rows whose heartbeat is stale, and its Queued
+    // rows older than JobLifecycleTimings.QueuedExpiresAfter (12 h, typically a row whose queue message
+    // is gone), with "job-interrupted". Younger Queued rows are never failed for age. Returns the count.
     Task<int> FailStaleAsync(Guid householdId, CancellationToken cancellationToken);
 
     // Startup sweep (in-process queue only, AD-24): fails this Household's Queued/Processing rows

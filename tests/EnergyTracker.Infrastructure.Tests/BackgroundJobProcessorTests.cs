@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
@@ -31,6 +32,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
     }
 
     private readonly ISmartPlugImportRepository _smartPlugImportRepository = Substitute.For<ISmartPlugImportRepository>();
+    private readonly IHouseholdRestoreWriter _restoreWriter = Substitute.For<IHouseholdRestoreWriter>();
 
     // A short heartbeat interval lets the heartbeat tests observe a tick without sleeping a minute.
     private static readonly JobLifecycleTimings FastHeartbeat = new(TimeSpan.FromMilliseconds(50), TimeSpan.FromMinutes(5));
@@ -49,6 +51,9 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         services.AddSingleton(_smartPlugImportRepository);
         services.AddSingleton(Substitute.For<IBackgroundJobRepository>());
         services.AddScoped<CleanUpSmartPlugImportJobs>();
+        // RestoreHouseholdData is the cheapest real use case to register for the missing-payload tests.
+        services.AddSingleton(_restoreWriter);
+        services.AddScoped<RestoreHouseholdData>();
         return services.BuildServiceProvider();
     }
 
@@ -560,5 +565,156 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
             .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct));
 
         await lifecycle.Received(3).TryCompleteAsync(jobId, token, Arg.Any<CancellationToken>());
+    }
+
+    // ---- Story 11.3: dequeue limit and missing payload ----
+
+    [Theory]
+    [InlineData(BackgroundJobStatus.Queued)]
+    [InlineData(BackgroundJobStatus.Processing)]
+    public async Task FailRetriesExhaustedAsync_fails_a_Queued_or_Processing_row_with_the_stable_code(BackgroundJobStatus status)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, status, JobTypes.CleanUpSmartPlugImportJobs,
+            startedAt: status == BackgroundJobStatus.Processing ? DateTimeOffset.UtcNow.AddHours(-2) : null,
+            heartbeatAt: status == BackgroundJobStatus.Processing ? DateTimeOffset.UtcNow.AddSeconds(-5) : null, cancellationToken: ct);
+
+        await NewProcessor(provider).FailRetriesExhaustedAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.RetriesExhausted);
+        persisted.CompletedAtUtc.ShouldNotBeNull();
+        await _smartPlugImportRepository.DidNotReceiveWithAnyArgs().DeleteJobsAsync(default, default, TestContext.Current.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData(BackgroundJobStatus.Completed)]
+    [InlineData(BackgroundJobStatus.Failed)]
+    public async Task FailRetriesExhaustedAsync_never_overwrites_a_terminal_row_and_does_not_throw(BackgroundJobStatus terminal)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, terminal, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        var before = (await LoadAsync(provider, jobId, ct))!;
+
+        await NewProcessor(provider).FailRetriesExhaustedAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var after = (await LoadAsync(provider, jobId, ct))!;
+        after.Status.ShouldBe(terminal);
+        after.ErrorMessage.ShouldBe(before.ErrorMessage);
+        after.CompletedAtUtc.ShouldBe(before.CompletedAtUtc);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_skips_the_late_message_of_a_Queued_row_that_was_failed_by_age()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        var timings = JobLifecycleTimings.Default with { QueuedExpiresAfter = TimeSpan.FromMinutes(1) };
+        await using var provider = BuildServices(householdId, timings);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        using (var scope = provider.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<JobHouseholdContext>().HouseholdId = householdId;
+            (await scope.ServiceProvider.GetRequiredService<IBackgroundJobLifecycle>().FailStaleAsync(householdId, ct)).ShouldBe(1);
+        }
+
+        await Should.NotThrowAsync(() => NewProcessor(provider, timings)
+            .ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct));
+
+        await _smartPlugImportRepository.DidNotReceiveWithAnyArgs().DeleteJobsAsync(default, default, TestContext.Current.CancellationToken);
+        var persisted = (await LoadAsync(provider, jobId, ct))!;
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.Interrupted);
+        persisted.StartedAtUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task FailRetriesExhaustedAsync_does_nothing_and_does_not_throw_for_a_missing_row()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = Guid.NewGuid();
+
+        await NewProcessor(provider).FailRetriesExhaustedAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        (await LoadAsync(provider, jobId, ct)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task FailRetriesExhaustedAsync_retries_a_transient_database_error_and_then_gives_up_so_the_message_stays()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var lifecycle = Substitute.For<IBackgroundJobLifecycle>();
+        lifecycle.TryFailNonTerminalAsync(jobId, JobFailureCodes.RetriesExhausted, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException<bool>(new InvalidOperationException("db blip")), _ => Task.FromResult(true));
+        await using var provider = BuildLifecycleSubstituteServices(lifecycle);
+        var message = new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload);
+
+        await NewProcessor(provider, FastRetry).FailRetriesExhaustedAsync(message, ct);
+
+        await lifecycle.Received(2).TryFailNonTerminalAsync(jobId, JobFailureCodes.RetriesExhausted, Arg.Any<CancellationToken>());
+
+        lifecycle.ClearReceivedCalls();
+        lifecycle.TryFailNonTerminalAsync(jobId, JobFailureCodes.RetriesExhausted, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException<bool>(new InvalidOperationException("db down")));
+
+        // An outage that outlasts the retries propagates, which makes the consumer leave the message undeleted.
+        await Should.ThrowAsync<InvalidOperationException>(() => NewProcessor(provider, FastRetry).FailRetriesExhaustedAsync(message, ct));
+        await lifecycle.Received(3).TryFailNonTerminalAsync(jobId, JobFailureCodes.RetriesExhausted, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_a_restore_whose_temp_file_is_gone_ends_Failed_with_upload_missing_and_returns_normally()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.RestoreHouseholdData, cancellationToken: ct);
+        var payload = JsonSerializer.Serialize(new RestoreHouseholdDataPayload(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json"), "export.json"));
+
+        // Returning normally is the consumer's "delete the message" signal: nothing retries a missing file (AD-24).
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.RestoreHouseholdData, payload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.UploadMissing);
+        persisted.CompletedAtUtc.ShouldNotBeNull();
+        await _restoreWriter.DidNotReceive().RestoreAsync(Arg.Any<HouseholdRestoreData>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_maps_UploadMissingException_by_type_not_by_its_message_text()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new UploadMissingException("C:\\secret\\path\\file.json is gone")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.UploadMissing);
     }
 }

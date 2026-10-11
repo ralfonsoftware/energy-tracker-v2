@@ -313,9 +313,11 @@ message that it was interrupted before the restore finished.
   failed the next time its status is read, or when a new restore or
   history cleanup is started. A restore that is still running and
   heartbeating is not failed, and it keeps blocking a second restore for
-  the whole time. A job that only waits in a lost queue message is not
-  covered by the 5-minute check (the Azure queue's own recovery is a
-  separate piece of work).
+  the whole time. A job that is still waiting after 12 hours, for example
+  because its queue message was lost, is marked failed the same way, so it
+  can no longer block a restore or a history cleanup for longer than that.
+  A job that is still waiting after less than 12 hours is never failed for
+  its age.
 
 ## Backups and access
 

@@ -19,14 +19,12 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
         {
             // Task 1's two-phase flow already ran ValidateHouseholdImport's full structural check
             // synchronously before this job was ever enqueued — this is not a second validation
-            // pass. A missing file here means the rare validate-then-confirm race (e.g. a
-            // container restart clearing temp disk between the two requests), not bad file
-            // content — HouseholdImportValidationException's .Message is safe to forward to the
-            // client either way (BackgroundJobProcessor.cs).
+            // pass. A missing file here means the enqueue-then-dequeue window (e.g. a replica or its
+            // disk replaced, AD-24), not bad file content. It ends the job with the stable
+            // upload-missing code (AD-6), never an English sentence forwarded to the client.
             if (!File.Exists(payload.TempFilePath))
             {
-                throw new HouseholdImportValidationException(
-                    $"The uploaded file '{payload.OriginalFileName}' could not be found on the server — please upload it again.");
+                throw new UploadMissingException($"The uploaded file '{payload.OriginalFileName}' no longer exists on the server.");
             }
 
             var json = await File.ReadAllTextAsync(payload.TempFilePath, cancellationToken);

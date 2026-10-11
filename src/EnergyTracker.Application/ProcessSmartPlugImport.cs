@@ -24,6 +24,14 @@ public class ProcessSmartPlugImport(
         ISmartPlugParser? parser = null;
         try
         {
+            // AD-24: the temp file lives on the receiving instance's disk, which may be replaced between
+            // enqueue and dequeue. Thrown inside the try so the generic catch below still persists the
+            // Failed SmartPlugImport row (the member keeps seeing the file in the job history).
+            if (!File.Exists(payload.TempFilePath))
+            {
+                throw new UploadMissingException($"The temp file for import {payload.SmartPlugImportId} no longer exists.");
+            }
+
             parser = parsers.FirstOrDefault(p => p.CanParse(payload.OriginalFileName))
                 ?? throw new SmartPlugImportValidationException($"No parser recognizes file '{payload.OriginalFileName}'.");
 
@@ -141,12 +149,25 @@ public class ProcessSmartPlugImport(
             // skip the temp-file cleanup below so a redelivered message can still find the file.
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // The caller (BackgroundJobProcessor) is the single source of truth for
             // BackgroundJob.Status/ErrorMessage — this only ensures a Failed SmartPlugImport row
-            // exists alongside it, then re-throws so that still happens.
-            await PersistFailedImportAsync(householdId, backgroundJobId, payload, parser?.Vendor, cancellationToken);
+            // exists alongside it, then re-throws so that still happens. The original failure is
+            // logged first and always the one that propagates: a failure while persisting the Failed
+            // row (audit C7) is logged and swallowed rather than replacing it.
+            logger.LogError(ex, "Import {SmartPlugImportId} of background job {BackgroundJobId} failed.", payload.SmartPlugImportId, backgroundJobId);
+            try
+            {
+                await PersistFailedImportAsync(householdId, backgroundJobId, payload, parser?.Vendor, cancellationToken);
+            }
+            catch (Exception persistException)
+            {
+                logger.LogError(
+                    persistException, "Could not persist the Failed row for import {SmartPlugImportId} of background job {BackgroundJobId}.",
+                    payload.SmartPlugImportId, backgroundJobId);
+            }
+
             throw;
         }
         finally
