@@ -82,8 +82,8 @@ public class SmartPlugReadingConfiguration : IEntityTypeConfiguration<SmartPlugR
         // instead by a second, hand-added `(HouseholdId, DeviceName, IntervalStart) WHERE
         // PowerPointId IS NULL` partial unique index in both providers' migrations (Story 11.4,
         // AD-20 amended 2026-10-10: it was `(HouseholdId, IntervalStart)` until then, which let one
-        // plug's unmapped file overwrite another's; the old index stays through deploy N and is
-        // dropped by deploy N+1).
+        // plug's unmapped file overwrite another's; the old index stayed through deploy N and was
+        // dropped by deploy N+1, DropOldUnmappedSmartPlugReadingIndex).
         builder.HasIndex(r => new { r.PowerPointId, r.IntervalStart }).IsUnique();
 
         // Story 3.4 / Story 11.4: the `(HouseholdId, DeviceName, IntervalStart) WHERE PowerPointId

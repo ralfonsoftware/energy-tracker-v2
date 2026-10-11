@@ -476,4 +476,35 @@ public class PostgresMigrationTests : IAsyncLifetime
         (await dbContext.Database.SqlQueryRaw<int?>("SELECT character_maximum_length::int AS \"Value\" FROM information_schema.columns WHERE table_name = 'SmartPlugReadings' AND column_name = 'DeviceName'").SingleAsync(TestContext.Current.CancellationToken))
             .ShouldBeNull();
     }
+
+    // --- Story 11.4 Part B (deploy N+1): the contract half drops the old (HouseholdId, IntervalStart)
+    // WHERE PowerPointId IS NULL index. Located by name suffix; indexes asserted by definition. ---
+
+    private const string DropOldIndexMigrationSuffix = "_DropOldUnmappedSmartPlugReadingIndex";
+
+    [Fact]
+    public async Task DropOldUnmappedSmartPlugReadingIndex_migration_drops_only_the_old_unmapped_index_and_keeps_the_new_and_the_mapped_ones()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = NewDeviceNameKeyDbContext(householdId);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var migrations = dbContext.Database.GetMigrations().ToList();
+        var dropOld = migrations.Single(m => m.EndsWith(DropOldIndexMigrationSuffix, StringComparison.Ordinal));
+        var previous = migrations[migrations.IndexOf(dropOld) - 1];
+        await migrator.MigrateAsync(previous, TestContext.Current.CancellationToken);
+        const string indexesSql = "SELECT indexdef AS \"Value\" FROM pg_indexes WHERE tablename = 'SmartPlugReadings'";
+        var before = await dbContext.Database.SqlQueryRaw<string>(indexesSql).ToListAsync(TestContext.Current.CancellationToken);
+        before.Count(IsOldUnmappedIndex).ShouldBe(1);
+
+        await migrator.MigrateAsync(dropOld, TestContext.Current.CancellationToken);
+
+        var after = await dbContext.Database.SqlQueryRaw<string>(indexesSql).ToListAsync(TestContext.Current.CancellationToken);
+        after.Count(IsOldUnmappedIndex).ShouldBe(0);
+        after.Count(d => d.Contains("UNIQUE") && d.Contains("(\"HouseholdId\", \"DeviceName\", \"IntervalStart\")") && d.Contains("WHERE (\"PowerPointId\" IS NULL)")).ShouldBe(1);
+        // The mapped (PowerPointId, IntervalStart) key is a unique index or constraint-backed index, untouched.
+        after.Count(d => d.Contains("UNIQUE") && d.Contains("(\"PowerPointId\", \"IntervalStart\")")).ShouldBe(1);
+    }
+
+    private static bool IsOldUnmappedIndex(string indexDef) =>
+        indexDef.Contains("UNIQUE") && indexDef.Contains("(\"HouseholdId\", \"IntervalStart\")") && indexDef.Contains("WHERE (\"PowerPointId\" IS NULL)");
 }

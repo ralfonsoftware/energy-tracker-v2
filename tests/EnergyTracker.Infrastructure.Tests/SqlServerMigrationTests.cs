@@ -478,4 +478,34 @@ public class SqlServerMigrationTests : IAsyncLifetime
         (await dbContext.Database.SqlQueryRaw<int>("SELECT CAST(max_length AS int) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('dbo.SmartPlugReadings') AND name = 'DeviceName'").SingleOrDefaultAsync(TestContext.Current.CancellationToken))
             .ShouldBe(-1);
     }
+
+    // --- Story 11.4 Part B (deploy N+1): the contract half drops the old (HouseholdId, IntervalStart)
+    // WHERE PowerPointId IS NULL index. Located by name suffix; indexes asserted by definition. ---
+
+    private const string DropOldIndexMigrationSuffix = "_DropOldUnmappedSmartPlugReadingIndex";
+
+    private const string FilteredIndexesSql =
+        "SELECT STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal) + ' WHERE ' + i.filter_definition AS [Value] FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0 JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id WHERE i.object_id = OBJECT_ID('dbo.SmartPlugReadings') AND i.is_unique = 1 AND i.has_filter = 1 GROUP BY i.index_id, i.filter_definition";
+
+    [Fact]
+    public async Task DropOldUnmappedSmartPlugReadingIndex_migration_drops_only_the_old_unmapped_index_and_keeps_the_new_and_the_mapped_ones()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = NewDeviceNameKeyDbContext(householdId);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var migrations = dbContext.Database.GetMigrations().ToList();
+        var dropOld = migrations.Single(m => m.EndsWith(DropOldIndexMigrationSuffix, StringComparison.Ordinal));
+        var previous = migrations[migrations.IndexOf(dropOld) - 1];
+        await migrator.MigrateAsync(previous, TestContext.Current.CancellationToken);
+        const string oldUnmapped = "HouseholdId,IntervalStart WHERE ([PowerPointId] IS NULL)";
+        var before = await dbContext.Database.SqlQueryRaw<string>(FilteredIndexesSql).ToListAsync(TestContext.Current.CancellationToken);
+        before.Count(d => d == oldUnmapped).ShouldBe(1);
+
+        await migrator.MigrateAsync(dropOld, TestContext.Current.CancellationToken);
+
+        var after = await dbContext.Database.SqlQueryRaw<string>(FilteredIndexesSql).ToListAsync(TestContext.Current.CancellationToken);
+        after.Count(d => d == oldUnmapped).ShouldBe(0);
+        after.Count(d => d == "HouseholdId,DeviceName,IntervalStart WHERE ([PowerPointId] IS NULL)").ShouldBe(1);
+        after.Count(d => d == "PowerPointId,IntervalStart WHERE ([PowerPointId] IS NOT NULL)").ShouldBe(1);
+    }
 }

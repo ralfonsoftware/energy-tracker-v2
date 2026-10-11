@@ -37,9 +37,6 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     protected abstract Task<EnergyTrackerDbContext> OpenDbContextAtMigrationAsync(
         Guid householdId, string migrationNameSuffix, CancellationToken cancellationToken);
 
-    // The DDL that drops the old (HouseholdId, IntervalStart) WHERE PowerPointId IS NULL index, idempotent.
-    protected abstract string DropOldUnmappedIndexSql { get; }
-
     protected static async Task MigrateToAsync(EnergyTrackerDbContext dbContext, string migrationNameSuffix, CancellationToken cancellationToken)
     {
         var target = dbContext.Database.GetMigrations().Single(m => m.EndsWith(migrationNameSuffix, StringComparison.Ordinal));
@@ -474,17 +471,6 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     // Pinned here so the transitional-state test stays valid after the old index is dropped.
     protected const string DeployNMigrationSuffix = "_NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice";
 
-    // Deploy N keeps the old index (AC #2), which by design rejects a second plug's overlapping rows, so
-    // the end-state behaviour of AC #5 is exercised on the fully migrated schema with the old index
-    // dropped here. This is exactly what deploy N+1's migration does (Part B); once it exists the drop
-    // below is a no-op and this helper can go.
-    private async Task<EnergyTrackerDbContext> OpenDbContextWithoutOldUnmappedIndexAsync(Guid householdId, CancellationToken cancellationToken)
-    {
-        var dbContext = await OpenMigratedDbContextAsync(householdId, cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync(DropOldUnmappedIndexSql, cancellationToken);
-        return dbContext;
-    }
-
     private static readonly DateTimeOffset PlugPeriodStart = new(2026, 4, 1, 0, 0, 0, TimeSpan.Zero);
 
     private static SmartPlugImportRepository NewRepository(EnergyTrackerDbContext dbContext) =>
@@ -528,7 +514,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         // shared IntervalStart (audit C9): 3 rows survived, all attributed to plug B.
         var householdId = Guid.NewGuid();
         var ct = TestContext.Current.CancellationToken;
-        await using var dbContext = await OpenDbContextWithoutOldUnmappedIndexAsync(householdId, ct);
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, ct);
         var powerPointX = await SeedPowerPointAsync(dbContext, householdId, ct);
         var powerPointY = await SeedAdditionalPowerPointAsync(dbContext, householdId, "Lamp", ct);
         var repository = NewRepository(dbContext);
@@ -573,7 +559,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     {
         var householdId = Guid.NewGuid();
         var ct = TestContext.Current.CancellationToken;
-        await using var dbContext = await OpenDbContextWithoutOldUnmappedIndexAsync(householdId, ct);
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, ct);
         await SeedPowerPointAsync(dbContext, householdId, ct);
         var repository = NewRepository(dbContext);
         var (_, originalReadingsA) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.1m, ct);
@@ -640,7 +626,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         // = never silently discarded), not a unique-violation 500.
         var householdId = Guid.NewGuid();
         var ct = TestContext.Current.CancellationToken;
-        await using var dbContext = await OpenDbContextWithoutOldUnmappedIndexAsync(householdId, ct);
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, ct);
         var powerPointX = await SeedPowerPointAsync(dbContext, householdId, ct);
         var repository = NewRepository(dbContext);
         var (importA, readingsA) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.1m, ct);
@@ -690,9 +676,6 @@ public class PostgresSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartP
 
     protected override int AwaitingMappingUpsertChunkSize => 5_000;
 
-    protected override string DropOldUnmappedIndexSql =>
-        """DROP INDEX IF EXISTS "IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull";""";
-
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
@@ -724,9 +707,6 @@ public class SqlServerSmartPlugImportRepositoryAddAsyncDualProviderTests : Smart
     private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
 
     protected override int AwaitingMappingUpsertChunkSize => 200;
-
-    protected override string DropOldUnmappedIndexSql =>
-        "DROP INDEX IF EXISTS [IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull] ON [SmartPlugReadings];";
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
