@@ -2,6 +2,7 @@ using System.Globalization;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 
@@ -49,7 +50,7 @@ public class EveHomeXlsxParser : ISmartPlugParser
 
             if (rowIndex == 1)
             {
-                deviceName = StripPrefix(FirstCellText(row, sharedStrings), "Gerät:");
+                deviceName = RequireDeviceTagWithinBound(StripPrefix(FirstCellText(row, sharedStrings), "Gerät:"), fileName);
                 continue;
             }
 
@@ -102,7 +103,7 @@ public class EveHomeXlsxParser : ISmartPlugParser
 
             if (rowIndex == 1)
             {
-                deviceName = StripPrefix(FirstCellText(row, sharedStrings), "Gerät:");
+                deviceName = RequireDeviceTagWithinBound(StripPrefix(FirstCellText(row, sharedStrings), "Gerät:"), fileName);
                 continue;
             }
 
@@ -239,6 +240,14 @@ public class EveHomeXlsxParser : ISmartPlugParser
 
         return text;
     }
+
+    // AD-20 (Story 11.4): the tag is part of the unmapped-reading unique key, so its column is bounded.
+    // string.Length counts UTF-16 units, the strictest unit across both providers' column types.
+    private static string RequireDeviceTagWithinBound(string deviceTag, string fileName) =>
+        deviceTag.Length <= SmartPlugReading.DeviceNameMaxLength
+            ? deviceTag
+            : throw new DeviceTagTooLongException(
+                $"'{fileName}' has a device tag of {deviceTag.Length} characters; the limit is {SmartPlugReading.DeviceNameMaxLength}.");
 
     private static string StripPrefix(string cellText, string prefix) =>
         cellText.StartsWith(prefix, StringComparison.Ordinal) ? cellText[prefix.Length..].Trim() : cellText.Trim();

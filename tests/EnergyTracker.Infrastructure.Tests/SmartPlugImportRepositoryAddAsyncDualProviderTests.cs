@@ -1,7 +1,11 @@
+using System.Data.Common;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Testcontainers.MsSql;
@@ -27,6 +31,20 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     }
 
     protected abstract Task<EnergyTrackerDbContext> OpenMigratedDbContextAsync(Guid householdId, CancellationToken cancellationToken);
+
+    // Opens the database migrated only up to the (single) migration whose name ends in the given
+    // suffix — the checkpoint mechanism PostgresMigrationTests/SqlServerMigrationTests already use.
+    protected abstract Task<EnergyTrackerDbContext> OpenDbContextAtMigrationAsync(
+        Guid householdId, string migrationNameSuffix, CancellationToken cancellationToken);
+
+    // The DDL that drops the old (HouseholdId, IntervalStart) WHERE PowerPointId IS NULL index, idempotent.
+    protected abstract string DropOldUnmappedIndexSql { get; }
+
+    protected static async Task MigrateToAsync(EnergyTrackerDbContext dbContext, string migrationNameSuffix, CancellationToken cancellationToken)
+    {
+        var target = dbContext.Database.GetMigrations().Single(m => m.EndsWith(migrationNameSuffix, StringComparison.Ordinal));
+        await dbContext.GetInfrastructure().GetRequiredService<IMigrator>().MigrateAsync(target, cancellationToken);
+    }
 
     // Mirrors UpsertAwaitingMappingReadingsAsync's own per-provider chunk size (Story 3.9 review
     // fix) — deliberately kept as a second, independent literal here rather than reflecting into
@@ -79,7 +97,8 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     };
 
     private static SmartPlugReading MakeReading(
-        Guid householdId, Guid smartPlugImportId, Guid? powerPointId, DateTimeOffset intervalStart, decimal kwhValue = 0.5m) => new()
+        Guid householdId, Guid smartPlugImportId, Guid? powerPointId, DateTimeOffset intervalStart, decimal kwhValue = 0.5m,
+        string deviceName = "Fridge") => new()
     {
         Id = Guid.NewGuid(),
         HouseholdId = householdId,
@@ -87,7 +106,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         PowerPointId = powerPointId,
         RoomName = "Kitchen",
         PowerPointName = "Fridge",
-        DeviceName = "Fridge",
+        DeviceName = deviceName,
         IntervalStart = intervalStart,
         IntervalEnd = intervalStart,
         KwhValue = kwhValue,
@@ -446,6 +465,223 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         // Untouched by household A's write — the regression this test guards against.
         persistedB[0].KwhValue.ShouldBe(0.2m);
     }
+
+    // --- Story 11.4, AD-20 (amended 2026-10-10), audit C9: the unmapped-reading key is
+    // (HouseholdId, DeviceName, IntervalStart) WHERE PowerPointId IS NULL, so two different plugs'
+    // files covering the same period keep their own readings until each is mapped. ---
+
+    // The migration that adds the (HouseholdId, DeviceName, IntervalStart) index beside the old one.
+    // Pinned here so the transitional-state test stays valid after the old index is dropped.
+    protected const string DeployNMigrationSuffix = "_NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice";
+
+    // Deploy N keeps the old index (AC #2), which by design rejects a second plug's overlapping rows, so
+    // the end-state behaviour of AC #5 is exercised on the fully migrated schema with the old index
+    // dropped here. This is exactly what deploy N+1's migration does (Part B); once it exists the drop
+    // below is a no-op and this helper can go.
+    private async Task<EnergyTrackerDbContext> OpenDbContextWithoutOldUnmappedIndexAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        var dbContext = await OpenMigratedDbContextAsync(householdId, cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(DropOldUnmappedIndexSql, cancellationToken);
+        return dbContext;
+    }
+
+    private static readonly DateTimeOffset PlugPeriodStart = new(2026, 4, 1, 0, 0, 0, TimeSpan.Zero);
+
+    private static SmartPlugImportRepository NewRepository(EnergyTrackerDbContext dbContext) =>
+        new(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+
+    private static List<SmartPlugReading> MakePlugReadings(
+        Guid householdId, Guid importId, string deviceName, decimal firstKwhValue, int count = 3) =>
+        Enumerable.Range(0, count)
+            .Select(i => MakeReading(
+                householdId, importId, powerPointId: null, PlugPeriodStart.AddMinutes(10 * i),
+                kwhValue: firstKwhValue + 0.1m * i, deviceName: deviceName))
+            .ToList();
+
+    private static async Task<Guid> SeedAdditionalPowerPointAsync(
+        EnergyTrackerDbContext dbContext, Guid householdId, string name, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = $"{name} room", CreatedAtUtc = now };
+        dbContext.Rooms.Add(room);
+        var powerPoint = new PowerPoint { Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = name, CreatedAtUtc = now };
+        dbContext.PowerPoints.Add(powerPoint);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return powerPoint.Id;
+    }
+
+    private static async Task<(SmartPlugImport Import, List<SmartPlugReading> Readings)> AddUnmappedPlugImportAsync(
+        EnergyTrackerDbContext dbContext, SmartPlugImportRepository repository, Guid householdId, string deviceName,
+        decimal firstKwhValue, CancellationToken cancellationToken)
+    {
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, cancellationToken);
+        var import = MakeImport(householdId, backgroundJobId, deviceTag: deviceName);
+        var readings = MakePlugReadings(householdId, import.Id, deviceName, firstKwhValue);
+        await repository.AddAsync(import, readings, cancellationToken);
+        return (import, readings);
+    }
+
+    [Fact]
+    public async Task AddAsync_keeps_each_plugs_unmapped_readings_when_two_plugs_cover_the_same_period_and_attributes_them_once_mapped()
+    {
+        // AC #5 main case. Before this story the second plug's rows replaced the first plug's for every
+        // shared IntervalStart (audit C9): 3 rows survived, all attributed to plug B.
+        var householdId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+        await using var dbContext = await OpenDbContextWithoutOldUnmappedIndexAsync(householdId, ct);
+        var powerPointX = await SeedPowerPointAsync(dbContext, householdId, ct);
+        var powerPointY = await SeedAdditionalPowerPointAsync(dbContext, householdId, "Lamp", ct);
+        var repository = NewRepository(dbContext);
+
+        var (importA, readingsA) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.1m, ct);
+        var (importB, readingsB) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug B", firstKwhValue: 0.7m, ct);
+
+        await using (var unmappedContext = await OpenMigratedDbContextAsync(householdId, ct))
+        {
+            var unmapped = await unmappedContext.SmartPlugReadings
+                .Where(r => r.HouseholdId == householdId && r.PowerPointId == null)
+                .ToListAsync(ct);
+            unmapped.Count.ShouldBe(6);
+            var fromA = unmapped.Where(r => r.DeviceName == "Plug A").OrderBy(r => r.IntervalStart).ToList();
+            fromA.Select(r => r.Id).ShouldBe(readingsA.Select(r => r.Id), ignoreOrder: true);
+            fromA.ShouldAllBe(r => r.SmartPlugImportId == importA.Id);
+            fromA.Select(r => r.KwhValue).ShouldBe([0.1m, 0.2m, 0.3m]);
+            var fromB = unmapped.Where(r => r.DeviceName == "Plug B").OrderBy(r => r.IntervalStart).ToList();
+            fromB.Select(r => r.Id).ShouldBe(readingsB.Select(r => r.Id), ignoreOrder: true);
+            fromB.ShouldAllBe(r => r.SmartPlugImportId == importB.Id);
+            fromB.Select(r => r.KwhValue).ShouldBe([0.7m, 0.8m, 0.9m]);
+        }
+
+        await repository.UpdateMappingAsync(importA, powerPointX, "Fridge", "Kitchen", ct);
+        await repository.UpdateMappingAsync(importB, powerPointY, "Lamp", "Lamp room", ct);
+
+        await using var verifyContext = await OpenMigratedDbContextAsync(householdId, ct);
+        var all = await verifyContext.SmartPlugReadings.Where(r => r.HouseholdId == householdId).ToListAsync(ct);
+        all.Count.ShouldBe(6);
+        var mappedA = all.Where(r => r.DeviceName == "Plug A").ToList();
+        mappedA.Count.ShouldBe(3);
+        mappedA.ShouldAllBe(r => r.PowerPointId == powerPointX && r.SmartPlugImportId == importA.Id);
+        mappedA.Select(r => r.Id).ShouldBe(readingsA.Select(r => r.Id), ignoreOrder: true);
+        var mappedB = all.Where(r => r.DeviceName == "Plug B").ToList();
+        mappedB.Count.ShouldBe(3);
+        mappedB.ShouldAllBe(r => r.PowerPointId == powerPointY && r.SmartPlugImportId == importB.Id);
+        mappedB.Select(r => r.Id).ShouldBe(readingsB.Select(r => r.Id), ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task AddAsync_updates_the_same_plugs_unmapped_readings_in_place_when_its_file_is_uploaded_again()
+    {
+        var householdId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+        await using var dbContext = await OpenDbContextWithoutOldUnmappedIndexAsync(householdId, ct);
+        await SeedPowerPointAsync(dbContext, householdId, ct);
+        var repository = NewRepository(dbContext);
+        var (_, originalReadingsA) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.1m, ct);
+        var (importB, readingsB) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug B", firstKwhValue: 0.7m, ct);
+
+        var (reuploadA, _) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.5m, ct);
+
+        await using var verifyContext = await OpenMigratedDbContextAsync(householdId, ct);
+        var all = await verifyContext.SmartPlugReadings.Where(r => r.HouseholdId == householdId).ToListAsync(ct);
+        all.Count.ShouldBe(6);
+        var plugA = all.Where(r => r.DeviceName == "Plug A").OrderBy(r => r.IntervalStart).ToList();
+        plugA.Select(r => r.Id).ShouldBe(originalReadingsA.OrderBy(r => r.IntervalStart).Select(r => r.Id));
+        plugA.ShouldAllBe(r => r.SmartPlugImportId == reuploadA.Id && r.PowerPointId == null);
+        plugA.Select(r => r.KwhValue).ShouldBe([0.5m, 0.6m, 0.7m]);
+        var plugB = all.Where(r => r.DeviceName == "Plug B").OrderBy(r => r.IntervalStart).ToList();
+        plugB.Select(r => r.Id).ShouldBe(readingsB.OrderBy(r => r.IntervalStart).Select(r => r.Id));
+        plugB.ShouldAllBe(r => r.SmartPlugImportId == importB.Id);
+        plugB.Select(r => r.KwhValue).ShouldBe([0.7m, 0.8m, 0.9m]);
+    }
+
+    [Fact]
+    public async Task At_the_deploy_N_schema_an_overlapping_second_plug_fails_loudly_and_never_overwrites_the_first_plugs_rows()
+    {
+        // The accepted transitional state of the sprint change proposal (section 3): at deploy N the old
+        // (HouseholdId, IntervalStart) index still exists, so a second plug's overlapping unmapped import
+        // is rejected by the database (never a silent overwrite) until deploy N+1 drops it. Pinned to N's
+        // own migration so it stays valid once N+1 exists.
+        var householdId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+        await using var dbContext = await OpenDbContextAtMigrationAsync(householdId, DeployNMigrationSuffix, ct);
+        await SeedPowerPointAsync(dbContext, householdId, ct);
+        var repository = NewRepository(dbContext);
+        var (importA, readingsA) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.1m, ct);
+
+        var backgroundJobIdB = await SeedBackgroundJobAsync(dbContext, householdId, ct);
+        var importB = MakeImport(householdId, backgroundJobIdB, deviceTag: "Plug B");
+        var readingsB = MakePlugReadings(householdId, importB.Id, "Plug B", firstKwhValue: 0.7m);
+        await Should.ThrowAsync<DbException>(() => repository.AddAsync(importB, readingsB, ct));
+
+        await using (var afterFailureContext = await OpenDbContextAtMigrationAsync(householdId, DeployNMigrationSuffix, ct))
+        {
+            var rows = await afterFailureContext.SmartPlugReadings.Where(r => r.HouseholdId == householdId).OrderBy(r => r.IntervalStart).ToListAsync(ct);
+            rows.Select(r => r.Id).ShouldBe(readingsA.OrderBy(r => r.IntervalStart).Select(r => r.Id));
+            rows.ShouldAllBe(r => r.DeviceName == "Plug A" && r.SmartPlugImportId == importA.Id);
+            rows.Select(r => r.KwhValue).ShouldBe([0.1m, 0.2m, 0.3m]);
+            (await afterFailureContext.SmartPlugImports.AnyAsync(i => i.Id == importB.Id, ct)).ShouldBeFalse();
+        }
+
+        // The same plug's re-upload still works at this schema: only the foreign plug is rejected.
+        var (reuploadA, _) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.5m, ct);
+
+        await using var verifyContext = await OpenDbContextAtMigrationAsync(householdId, DeployNMigrationSuffix, ct);
+        var afterReupload = await verifyContext.SmartPlugReadings.Where(r => r.HouseholdId == householdId).OrderBy(r => r.IntervalStart).ToListAsync(ct);
+        afterReupload.Select(r => r.Id).ShouldBe(readingsA.OrderBy(r => r.IntervalStart).Select(r => r.Id));
+        afterReupload.ShouldAllBe(r => r.SmartPlugImportId == reuploadA.Id);
+        afterReupload.Select(r => r.KwhValue).ShouldBe([0.5m, 0.6m, 0.7m]);
+    }
+
+    [Fact]
+    public async Task UpdateMappingAsync_still_collides_on_PowerPointId_IntervalStart_and_leaves_a_different_plugs_divergent_rows_unmapped()
+    {
+        // AC #4: mapping keeps (PowerPointId, IntervalStart) as its collision key. Two plugs mapped to the
+        // SAME Power Point at the same intervals take the classification path (divergent DeviceName/KwhValue
+        // = never silently discarded), not a unique-violation 500.
+        var householdId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+        await using var dbContext = await OpenDbContextWithoutOldUnmappedIndexAsync(householdId, ct);
+        var powerPointX = await SeedPowerPointAsync(dbContext, householdId, ct);
+        var repository = NewRepository(dbContext);
+        var (importA, readingsA) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug A", firstKwhValue: 0.1m, ct);
+        var (importB, readingsB) = await AddUnmappedPlugImportAsync(dbContext, repository, householdId, "Plug B", firstKwhValue: 0.7m, ct);
+
+        await repository.UpdateMappingAsync(importA, powerPointX, "Fridge", "Kitchen", ct);
+        await Should.NotThrowAsync(() => repository.UpdateMappingAsync(importB, powerPointX, "Fridge", "Kitchen", ct));
+
+        await using var verifyContext = await OpenMigratedDbContextAsync(householdId, ct);
+        var all = await verifyContext.SmartPlugReadings.Where(r => r.HouseholdId == householdId).ToListAsync(ct);
+        all.Count.ShouldBe(6);
+        var plugA = all.Where(r => r.DeviceName == "Plug A").ToList();
+        plugA.Select(r => r.Id).ShouldBe(readingsA.Select(r => r.Id), ignoreOrder: true);
+        plugA.ShouldAllBe(r => r.PowerPointId == powerPointX);
+        var plugB = all.Where(r => r.DeviceName == "Plug B").ToList();
+        plugB.Select(r => r.Id).ShouldBe(readingsB.Select(r => r.Id), ignoreOrder: true);
+        plugB.ShouldAllBe(r => r.PowerPointId == null);
+    }
+
+    [Fact]
+    public async Task AddAsync_does_not_duplicate_or_throw_when_an_unmapped_batch_has_a_within_batch_match_key_collision()
+    {
+        var householdId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, ct);
+        await SeedPowerPointAsync(dbContext, householdId, ct);
+        var repository = NewRepository(dbContext);
+        var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, ct);
+        var import = MakeImport(householdId, backgroundJobId, deviceTag: "Plug A");
+        var sharedIntervalStart = new DateTimeOffset(2026, 11, 1, 2, 30, 0, TimeSpan.Zero);
+        var first = MakeReading(householdId, import.Id, powerPointId: null, sharedIntervalStart, kwhValue: 0.3m, deviceName: "Plug A");
+        var second = MakeReading(householdId, import.Id, powerPointId: null, sharedIntervalStart, kwhValue: 0.5m, deviceName: "Plug A");
+
+        await repository.AddAsync(import, [first, second], ct);
+
+        await using var verifyContext = await OpenMigratedDbContextAsync(householdId, ct);
+        var persisted = await verifyContext.SmartPlugReadings
+            .Where(r => r.HouseholdId == householdId && r.PowerPointId == null && r.IntervalStart == sharedIntervalStart)
+            .ToListAsync(ct);
+        persisted.ShouldHaveSingleItem().Id.ShouldBe(first.Id);
+    }
 }
 
 public class PostgresSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartPlugImportRepositoryAddAsyncDualProviderTestsBase, IAsyncLifetime
@@ -453,6 +689,9 @@ public class PostgresSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartP
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
 
     protected override int AwaitingMappingUpsertChunkSize => 5_000;
+
+    protected override string DropOldUnmappedIndexSql =>
+        """DROP INDEX IF EXISTS "IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull";""";
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
@@ -467,6 +706,17 @@ public class PostgresSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartP
         await dbContext.Database.MigrateAsync(cancellationToken);
         return dbContext;
     }
+
+    protected override async Task<EnergyTrackerDbContext> OpenDbContextAtMigrationAsync(
+        Guid householdId, string migrationNameSuffix, CancellationToken cancellationToken)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
+        optionsBuilder.UseNpgsql(_container.GetConnectionString(),
+            o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres"));
+        var dbContext = NewDbContext(optionsBuilder.Options, householdId);
+        await MigrateToAsync(dbContext, migrationNameSuffix, cancellationToken);
+        return dbContext;
+    }
 }
 
 public class SqlServerSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartPlugImportRepositoryAddAsyncDualProviderTestsBase, IAsyncLifetime
@@ -474,6 +724,9 @@ public class SqlServerSmartPlugImportRepositoryAddAsyncDualProviderTests : Smart
     private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
 
     protected override int AwaitingMappingUpsertChunkSize => 200;
+
+    protected override string DropOldUnmappedIndexSql =>
+        "DROP INDEX IF EXISTS [IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull] ON [SmartPlugReadings];";
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
@@ -486,6 +739,17 @@ public class SqlServerSmartPlugImportRepositoryAddAsyncDualProviderTests : Smart
             o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer"));
         var dbContext = NewDbContext(optionsBuilder.Options, householdId);
         await dbContext.Database.MigrateAsync(cancellationToken);
+        return dbContext;
+    }
+
+    protected override async Task<EnergyTrackerDbContext> OpenDbContextAtMigrationAsync(
+        Guid householdId, string migrationNameSuffix, CancellationToken cancellationToken)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
+        optionsBuilder.UseSqlServer(_container.GetConnectionString(),
+            o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer"));
+        var dbContext = NewDbContext(optionsBuilder.Options, householdId);
+        await MigrateToAsync(dbContext, migrationNameSuffix, cancellationToken);
         return dbContext;
     }
 }

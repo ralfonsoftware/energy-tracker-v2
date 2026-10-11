@@ -1,3 +1,4 @@
+using EnergyTracker.Application;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Shouldly;
@@ -120,5 +121,42 @@ public class MerossCsvParserTests
         var deviceTag = parser.ReadDeviceTag(stream, Path.GetFileName(SampleFilePath), TestContext.Current.CancellationToken);
 
         deviceTag.ShouldBe("Verbraucher 1");
+    }
+
+    [Fact]
+    public void ReadDeviceTag_and_Parse_accept_a_device_tag_of_exactly_the_maximum_length()
+    {
+        // Story 11.4, AD-20: the tag is part of the unmapped-reading key, so the column is bounded.
+        var tag = new string('a', SmartPlugReading.DeviceNameMaxLength);
+        var fileName = $"Power Monitor Day Data - {tag} - 20260101.csv";
+        var parser = new MerossCsvParser();
+
+        using var headerStream = new MemoryStream();
+        parser.ReadDeviceTag(headerStream, fileName, TestContext.Current.CancellationToken).ShouldBe(tag);
+
+        using var parseStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("Date\t,Power Consumption-(kWh)\t\n"));
+        parser.Parse(parseStream, fileName, watermark: null, TestContext.Current.CancellationToken).Readings.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ReadDeviceTag_throws_DeviceTagTooLongException_for_a_device_tag_over_the_maximum_length()
+    {
+        var fileName = $"Power Monitor Day Data - {new string('a', SmartPlugReading.DeviceNameMaxLength + 1)} - 20260101.csv";
+        var parser = new MerossCsvParser();
+        using var stream = new MemoryStream();
+
+        Should.Throw<DeviceTagTooLongException>(() =>
+            parser.ReadDeviceTag(stream, fileName, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void Parse_throws_DeviceTagTooLongException_for_a_device_tag_over_the_maximum_length()
+    {
+        var fileName = $"Power Monitor Day Data - {new string('a', SmartPlugReading.DeviceNameMaxLength + 1)} - 20260101.csv";
+        var parser = new MerossCsvParser();
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("Date\t,Power Consumption-(kWh)\t\n"));
+
+        Should.Throw<DeviceTagTooLongException>(() =>
+            parser.Parse(stream, fileName, watermark: null, TestContext.Current.CancellationToken));
     }
 }

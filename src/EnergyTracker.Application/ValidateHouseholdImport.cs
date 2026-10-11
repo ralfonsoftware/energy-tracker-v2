@@ -243,7 +243,7 @@ public class ValidateHouseholdImport
         RequireOptionalGuid(item, "powerPointId", path, failures);
         RequireString(item, "roomName", path, failures);
         RequireString(item, "powerPointName", path, failures);
-        RequireString(item, "deviceName", path, failures);
+        RequireStringMaxLength(item, "deviceName", path, SmartPlugReading.DeviceNameMaxLength, failures);
         RequireDateTimeOffset(item, "intervalStart", path, failures);
         RequireDateTimeOffset(item, "intervalEnd", path, failures);
         RequireNonNegativeDecimal(item, "kwhValue", path, failures);
@@ -393,6 +393,20 @@ public class ValidateHouseholdImport
         if (!obj.TryGetProperty(field, out var element) || element.ValueKind != JsonValueKind.String)
         {
             failures.Add($"{path}: '{field}' must be a string.");
+        }
+    }
+
+    // A string field with an upper bound (AD-20, Story 11.4: DeviceName is part of the unmapped-reading
+    // key, so its column is bounded). JsonElement.GetString().Length counts UTF-16 units, the same unit the
+    // parsers use. A missing/non-string value reports the type failure only.
+    private static void RequireStringMaxLength(JsonElement obj, string field, string path, int maxLength, List<string> failures)
+    {
+        RequireString(obj, field, path, failures);
+        if (obj.TryGetProperty(field, out var element)
+            && element.ValueKind == JsonValueKind.String
+            && element.GetString()!.Length > maxLength)
+        {
+            failures.Add($"{path}: '{field}' must be at most {maxLength} characters.");
         }
     }
 

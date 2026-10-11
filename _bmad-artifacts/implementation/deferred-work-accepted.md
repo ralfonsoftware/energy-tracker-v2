@@ -396,3 +396,8 @@ Archived 2026-10-02 from `deferred-work.md` (Epic 8 retro action #6, `spec-defer
 ## Deferred from: code review of story-11-2-job-lifecycle-conditional-transitions-stale-recovery (2026-10-10)
 
 - [accepted: single instance (AD-24) and 60 min queue visibility timeout vs 5 min staleness, Ralf 2026-10-11 at Story 11.3 create-story; revisit if `maxReplicas` is ever raised above 1, together with the deferred shared-state work] Heartbeat "ownership lost" only stops the heartbeat, and a stale takeover can run a job twice at once while the original owner is still alive; the ownership token protects the status row, not the side effects. A second run needs the message redelivered (60 min) and the original silent for over 5 min, and with one instance there is no second replica to race. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs]
+
+
+## Deferred from: create-story of story-11-4-unmapped-smart-plug-readings-keyed-by-device (2026-10-11)
+
+- [accepted: Ralf 2026-10-11; far narrower than audit C9, a per-column collation cannot be put on an index; revisit if a household reports two plugs whose tags differ only by case or trailing spaces losing readings on SQL Server] On SQL Server (default case- and trailing-space-insensitive collation) the unmapped-reading key `(HouseholdId, DeviceName, IntervalStart)` treats tags differing only by case or trailing spaces as the same plug, so the later import overwrites the earlier one's values. Postgres treats them as distinct, and Power Point matching in `ProcessSmartPlugImport` is ordinal. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs, unmapped MERGE]

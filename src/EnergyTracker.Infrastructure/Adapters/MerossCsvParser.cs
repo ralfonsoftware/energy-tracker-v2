@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 
@@ -96,7 +97,16 @@ public partial class MerossCsvParser : ISmartPlugParser
             throw new InvalidOperationException($"File name '{fileName}' does not match the Meross export pattern.");
         }
 
-        return match.Groups["device"].Value;
+        // AD-20 (Story 11.4): the tag is part of the unmapped-reading unique key, so its column is bounded.
+        // string.Length counts UTF-16 units, the strictest unit across both providers' column types.
+        var deviceTag = match.Groups["device"].Value;
+        if (deviceTag.Length > SmartPlugReading.DeviceNameMaxLength)
+        {
+            throw new DeviceTagTooLongException(
+                $"File name '{fileName}' has a device tag of {deviceTag.Length} characters; the limit is {SmartPlugReading.DeviceNameMaxLength}.");
+        }
+
+        return deviceTag;
     }
 
     [GeneratedRegex(@"^Power Monitor Day Data - (?<device>.+) - \d{8}\.csv$", RegexOptions.IgnoreCase)]

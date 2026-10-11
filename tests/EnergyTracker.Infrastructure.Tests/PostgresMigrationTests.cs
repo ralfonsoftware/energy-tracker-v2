@@ -1,3 +1,4 @@
+using System.Data.Common;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
@@ -383,5 +384,96 @@ public class PostgresMigrationTests : IAsyncLifetime
         survivingReading.DeviceName.ShouldBe("Fridge");
         survivingReading.IntervalStart.ShouldBe(intervalStart);
         survivingReading.KwhValue.ShouldBe(0.5m);
+    }
+
+    // --- Story 11.4, AD-20 (amended 2026-10-10), audit C9: deploy N narrows SmartPlugReadings.DeviceName
+    // to a bounded column and adds the (HouseholdId, DeviceName, IntervalStart) WHERE PowerPointId IS NULL
+    // unique index next to the old one (the old index is dropped by deploy N+1). Located by name suffix so
+    // the tests do not depend on the generated timestamp. ---
+
+    private const string NarrowMigrationSuffix = "_NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice";
+
+    private EnergyTrackerDbContext NewDeviceNameKeyDbContext(Guid householdId)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
+        optionsBuilder.UseNpgsql(_container.GetConnectionString(),
+            o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres"));
+        return new EnergyTrackerDbContext(optionsBuilder.Options, new FixedHouseholdAccessor(householdId));
+    }
+
+    private static (string Previous, string Narrow) ResolveNarrowMigration(EnergyTrackerDbContext dbContext)
+    {
+        var migrations = dbContext.Database.GetMigrations().ToList();
+        var narrow = migrations.Single(m => m.EndsWith(NarrowMigrationSuffix, StringComparison.Ordinal));
+        return (migrations[migrations.IndexOf(narrow) - 1], narrow);
+    }
+
+    private static async Task SeedUnmappedReadingsAsync(
+        EnergyTrackerDbContext dbContext, Guid householdId, CancellationToken cancellationToken, params string[] deviceNames)
+    {
+        dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        var start = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < deviceNames.Length; i++)
+        {
+            dbContext.SmartPlugReadings.Add(new SmartPlugReading
+            {
+                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = null, PowerPointId = null,
+                RoomName = string.Empty, PowerPointName = "Unmapped", DeviceName = deviceNames[i],
+                IntervalStart = start.AddMinutes(10 * i), IntervalEnd = start.AddMinutes(10 * i), KwhValue = 0.5m,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    [Fact]
+    public async Task NarrowSmartPlugReadingDeviceNameKey_migration_bounds_the_column_keeps_stored_values_and_adds_the_new_unmapped_index_beside_the_old_one()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = NewDeviceNameKeyDbContext(householdId);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var (previous, narrow) = ResolveNarrowMigration(dbContext);
+        await migrator.MigrateAsync(previous, TestContext.Current.CancellationToken);
+        var longestAllowed = new string('x', 200);
+        await SeedUnmappedReadingsAsync(dbContext, householdId, TestContext.Current.CancellationToken, longestAllowed, "Fridge");
+
+        await migrator.MigrateAsync(narrow, TestContext.Current.CancellationToken);
+
+        dbContext.ChangeTracker.Clear();
+        var names = await dbContext.SmartPlugReadings.AsNoTracking()
+            .OrderBy(r => r.IntervalStart).Select(r => r.DeviceName).ToListAsync(TestContext.Current.CancellationToken);
+        names.ShouldBe([longestAllowed, "Fridge"]);
+        (await dbContext.Database.SqlQueryRaw<int>("SELECT character_maximum_length::int AS \"Value\" FROM information_schema.columns WHERE table_name = 'SmartPlugReadings' AND column_name = 'DeviceName'").SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(200);
+
+        var indexes = await dbContext.Database.SqlQueryRaw<string>("SELECT indexdef AS \"Value\" FROM pg_indexes WHERE tablename = 'SmartPlugReadings'").ToListAsync(TestContext.Current.CancellationToken);
+        indexes.Count(d => d.Contains("UNIQUE") && d.Contains("(\"HouseholdId\", \"DeviceName\", \"IntervalStart\")") && d.Contains("WHERE (\"PowerPointId\" IS NULL)")).ShouldBe(1);
+        // AC #2: expand only. The old key stays through deploy N so the previous image and a rollback keep their arbiter.
+        indexes.Count(d => d.Contains("UNIQUE") && d.Contains("(\"HouseholdId\", \"IntervalStart\")") && d.Contains("WHERE (\"PowerPointId\" IS NULL)")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task NarrowSmartPlugReadingDeviceNameKey_migration_fails_loudly_and_changes_nothing_when_a_stored_DeviceName_is_over_200_characters()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = NewDeviceNameKeyDbContext(householdId);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var (previous, narrow) = ResolveNarrowMigration(dbContext);
+        await migrator.MigrateAsync(previous, TestContext.Current.CancellationToken);
+        // Plain EF insert: the column is still unbounded at this checkpoint.
+        await SeedUnmappedReadingsAsync(dbContext, householdId, TestContext.Current.CancellationToken, "Fridge", new string('y', 201));
+
+        var failure = await Should.ThrowAsync<DbException>(() => migrator.MigrateAsync(narrow, TestContext.Current.CancellationToken));
+
+        failure.Message.ShouldContain("SmartPlugReadings");
+        failure.Message.ShouldContain("DeviceName");
+        failure.Message.ShouldContain("200");
+        failure.Message.ShouldContain("201");
+        // Never truncated, and the whole Up() rolled back: the migration is not recorded and the column is unchanged.
+        var storedLengths = await dbContext.Database.SqlQueryRaw<int>("SELECT length(\"DeviceName\") AS \"Value\" FROM \"SmartPlugReadings\"").ToListAsync(TestContext.Current.CancellationToken);
+        storedLengths.OrderBy(l => l).ToList().ShouldBe([6, 201]);
+        (await dbContext.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken)).ShouldNotContain(narrow);
+        (await dbContext.Database.SqlQueryRaw<int?>("SELECT character_maximum_length::int AS \"Value\" FROM information_schema.columns WHERE table_name = 'SmartPlugReadings' AND column_name = 'DeviceName'").SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeNull();
     }
 }

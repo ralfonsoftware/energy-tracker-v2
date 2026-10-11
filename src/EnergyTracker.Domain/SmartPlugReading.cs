@@ -8,6 +8,12 @@ namespace EnergyTracker.Domain;
 // once parsing and matching are done, same "mutable via X only" discipline as PowerPoint.RoomId.
 public class SmartPlugReading
 {
+    // AD-20 (amended 2026-10-10): DeviceName is part of the unmapped-reading unique key, so it must be
+    // bounded (SQL Server cannot index nvarchar(max)). The single source for the EF column length, both
+    // parsers and the restore validator; .NET string.Length (UTF-16 units) is the strictest unit across
+    // both providers, so a value that passes here fits either column.
+    public const int DeviceNameMaxLength = 200;
+
     public required Guid Id { get; init; }
 
     public required Guid HouseholdId { get; set; }

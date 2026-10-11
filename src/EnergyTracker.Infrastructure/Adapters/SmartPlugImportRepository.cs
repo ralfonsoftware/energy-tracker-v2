@@ -35,8 +35,8 @@ public class SmartPlugImportRepository(
         SmartPlugReadingCorrection? boundaryCorrection = null)
     {
         // Snapshot everything already tracked on this shared scoped DbContext before this call adds
-        // anything of its own — the caller (BackgroundJobProcessor) tracks its own BackgroundJob
-        // entity across this same call, and the failure-cleanup below must never touch it.
+        // anything of its own — the failure-cleanup below must detach only what this call tracked,
+        // never an entity the caller already had on the context.
         var trackedBeforeCall = new HashSet<object>(dbContext.ChangeTracker.Entries().Select(e => e.Entity));
 
         try
@@ -58,12 +58,11 @@ public class SmartPlugImportRepository(
             //
             // Incident fix (confirmed live in production, 2026-09-05): this used to be a blanket
             // dbContext.ChangeTracker.Clear(), which also silently detached whatever OTHER entity
-            // the caller had tracked on this same scoped DbContext — specifically
-            // BackgroundJobProcessor's own tracked BackgroundJob row, whose subsequent
-            // Status = Failed mutation then targeted a detached entity and got dropped by a no-op
-            // SaveChangesAsync, permanently orphaning the job at Status = Processing with its queue
-            // message already deleted (reproduced and manually corrected against the live
-            // production row this same day).
+            // the caller had tracked on this same scoped DbContext — then BackgroundJobProcessor's
+            // own tracked BackgroundJob row, whose Status = Failed mutation targeted a detached
+            // entity and was dropped, orphaning the job at Status = Processing. Since Story 11.2 the
+            // processor no longer tracks its job (every status change is a conditional update through
+            // IBackgroundJobLifecycle), but the narrower cleanup below is still the right shape.
             //
             // Detach only entities newly tracked by this call — compared against the trackedBeforeCall
             // snapshot, NOT filtered by current State: `import`'s own AddAsync+SaveChangesAsync above
@@ -235,19 +234,23 @@ public class SmartPlugImportRepository(
 
     // Confirmed empirically (Story 3.9): both write paths' own ON CONFLICT throws
     // "cannot affect row a second time" when two rows in one incoming batch share the same
-    // (PowerPointId, IntervalStart) match key — Postgres's own restriction on ON CONFLICT DO
-    // UPDATE, not a library quirk. First-encountered-in-parse-order wins, same discipline as
-    // AD-22's own DST-fold handling in ProcessSmartPlugImport and the deleted per-row-fallback's
-    // "earlier-processed reading always wins" rule.
+    // match key — Postgres's own restriction on ON CONFLICT DO UPDATE, not a library quirk. The
+    // key mirrors each path's own: a mapped reading is (PowerPointId, IntervalStart); an unmapped
+    // one is (DeviceName, IntervalStart) (AD-20 amended 2026-10-10, Story 11.4 — DeviceName is
+    // part of the unmapped key, so two plugs' rows at the same interval are not duplicates).
+    // First-encountered-in-parse-order wins, same discipline as AD-22's own DST-fold handling in
+    // ProcessSmartPlugImport and the deleted per-row-fallback's "earlier-processed reading
+    // always wins" rule.
     private IReadOnlyList<SmartPlugReading> DeduplicateByMatchKey(IReadOnlyList<SmartPlugReading> readings, Guid smartPlugImportId)
     {
-        var seenKeys = new HashSet<(Guid? PowerPointId, DateTimeOffset IntervalStart)>();
+        var seenKeys = new HashSet<(Guid? PowerPointId, string? DeviceName, DateTimeOffset IntervalStart)>();
         var deduplicated = new List<SmartPlugReading>(readings.Count);
         var duplicateCount = 0;
 
         foreach (var reading in readings)
         {
-            if (seenKeys.Add((reading.PowerPointId, reading.IntervalStart)))
+            var deviceName = reading.PowerPointId is null ? reading.DeviceName : null;
+            if (seenKeys.Add((reading.PowerPointId, deviceName, reading.IntervalStart)))
             {
                 deduplicated.Add(reading);
             }
@@ -271,11 +274,10 @@ public class SmartPlugImportRepository(
 
     // AD-2 [AMENDED 2026-09-04, Story 3.9] — the one narrow, named exception to "provider chosen
     // once, at the composition root, never branched on elsewhere": Story 3.8's spike (Finding #2)
-    // proved BulkInsertOrUpdateAsync's UpdateByProperties cannot safely target
-    // IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull's partial-index predicate
-    // on either provider — it throws on both rather than silently corrupting a row, but the
-    // originally-specified single-mechanism design doesn't work for this one path. A hand-written,
-    // provider-native raw-SQL upsert instead.
+    // proved BulkInsertOrUpdateAsync's UpdateByProperties cannot safely target the unmapped
+    // partial unique index's predicate (WHERE PowerPointId IS NULL) on either provider — it throws
+    // on both rather than silently corrupting a row, but the originally-specified single-mechanism
+    // design doesn't work for this one path. A hand-written, provider-native raw-SQL upsert instead.
     //
     // [Story 3.9, post-implementation finding from a real end-to-end browser walkthrough] A single
     // multi-row statement, unchunked, does NOT scale to a realistic first-ever/unrecognized-device
@@ -329,23 +331,28 @@ public class SmartPlugImportRepository(
     {
         var (valuesClause, parameters) = BuildAwaitingMappingValuesClause(readings);
 
-        // ON CONFLICT's own (HouseholdId, IntervalStart) WHERE PowerPointId IS NULL predicate must
-        // match IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull's own predicate
-        // exactly (Postgres arbiter-index inference) — same predicate text as that index's own
-        // migration SQL. PowerPointId is never listed in the insert column list, so every new row
-        // lands with PowerPointId NULL, matching the batch this method is only ever called for.
+        // ON CONFLICT's own (HouseholdId, DeviceName, IntervalStart) WHERE PowerPointId IS NULL
+        // predicate must match IX_SmartPlugReadings_Household_Device_IntervalStart_Unmapped's own
+        // columns and predicate exactly (Postgres arbiter-index inference) — same predicate text as
+        // that index's own migration SQL (AD-20 amended 2026-10-10, Story 11.4: DeviceName is part
+        // of the key so two plugs' files covering the same period keep their own rows). During
+        // deploy N the old (HouseholdId, IntervalStart) index still exists: a different plug's
+        // overlapping row conflicts only on it, which is not the arbiter, so Postgres raises 23505
+        // (loud) instead of overwriting; deploy N+1 drops it. DeviceName is not in the DO UPDATE
+        // list: it is part of the key, so the assignment would be a no-op. PowerPointId is never
+        // listed in the insert column list, so every new row lands with PowerPointId NULL,
+        // matching the batch this method is only ever called for.
         // HouseholdId is filtered nowhere else in this statement (AD-3: raw SQL bypasses the global
         // query filter) — every incoming row already carries its own HouseholdId column value, so
         // no separate WHERE HouseholdId=... clause is needed the way a SELECT would need one.
         var sql = $"""
             INSERT INTO "SmartPlugReadings" ("Id", "HouseholdId", "SmartPlugImportId", "RoomName", "PowerPointName", "DeviceName", "IntervalStart", "IntervalEnd", "KwhValue")
             VALUES {valuesClause}
-            ON CONFLICT ("HouseholdId", "IntervalStart") WHERE "PowerPointId" IS NULL
+            ON CONFLICT ("HouseholdId", "DeviceName", "IntervalStart") WHERE "PowerPointId" IS NULL
             DO UPDATE SET
                 "SmartPlugImportId" = EXCLUDED."SmartPlugImportId",
                 "RoomName" = EXCLUDED."RoomName",
                 "PowerPointName" = EXCLUDED."PowerPointName",
-                "DeviceName" = EXCLUDED."DeviceName",
                 "IntervalEnd" = EXCLUDED."IntervalEnd",
                 "KwhValue" = EXCLUDED."KwhValue";
             """;
@@ -358,20 +365,25 @@ public class SmartPlugImportRepository(
         var (valuesClause, parameters) = BuildAwaitingMappingValuesClause(readings);
 
         // The ON clause's own target.[PowerPointId] IS NULL requirement scopes every match to the
-        // same row subset IX_SmartPlugReadings_HouseholdId_IntervalStart_WhenPowerPointIdNull
-        // covers — a target row with a non-null PowerPointId can never match, closing exactly the
+        // same row subset IX_SmartPlugReadings_Household_Device_IntervalStart_Unmapped covers — a
+        // target row with a non-null PowerPointId can never match, closing exactly the
         // cross-Power-Point collision Story 3.8 spike Finding #2 found with UpdateByProperties.
+        // DeviceName is part of the match (AD-20 amended 2026-10-10, Story 11.4), so a different
+        // plug's row at the same interval is NOT MATCHED and is inserted; during deploy N the old
+        // (HouseholdId, IntervalStart) unique index then rejects it (error 2601, loud, never an
+        // overwrite) until deploy N+1 drops it. DeviceName is not in the UPDATE SET list: it is part
+        // of the key, and the default collation is case- and trailing-space-insensitive, so an
+        // assignment could rewrite the by-value DeviceName snapshot (AD-10) of the row it matched.
         // WITH (HOLDLOCK) prevents a concurrent MERGE against the same key from racing this one
         // into a duplicate insert under READ COMMITTED — standard guidance for MERGE upserts.
         var sql = $"""
             MERGE INTO [SmartPlugReadings] WITH (HOLDLOCK) AS target
             USING (VALUES {valuesClause}) AS source ([Id], [HouseholdId], [SmartPlugImportId], [RoomName], [PowerPointName], [DeviceName], [IntervalStart], [IntervalEnd], [KwhValue])
-            ON target.[HouseholdId] = source.[HouseholdId] AND target.[IntervalStart] = source.[IntervalStart] AND target.[PowerPointId] IS NULL
+            ON target.[HouseholdId] = source.[HouseholdId] AND target.[DeviceName] = source.[DeviceName] AND target.[IntervalStart] = source.[IntervalStart] AND target.[PowerPointId] IS NULL
             WHEN MATCHED THEN UPDATE SET
                 target.[SmartPlugImportId] = source.[SmartPlugImportId],
                 target.[RoomName] = source.[RoomName],
                 target.[PowerPointName] = source.[PowerPointName],
-                target.[DeviceName] = source.[DeviceName],
                 target.[IntervalEnd] = source.[IntervalEnd],
                 target.[KwhValue] = source.[KwhValue]
             WHEN NOT MATCHED THEN INSERT ([Id], [HouseholdId], [SmartPlugImportId], [PowerPointId], [RoomName], [PowerPointName], [DeviceName], [IntervalStart], [IntervalEnd], [KwhValue])

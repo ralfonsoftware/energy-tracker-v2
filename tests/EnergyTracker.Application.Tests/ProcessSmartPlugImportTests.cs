@@ -374,6 +374,28 @@ public class ProcessSmartPlugImportTests
     }
 
     [Fact]
+    public async Task A_device_tag_over_the_maximum_length_rethrows_the_same_exception_and_still_persists_a_Failed_import_row()
+    {
+        // Story 11.4, AD-20/AD-6: the adapter's DeviceTagTooLongException flows through the existing
+        // generic catch — no new handling in the use case, the original exception is not masked, and the
+        // member still sees the file in the job history (BackgroundJobProcessor maps the type to a code).
+        var payload = MakePayload("Living Room Lamp");
+        var tooLong = new DeviceTagTooLongException("device tag is 201 characters");
+        _parser.ReadDeviceTag(Arg.Any<Stream>(), payload.OriginalFileName, Arg.Any<CancellationToken>()).Throws(tooLong);
+        var backgroundJobId = Guid.NewGuid();
+
+        var thrown = await Should.ThrowAsync<DeviceTagTooLongException>(
+            () => Sut().ExecuteAsync(_householdId, backgroundJobId, payload, TestContext.Current.CancellationToken));
+
+        thrown.ShouldBeSameAs(tooLong);
+        await _smartPlugImportRepository.Received(1).AddAsync(
+            Arg.Is<SmartPlugImport>(i => i.Id == payload.SmartPlugImportId && i.BackgroundJobId == backgroundJobId && i.Status == SmartPlugImportStatus.Failed),
+            Arg.Any<IReadOnlyList<SmartPlugReading>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<SmartPlugReadingCorrection?>());
+    }
+
+    [Fact]
     public async Task A_failure_while_persisting_the_Failed_row_does_not_mask_the_original_exception_which_is_logged_first()
     {
         // Story 11.3 AC #5 / audit C7: before this, PersistFailedImportAsync's own exception replaced the

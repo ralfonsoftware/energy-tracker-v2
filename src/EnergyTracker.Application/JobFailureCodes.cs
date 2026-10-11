@@ -10,4 +10,7 @@ public static class JobFailureCodes
     public const string RetriesExhausted = "job-retries-exhausted";
 
     public const string UploadMissing = "upload-missing";
+
+    // Story 11.4: a smart plug file's device tag exceeds SmartPlugReading.DeviceNameMaxLength.
+    public const string DeviceTagTooLong = "device-tag-too-long";
 }

@@ -25,8 +25,11 @@ public class SmartPlugReadingConfiguration : IEntityTypeConfiguration<SmartPlugR
         builder.Property(r => r.PowerPointName)
             .IsRequired();
 
+        // Bounded (AD-20, amended 2026-10-10, Story 11.4): DeviceName is part of the unmapped-reading
+        // unique key below, and SQL Server cannot use nvarchar(max) as an index key.
         builder.Property(r => r.DeviceName)
-            .IsRequired();
+            .IsRequired()
+            .HasMaxLength(SmartPlugReading.DeviceNameMaxLength);
 
         // Restrict, not Cascade — same AD-10 reasoning as every other FK to Household.
         builder.HasOne<Household>()
@@ -76,13 +79,18 @@ public class SmartPlugReadingConfiguration : IEntityTypeConfiguration<SmartPlugR
         // `WHERE [PowerPointId] IS NOT NULL` for the identical reason (verified empirically via
         // this project's own `dotnet ef migrations add` output, correcting Dev Notes Open
         // Question #3's original assumption that SQL Server protected this "for free"). Closed
-        // instead by a second, hand-added `(HouseholdId, IntervalStart) WHERE PowerPointId IS
-        // NULL` partial unique index in both providers' migrations.
+        // instead by a second, hand-added `(HouseholdId, DeviceName, IntervalStart) WHERE
+        // PowerPointId IS NULL` partial unique index in both providers' migrations (Story 11.4,
+        // AD-20 amended 2026-10-10: it was `(HouseholdId, IntervalStart)` until then, which let one
+        // plug's unmapped file overwrite another's; the old index stays through deploy N and is
+        // dropped by deploy N+1).
         builder.HasIndex(r => new { r.PowerPointId, r.IntervalStart }).IsUnique();
 
-        // Story 3.4: the `(HouseholdId, IntervalStart) WHERE PowerPointId IS NULL` unique index
-        // that closes the gap above (see the block comment) is declared ONLY as raw SQL in each
-        // provider's migration (Postgres 20260822165109/SqlServer 20260822165112's Up()) — NOT
+        // Story 3.4 / Story 11.4: the `(HouseholdId, DeviceName, IntervalStart) WHERE PowerPointId
+        // IS NULL` unique index that closes the gap above (see the block comment) is declared ONLY
+        // as raw SQL in each provider's migration (Story 11.4's NarrowSmartPlugReadingDeviceNameKey
+        // migration creates it; Story 3.4's 20260822165109 Postgres/20260822165112 SQL Server
+        // migrations created its `(HouseholdId, IntervalStart)` predecessor) — NOT
         // here. A `HasFilter(...)` predicate is raw dialect SQL text (Postgres double-quoted
         // identifiers vs. SQL Server brackets), and this class is shared across both provider
         // migration projects (AD-2) with no provider check available at this configuration
