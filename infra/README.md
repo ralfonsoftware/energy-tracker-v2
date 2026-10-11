@@ -258,7 +258,7 @@ at all — Bicep can't create the identity that deploys it — so this is a manu
 once outside of any pipeline.
 
 **This has already been done for this repository** (deploy identity: 2026-08-12; PR identity split
-out under Story 11.5 — record the date here when its steps R1 and R3 are done). The GitHub
+out under Story 11.5: 2026-10-11, including the removal of `repo-pr` from the deploy identity). The GitHub
 repository secrets the workflows depend on (`AZURE_CLIENT_ID` for the deploy identity,
 `AZURE_PR_CLIENT_ID` for the PR identity, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) already
 exist. Do not recreate or re-provision any of this — the commands below are reference
