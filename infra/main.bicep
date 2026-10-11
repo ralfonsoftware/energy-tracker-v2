@@ -218,3 +218,5 @@ output customDomainVerificationId string = containerApp.outputs.customDomainVeri
 output containerRegistryLoginServer string = containerRegistry.outputs.loginServer
 output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceId
 output appInsightsId string = appInsights.outputs.id
+
+// R2.2 check
