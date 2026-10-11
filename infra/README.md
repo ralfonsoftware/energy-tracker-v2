@@ -185,7 +185,7 @@ workflow code on a branch is attacker-controlled by construction. So the fix is 
 | Identity | Role | Federated credential (subject) | Repository secret | Used by | Database access |
 |---|---|---|---|---|---|
 | `energy-tracker-devops-uami` (deploy) | **Owner** on the target resource group | `repo-branch-main` (`main` push only) | `AZURE_CLIENT_ID` | `app-deploy.yml`, `infra-deploy.yml` | contained Entra user, `db_datareader`/`db_datawriter`/`db_ddladmin` (`infra/sql/grant-entra-db-users.sql`) |
-| `energy-tracker-pr-reader-uami` (PR) | **Reader** on the target resource group | `repo-pr` (`pull_request`) | `AZURE_PR_CLIENT_ID` | `pr-review.yml` job `validate-infra` | none |
+| `energy-tracker-pr-reader-uami` (PR) | **Reader** plus the custom role **Energy Tracker PR What-If** (`Microsoft.Resources/deployments/whatIf/action` only), both on the target resource group | `repo-pr` (`pull_request`) | `AZURE_PR_CLIENT_ID` | `pr-review.yml` job `validate-infra` | none |
 
 `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` are shared. Fork pull requests never receive an OIDC
 token or secrets from GitHub, whatever credentials exist.
@@ -218,20 +218,26 @@ failure and never counts as a pass.
 | Read the target resource group and its container app | `validate-infra` | the what-if reads existing resources; the job also resolves the running image | `az group show`, `az containerapp list` |
 | **Not allowed:** any write | | a PR must not change anything | `az tag update --operation Delete --tags energy-tracker-preflight` on the resource group must be denied (deleting a tag key that does not exist changes nothing even if it were allowed) |
 | **Not allowed:** any reach beyond the target resource group | | least privilege | `az group list` must show exactly the target resource group |
+| Run a what-if on the target resource group (`Microsoft.Resources/deployments/whatIf/action`, custom role "Energy Tracker PR What-If") | `validate-infra` | Reader alone is denied the what-if call itself, even with `ProviderNoRbac` (live, Story 11.5 R2.2) | **not probed**: no harmless probe other than the what-if itself; a missing right fails the "What-if validation" step with `AuthorizationFailed` |
 | Azure CLI 2.76.0 or newer on the runner | `validate-infra` | `--validation-level ProviderNoRbac` | `az version` |
 
-**Why Reader is enough for the PR what-if.** By Microsoft's documentation the what-if has the same
-permission requirements as the deployment itself at the default validation level (`Provider`), so a
-Reader would be denied. `--validation-level ProviderNoRbac` checks read permissions only (Azure CLI
-2.76.0+), and `pr-review.yml` uses it. The what-if does not evaluate `listKeys()` (used by
-`storage-queue.bicep` and `container-apps-environment.bicep`), so no key-listing right is needed.
-The PR what-if passes inert placeholders for `DATABASE_ADMIN_PASSWORD` and `OIDC_CLIENT_SECRET`
-instead of the repository secrets, because what-if never shows or deploys secure parameter values.
+**Why Reader alone is not enough, and what the PR identity gets on top.** By Microsoft's
+documentation the what-if has the same permission requirements as the deployment itself at the
+default validation level (`Provider`), so `pr-review.yml` uses `--validation-level ProviderNoRbac`
+(Azure CLI 2.76.0+), which skips the per-resource write checks. Verified live (Story 11.5 R2.2,
+2026-10-11): even then, Azure denies a Reader the call itself (`AuthorizationFailed` for
+`Microsoft.Resources/deployments/whatIf/action` on the deployment scope). The PR identity therefore
+also holds the custom role **Energy Tracker PR What-If** on the target resource group, which grants
+exactly that one action and nothing else (no deployment write, no resource write). The what-if does
+not evaluate `listKeys()` (used by `storage-queue.bicep` and `container-apps-environment.bicep`), so
+no key-listing right is needed. The PR what-if passes inert placeholders for
+`DATABASE_ADMIN_PASSWORD` and `OIDC_CLIENT_SECRET` instead of the repository secrets, because
+what-if never shows or deploys secure parameter values.
 
-**Fallback, only if `ProviderNoRbac` still denies a Reader.** Use a custom role "Reader +
-`Microsoft.Resources/deployments/*`" at the resource-group scope. **Never** Contributor or Owner, and
-never a right that lists keys: if a what-if ever demands one, stop and decide deliberately, because
-handing the PR identity a key-listing right defeats the split.
+**If a what-if ever demands more.** Widen the custom role to `Microsoft.Resources/deployments/*` on
+the resource group, and nothing beyond that. **Never** Contributor or Owner, and never a right that
+lists keys: if a what-if ever demands one, stop and decide deliberately, because handing the PR
+identity a key-listing right defeats the split.
 
 **Running the preflight by hand** (this is also the drill that proves a denied probe really fires:
 signed in with your own, broader account, `pr` mode must **fail** with the "ALLOWED. Excess right"
@@ -318,8 +324,9 @@ az identity federated-credential create \
   --subject repo:<org>/<repo>:ref:refs/heads/main \
   --audiences api://AzureADTokenExchange
 
-# 5. The PR identity (Story 11.5 task R1): a separate managed identity, Reader on the target
-#    resource group (not the subscription), nothing else, no database user.
+# 5. The PR identity (Story 11.5 task R1): a separate managed identity, Reader plus the custom
+#    "Energy Tracker PR What-If" role (step 5c) on the target resource group (not the
+#    subscription), nothing else, no database user.
 az identity create \
   --name energy-tracker-pr-reader-uami \
   --resource-group <bootstrap-resource-group>
@@ -327,6 +334,24 @@ az role assignment create \
   --assignee-object-id <pr-identity-principal-id> \
   --assignee-principal-type ServicePrincipal \
   --role Reader \
+  --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>
+
+# 5c. The custom role that lets it run a what-if (Reader alone is denied, Story 11.5 R2.2): the
+#     single action Microsoft.Resources/deployments/whatIf/action, nothing else.
+cat > pr-whatif-role.json <<'JSON'
+{
+  "Name": "Energy Tracker PR What-If",
+  "Description": "Run az deployment group what-if on the target resource group. No deployment write, no resource write.",
+  "Actions": ["Microsoft.Resources/deployments/whatIf/action"],
+  "NotActions": [],
+  "AssignableScopes": ["/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>"]
+}
+JSON
+az role definition create --role-definition pr-whatif-role.json
+az role assignment create \
+  --assignee-object-id <pr-identity-principal-id> \
+  --assignee-principal-type ServicePrincipal \
+  --role "Energy Tracker PR What-If" \
   --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>
 
 # 5b. Its one federated credential, for the pull_request subject. Fork PRs never receive an OIDC
@@ -418,7 +443,7 @@ recreating unchanged resources.
 request against `main` — build/test/lint always (`build-test-lint` job), and a read-only infra
 `what-if` validation (`validate-infra` job) when `infra/**` changed and the PR isn't from a fork.
 It never deploys anything; that stays exclusive to `infra-deploy.yml`/`app-deploy.yml` on push to
-`main`. `validate-infra` logs in as the Reader-scoped PR identity, not the deploy identity (see
+`main`. `validate-infra` logs in as the read-only PR identity (Reader plus the what-if role), not the deploy identity (see
 "Workflow identities and their permissions").
 
 `main` has GitHub branch protection requiring both `build-test-lint` and `validate-infra` as

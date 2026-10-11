@@ -154,8 +154,8 @@ jobs:
             echo "::warning::infra/** changed in this fork PR; what-if validation was skipped (fork PRs never get Azure credentials) — a maintainer should check out the branch locally and run 'az deployment group what-if' before merging."
           fi
 
-      # OIDC login as the PR identity (energy-tracker-pr-reader-uami): Reader on the target resource
-      # group only, trusted only for the pull_request subject, no database user. The Owner-scoped
+      # OIDC login as the PR identity (energy-tracker-pr-reader-uami): Reader plus the custom
+      # what-if role on the target resource group only, trusted only for the pull_request subject, no database user. The Owner-scoped
       # deploy identity (AZURE_CLIENT_ID) is reachable only from main, so a branch push cannot act
       # as the deploy identity (audit S11, Story 11.5). Tenant and subscription ids are shared.
       - name: Azure login (OIDC)
@@ -195,9 +195,10 @@ jobs:
 
       # Read-only what-if only — never `az deployment group create`. That's infra-deploy.yml's
       # exclusive job, gated to push on main only. Same mechanism as infra-deploy.yml's manual
-      # what-if step, with two differences for the Reader-only PR identity:
+      # what-if step, with two differences for the read-only PR identity:
       # - `--validation-level ProviderNoRbac`: the default level checks the same (write) permissions
-      #   as the deployment itself and would deny a Reader; this level checks read permissions only.
+      #   as the deployment itself and would deny the PR identity; this level skips the per-resource write
+      #   checks (the identity holds the what-if action through its custom role, Reader alone is denied).
       #   Needs Azure CLI 2.76.0 or newer (the preflight checks that).
       # - DATABASE_ADMIN_PASSWORD and OIDC_CLIENT_SECRET are inert placeholders, not the repository
       #   secrets: what-if never deploys or shows secure parameter values, so the real ones are not
