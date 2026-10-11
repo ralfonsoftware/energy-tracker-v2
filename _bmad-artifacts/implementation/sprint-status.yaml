@@ -142,7 +142,7 @@ development_status:
   11-1-restore-export-never-carry-access-grants: done
   11-2-job-lifecycle-conditional-transitions-stale-recovery: done
   11-3-azure-queue-consumer-resilience: done
-  11-4-unmapped-smart-plug-readings-keyed-by-device: in-progress
+  11-4-unmapped-smart-plug-readings-keyed-by-device: done
   11-5-ci-identity-split-supply-chain-hygiene: backlog
   11-6-data-protection-key-encryption: backlog
   11-7-security-headers-csp-rate-limiting: backlog
