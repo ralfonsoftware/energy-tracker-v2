@@ -354,3 +354,23 @@ when those steps are skipped (a job's status reflects whether any of its steps f
 whether every step ran). Requiring `validate-infra` as a status check therefore does not block
 PRs that don't touch `infra/**`, or fork PRs that do (those get an `::warning::` annotation
 instead — see the workflow's own "Notice" step).
+
+## Dependabot version updates and auto-merge
+
+[`.github/dependabot.yml`](../.github/dependabot.yml) opens one grouped PR per ecosystem (npm in
+`/web`, NuGet, GitHub Actions, Docker) every Monday for **patch and minor** updates, with a
+3-day cooldown on new releases. Major updates arrive as individual PRs. Dependabot *security*
+updates are a separate repo setting and keep working as before.
+
+[`dependabot-automerge.yml`](../.github/workflows/dependabot-automerge.yml) enables GitHub
+auto-merge (squash) on Dependabot PRs that are patch or minor updates, so they merge once
+`build-test-lint` and `validate-infra` pass. Majors are never auto-merged. Because every merge to
+`main` that touches `src/**` or `web/**` deploys to production (`app-deploy.yml`), the allowed
+update types are the safety boundary; change them only together with the spec
+(`_bmad-artifacts/implementation/spec-dependabot-version-updates-auto-merge.md`).
+
+Branch protection keeps `strict: true`, so a Dependabot PR that falls behind `main` waits until
+it is rebased. Rebase it by hand: comment `@dependabot rebase` on the PR. Auto-merge then
+completes on its own once the checks are green again.
+
+Repo prerequisite (already set): Settings → General → "Allow auto-merge".
