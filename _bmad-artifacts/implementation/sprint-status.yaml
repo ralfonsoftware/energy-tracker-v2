@@ -169,18 +169,18 @@ action_items:
   - epic: 10
     action: "Amend ACs at decision time: when an Ask First or review decision changes an AC, mark it AMENDED <date, decision> with the old text struck through; add the rule to project-context.md process gates"
     owner: "Amelia"
-    status: open
-    note: "2026-10-10 epic-10 retro. Before the first Epic 11 dev-story. See epic-10-retro-2026-10-10.md."
+    status: done
+    note: "2026-10-10 epic-10 retro. Due before the first Epic 11 dev-story; closed late on 2026-10-11 (after 11.1-11.3). Rule added to project-context.md process gates ('Amend ACs at decision time'); 11.3 AC #6 and 11.2 AC #3 retrofitted with AMENDED markers. See epic-10-retro-2026-10-10.md."
   - epic: 10
     action: "Add the Chrome tooling quirks (key presses need a screenshot to focus the page; a stale tab clamps width to 659/660) to the live-resize procedure in project-context.md"
     owner: "Amelia"
-    status: open
-    note: "2026-10-10 epic-10 retro. Before Story 11.6 (first Epic 11 story with a live gate)."
+    status: done
+    note: "2026-10-10 epic-10 retro. Due before Story 11.6 (first Epic 11 story with a live gate); done 2026-10-11. Live-resize procedure in project-context.md now covers the screenshot-to-focus key-press quirk (step 3) and the stale-tab 659/660 clamp (step 4)."
   - epic: 10
     action: "Inspect the Summary tab of the first deploy with real pending migrations (pending list and patched restore-point block, Story 10.1)"
     owner: "Ralf"
-    status: open
-    note: "2026-10-10 epic-10 retro. First migration-bearing Epic 11 deploy (probably 11.2). Only a local Postgres format check and a 'none pending' live run exist so far."
+    status: done
+    note: "2026-10-10 epic-10 retro. First migration-bearing Epic 11 deploy (probably 11.2). Only a local Postgres format check and a 'none pending' live run exist so far. 2026-10-11 Ralf: the Summary tab listed one pending migration, 20261010203515_AddBackgroundJobStartedAndHeartbeat (Pending), which is Story 11.2's migration, so the pending list is observed live. Same run, restore-point block confirmed by Ralf: SQL server, database, restore point (UTC) and earliest restore date shown, pending migrations and the restore command present. Observed once, noted; closed 2026-10-11."
   - epic: 10
     action: "Triage deferred-work.md again (marker and index cleanup, drop entries closed by Epic 11 stories)"
     owner: "Amelia + Charlie + Dana"
