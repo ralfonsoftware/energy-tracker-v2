@@ -1,0 +1,59 @@
+name: CodeQL
+
+# Static analysis for C# and JavaScript/TypeScript (Story 11.5, AC #3; audit S11). Results show up
+# under Security > Code scanning. Deliberately its own workflow with no secrets and no `id-token`:
+# it is not part of the deploy path and is not a required status check (a new query pack must not
+# block an unrelated PR or deploy). The weekly schedule is what surfaces findings from query
+# updates on unchanged code. The repo is public, so CodeQL is free.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 2'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # Dependabot and fork pull requests run with a read-only token and cannot upload results; the
+    # merge to main is scanned by the push trigger instead.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [csharp, javascript-typescript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # build-mode none still restores NuGet packages to resolve references; global.json pins the
+      # SDK, so make sure the matching one is installed.
+      - name: Setup .NET
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # init and analyze must use the same pinned commit.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:${{ matrix.language }}

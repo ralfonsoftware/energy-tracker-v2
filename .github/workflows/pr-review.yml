@@ -31,10 +31,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -46,16 +46,24 @@ jobs:
       - name: Build .NET solution
         run: dotnet build EnergyTracker.sln --no-restore --configuration Release
 
-      # node-version matches the Dockerfile's node:22-alpine build stage exactly. web/package.json's
-      # @types/node devDependency is ^24, but that's a type-checking version, not the actual Node
-      # runtime the shipped image builds/runs with.
+      # node-version must match the Dockerfile's frontend build stage (node:25-alpine) so CI tests
+      # and builds on the Node the image builds with. Change both together (Dependabot bumps the
+      # Dockerfile base image, not this value). web/package.json's @types/node devDependency is a
+      # type-checking version, not the runtime.
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '22'
+          node-version: '25'
 
       - name: Install frontend dependencies
         run: npm --prefix web ci
+
+      # Counterpart of the NuGet Audit gate (Directory.Build.props): a moderate-or-worse advisory in
+      # a dependency that ships (devDependencies are excluded) fails the PR. Dev-only advisories
+      # (the shadcn CLI) are listed in deferred-work-accepted.md instead. If the registry is down
+      # this step fails like any other network step; re-run the job.
+      - name: Audit frontend dependencies
+        run: npm --prefix web audit --omit=dev --audit-level=moderate
 
       # Must run before "Test .NET solution" below: web/vite.config.ts's outDir points straight at
       # src/EnergyTracker.Api/wwwroot (gitignored, AD-13 single-artifact deployment), and
@@ -105,7 +113,7 @@ jobs:
       # also means a PR with a real merge conflict against main fails this job for reasons
       # unrelated to the PR's own content.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -146,18 +154,28 @@ jobs:
             echo "::warning::infra/** changed in this fork PR; what-if validation was skipped (fork PRs never get Azure credentials) — a maintainer should check out the branch locally and run 'az deployment group what-if' before merging."
           fi
 
-      # OIDC login relies on the same identity's (energy-tracker-devops-uami) second federated
-      # credential, already provisioned for the pull_request subject — no second identity, no new
-      # credential created by this job. Reuses the same three repository secrets
-      # app-deploy.yml/infra-deploy.yml already use.
+      # OIDC login as the PR identity (energy-tracker-pr-reader-uami): Reader on the target resource
+      # group only, trusted only for the pull_request subject, no database user. The Owner-scoped
+      # deploy identity (AZURE_CLIENT_ID) is reachable only from main, so a branch push cannot act
+      # as the deploy identity (audit S11, Story 11.5). Tenant and subscription ids are shared.
       - name: Azure login (OIDC)
         if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-id: ${{ secrets.AZURE_PR_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
+      # Fails fast, before what-if, if the PR identity lost a right it needs (read) or gained one it
+      # must not have (any write, or reach beyond the target resource group). What is probed and
+      # why: infra/README.md, "Workflow identities and their permissions".
+      - name: "Preflight: identity permissions"
+        if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
+        env:
+          AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: scripts/ci/azure-preflight.sh pr
+
       - name: Resolve current Container App image (if any)
         id: currentimage
         if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
@@ -176,14 +194,19 @@ jobs:
           fi
 
       # Read-only what-if only — never `az deployment group create`. That's infra-deploy.yml's
-      # exclusive job, gated to push on main only. Mirrors infra-deploy.yml's manual what-if step
-      # verbatim in mechanism, including DATABASE_ADMIN_PASSWORD (the @secure() bicepparam
-      # parameter needs it to resolve even for a dry-run; what-if does not persist or expose it).
+      # exclusive job, gated to push on main only. Same mechanism as infra-deploy.yml's manual
+      # what-if step, with two differences for the Reader-only PR identity:
+      # - `--validation-level ProviderNoRbac`: the default level checks the same (write) permissions
+      #   as the deployment itself and would deny a Reader; this level checks read permissions only.
+      #   Needs Azure CLI 2.76.0 or newer (the preflight checks that).
+      # - DATABASE_ADMIN_PASSWORD and OIDC_CLIENT_SECRET are inert placeholders, not the repository
+      #   secrets: what-if never deploys or shows secure parameter values, so the real ones are not
+      #   needed here and a PR branch has no reason to receive them through this workflow.
       - name: What-if validation
         if: steps.changes.outputs.infra_changed == 'true' && steps.origin.outputs.is_fork == 'false'
         env:
-          DATABASE_ADMIN_PASSWORD: ${{ secrets.DATABASE_ADMIN_PASSWORD }}
-          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
+          DATABASE_ADMIN_PASSWORD: 'Placeholder-not-a-secret-0a1B2c3D!'
+          OIDC_CLIENT_SECRET: 'unset'
           OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
           OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
           AZURE_ALERT_OTEL_CAP_EMAIL: ${{ vars.AZURE_ALERT_OTEL_CAP_EMAIL }}
@@ -193,4 +216,5 @@ jobs:
             --name "pr-review-${{ github.run_id }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP_NAME }}" \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam
+            --parameters infra/main.bicepparam \
+            --validation-level ProviderNoRbac

@@ -65,5 +65,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // Node 25 enables its own global `localStorage` by default, which shadows jsdom's (no
+    // getItem/setItem/clear without --localstorage-file). Turn it off so tests see jsdom's, as on
+    // Node 22. CI and the Dockerfile build on Node 25.
+    execArgv: ['--no-experimental-webstorage'],
   },
 })

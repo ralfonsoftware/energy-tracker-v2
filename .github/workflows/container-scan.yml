@@ -1,0 +1,58 @@
+name: Container Scan
+
+# Scans the container image for known vulnerabilities (Story 11.5, AC #3; audit S11): builds the
+# same Dockerfile that app-deploy.yml ships and runs Trivy against it. Deliberately separate from
+# app-deploy.yml: the scanner is third-party code and must never share a job with `id-token:
+# write`. No secrets, read-only token. Not a required status check and not part of the deploy
+# path: a new base-image CVE must not block an unrelated PR or deploy. The weekly schedule is
+# what surfaces new CVEs in unchanged base images. Ralf may make it required later (see
+# infra/README.md, "Scanning and supply chain").
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'src/**'
+      - 'web/**'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/container-scan.yml'
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 5 * * 3'
+
+permissions:
+  contents: read
+
+jobs:
+  scan-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image
+        run: docker build -t energy-tracker:scan .
+
+      # Pinned to the v0.36.0 commit. In March 2026 aquasecurity/trivy-action had its version tags
+      # force-pushed to malicious commits (tracking issue aquasecurity/trivy-action#541; the
+      # maintainers restored the tags and published v0.35.0 and later as safe), so this SHA was
+      # checked against that advisory: signed commit from a maintainer, released after the
+      # restoration, and its nested actions are pinned to SHAs in its own action.yaml. Update it only
+      # through a reviewed Dependabot PR, never by moving to a tag.
+      #
+      # ignore-unfixed: a finding with no available fix is not actionable here. High and critical
+      # only. No .trivyignore: if one is ever needed, every entry gets a reason and a revisit
+      # trigger.
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: energy-tracker:scan
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table

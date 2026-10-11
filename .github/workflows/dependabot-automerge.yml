@@ -7,6 +7,13 @@ name: Dependabot Auto-merge
 #
 # Majors are never enabled here. Merging to main deploys (app-deploy.yml), so the allowed
 # update types are the whole safety boundary: change them only with a matching spec update.
+#
+# GitHub Actions updates are never enabled either, whatever the update type (Story 11.5, AC #8).
+# Actions are pinned to commit SHAs, so Dependabot proposes minor and patch bumps as well, and an
+# action runs with the deploy identity's OIDC token on main. Those PRs are merged by hand after
+# reading the SHA diff. `package-ecosystem` is the spelling Dependabot uses in its branch names
+# (dependabot/github_actions/...), not the `github-actions` of dependabot.yml. The branch name is
+# checked as well, so an empty or renamed `package-ecosystem` output cannot open the boundary.
 on:
   pull_request:
     branches: [main]
@@ -28,7 +35,7 @@ jobs:
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@v3
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -37,19 +44,24 @@ jobs:
       # updates) are judged by update-type.
       - name: Enable auto-merge for patch and minor updates
         if: >-
-          steps.metadata.outputs.dependency-group != ''
+          steps.metadata.outputs.package-ecosystem != 'github_actions'
+          && !startsWith(github.head_ref, 'dependabot/github_actions/')
+          && (steps.metadata.outputs.dependency-group != ''
           || steps.metadata.outputs.update-type == 'version-update:semver-patch'
-          || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+          || steps.metadata.outputs.update-type == 'version-update:semver-minor')
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge --auto --squash "$PR_URL"
 
-      - name: Leave major updates for manual review
+      - name: Leave major and GitHub Actions updates for manual review
         if: >-
-          steps.metadata.outputs.dependency-group == ''
+          steps.metadata.outputs.package-ecosystem == 'github_actions'
+          || startsWith(github.head_ref, 'dependabot/github_actions/')
+          || (steps.metadata.outputs.dependency-group == ''
           && steps.metadata.outputs.update-type != 'version-update:semver-patch'
-          && steps.metadata.outputs.update-type != 'version-update:semver-minor'
+          && steps.metadata.outputs.update-type != 'version-update:semver-minor')
         env:
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
-        run: echo "::notice::$UPDATE_TYPE update, auto-merge not enabled. Merge by hand after review."
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+        run: echo "::notice::$ECOSYSTEM $UPDATE_TYPE update, auto-merge not enabled. Merge by hand after review (for GitHub Actions, read the SHA diff first)."

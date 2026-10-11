@@ -20,17 +20,17 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **Frontend:** React 19.2, Vite 8.2, TypeScript ~6.0, Tailwind CSS v4, shadcn/ui + Radix.
 
 **Key dependencies:**
-- Persistence: Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (Postgres 17 self-host) / Microsoft.EntityFrameworkCore.SqlServer 10.0.10 (Azure SQL Basic DTU) — dual-provider, config-selected.
-- Auth: Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.10 + cookie auth, Microsoft.AspNetCore.DataProtection.EntityFrameworkCore 10.0.10.
-- Observability: Serilog.AspNetCore 10.0.0, OpenTelemetry.* 1.17.0 (`OpenTelemetry.Instrumentation.EntityFrameworkCore` is pinned to `1.17.0-beta.1` deliberately — no stable release exists upstream).
-- .NET testing: xunit.v3.mtp-v2 3.2.2, Shouldly 4.3.0, NSubstitute 6.1.0, Testcontainers.PostgreSql/MsSql 4.13.0, Microsoft.AspNetCore.Mvc.Testing 10.0.10.
+- Persistence: Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (Postgres 17 self-host) / Microsoft.EntityFrameworkCore.SqlServer 10.0.12 (Azure SQL Basic DTU) — dual-provider, config-selected.
+- Auth: Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.12 + cookie auth, Microsoft.AspNetCore.DataProtection.EntityFrameworkCore 10.0.12.
+- Observability: Serilog.AspNetCore 10.0.0, OpenTelemetry.* 1.19.x (`OpenTelemetry.Instrumentation.EntityFrameworkCore` is pinned to `1.19.1-beta.1` deliberately — no stable release exists upstream).
+- .NET testing: xunit.v3.mtp-v2 3.2.2, Shouldly 4.3.0, NSubstitute 6.2.0, Testcontainers.PostgreSql/MsSql 4.15.0, Microsoft.AspNetCore.Mvc.Testing 10.0.12.
 - Frontend: i18next 26.x + react-i18next 17.x, class-variance-authority, tailwind-merge, lucide-react.
 - Frontend testing: Vitest 4.1, @testing-library/react 16.3, @playwright/test 1.62, oxlint 1.75 (not ESLint).
 
 **Version constraints:**
 - SDK pinned via `global.json` to `10.0.100`, `rollForward: latestFeature`.
 - All NuGet versions are centrally managed in `Directory.Packages.props` (`ManagePackageVersionsCentrally=true`) — never add `Version=` to a `<PackageReference>` in a `.csproj`; bump the version in `Directory.Packages.props` instead.
-- EF Core packages (EFCore, EFCore.Design, EFCore.Relational, EFCore.SqlServer) are pinned to the identical `10.0.10` line to avoid transitive version conflicts — bump together, never individually.
+- EF Core packages (EFCore, EFCore.Design, EFCore.Relational, EFCore.SqlServer) are pinned to the identical `10.0.12` line to avoid transitive version conflicts — bump together, never individually (the `dotnet-ef` tool in `.config/dotnet-tools.json`, `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore`, `OpenIdConnect`, `Mvc.Testing` and `Microsoft.Extensions.Logging.Abstractions` ride the same patch). OpenTelemetry packages move together on one 1.x line as well.
 - `xunit.v3.mtp-v2` runs on Microsoft.Testing.Platform (`global.json` `test.runner`), not the classic VSTest runner — test invocation differs from xUnit v2 projects.
 
 ## Critical Implementation Rules
@@ -126,6 +126,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **CI (`pr-review.yml`):**
 - Runs on every PR against `main`: builds/tests/lints the .NET solution and web frontend; runs infra `what-if` only when `infra/**` changed and the PR isn't from a fork. Never deploys — deploys only happen from `app-deploy.yml`/`infra-deploy.yml` on push to `main`.
+- **Two Azure identities (Story 11.5, audit S11):** `pr-review.yml`'s `validate-infra` logs in as the Reader-scoped `energy-tracker-pr-reader-uami` (`AZURE_PR_CLIENT_ID`, `pull_request` credential, what-if with `--validation-level ProviderNoRbac`); the Owner-scoped deploy identity (`AZURE_CLIENT_ID`) is reachable only from `main`. Never give the PR identity a write or key-listing right; rights and probes are in `infra/README.md` ("Workflow identities and their permissions").
+- **Preflight:** each Azure-authenticated workflow runs `Preflight: identity permissions` (`scripts/ci/azure-preflight.sh <mode>`) before any step that changes something; `WorkflowPreflightGuardTests` enforces the order.
+- **Actions are pinned to a commit SHA with a `# vX.Y.Z` comment** (`WorkflowActionsArePinnedToCommitShaTests`). Dependabot GitHub Actions PRs are never auto-merged: read the SHA diff, merge by hand. CodeQL (`codeql.yml`) and the image scan (`container-scan.yml`) are separate workflows with no secrets and are not required checks.
+- **Node:** CI's `node-version` must match the Dockerfile's frontend stage (`node:25-alpine`); change both together. The vitest config turns off Node's built-in `localStorage` (`--no-experimental-webstorage`) because it shadows jsdom's.
+- `npm audit --omit=dev --audit-level=moderate` gates `build-test-lint` like the NuGet Audit gate below.
 - The `build-test-lint` job has **no `name:` override** — GitHub branch protection matches required status checks by job id, not display name.
 - Workflow-level `concurrency` cancels in-progress runs on new pushes to the same PR.
 - **NuGet Audit gate (`Directory.Build.props`):** `NuGetAuditMode=all` + `NuGetAuditLevel=moderate` + `NU1902`–`NU1904` in `WarningsAsErrors` — a moderate-or-worse advisory on a direct **or transitive** package fails `dotnet restore` (the `build-test-lint` job's first step), not just warns. Don't suppress an NU190x code to unblock a PR — bump/replace the offending package (see `spec-nuget-audit-ci-gate.md`, `spec-ssh-net-cve-fix.md`).
