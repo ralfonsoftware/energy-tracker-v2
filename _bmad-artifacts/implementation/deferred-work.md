@@ -446,3 +446,8 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: dev-story of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
 
 - [open] A branch pusher can still read the repository secrets that other workflows hold (`DATABASE_ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET`) by editing a workflow on their branch; 11.5 only stopped the maintained `validate-infra` job from receiving them (placeholders instead). The real fix is a GitHub Environment with a branch restriction for the secrets, which changes the federated-credential subjects to `environment:`. Also open: Dockerfile base images pinned by digest. Both are out of scope for 11.5. [.github/workflows, Dockerfile]
+
+## Deferred from: code review of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
+
+- [open] CI (`pr-review.yml`, `app-deploy.yml`) and the Dockerfile frontend stage build on Node 25, a non-LTS line that, to the best of the reviewer's knowledge, reached end of support in mid-2026 (verify). Ralf chose "move CI to match the Dockerfile" during 11.5; the next step is moving both to an LTS line (the vitest `--no-experimental-webstorage` flag is valid there too). [.github/workflows/pr-review.yml, .github/workflows/app-deploy.yml, Dockerfile]
+- [open] `Directory.Packages.props` line 15 comment says "same 10.0.10 line as the rest of EF Core"; the line is 10.0.12 since Dependabot #112. Cosmetic. [Directory.Packages.props]

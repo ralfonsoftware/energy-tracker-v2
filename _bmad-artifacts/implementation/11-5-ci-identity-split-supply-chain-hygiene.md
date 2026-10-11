@@ -118,6 +118,22 @@ Write each guard test first and see it **red** against the current workflows bef
   - [x] A9.1 Append to `deferred-work.md` (end of file, project-context convention, `[open]` marker): (a) Node drift (Dev Notes); (b) PR-branch access to repo secrets needs a GitHub Environment with a branch restriction (`DATABASE_ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET`) and Dockerfile base images pinned by digest, both out of scope here; (c) anything CodeQL/Trivy found that was deferred.
   - [ ] A9.2 Sprint status `11-5-ci-identity-split-supply-chain-hygiene` stays `review` until R2 and R3 are done and recorded, then `done`. Tick the tasks.
 
+### Review Findings
+
+Code review 2026-10-11 against `origin/main...HEAD` (3 commits, 20 files). Review layers (adversarial, edge-case, acceptance) were run inline by one reviewer, not as separate subagents.
+
+- [x] [Review][Patch] Split `d797082` out of this PR (decided by Ralf, 2026-10-11): revert it on `feature/11-5-ci-identity-split` and carry the `infra/main.bicep` lint fix on its own branch from `origin/main`, so this PR no longer touches `.bicep` and `validate-infra` skips its Azure steps again, as R2.2 expects. The separate bicep PR can serve as the R2.2 throw-away infra PR. Then correct the stale story text only where it is actually stale (nothing to change in R2.2 once the revert is in; File List/Change Log need no `main.bicep` entry). Do not push without Ralf's go-ahead. Done locally: revert commit on this branch; branch `fix/bicep-oidc-secret-lint` (cherry-pick of `d797082` plus the description fix below), not pushed. [infra/main.bicep]
+- [x] [Review][Dismissed] AC #1 guard test (decided by Ralf, 2026-10-11): not added. AC #7 keeps its two guards. AC #1 relies on the Azure side (deploy identity keeps only `repo-branch-main` after R3, Reader-only PR identity) plus the `pr` preflight's excess-right probes. Known gap: nothing tests that `validate-infra` uses `AZURE_PR_CLIENT_ID` or that it receives no `DATABASE_ADMIN_PASSWORD`/`OIDC_CLIENT_SECRET`; a reviewer must check that in `pr-review.yml` diffs.
+- [x] [Review][Patch] (applied on `fix/bicep-oidc-secret-lint`, not on this branch) `infra/main.bicep:82-85`: the `@description` of `oidcClientSecret` still says "Defaults to the non-empty 'unset' sentinel", but the default was removed; the line also has trailing whitespace after `string`. `main.bicepparam` (comment about the 'unset' sentinel) says the same. [infra/main.bicep:82]
+- [x] [Review][Patch] `Preflight: identity permissions` in `app-deploy.yml` has `timeout-minutes: 15`, but the script's worst case is 5 x 180 s probe timeouts + 4 x 30 s sleeps = 17 min, and attempt 1 includes a cold Debug build by `dotnet ef` inside the 180 s timeout. A hanging database kills the step with a generic timeout instead of the clear "Preflight FAILED" message, and a slow first build can burn an attempt. Raise the step timeout above the worst case (e.g. 20) and/or build once before the loop (`dotnet build -c Release` then `dotnet ef ... --no-build`). [.github/workflows/app-deploy.yml:126, scripts/ci/azure-preflight.sh:715]
+- [x] [Review][Patch] `WorkflowPreflightGuardTests` only checks that the preflight step exists, invokes the script with the right mode and comes first. A `continue-on-error: true` on the step (or an `if:` that skips it in `app-deploy.yml`/`infra-deploy.yml`) would defeat the fail-fast and still pass. Assert the preflight step body has no `continue-on-error`, and no `if:` in the two deploy workflows. [tests/EnergyTracker.Architecture.Tests/WorkflowPreflightGuardTests.cs:1010]
+- [x] [Review][Patch] `dependabot-automerge.yml` excludes Actions with a deny-list (`package-ecosystem != 'github_actions'`). If the output were ever empty or spelled differently, a SHA-bumping Actions PR would be auto-merged to `main` (deploy path); the story itself notes the spelling is "not exercised until an Actions PR arrives". Add a second, independent condition on the branch name (`!startsWith(github.head_ref, 'dependabot/github_actions/')`) to both conditions. [.github/workflows/dependabot-automerge.yml:43]
+- [x] [Review][Patch] `WorkflowActionsArePinnedToCommitShaTests` scans `*.yml` only (a `.yaml` workflow, which GitHub runs, is invisible) and its version-comment regex rejects pre-release comments such as `# v1.2.3-rc.1` (false violation on a legitimate Dependabot comment). Scan `*.yml` and `*.yaml`; allow an optional `-suffix`. [tests/EnergyTracker.Architecture.Tests/WorkflowActionsArePinnedToCommitShaTests.cs:842,900]
+- [x] [Review][Patch] `codeql.yml` only skips Dependabot on `pull_request`. A PR from a fork gets a read-only token, so the SARIF upload fails and the (non-required) check goes red. Extend the job `if` with `github.event.pull_request.head.repo.fork != true` (or skip forks explicitly). [.github/workflows/codeql.yml:196]
+- [x] [Review][Patch] Story record drift: the File List's `sprint-status.yaml` line says "status in-progress" (it is `review`). (The `infra/main.bicep` / R2.2 parts of this item disappear once `d797082` is split out.) [_bmad-artifacts/implementation/11-5-ci-identity-split-supply-chain-hygiene.md]
+- [x] [Review][Defer] CI and the Dockerfile frontend stage build on Node 25, a non-LTS line whose support has ended (verify at nodejs.org/en/about/previous-releases) — deferred, decided by Ralf in this story (Node drift); revisit when moving to an LTS line [.github/workflows/pr-review.yml:57, Dockerfile:5]
+- [x] [Review][Defer] `Directory.Packages.props:15` comment still says "same 10.0.10 line as the rest of EF Core" (now 10.0.12) — deferred, pre-existing from #112 [Directory.Packages.props:15]
+
 ## Dev Notes
 
 ### What this fixes and why it is safe to change
@@ -297,7 +313,7 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 - `_bmad-artifacts/project-context.md` (modified)
 - `_bmad-artifacts/implementation/deferred-work.md` (modified)
 - `_bmad-artifacts/implementation/deferred-work-accepted.md` (modified)
-- `_bmad-artifacts/implementation/sprint-status.yaml` (modified, status in-progress)
+- `_bmad-artifacts/implementation/sprint-status.yaml` (modified, status review)
 - `_bmad-artifacts/implementation/11-5-ci-identity-split-supply-chain-hygiene.md` (this file)
 
 ### Change Log
@@ -305,3 +321,4 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 - 2026-10-11: Guard tests (red first), SHA pins, identity split + preflight in the three workflows, Dependabot Actions auto-merge exclusion, CodeQL and container scan workflows, npm audit fix and CI audit gate, infra/README.md rewrite, deferred-work entries. NuGet bumps and Part R pending.
 - 2026-10-11: CI Node 22 -> 25 to match the Dockerfile (Ralf's request); vitest `execArgv: ['--no-experimental-webstorage']` so the suite passes on Node 25; Node drift entry removed from deferred-work.md.
 - 2026-10-11: Rebased onto main after Dependabot #112; OTel EF Core beta bumped to 1.19.1-beta.1; project-context.md updated; full regression green.
+- 2026-10-11: Code review patches: preflight builds the migrations project once and the step timeout is 25 min; automerge also checks the `dependabot/github_actions/` branch name; CodeQL skips fork PRs; preflight guard rejects `continue-on-error` (and `if:` in the deploy workflows); pin guard scans `.yaml` and accepts pre-release comments. `d797082` (`infra/main.bicep`) split out to a separate branch.

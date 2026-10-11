@@ -19,9 +19,11 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # Dependabot pull requests run with a read-only token and cannot upload results; the merge to
-    # main is scanned by the push trigger instead.
-    if: github.event_name != 'pull_request' || github.actor != 'dependabot[bot]'
+    # Dependabot and fork pull requests run with a read-only token and cannot upload results; the
+    # merge to main is scanned by the push trigger instead.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork == false)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

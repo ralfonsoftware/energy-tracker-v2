@@ -149,8 +149,16 @@ probe_database_read() {
     return
   }
 
+  # Build once, outside the retry loop and its per-attempt timeout: otherwise the first attempt can
+  # spend most of its 180 s on a cold build and be counted as a failed (and retried) database read.
+  run_with_timeout 600 dotnet build src/EnergyTracker.Infrastructure.Migrations.SqlServer --nologo -v q \
+    >/dev/null 2>"$ERR_FILE" || {
+    fail "Building the migrations project failed, so the database probe cannot run. Detail: $(err_tail)"
+    return
+  }
+
   for attempt in $(seq 1 "$attempts"); do
-    if run_with_timeout 180 dotnet ef migrations list \
+    if run_with_timeout 180 dotnet ef migrations list --no-build \
       --project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
       --startup-project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
       --context EnergyTrackerDbContext \

@@ -175,8 +175,10 @@ jobs:
       # no reach beyond the target resource group. Placed after the firewall rule because the
       # database read needs it, and before the migration: a wrong right surfaces here, not halfway
       # through a deploy. Details: infra/README.md, "Workflow identities and their permissions".
+      # timeout-minutes covers the script's worst case (one 10-minute build cap, 5 x 180 s probe
+      # timeouts, 4 x 30 s sleeps) so a hanging database ends in the script's own message.
       - name: "Preflight: identity permissions"
-        timeout-minutes: 15
+        timeout-minutes: 25
         env:
           AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

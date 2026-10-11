@@ -21,7 +21,7 @@ public class WorkflowActionsArePinnedToCommitShaTests
 
     private static readonly Regex PinnedReference = new(@"@[0-9a-f]{40}$", RegexOptions.Compiled);
 
-    private static readonly Regex VersionComment = new(@"^\s*#\s*v\d+(\.\d+){0,2}\s*$", RegexOptions.Compiled);
+    private static readonly Regex VersionComment = new(@"^\s*#\s*v\d+(\.\d+){0,2}(-[0-9A-Za-z.]+)?\s*$", RegexOptions.Compiled);
 
     [Fact]
     public void Every_action_reference_is_pinned_to_a_commit_sha_with_a_version_comment()
@@ -80,6 +80,7 @@ public class WorkflowActionsArePinnedToCommitShaTests
         Directory.Exists(directory).ShouldBeTrue($"Expected to find {directory}");
 
         var workflows = Directory.GetFiles(directory, "*.yml")
+            .Concat(Directory.GetFiles(directory, "*.yaml"))
             .OrderBy(path => path, StringComparer.Ordinal)
             .Select(path => (
                 File: $"{WorkflowsRelativeDirectory}/{Path.GetFileName(path)}",

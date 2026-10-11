@@ -67,10 +67,11 @@ public class WorkflowPreflightGuardTests
             ".github/workflows/pr-review.yml (job validate-infra)",
             steps,
             mode: "pr",
-            mustPrecede: ["What-if validation"]);
+            mustPrecede: ["What-if validation"],
+            allowCondition: true);
     }
 
-    private static void AssertPreflight(string where, List<Step> steps, string mode, string[] mustPrecede)
+    private static void AssertPreflight(string where, List<Step> steps, string mode, string[] mustPrecede, bool allowCondition = false)
     {
         var preflightIndex = steps.FindIndex(s => s.Name == PreflightStepName);
         preflightIndex.ShouldBeGreaterThanOrEqualTo(
@@ -81,6 +82,17 @@ public class WorkflowPreflightGuardTests
         var invocation = new Regex($@"{Regex.Escape(PreflightScript)}\s+{Regex.Escape(mode)}\b");
         invocation.IsMatch(steps[preflightIndex].Body).ShouldBeTrue(
             $"{where}: step '{PreflightStepName}' must run `{PreflightScript} {mode}`.");
+
+        // A preflight that can be skipped or that is allowed to fail without failing the job is not
+        // fail-fast. pr-review.yml's preflight legitimately carries the same `if:` as the Azure
+        // steps around it (fork PRs and PRs without infra changes get no Azure login at all).
+        Regex.IsMatch(steps[preflightIndex].Body, @"^\s*continue-on-error:", RegexOptions.Multiline).ShouldBeFalse(
+            $"{where}: step '{PreflightStepName}' must not set continue-on-error; a failed preflight has to fail the job.");
+        if (!allowCondition)
+        {
+            Regex.IsMatch(steps[preflightIndex].Body, @"^\s*if:", RegexOptions.Multiline).ShouldBeFalse(
+                $"{where}: step '{PreflightStepName}' must not have an `if:`; it has to run on every deploy.");
+        }
 
         foreach (var name in mustPrecede)
         {
