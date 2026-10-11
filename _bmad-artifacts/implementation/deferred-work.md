@@ -451,3 +451,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] CI (`pr-review.yml`, `app-deploy.yml`) and the Dockerfile frontend stage build on Node 25, a non-LTS line that, to the best of the reviewer's knowledge, reached end of support in mid-2026 (verify). Ralf chose "move CI to match the Dockerfile" during 11.5; the next step is moving both to an LTS line (the vitest `--no-experimental-webstorage` flag is valid there too). [.github/workflows/pr-review.yml, .github/workflows/app-deploy.yml, Dockerfile]
 - [open] `Directory.Packages.props` line 15 comment says "same 10.0.10 line as the rest of EF Core"; the line is 10.0.12 since Dependabot #112. Cosmetic. [Directory.Packages.props]
+
+## Deferred from: Story 11.5 R2.2 (2026-10-11)
+
+- [open] `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App image" step but never passes `placeholderImage="$CURRENT_IMAGE"` to `az deployment group what-if` (as `infra-deploy.yml` does), so every PR what-if shows the Container App image changing to the quickstart placeholder. Noise only; passing the parameter would make the diff show real changes only. [.github/workflows/pr-review.yml]
