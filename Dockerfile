@@ -2,7 +2,7 @@
 # The same image is used for local dev (docker-compose.yml) and self-hosting — no separate "cloud edition".
 
 # --- Stage 1: build the frontend ---
-FROM node:25-alpine AS frontend-build
+FROM node:26-alpine AS frontend-build
 WORKDIR /src
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci --no-audit --no-fund

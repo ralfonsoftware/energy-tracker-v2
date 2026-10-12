@@ -69,14 +69,14 @@ jobs:
       # happened to pass locally when a stale wwwroot/ build from an earlier `npm run build`
       # was still sitting on disk.
       #
-      # node-version must match the Dockerfile's frontend build stage (node:25-alpine) so CI tests
+      # node-version must match the Dockerfile's frontend build stage (node:26-alpine) so CI tests
       # and builds on the Node the image builds with. Change both together (Dependabot bumps the
       # Dockerfile base image, not this value). web/package.json's @types/node devDependency is a
       # type-checking version, not the runtime.
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '25'
+          node-version: '26'
 
       - name: Install frontend dependencies
         run: npm --prefix web ci
