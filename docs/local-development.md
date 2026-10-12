@@ -11,7 +11,7 @@ VS Code is optional but the debugging instructions assume it).
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [Node.js 22+](https://nodejs.org/) and npm
+- [Node.js 26+](https://nodejs.org/) and npm
 - [Docker](https://docs.docker.com/get-docker/) (used only to run Postgres locally)
 - [VS Code](https://code.visualstudio.com/) with the recommended extensions
   (VS Code will prompt you to install these on first open — see
