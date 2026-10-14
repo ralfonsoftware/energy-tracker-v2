@@ -16,8 +16,13 @@ Bicep templates for the Energy Tracker Azure environment, deployed by
   adapter's backing store
 - `database-postgres.bicep` / `database-sqlserver.bicep` — exactly one is deployed, selected by
   the `databaseProvider` parameter (`'Postgres'` | `'SqlServer'`), matching AD-2
+- `key-vault.bicep` — Key Vault (Standard, RBAC permission model, no access policies) holding one
+  RSA key, `data-protection`, that wraps the ASP.NET Core Data Protection key ring (AD-17, audit
+  S2; see "Data Protection key encryption" below)
 - `container-app.bicep` — the Container App itself: system-assigned managed identity, `AcrPull`
-  role assignment against the registry, scale-to-zero (`minReplicas: 0`)
+  role assignment against the registry, a `Key Vault Crypto Service Encryption User` role
+  assignment scoped to the Data Protection key only, and `DataProtection__KeyVaultKeyId` as a
+  plain env var, scale-to-zero (`minReplicas: 0`)
 
 Environment-specific values live in `main.bicepparam` — no secrets. Secret-shaped values
 (`databaseAdministratorPassword`) are `@secure()` parameters supplied only at deploy time from
@@ -175,6 +180,128 @@ scratch database on the same server):_
 - The drill connected with the operator's own Entra identity, not `energy-tracker-devops-uami`; the
   CI identity's access was confirmed only by its contained user being present.
 
+## Data Protection key encryption (Key Vault) and key revocation
+
+**What and why.** ASP.NET Core Data Protection signs and encrypts the session cookie with a key
+ring that `PersistKeysToDbContext` stores in the `DataProtectionKeys` table (needed so a scale-to-zero
+cold start does not regenerate it). Before Story 11.6 the ring sat in that table in the clear on
+Azure: anyone with database read access, or a backup, could read the master key and forge a session
+cookie for any household member (audit S2). AD-17 (amendment 2026-10-10) fixes this by wrapping the
+ring with one Key Vault key. Each ring element is encrypted with a fresh AES key and that AES key is
+wrapped (`RSA-OAEP`) by the vault key, so the table holds only ciphertext and `kid` pointers to the
+key version used. Self-hosters get the same protection from a certificate (`docs/self-hosting.md`);
+outside Development the app refuses to start with neither (fail closed).
+
+**What is deployed.** `modules/key-vault.bicep`: vault `et<env><token>kv` and key `data-protection`
+(RSA 2048, `wrapKey`/`unwrapKey` only, no expiry, no rotation policy, purge protection off). In
+`container-app.bicep`: the Container App's system-assigned identity gets **Key Vault Crypto Service
+Encryption User** (`e147488a-f6f5-4113-8e2d-b22465e65bf6`: `keys/read`, `keys/wrap/action`,
+`keys/unwrap/action`) **scoped to the key**, never to the vault, and the versionless key URI is set as
+`DataProtection__KeyVaultKeyId`. The deploy identity creates the vault, key and role assignment
+(all inside Owner on the resource group); the PR identity needs nothing new (Reader reads the new
+resources).
+
+### Rollout order (do not collapse)
+
+1. **PR A (infra)** merges first; `infra-deploy.yml` creates the vault, key, role and env var. The
+   running app image ignores the variable, so nothing changes for members.
+2. **PR B (app)** merges second, only after PR A's `infra-deploy.yml` run is green. The new image
+   selects the Key Vault protector but does not call Key Vault yet (the existing plaintext key
+   still decrypts; a new key is only created after a revoke). Check that `app-deploy.yml` really ran
+   for the merge commit before step 4 (Dependabot auto-merges made by `GITHUB_TOKEN` do not
+   trigger deploys).
+3. Why not one PR: a merge touching `src/**` and `infra/**` starts both deploy workflows in an
+   unspecified order; if the app deploy ran first the new image would start with no protector,
+   refuse to start (fail closed), fail the health check and roll back.
+4. **Cutover and revocation** last, after the pre-cutover revision is deactivated (below).
+
+### Verify the Azure side (read-only, after PR A's deploy)
+
+Role assignments can take minutes to propagate; do not conclude "denied" before ten minutes.
+
+```bash
+RG=<resource-group>
+VAULT=$(az keyvault list -g $RG --query "[0].name" -o tsv)
+APP=$(az containerapp list -g $RG --query "[0].name" -o tsv)
+PRINCIPAL=$(az containerapp show -n $APP -g $RG --query identity.principalId -o tsv)
+
+# RBAC model on, purge protection state, public access
+az keyvault show -n $VAULT --query "{rbac:properties.enableRbacAuthorization, purge:properties.enablePurgeProtection, publicAccess:properties.publicNetworkAccess}"
+
+# Exactly one assignment on the key: the Container App's principal, role "Key Vault Crypto Service Encryption User"
+az role assignment list --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RG/providers/Microsoft.KeyVault/vaults/$VAULT/keys/data-protection" -o table
+# ... and nothing for that principal at vault scope
+az role assignment list --scope "$(az keyvault show -n $VAULT --query id -o tsv)" --assignee $PRINCIPAL -o table
+
+# The env var carries the versionless key URI
+az containerapp show -n $APP -g $RG --query "properties.template.containers[0].env[?name=='DataProtection__KeyVaultKeyId']"
+
+# One key version only, also after re-running infra-deploy.yml once (idempotency)
+az keyvault key list-versions --vault-name $VAULT -n data-protection -o table
+```
+
+If a redeploy of the module creates a second key version, that is harmless (older versions stay
+usable for unwrap and each ring element records the version it was wrapped with) but record it.
+
+### Cutover and revocation (Ralf, once, after PR B is deployed)
+
+The key ring is cached in-process for up to about 24 hours, so revoking while an older revision still
+runs would leave that revision signing with a revoked key. The revoke itself signs every member out
+once (14-day sliding cookie; no data is lost). The Container App is single-revision.
+
+1. Confirm the active revision is the one from PR B and older revisions are inactive:
+   `az containerapp revision list -n $APP -g $RG -o table`.
+2. Note the cutoff (UTC, with offset): `CUTOFF=$(date -u +%Y-%m-%dT%H:%M:%SZ)`.
+3. Set it. This creates a new revision; at startup the app calls `IKeyManager.RevokeAllKeys` for that
+   cutoff **only if** a non-revoked key created before it exists, so a restart with the variable left
+   in place is a no-op:
+
+   ```bash
+   az containerapp update -n $APP -g $RG --set-env-vars DataProtection__RevokeKeysCreatedBeforeUtc=$CUTOFF
+   ```
+
+   The first request afterwards creates a new key, wrapped by Key Vault. This is the first moment
+   Key Vault is actually called.
+4. Watch the logs for the revocation line and for any `Forbidden` / `403` from Key Vault:
+   `az containerapp logs show -n $APP -g $RG --follow`. A 403 means the role has not propagated or
+   the scope is wrong; fix it and restart the revision (sessions are already invalid, so waiting
+   costs nothing extra).
+5. Leave the variable in place (idempotent). Remove it with the next routine `infra-deploy.yml`
+   run (Bicep does not declare it, so a redeploy drops it) or:
+   `az containerapp update -n $APP -g $RG --remove-env-vars DataProtection__RevokeKeysCreatedBeforeUtc`.
+
+### Verify the cutover (live, never skipped)
+
+1. In Chrome against the real deployment: the old session is gone (first load redirects to sign-in),
+   a fresh Auth0 sign-in works and the household loads, a reload keeps the session.
+2. The new key row is encrypted. Connect as yourself (the "Rolling back a bad migration" runbook's
+   method: own Entra login, temporary firewall rule, remove it afterwards) and run counts only,
+   **never select or paste `Xml`**:
+
+   ```sql
+   -- only the revoked pre-cutover rows may still hold a plaintext master key (normally 1)
+   SELECT COUNT(*) FROM DataProtectionKeys WHERE Xml LIKE '%<masterKey%';
+   -- at least 1: a new row encrypted with the Key Vault key
+   SELECT COUNT(*) FROM DataProtectionKeys WHERE Xml LIKE '%encryptedKey%' AND Xml LIKE '%vault.azure.net%';
+   ```
+
+3. The app log shows the protector line for Azure Key Vault.
+
+### If sign-in fails after the revoke
+
+Look at the container logs first. `Forbidden` / `403` from Key Vault: wait for role propagation
+(up to ten minutes), re-check the role assignment scope with the commands above, then restart the
+revision. A new key could not be created, so every request that needs a key fails until it is. Do
+not widen the role to the vault; the scope must stay the key.
+
+### Residual risk and optional cleanup
+
+Revoked plaintext key material stays in older database backups and restore points until they age out
+(the Story 10.1 restore points keep it for the retention period). Revoked keys are rejected either
+way. Optionally, after the live check, delete the revoked plaintext rows
+(`DELETE FROM DataProtectionKeys WHERE Xml LIKE '%<masterKey%'`); it removes live plaintext material
+from the database, backups keep it until they expire, and it cannot be undone.
+
 ## Workflow identities and their permissions
 
 Two Azure identities exist, one per trust level (Story 11.5, audit S11). A pull request must not be
@@ -186,6 +313,10 @@ workflow code on a branch is attacker-controlled by construction. So the fix is 
 |---|---|---|---|---|---|
 | `energy-tracker-devops-uami` (deploy) | **Owner** on the target resource group | `repo-branch-main` (`main` push only) | `AZURE_CLIENT_ID` | `app-deploy.yml`, `infra-deploy.yml` | contained Entra user, `db_datareader`/`db_datawriter`/`db_ddladmin` (`infra/sql/grant-entra-db-users.sql`) |
 | `energy-tracker-pr-reader-uami` (PR) | **Reader** plus the custom role **Energy Tracker PR What-If** (`Microsoft.Resources/deployments/whatIf/action` only), both on the target resource group | `repo-pr` (`pull_request`) | `AZURE_PR_CLIENT_ID` | `pr-review.yml` job `validate-infra` | none |
+
+The deploy identity creates the Key Vault, its Data Protection key and the key-scoped role assignment
+(Story 11.6; all inside Owner on the resource group). Nothing changes for the PR identity: Reader
+reads the new resources, and it cannot grant itself any Key Vault right (AD-17 "Prerequisite").
 
 `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` are shared. Fork pull requests never receive an OIDC
 token or secrets from GitHub, whatever credentials exist.

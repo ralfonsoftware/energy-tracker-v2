@@ -160,6 +160,17 @@ module storageQueue 'modules/storage-queue.bicep' = {
   }
 }
 
+// AD-17 (amendment 2026-10-10, audit S2): one Key Vault key wraps the Data Protection key ring.
+// Vault names: 3-24 chars, alphanumeric and hyphens, globally unique. Same shape as the storage
+// account name (2 + up to 10 + 10 + 2 = 24), so it fits for every allowed environmentName.
+module keyVault 'modules/key-vault.bicep' = {
+  name: 'key-vault'
+  params: {
+    name: toLower('et${environmentName}${globalToken}kv')
+    location: location
+  }
+}
+
 module databasePostgres 'modules/database-postgres.bicep' = if (databaseProvider == 'Postgres') {
   name: 'database-postgres'
   params: {
@@ -210,6 +221,9 @@ module containerApp 'modules/container-app.bicep' = {
     customDomainName: customDomainName
     customDomainCertificateReady: customDomainCertificateReady
     managedCertificateId: containerAppsEnvironment.outputs.managedCertificateId
+    dataProtectionKeyVaultName: keyVault.outputs.name
+    dataProtectionKeyName: keyVault.outputs.keyName
+    dataProtectionKeyUri: keyVault.outputs.keyUri
   }
 }
 
