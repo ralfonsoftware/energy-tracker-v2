@@ -64,8 +64,24 @@ param maxReplicas int = 1
 @description('Port the ingress health-checks and routes traffic to — must match whatever image is currently deployed (placeholderImage listens on 80; the real app image listens on 8080 per Dockerfile ASPNETCORE_HTTP_PORTS)')
 param targetPort int = 8080
 
+@description('Name of the Key Vault that holds the Data Protection wrapping key (AD-17). Blank leaves the key-vault role assignment out, so this module stays usable on its own.')
+param dataProtectionKeyVaultName string = ''
+
+@description('Name of the Key Vault key that wraps the Data Protection key ring (AD-17). Required together with dataProtectionKeyVaultName.')
+param dataProtectionKeyName string = ''
+
+@description('Versionless URI of the Data Protection wrapping key, handed to the app as DataProtection__KeyVaultKeyId. A URI, not a secret.')
+param dataProtectionKeyUri string = ''
+
 // Well-known built-in role definition ID for "AcrPull" — stable across subscriptions/tenants.
 var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+
+// Well-known built-in role definition ID for "Key Vault Crypto Service Encryption User": grants
+// keys/read, keys/wrap and keys/unwrap data actions and nothing else — exactly what the Data
+// Protection Key Vault encryptor needs (AD-17).
+var keyVaultCryptoServiceEncryptionUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'e147488a-f6f5-4113-8e2d-b22465e65bf6')
+
+var hasDataProtectionKey = !empty(dataProtectionKeyVaultName) && !empty(dataProtectionKeyName)
 
 // Trimmed so a whitespace-only override (e.g. accidental ' ') doesn't pass !empty() and bind a
 // garbage hostname — matches the same guard in container-apps-environment.bicep.
@@ -73,6 +89,17 @@ var trimmedCustomDomainName = trim(customDomainName)
 
 resource registry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = {
   name: containerRegistryName
+}
+
+// `existing` references are only evaluated where something uses them, so with the params left
+// blank (module used on its own) nothing is looked up and the role assignment below is not deployed.
+resource dataProtectionVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
+  name: dataProtectionKeyVaultName
+}
+
+resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2024-11-01' existing = {
+  parent: dataProtectionVault
+  name: dataProtectionKeyName
 }
 
 resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
@@ -210,6 +237,13 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
               name: 'Otel__AzureMonitorConnectionString'
               secretRef: 'appinsights-connection-string'
             }
+            // AD-17 (audit S2): Program.cs reads DataProtection:KeyVaultKeyId once at the composition
+            // root and wraps the Data Protection key ring with this key via the system-assigned
+            // identity. A URI, not key material, so a plain env var rather than a secret.
+            {
+              name: 'DataProtection__KeyVaultKeyId'
+              value: dataProtectionKeyUri
+            }
           ]
         }
       ]
@@ -226,6 +260,19 @@ resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
   scope: registry
   properties: {
     roleDefinitionId: acrPullRoleDefinitionId
+    principalId: containerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Scoped to the KEY, not the vault (AD-17: "on that key only"): the identity can wrap/unwrap with
+// this one key and nothing else in the vault. Lives here rather than in key-vault.bicep because it
+// needs containerApp.identity.principalId while the app needs the key URI (would be circular).
+resource dataProtectionKeyRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasDataProtectionKey) {
+  name: guid(dataProtectionKey.id, containerApp.id, 'KeyVaultCryptoServiceEncryptionUser')
+  scope: dataProtectionKey
+  properties: {
+    roleDefinitionId: keyVaultCryptoServiceEncryptionUserRoleDefinitionId
     principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
   }

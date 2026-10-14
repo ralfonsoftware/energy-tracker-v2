@@ -322,6 +322,32 @@ database users.
 
 ---
 
+## D7 — Data Protection key protector: Key Vault exists only in Azure
+
+**Local/self-host:** there is no Key Vault and no managed identity. `Development` (`dotnet run`,
+`scripts/run-api.sh`) keeps the key ring unprotected on purpose and logs that at warning level. A
+full `docker compose up` runs the image as `Production`, so the API **refuses to start** unless a
+certificate (`DataProtection:CertificateBase64`) or the explicit opt-out
+(`DataProtection:AllowUnprotectedKeys=true`) is configured (`docs/self-hosting.md`).
+
+**Azure:** the key ring is wrapped by one Key Vault key
+(`DataProtection:KeyVaultKeyId`) through the Container App's system-assigned identity (AD-17,
+audit S2). The role assignment ("Key Vault Crypto Service Encryption User") is scoped to the key,
+and the first Key Vault call only happens when a new ring key is created, so a role that has not
+propagated does not show up at deploy time.
+
+**Why it bites:** the Key Vault branch cannot run anywhere but Azure, so CI proves only the selection
+and the encryptor type; a missing or mis-scoped role (or the ten-minute role propagation delay)
+shows up as `Forbidden` from Key Vault at the first key creation, after the revoke, not at deploy.
+It is also why the revoke is a separate, deliberate step after the pre-cutover revision is gone.
+
+**What this means for a story:** a change to how Data Protection keys are protected needs a live
+sign-in on Azure afterwards, plus a counts-only check that the newest `DataProtectionKeys` row is
+encrypted (`infra/README.md`, "Data Protection key encryption"). Never print key XML. A new test
+host that runs outside `Development` must set `DataProtection:AllowUnprotectedKeys=true`.
+
+---
+
 ## Quick-reference table
 
 | # | Delta | Local/self-host behavior | Azure behavior | Governing story |
@@ -331,4 +357,5 @@ database users.
 | D3 | ACR credential timing | No registry/identity involved | Fresh-deploy `AcrPull` role assignment race if `registries` is declared too early | 1.2 (bootstrap), 1.3 (re-added) |
 | D4 | Empty-secret ACA validation | Blank env var is fine | ACA rejects a `secrets` entry with an empty value | 1.2 |
 | D6 | Azure SQL Entra-only auth redeploy lockout | No Entra concept; `sa`/password permanently | A from-scratch SQL Server redeploy comes up Entra-only with zero contained DB users unless the manual grant script is re-run first | 1.11 |
+| D7 | Data Protection key protector | No Key Vault; `Development` is unprotected by design, `Production` needs a certificate or the explicit opt-out or refuses to start | Key Vault key via the Container App's managed identity; a role that has not propagated surfaces as `Forbidden` at the first key creation, not at deploy | 11.6 |
 | D5 | Custom domain / managed cert DNS timing | No domain-binding concept | Managed cert issuance requires externally-verified DNS (non-Azure provider) and the hostname pre-registered on the app (two-phase deploy); CNAME must be direct, CAA must allow DigiCert | N/A (caught pre-CI, see below) |
