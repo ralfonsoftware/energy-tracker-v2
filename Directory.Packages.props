@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Lets a PackageVersion below override the version of a package that only arrives transitively.
+         Used for the two audit pins at the end of this file. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -68,6 +71,15 @@
          injection) — no local override needed. -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
+
+    <!-- NuGet Audit gate (Directory.Build.props): these two arrive only transitively and the versions
+         they came with are flagged (System.Security.Cryptography.Pkcs 9.0.11 via Microsoft.Data.SqlClient
+         6.1.6, Pkcs/Xml 10.0.12 via the ASP.NET Core packages): GHSA-2fmv-rv2c-59x7, GHSA-846f-f764-76mx,
+         GHSA-7hqp-7c5m-4vq6, GHSA-c399-9853-6jmj, GHSA-r955-8q5j-3h83. 10.0.13 is the patched release.
+         Transitive pinning (above) applies it everywhere. Remove these pins once the packages that
+         bring them in ask for a patched version themselves. Never suppress the advisories. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
   </ItemGroup>
 
 </Project>
