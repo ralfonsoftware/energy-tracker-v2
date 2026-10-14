@@ -21,7 +21,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **Key dependencies:**
 - Persistence: Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (Postgres 17 self-host) / Microsoft.EntityFrameworkCore.SqlServer 10.0.12 (Azure SQL Basic DTU) — dual-provider, config-selected.
-- Auth: Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.12 + cookie auth, Microsoft.AspNetCore.DataProtection.EntityFrameworkCore 10.0.12.
+- Auth: Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.12 + cookie auth, Microsoft.AspNetCore.DataProtection.EntityFrameworkCore 10.0.12, Azure.Extensions.AspNetCore.DataProtection.Keys 1.6.4 + Azure.Identity 1.21.0 (both pinned explicitly in `Directory.Packages.props` and referenced by the Api project; Key Vault protector for the Data Protection key ring, AD-17; `Azure.Identity` also arrives transitively via `Microsoft.Data.SqlClient`).
 - Observability: Serilog.AspNetCore 10.0.0, OpenTelemetry.* 1.19.x (`OpenTelemetry.Instrumentation.EntityFrameworkCore` is pinned to `1.19.1-beta.1` deliberately — no stable release exists upstream).
 - .NET testing: xunit.v3.mtp-v2 3.2.2, Shouldly 4.3.0, NSubstitute 6.2.0, Testcontainers.PostgreSql/MsSql 4.15.0, Microsoft.AspNetCore.Mvc.Testing 10.0.12.
 - Frontend: i18next 26.x + react-i18next 17.x, class-variance-authority, tailwind-merge, lucide-react.
@@ -64,7 +64,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Main Meter is sole authoritative total (AD-14):** no domain code, service, DTO, or frontend view may sum `SmartPlugReading`/`Event` data into a figure compared against or rendered alongside the Main Meter total. No `Residual` type/field/DTO/view anywhere.
 - **No hardcoded household-specific values (AD-15):** every household-specific value (baselines, thresholds, currency, locale) is a `Household`-scoped config row, never a literal in code.
 - **Idempotent Meter Reading writes (AD-16):** creation carries a client-generated idempotency key (GUID) set before any network attempt; the API upserts by that key.
-- **Auth (AD-17):** cookie auth chained to OIDC — the SPA never reads or stores a token itself. Data Protection keys persist via `PersistKeysToDbContext`, never the in-memory default (doesn't survive scale-to-zero).
+- **Auth (AD-17):** cookie auth chained to OIDC — the SPA never reads or stores a token itself. Data Protection keys persist via `PersistKeysToDbContext`, never the in-memory default (doesn't survive scale-to-zero). The key ring must be encrypted at rest: Azure Key Vault (`DataProtection:KeyVaultKeyId`, Container App managed identity) on Azure, a certificate (`DataProtection:CertificateBase64`) or an explicit opt-out (`DataProtection:AllowUnprotectedKeys=true`) elsewhere, chosen once by `DataProtectionKeyProtection` at the composition root. **Fail closed:** outside Development with none of the three the app refuses to start; any new test host that runs outside Development sets the opt-out. Key Vault wins over a certificate; Development with nothing configured stays unprotected and warns.
 - **Single deployment artifact (AD-13):** the `Api` project serves the built SPA from `wwwroot/` — don't introduce a separate static-hosting deployment path.
 - **Operational baseline (AD-19):** `/health` is liveness-only (no DB check). Logging is structured (Serilog) to stdout/stderr only, no environment branching in logging code. Secrets only via env vars/Container Apps secrets/`.env` — never committed or baked into the image.
 
@@ -179,6 +179,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Every route requires authentication except the OIDC callback — don't add an unauthenticated endpoint without an explicit, reviewed reason.
 - Never store an auth token client-side (`localStorage`/`sessionStorage`/JS-readable cookie) — enforced by `FrontendDoesNotStoreAuthTokensTests`. The sole, allowlisted exception is the per-device theme preference (`'light'`/`'dark'`, FR-35) in `web/src/lib/color-scheme.ts` (+ its test); `web/index.html`'s inline script isn't scanned (guard covers only `.ts`/`.tsx`). Session state lives only in the httpOnly cookie.
 - Secrets (DB connection string, OIDC client secret, AI API key) come only from env vars/Container Apps secrets/`.env` — never committed, never baked into the image.
+- Never log, print or paste Data Protection key XML (`DataProtectionKeys.Xml`); check key rows with counts only. Outside Development or the explicit opt-out no row may contain `<masterKey` (revoked pre-cutover rows excepted until deleted). Key Vault role: Key Vault Crypto Service Encryption User on the key only, never the vault (guarded by `DataProtectionKeyVaultInfraTests`).
 
 **Performance/operational gotchas:**
 - `/health` must stay liveness-only (no DB/dependency check) — adding one risks a restart loop when Postgres/Azure SQL is briefly slow, since Container Apps' probe would fail and cycle the container.
@@ -203,4 +204,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-09-21
+Last Updated: 2026-10-14 (Story 11.6: Data Protection key encryption)

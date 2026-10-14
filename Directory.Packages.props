@@ -43,6 +43,13 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
 
+    <!-- AD-17 (amendment 2026-10-10, audit S2): wraps the Data Protection key ring with a Key Vault
+         key. Azure.Identity is also a transitive dependency of Microsoft.Data.SqlClient; it is pinned
+         explicitly here and referenced by the Api project so its version is a decision, not whatever
+         SqlClient happens to ask for. -->
+    <PackageVersion Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.4" />
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
+
     <!-- AD-6 async job queue cloud adapter (AzureStorageQueueJobQueue) -->
     <PackageVersion Include="Azure.Storage.Queues" Version="12.28.1" />
 

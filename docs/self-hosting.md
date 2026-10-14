@@ -66,6 +66,60 @@ configuration needed, informational only.)
 repository or in the built container image contains real secrets; every
 credential is supplied at runtime through `.env`.
 
+### Data Protection keys (required decision since this release)
+
+Energy Tracker signs and encrypts your session cookie with a set of keys
+that it stores in its own database (so you stay signed in across restarts).
+If those keys sit in the database in the clear, anyone who can read the
+database or a backup can forge a login for any member. So **outside
+Development the app refuses to start unless you choose one of two options**
+in `.env`:
+
+**Option 1 — a certificate (recommended).** The keys are then stored
+encrypted. Create a throw-away self-signed certificate once (the key pair is
+only used to encrypt the keys; it does not need to be trusted by anything):
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem \
+  -days 3650 -subj "/CN=energy-tracker-data-protection"
+openssl pkcs12 -export -inkey key.pem -in cert.pem -out dp.pfx -passout pass:<choose-a-password>
+base64 -i dp.pfx | tr -d '\n'      # macOS;  on Linux: base64 -w0 dp.pfx
+rm key.pem cert.pem                  # keep dp.pfx somewhere safe
+```
+
+Put the printed base64 text and your password into `.env`:
+
+```
+DATA_PROTECTION_CERTIFICATE_BASE64=<the base64 text>
+DATA_PROTECTION_CERTIFICATE_PASSWORD=<choose-a-password>
+```
+
+Keep `dp.pfx` and the password safe. If you lose them, everyone just signs in
+again; no data is lost. (Replacing the certificate later does the same.)
+
+**Option 2 — deliberately store the keys unprotected.** Only reasonable for a
+single-user box whose database and backups nobody else can read. Set this
+line in `.env` (the value must be exactly `true`; anything else still refuses
+to start):
+
+```
+DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS=true
+```
+
+If both are set, the certificate is used and the opt-out is ignored.
+
+**Upgrading from an earlier release.** This is a breaking change. An install
+that has neither option set no longer starts; the API container exits with an
+error that names `DataProtection:CertificateBase64` and
+`DataProtection:AllowUnprotectedKeys` (`docker compose logs api`). Add one of
+the two options above and run `docker compose up -d` again. An install that
+already used a certificate needs no change. Switching to a certificate
+leaves the keys stored earlier unencrypted in the database until they expire
+(Data Protection rotates keys about every 90 days). Retiring them sooner is
+optional: delete the rows from the `DataProtectionKeys` table and restart the
+`api` container; that signs every member out once. Old database backups keep
+the old keys until they are deleted.
+
 ## 3. Start the stack
 
 ```bash
