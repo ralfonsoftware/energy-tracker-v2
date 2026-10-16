@@ -1,8 +1,8 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
-using System.Security.Cryptography.X509Certificates;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Azure.Storage.Queues;
+using EnergyTracker.Api;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
@@ -277,22 +277,13 @@ builder.Services.AddProblemDetails();
 var dataProtectionBuilder = builder.Services.AddDataProtection()
     .PersistKeysToDbContext<EnergyTrackerDbContext>();
 
-// Without an encryptor, ASP.NET Core has no DPAPI to fall back on (Linux/Container Apps) and
-// persists key XML in plaintext in the same DataProtectionKeys table as Households/
-// HouseholdMembers — anyone with DB read access or a backup could forge a valid session cookie
-// for any household member. Encrypt with a PKCS12 certificate when one is configured (base64,
-// same env-var-secret pattern as Oidc:ClientSecret — no volume mount needed); the cert itself
-// is an external dependency this patch cannot self-provision (same category as the OIDC
-// provider/GitHub secret gaps already flagged), so this degrades to the previous
-// documented-risk behavior when unset rather than failing startup.
-var dataProtectionCertificateBase64 = builder.Configuration["DataProtection:CertificateBase64"] ?? string.Empty;
-var dataProtectionCertificatePassword = builder.Configuration["DataProtection:CertificatePassword"] ?? string.Empty;
-if (!string.IsNullOrEmpty(dataProtectionCertificateBase64))
-{
-    var certificateBytes = Convert.FromBase64String(dataProtectionCertificateBase64);
-    dataProtectionBuilder.ProtectKeysWithCertificate(
-        X509CertificateLoader.LoadPkcs12(certificateBytes, dataProtectionCertificatePassword));
-}
+// AD-17 (audit S2): the key ring is protected by exactly one of Azure Key Vault, a certificate or an
+// explicit opt-out, chosen from DataProtection:* here, once. Outside Development the app refuses to
+// start when none is configured (fail closed). Without a protector ASP.NET Core has no DPAPI to fall
+// back on (Linux/Container Apps) and would persist the key XML in plaintext in the same database as
+// the household data, so anyone with DB read access or a backup could forge a session cookie.
+var dataProtectionKeyProtection = DataProtectionKeyProtection.Configure(
+    dataProtectionBuilder, builder.Configuration, builder.Environment);
 
 builder.Services.AddScoped<IHouseholdRepository, HouseholdRepository>();
 builder.Services.AddScoped<ICurrentHouseholdAccessor, CurrentHouseholdAccessor>();
@@ -467,6 +458,10 @@ switch (jobQueueProvider)
 }
 
 var app = builder.Build();
+
+// Logs the active Data Protection protector and, only when DataProtection:RevokeKeysCreatedBeforeUtc is
+// set, runs the one-time key revocation (AD-17 cutover). Must run before the first request.
+DataProtectionKeyProtection.ApplyStartupActions(app.Services, dataProtectionKeyProtection, app.Logger);
 
 // Must run before anything reads Request.Scheme/Host — Azure Container Apps (this story's own
 // deploy target, infra/modules/container-app.bicep) terminates TLS at its ingress and forwards

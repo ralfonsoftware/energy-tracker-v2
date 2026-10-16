@@ -25,6 +25,7 @@ export Otel__Exporter="${OTEL_EXPORTER:-Otel}"
 export Otel__OtlpEndpoint="${OTEL_OTLP_ENDPOINT:-}"
 export DataProtection__CertificateBase64="${DATA_PROTECTION_CERTIFICATE_BASE64:-}"
 export DataProtection__CertificatePassword="${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}"
+export DataProtection__AllowUnprotectedKeys="${DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS:-}"
 export Ai__ApiKey="${AI_API_KEY:-}"
 
 # Program.cs's fallback connection string (no ConnectionStrings:Default set) hardcodes

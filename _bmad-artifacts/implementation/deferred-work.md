@@ -455,3 +455,10 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: Story 11.5 R2.2 (2026-10-11)
 
 - [open] `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App image" step but never passes `placeholderImage="$CURRENT_IMAGE"` to `az deployment group what-if` (as `infra-deploy.yml` does), so every PR what-if shows the Container App image changing to the quickstart placeholder. Noise only; passing the parameter would make the diff show real changes only. [.github/workflows/pr-review.yml]
+
+## Deferred from: dev-story of story-11-6-data-protection-key-encryption (2026-10-14)
+
+- [open] The NuGet Audit gate failed `dotnet restore` on `main` itself (transitive `System.Security.Cryptography.Pkcs` 9.0.11 via `Microsoft.Data.SqlClient` 6.1.6, Pkcs/Xml 10.0.12 via the ASP.NET Core packages) before Story 11.6 touched anything. Worked around in PR #126 with `CentralPackageTransitivePinningEnabled` and pins to 10.0.13. Remove the two pins once the parent packages ask for patched versions themselves, and look at why Dependabot did not raise this before `main` went red. [Directory.Packages.props]
+- [open] Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover (Ralf's call, Q2/R4). Removes live plaintext key material; backups keep it until they expire. [infra/README.md]
+- [open] Key Vault diagnostic settings to Log Analytics (audit trail of wrap/unwrap) were left out on purpose: a second ingestion path against the shared daily cap (AD-19 OTel note). Revisit if an audit trail of key use is wanted. [infra/modules/key-vault.bicep]
+- [open] `Azure.Identity` is now an explicit 1.21.0 pin while `Microsoft.Data.SqlClient` 6.1.6 asks for 1.17.1; a later SqlClient major may need the pin re-checked (AD-21/AD-23 Entra `Active Directory Default` migration path). [Directory.Packages.props]

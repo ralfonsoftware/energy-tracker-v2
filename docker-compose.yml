@@ -12,6 +12,10 @@ services:
       Oidc__ClientSecret: "${OIDC_CLIENT_SECRET:-}"
       DataProtection__CertificateBase64: "${DATA_PROTECTION_CERTIFICATE_BASE64:-}"
       DataProtection__CertificatePassword: "${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}"
+      # Explicit opt-out (Story 11.6, AD-17): only the exact value "true" lets the API start without a
+      # certificate and store its Data Protection keys unprotected. Blank (the default) means "refuse
+      # to start without a certificate". See docs/self-hosting.md.
+      DataProtection__AllowUnprotectedKeys: "${DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS:-}"
       Ai__ApiKey: "${AI_API_KEY:-}"
       # AD-19 OTel extension — local dev exports to the aspire-dashboard container below via OTLP.
       Otel__Exporter: Otlp

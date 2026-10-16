@@ -74,6 +74,13 @@ foreground terminal or a debugger.
 This gives you hot reload on both sides and full debugger support, which the
 single Docker image build (used for self-hosting) doesn't.
 
+> **A full `docker compose up` runs the API as Production.** Unlike `dotnet run` /
+> `scripts/run-api.sh` (Development, which starts with nothing configured), the container
+> refuses to start unless `.env` sets a Data Protection certificate or the explicit opt-out
+> `DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS=true` (see
+> [self-hosting.md](self-hosting.md), "Data Protection keys"). The Postgres-only command
+> below is unaffected.
+
 ### 1. Start Postgres only
 
 ```bash
