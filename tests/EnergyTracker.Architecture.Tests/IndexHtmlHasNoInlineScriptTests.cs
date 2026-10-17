@@ -46,6 +46,8 @@ public partial class IndexHtmlHasNoInlineScriptTests
         var headEnd = html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
         var themeColorMeta = html.IndexOf("name=\"theme-color\"", StringComparison.Ordinal);
         var moduleScript = html.IndexOf("type=\"module\"", StringComparison.Ordinal);
+        headEnd.ShouldBeGreaterThanOrEqualTo(0, "web/index.html must have a </head>.");
+        themeColorMeta.ShouldBeGreaterThanOrEqualTo(0, "web/index.html must have the theme-color meta that theme-init.js rewrites.");
         themeInit.Index.ShouldBeLessThan(headEnd, "theme-init.js must be loaded in <head>.");
         themeInit.Index.ShouldBeGreaterThan(themeColorMeta, "theme-init.js reads the theme-color meta, so it must come after it.");
         themeInit.Index.ShouldBeLessThan(moduleScript, "theme-init.js must run before the app module script.");

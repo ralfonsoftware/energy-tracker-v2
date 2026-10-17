@@ -18,6 +18,11 @@ public class SecurityHeadersTests : IDisposable
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; " +
         "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
+    // These hosts never need a database. Without a connection string Program.cs falls back to
+    // localhost:5432 with the example password, and the host's startup job sweep would then touch a
+    // developer's real local Postgres if one is running, so point every host at an unreachable address.
+    private const string UnreachableDatabase = "Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=1";
+
     private readonly string _webRoot = Directory.CreateTempSubdirectory("energy-tracker-webroot-").FullName;
 
     public SecurityHeadersTests()
@@ -33,6 +38,8 @@ public class SecurityHeadersTests : IDisposable
         {
             builder.UseEnvironment(Environments.Production);
             builder.UseSetting("DataProtection:AllowUnprotectedKeys", "true");
+            builder.UseSetting("Database:Provider", "Postgres");
+            builder.UseSetting("ConnectionStrings:Default", UnreachableDatabase);
             builder.UseWebRoot(_webRoot);
             configure?.Invoke(builder);
         });
@@ -92,8 +99,6 @@ public class SecurityHeadersTests : IDisposable
         // reset the response. Headers set before next() would be lost there.
         await using var factory = ProductionFactory(builder =>
         {
-            builder.UseSetting("Database:Provider", "Postgres");
-            builder.UseSetting("ConnectionStrings:Default", "Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=1");
             builder.ConfigureTestServices(services => services
                 .AddAuthentication(TestAuthHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { }));
@@ -124,7 +129,12 @@ public class SecurityHeadersTests : IDisposable
     [Fact]
     public async Task Development_responses_carry_none_of_the_hardening_headers()
     {
-        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseWebRoot(_webRoot));
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Database:Provider", "Postgres");
+            builder.UseSetting("ConnectionStrings:Default", UnreachableDatabase);
+            builder.UseWebRoot(_webRoot);
+        });
         using var https = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://energytracker.example") });
 
         foreach (var path in new[] { "/health", "/api/session", "/theme-init.js" })
