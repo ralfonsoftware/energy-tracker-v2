@@ -480,3 +480,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] No server-side revocation of a stolen cookie before the cap (AD-17 accepts this). Removing a member is Story 11.9. [src/EnergyTracker.Api/SessionLifetime.cs]
 - [open] A request whose body fails minimal-API binding answers the binding's own 400 before the X-Requested-With filter runs (binding precedes endpoint filters), so a header-less malformed request shows the binding error, not the filter's. No handler logic runs either way; accepted (RequestedWithFilter remarks). [src/EnergyTracker.Api/RequestedWithFilter.cs]
 - [open] A tab that was open across the 11.8 deploy still runs the old bundle: its next mutation gets a 400 until the page is reloaded, and its logout (a navigation to the removed `GET /logout`) lands on the SPA instead of signing out. Reloading fixes both. Single-user app; not mitigated. [web/src/lib/api-client.ts]
+
+## Deferred from: code review of 11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
+
+- [open] `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched (the OIDC handler throws, `UseExceptionHandler` drops the cookie deletion), so during a provider outage a member cannot sign out locally. Pre-existing (the old `GET /logout` failed the same way); consider catching it and degrading to a local sign-out like the "no `end_session_endpoint`" path. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
+- [open] After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Version`, so its first toggle PUT answers 409 and only the refetch-and-retry works (seen in the 11.8 live rehearsal). Pre-existing. [web/src/components/ai-plausibility/ai-plausibility-form.tsx]
+

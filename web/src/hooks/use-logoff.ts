@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiFetch, toApiError } from '@/lib/api-client'
 import { checkPendingReadingsBeforeLogoff } from '@/lib/logoff'
 
@@ -26,7 +26,9 @@ export interface UseLogoffResult {
 
 // The server's answer is trusted, but the SPA still only follows a same-origin path or an http(s) URL. A
 // leading `//` is protocol-relative and would resolve to another origin, so it falls back to "/" like
-// javascript:, data: and anything unparseable.
+// javascript:, data: and anything unparseable. A value that starts with `/` must also *resolve* to this origin:
+// the URL parser strips tabs and newlines, so "/<tab>/evil.example" becomes "//evil.example" after the prefix
+// checks above have passed.
 function toSafeNavigationTarget(value: unknown): string {
   if (typeof value !== 'string' || value === '' || value.startsWith('//') || value.startsWith('/\\')) {
     return '/'
@@ -37,7 +39,10 @@ function toSafeNavigationTarget(value: unknown): string {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return '/'
     }
-    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : url.href
+    if (url.origin === window.location.origin) {
+      return url.pathname + url.search + url.hash
+    }
+    return value.startsWith('/') ? '/' : url.href
   } catch {
     return '/'
   }
@@ -54,6 +59,18 @@ export function useLogoff(householdId: string, supportsFederatedLogout: boolean)
   const [pendingReadingCount, setPendingReadingCount] = useState(0)
 
   const logoffChecking = checking || navigating
+
+  // Back from the provider's confirmation page can restore this page from the back/forward cache with
+  // `navigating` still true, which would leave the dialog's buttons disabled until a reload.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setNavigating(false)
+      }
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
 
   const openLogoffDialog = () => {
     setLogoffError(false)

@@ -82,6 +82,9 @@ describe('useLogoff', () => {
     ['a javascript: URL', 'javascript:alert(1)'],
     ['a protocol-relative URL', '//evil.example/x'],
     ['a data: URL', 'data:text/html,<script>alert(1)</script>'],
+    ['a tab-smuggled protocol-relative URL', '/\t/evil.example'],
+    ['a newline-smuggled protocol-relative URL', '/\n/evil.example'],
+    ['a backslash URL', '/\\evil.example'],
     ['an empty string', ''],
     ['not a string', 42],
     ['a missing value', undefined],
@@ -219,6 +222,25 @@ describe('useLogoff', () => {
     ok = true
     await act(() => result.current.navigateToLogout())
     expect(result.current.logoffError).toBe(false)
+  })
+
+  it('becomes usable again when the browser restores the page from the back/forward cache after a successful POST', async () => {
+    stubFetch(() => Promise.resolve(jsonResponse({ redirectUrl: 'https://tenant.example/oidc/logout?state=abc' })))
+    const { result } = renderHook(() => useLogoff(householdId, true))
+    act(() => result.current.openLogoffDialog())
+    await act(() => result.current.handleConfirmLogoff())
+    expect(result.current.logoffChecking).toBe(true)
+
+    // A normal pageshow (not from the cache) must not reset it: the browser is still on its way out.
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: false }))
+    })
+    expect(result.current.logoffChecking).toBe(true)
+
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }))
+    })
+    expect(result.current.logoffChecking).toBe(false)
   })
 
   it('closes back to the resting state', () => {
