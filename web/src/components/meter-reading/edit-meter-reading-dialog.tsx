@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { UnitInput } from '@/components/ui/unit-input'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
-import { ApiError, updateMeterReading, type MeterReadingHistoryItemDto } from '@/lib/meter-reading-history-api'
+import { updateMeterReading, type MeterReadingHistoryItemDto } from '@/lib/meter-reading-history-api'
+import { ApiError } from '@/lib/api-client'
 
 interface EditMeterReadingDialogProps {
   reading: MeterReadingHistoryItemDto

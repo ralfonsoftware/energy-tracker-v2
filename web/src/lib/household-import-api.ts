@@ -1,15 +1,4 @@
-// Same ApiError/toApiError shape as data-export-panel.tsx/smart-plug-import-api.ts — copied per
-// module, not shared, per this repo's own established convention.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
+import { ApiError, apiFetch, toApiError } from '@/lib/api-client'
 
 // UX-DR14's "Import data fails validation" state: distinct from ApiError so the panel can render
 // the full list of what failed, not just a single detail string.
@@ -52,9 +41,8 @@ export async function uploadHouseholdImportFile(file: File, signal?: AbortSignal
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch('/api/household-import', {
+  const response = await apiFetch('/api/household-import', {
     method: 'POST',
-    credentials: 'include',
     body: formData,
     signal,
   })
@@ -84,9 +72,8 @@ export async function uploadHouseholdImportFile(file: File, signal?: AbortSignal
 // POST /api/household-import/{token}/confirm: the explicit "replace all data" confirmation (AC
 // #4) — enqueues the actual restore as an async background job and returns immediately.
 export async function confirmHouseholdImport(token: string, signal?: AbortSignal): Promise<string> {
-  const response = await fetch(`/api/household-import/${token}/confirm`, {
+  const response = await apiFetch(`/api/household-import/${token}/confirm`, {
     method: 'POST',
-    credentials: 'include',
     signal,
   })
 
@@ -98,11 +85,3 @@ export async function confirmHouseholdImport(token: string, signal?: AbortSignal
   return body.jobId
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}

@@ -22,16 +22,35 @@ public static class AuthEndpoints
             // AD-27: per client IP, the one unauthenticated throttled route (audit S3).
             .RequireRateLimiting(RateLimitPolicies.Login);
 
-        // Signs out the cookie scheme, plus the OIDC scheme (provider-side end-session, if
-        // supported) only when it's actually registered — /logout is reachable by anyone,
-        // unauthenticated, at any time, unlike /login, so it must not throw when OIDC is still
-        // unconfigured (the expected state before a self-hoster sets up a real provider).
-        app.MapGet("/logout", () =>
-            Results.SignOut(
-                new AuthenticationProperties { RedirectUri = "/" },
-                oidcConfigured
-                    ? [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]
-                    : [CookieAuthenticationDefaults.AuthenticationScheme]));
+        // Story 11.8 (AD-27, audit S9): a POST that needs X-Requested-With, so no other site can log a member
+        // out with an <img src="/logout">. Answers 200 JSON { redirectUrl } rather than a 302: a fetch cannot
+        // follow the provider's cross-origin redirect, and a form POST would hit the CSP's form-action. The SPA
+        // navigates to redirectUrl. Signs out the cookie scheme, plus the OIDC scheme (provider-side end-session,
+        // if supported) only when it's actually registered — /logout is reachable by anyone, unauthenticated,
+        // at any time, unlike /login, so it must not throw when OIDC is still unconfigured (the expected state
+        // before a self-hoster sets up a real provider). It stays outside /api, so it needs the filter explicitly.
+        app.MapPost("/logout", async (HttpContext http) =>
+        {
+            // First, so its Set-Cookie is on the response before anything else touches it. No RedirectUri:
+            // the cookie handler must not write a redirect of its own.
+            await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var redirectUrl = "/";
+            if (oidcConfigured)
+            {
+                // The OIDC handler runs FederatedLogout.Handle (Program.cs), which stores the end-session URL
+                // in Items instead of writing a redirect.
+                await http.SignOutAsync(
+                    OpenIdConnectDefaults.AuthenticationScheme,
+                    new AuthenticationProperties { RedirectUri = "/" });
+                if (http.Items[FederatedLogout.RedirectUrlKey] is string url)
+                {
+                    redirectUrl = url;
+                }
+            }
+
+            return Results.Ok(new LogoutResponse(redirectUrl));
+        }).RequireRequestedWith();
 
         return app;
     }
@@ -54,3 +73,5 @@ public static class AuthEndpoints
         !returnUrl.Contains("://", StringComparison.Ordinal) &&
         !returnUrl.Any(char.IsControl);
 }
+
+public record LogoutResponse(string RedirectUrl);

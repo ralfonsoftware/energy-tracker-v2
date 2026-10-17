@@ -3,7 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StatusDetailDialog } from './status-detail-dialog'
-import { ApiError, type StatusDetailDto } from '@/lib/status-api'
+import { type StatusDetailDto } from '@/lib/status-api'
+import { ApiError } from '@/lib/api-client'
 
 function detailDto(overrides: Partial<StatusDetailDto> = {}): StatusDetailDto {
   return {

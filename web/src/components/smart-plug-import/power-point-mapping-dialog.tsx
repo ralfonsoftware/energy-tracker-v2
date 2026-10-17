@@ -5,15 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
-import {
-  ApiError,
-  createPowerPoint,
-  fetchPowerPoints,
-  fetchRooms,
-  mapSmartPlugImportToPowerPoint,
-  type PowerPointDto,
-  type RoomDto,
-} from '@/lib/smart-plug-import-api'
+import { createPowerPoint, fetchPowerPoints, fetchRooms, mapSmartPlugImportToPowerPoint, type PowerPointDto, type RoomDto } from '@/lib/smart-plug-import-api'
+import { ApiError } from '@/lib/api-client'
 
 // Mockup reference: key-smart-plug-import.html State 3 (lines 409-449) — title, body copy,
 // primary "Create Power Point" action, "or map to an existing one" divider, tappable list of

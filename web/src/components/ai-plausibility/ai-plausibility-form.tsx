@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { ApiError, apiFetch, toApiError } from '@/lib/api-client'
 
 interface AiPlausibilitySettings {
   enabled: boolean
@@ -14,28 +15,6 @@ interface AiPlausibilitySettings {
 
 interface AiPlausibilityFormProps {
   householdId: string
-}
-
-// Same ApiError/toApiError shape as yearly-baseline-form.tsx — copied per component, not shared,
-// per this repo's own established convention.
-class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
 }
 
 // AC #5: always visible regardless of Enabled's value or whether a backend is configured — this
@@ -54,7 +33,7 @@ export function AiPlausibilityForm({ householdId }: AiPlausibilityFormProps) {
     setLoading(true)
     setLoadError(false)
 
-    fetch(`/api/households/${householdId}/ai-plausibility`, { credentials: 'include' })
+    apiFetch(`/api/households/${householdId}/ai-plausibility`)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(`Unexpected /api/households/${householdId}/ai-plausibility response: ${response.status}`)
@@ -92,9 +71,8 @@ export function AiPlausibilityForm({ householdId }: AiPlausibilityFormProps) {
     setError(null)
 
     try {
-      const response = await fetch(`/api/households/${householdId}/ai-plausibility`, {
+      const response = await apiFetch(`/api/households/${householdId}/ai-plausibility`, {
         method: 'PUT',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: nextEnabled, version: settings.version }),
       })
@@ -111,7 +89,7 @@ export function AiPlausibilityForm({ householdId }: AiPlausibilityFormProps) {
         // YearlyBaselineForm's own 409 handling.
         let refetched = false
         try {
-          const refetchResponse = await fetch(`/api/households/${householdId}/ai-plausibility`, { credentials: 'include' })
+          const refetchResponse = await apiFetch(`/api/households/${householdId}/ai-plausibility`)
           if (refetchResponse.ok) {
             setSettings((await refetchResponse.json()) as AiPlausibilitySettings)
             refetched = true

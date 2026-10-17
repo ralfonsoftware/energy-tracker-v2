@@ -1,13 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  ApiError,
-  createPowerPoint,
-  fetchJobStatus,
-  fetchPowerPoints,
-  fetchRooms,
-  mapSmartPlugImportToPowerPoint,
-  uploadSmartPlugFile,
-} from './smart-plug-import-api'
+import { createPowerPoint, fetchJobStatus, fetchPowerPoints, fetchRooms, mapSmartPlugImportToPowerPoint, uploadSmartPlugFile } from './smart-plug-import-api'
+import { ApiError } from '@/lib/api-client'
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
@@ -29,6 +22,9 @@ describe('uploadSmartPlugFile', () => {
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('/api/smart-plug-imports')
     expect(init).toMatchObject({ method: 'POST', credentials: 'include' })
+    expect(new Headers(init?.headers).get('X-Requested-With')).toBe('fetch')
+    // multipart: the browser supplies the boundary, so no Content-Type is set
+    expect(new Headers(init?.headers).has('Content-Type')).toBe(false)
     expect(init?.body).toBeInstanceOf(FormData)
     expect((init!.body as FormData).get('file')).toBe(file)
   })
@@ -135,6 +131,8 @@ describe('mapSmartPlugImportToPowerPoint', () => {
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('/api/smart-plug-imports/import-1/power-point-mapping')
     expect(init).toMatchObject({ method: 'POST', credentials: 'include' })
+    expect(new Headers(init?.headers).get('X-Requested-With')).toBe('fetch')
+    expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
     expect(JSON.parse(init!.body as string)).toEqual({ powerPointId: 'pp-1' })
   })
 

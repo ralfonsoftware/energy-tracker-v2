@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { apiFetch } from '@/lib/api-client'
 
 // Launch Locales only (AD-15/NFR5) — matches CreateHousehold.SupportedLocales server-side.
 const SUPPORTED_LOCALES = ['de-DE', 'en-US'] as const
@@ -57,9 +58,8 @@ export function HouseholdCreationForm({ onCreated }: HouseholdCreationFormProps)
     setError(null)
 
     try {
-      const response = await fetch('/api/households', {
+      const response = await apiFetch('/api/households', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locale, currency }),
       })

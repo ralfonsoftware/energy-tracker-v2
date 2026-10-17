@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -171,6 +172,8 @@ var oidcClientId = builder.Configuration["Oidc:ClientId"] ?? string.Empty;
 var oidcClientSecret = builder.Configuration["Oidc:ClientSecret"] ?? string.Empty;
 
 builder.Services.AddHttpContextAccessor();
+// Story 11.8: the clock comes from DI so the session cap can be tested; tests may substitute it.
+builder.Services.TryAddSingleton(TimeProvider.System);
 
 var authenticationBuilder = builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -188,6 +191,16 @@ var authenticationBuilder = builder.Services
         // dangles at the framework default (/Account/Login, a route that doesn't exist here) for
         // any future non-/api route that ends up needing RequireAuthorization().
         options.LoginPath = "/login";
+        // Story 11.8 (AD-17, audit S13): the 14-day sliding window is written down (it is also the framework
+        // default) and a 90-day absolute cap is enforced from the issued-at stamp (SessionLifetime).
+        options.ExpireTimeSpan = SessionLifetime.SlidingWindow;
+        options.SlidingExpiration = true;
+        options.Events.OnSigningIn = context =>
+        {
+            SessionLifetime.StampIssuedAt(context);
+            return Task.CompletedTask;
+        };
+        options.Events.OnValidatePrincipal = SessionLifetime.ValidateAsync;
         // The cookie handler's default challenge behavior is a 302 to LoginPath — fine for a
         // full-page navigation, but AC #5 requires unauthenticated /api/** calls to 401 so the
         // SPA can detect them via fetch and navigate to /login itself, not follow a redirect.
@@ -263,6 +276,8 @@ if (oidcConfigured)
             OnRedirectToIdentityProviderForSignOut = context =>
             {
                 context.ProtocolMessage.ClientId = oidcClientId;
+                // Story 11.8: hand the end-session URL to POST /logout instead of writing a 302.
+                FederatedLogout.Handle(context);
                 return Task.CompletedTask;
             },
         };
@@ -546,7 +561,9 @@ app.MapAuthEndpoints(oidcConfigured);
 // Every route under /api requires an authenticated principal (AC #5). /health and static
 // SPA asset serving stay outside this group — the browser must be able to load the app shell
 // itself before any login can happen, and /health must never require auth (AD-19).
-var api = app.MapGroup("/api").RequireAuthorization();
+// Story 11.8 (AD-27, audit S9): every POST/PUT/PATCH/DELETE under /api needs X-Requested-With, via one
+// endpoint filter on the group. RequestedWithRoutesTests fails for a mutation route that lacks it.
+var api = app.MapGroup("/api").RequireAuthorization().RequireRequestedWith();
 api.MapSessionEndpoints();
 api.MapHouseholdEndpoints();
 api.MapHouseholdInviteEndpoints();

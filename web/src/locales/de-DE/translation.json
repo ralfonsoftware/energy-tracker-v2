@@ -60,7 +60,8 @@
       "queueWarningProceed": "Trotzdem abmelden",
       "federatedWarningTitle": "Du bist möglicherweise noch anderswo angemeldet",
       "federatedWarningDescription": "Dieser Identitätsanbieter unterstützt keine geräteübergreifende Abmeldung. Energy Tracker meldet dich hier ab, du bist aber möglicherweise weiterhin beim Identitätsanbieter selbst angemeldet.",
-      "federatedWarningProceed": "Weiter"
+      "federatedWarningProceed": "Weiter",
+      "error": "Das Abmelden hat nicht geklappt. Prüfe deine Verbindung und versuche es erneut."
     },
     "aiPlausibility": {
       "heading": "KI-Plausibilitätsprüfung",

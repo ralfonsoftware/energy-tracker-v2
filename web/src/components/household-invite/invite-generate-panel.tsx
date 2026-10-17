@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { apiFetch } from '@/lib/api-client'
 
 interface HouseholdInviteResponse {
   token: string
@@ -29,9 +30,8 @@ export function InviteGeneratePanel({ bare = false }: InviteGeneratePanelProps) 
     setError(null)
 
     try {
-      const response = await fetch('/api/household-invites', {
+      const response = await apiFetch('/api/household-invites', {
         method: 'POST',
-        credentials: 'include',
       })
 
       if (!response.ok) {

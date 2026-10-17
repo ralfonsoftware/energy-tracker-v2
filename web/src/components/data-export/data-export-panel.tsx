@@ -2,28 +2,7 @@ import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/glass-card'
-
-// Same ApiError/toApiError shape as ai-plausibility-form.tsx/yearly-baseline-form.tsx — copied per
-// component, not shared, per this repo's own established convention.
-class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
+import { ApiError, apiFetch, toApiError } from '@/lib/api-client'
 
 // The server sets Content-Disposition: attachment; filename="..." — read it back so the saved
 // file matches the backend's own naming (including its exact export date), falling back to a
@@ -62,7 +41,7 @@ export function DataExportPanel() {
     setError(null)
 
     try {
-      const response = await fetch('/api/household-export', { credentials: 'include' })
+      const response = await apiFetch('/api/household-export')
       if (!response.ok) {
         throw await toApiError(response)
       }

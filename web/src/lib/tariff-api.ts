@@ -1,24 +1,4 @@
-// Same ApiError/toApiError shape as meter-reading-history-api.ts/status-api.ts — copied per API
-// file, not shared, per this repo's own established convention.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
+import { apiFetch, toApiError } from '@/lib/api-client'
 
 export interface TariffFieldCorrectionDto {
   fieldName: string
@@ -48,7 +28,7 @@ export interface TariffHistoryPageDto {
 }
 
 export async function fetchTariffHistory(page: number, pageSize: number): Promise<TariffHistoryPageDto> {
-  const response = await fetch(`/api/tariffs?page=${page}&pageSize=${pageSize}`, { credentials: 'include' })
+  const response = await apiFetch(`/api/tariffs?page=${page}&pageSize=${pageSize}`)
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -65,9 +45,8 @@ export interface CreateTariffInput {
 }
 
 export async function createTariff(input: CreateTariffInput): Promise<TariffHistoryItemDto> {
-  const response = await fetch('/api/tariffs', {
+  const response = await apiFetch('/api/tariffs', {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
@@ -89,9 +68,8 @@ export interface EditTariffInput {
 }
 
 export async function updateTariff(id: string, input: EditTariffInput): Promise<TariffHistoryItemDto> {
-  const response = await fetch(`/api/tariffs/${id}`, {
+  const response = await apiFetch(`/api/tariffs/${id}`, {
     method: 'PUT',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
@@ -130,9 +108,8 @@ export interface TariffComparisonDto {
 // null parsing mirrors fetchCurrentStatus (status-api.ts), not this file's own createTariff/
 // fetchTariffHistory — this endpoint can legitimately return an empty body (AC #3).
 export async function compareTariff(input: CompareTariffInput): Promise<TariffComparisonDto | null> {
-  const response = await fetch('/api/tariffs/compare', {
+  const response = await apiFetch('/api/tariffs/compare', {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })

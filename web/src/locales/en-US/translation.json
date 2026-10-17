@@ -60,7 +60,8 @@
       "queueWarningProceed": "Log off anyway",
       "federatedWarningTitle": "You may still be signed in elsewhere",
       "federatedWarningDescription": "This identity provider doesn't support signing you out everywhere. Energy Tracker will sign you out here, but you may still be signed in at the identity provider itself.",
-      "federatedWarningProceed": "Continue"
+      "federatedWarningProceed": "Continue",
+      "error": "Logging off didn't work. Check your connection and try again."
     },
     "aiPlausibility": {
       "heading": "AI Plausibility Check",

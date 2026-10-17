@@ -5,6 +5,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { Label } from '@/components/ui/label'
 import { UnitInput } from '@/components/ui/unit-input'
 import { HouseholdSizePresetRow, PRESETS } from './household-size-preset-row'
+import { ApiError, apiFetch, toApiError } from '@/lib/api-client'
 
 interface HouseholdDetails {
   id: string
@@ -16,26 +17,6 @@ interface HouseholdDetails {
 
 interface YearlyBaselineFormProps {
   householdId: string
-}
-
-class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
 }
 
 // Mirrors SetYearlyBaseline's server-side MaxYearlyBaselineKwh — keeps the value inside the
@@ -58,7 +39,7 @@ export function YearlyBaselineForm({ householdId }: YearlyBaselineFormProps) {
     setLoading(true)
     setLoadError(false)
 
-    fetch(`/api/households/${householdId}`, { credentials: 'include' })
+    apiFetch(`/api/households/${householdId}`)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(`Unexpected /api/households/${householdId} response: ${response.status}`)
@@ -99,9 +80,8 @@ export function YearlyBaselineForm({ householdId }: YearlyBaselineFormProps) {
     setError(null)
 
     try {
-      const response = await fetch(`/api/households/${householdId}/yearly-baseline`, {
+      const response = await apiFetch(`/api/households/${householdId}/yearly-baseline`, {
         method: 'PUT',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ yearlyBaselineKwh, version }),
       })
@@ -121,7 +101,7 @@ export function YearlyBaselineForm({ householdId }: YearlyBaselineFormProps) {
         // value is still stale and the message must say so instead.
         let refetched = false
         try {
-          const refetchResponse = await fetch(`/api/households/${householdId}`, { credentials: 'include' })
+          const refetchResponse = await apiFetch(`/api/households/${householdId}`)
           if (refetchResponse.ok) {
             const details = (await refetchResponse.json()) as HouseholdDetails
             setInput(details.yearlyBaselineKwh !== null ? String(details.yearlyBaselineKwh) : '')

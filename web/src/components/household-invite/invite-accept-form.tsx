@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import type { CreatedHousehold } from '@/components/household-creation/household-creation-form'
+import { apiFetch } from '@/lib/api-client'
 
 interface InviteAcceptFormProps {
   token: string
@@ -17,7 +18,7 @@ export function InviteAcceptForm({ token, onJoined }: InviteAcceptFormProps) {
   useEffect(() => {
     let cancelled = false
 
-    fetch(`/api/household-invites/${token}`, { credentials: 'include' })
+    apiFetch(`/api/household-invites/${token}`)
       .then((response) => {
         if (cancelled) {
           return
@@ -49,9 +50,8 @@ export function InviteAcceptForm({ token, onJoined }: InviteAcceptFormProps) {
     setState('accepting')
 
     try {
-      const response = await fetch(`/api/household-invites/${token}/accept`, {
+      const response = await apiFetch(`/api/household-invites/${token}/accept`, {
         method: 'POST',
-        credentials: 'include',
       })
 
       if (!response.ok) {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translateJobError } from '@/lib/job-error'
-import { ApiError, fetchJobStatus } from '@/lib/smart-plug-import-api'
+import { fetchJobStatus } from '@/lib/smart-plug-import-api'
+import { ApiError } from '@/lib/api-client'
 
 export type HouseholdImportJobState = 'processing' | 'completed' | 'failed'
 

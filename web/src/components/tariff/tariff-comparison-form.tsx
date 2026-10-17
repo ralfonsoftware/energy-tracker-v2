@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label'
 import { QuietCard } from '@/components/ui/quiet-card'
 import { UnitInput } from '@/components/ui/unit-input'
 import { cn } from '@/lib/utils'
-import { ApiError, compareTariff, type TariffComparisonDto } from '@/lib/tariff-api'
+import { compareTariff, type TariffComparisonDto } from '@/lib/tariff-api'
+import { ApiError } from '@/lib/api-client'
 
 // status-detail-dialog.tsx's established label/value row convention (lines 113-135) — reused
 // here for the current-vs-candidate summary panels (AC #4) rather than inventing a new shape.

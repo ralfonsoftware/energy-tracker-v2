@@ -83,7 +83,10 @@ describe('ProfileMenu', () => {
 
   it('clicking Log off drives the shared use-logoff hook — the same flow as the Settings entry point (AC #4)', async () => {
     const user = userEvent.setup()
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(null))))
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(url === '/logout' ? jsonResponse({ redirectUrl: 'https://tenant.example/oidc/logout?state=abc' }) : jsonResponse(null)),
+    )
+    vi.stubGlobal('fetch', fetchMock)
     const restoreLocation = stubLocation()
     render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
 
@@ -93,7 +96,30 @@ describe('ProfileMenu', () => {
     expect(await screen.findByRole('heading', { name: 'Log off?' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Yes, log off' }))
-    await waitFor(() => expect(window.location.href).toBe('/logout'))
+    await waitFor(() => expect(window.location.href).toBe('https://tenant.example/oidc/logout?state=abc'))
+    const [, init] = fetchMock.mock.calls.find(([url]) => url === '/logout') as unknown as [string, RequestInit]
+    expect(init.method).toBe('POST')
+    expect(new Headers(init.headers).get('X-Requested-With')).toBe('fetch')
+    restoreLocation()
+  })
+
+  it('shows an inline error and keeps the dialog open when the logout POST fails (AC #10)', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => (url === '/logout' ? Promise.resolve(jsonResponse({ detail: 'boom' }, 500)) : Promise.resolve(jsonResponse(null)))),
+    )
+    const restoreLocation = stubLocation()
+    render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+
+    await user.click(screen.getByRole('button', { name: 'Account menu' }))
+    await user.click(await screen.findByText('Log off'))
+    await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Logging off didn't work. Check your connection and try again.")
+    expect(screen.getByRole('heading', { name: 'Log off?' })).toBeInTheDocument()
+    expect(window.location.href).toBe('')
+    expect(screen.getByRole('button', { name: 'Yes, log off' })).toBeEnabled()
     restoreLocation()
   })
 

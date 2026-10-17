@@ -244,7 +244,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of story-1.12 (2026-09-17)
 
-- [open] AC #2/#5/#6 (RP-initiated logout actually terminating both sessions, and landing back on the login step) have zero automated regression coverage — proven only by a one-time manual Auth0 + Chrome verification (Task 7), never re-run in CI [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]. Deferred, pre-existing: `/logout`'s implementation is unchanged by this diff (built in Story 1.5); this story only adds a frontend signal and control around an already-existing, unmodified backend mechanism. Raised by adversarial review (Blind Hunter).
+- [open] AC #2/#5/#6 (RP-initiated logout actually terminating both sessions, and landing back on the login step) have zero automated regression coverage — proven only by a one-time manual Auth0 + Chrome verification (Task 7), never re-run in CI [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]. Deferred, pre-existing: `/logout`'s implementation is unchanged by this diff (built in Story 1.5); this story only adds a frontend signal and control around an already-existing, unmodified backend mechanism. Raised by adversarial review (Blind Hunter). *Update (Story 11.8, 2026-10-17): `LogoutEndpointTests` and `FederatedLogoutTests` now cover the endpoint and the sign-out event logic automatically; the live provider round-trip stays manual (11.8 Task 8.2 and Part R).*
 
 - [open] No focus/accessibility management across the logoff dialog's three steps — `confirm` → `queue-warning`/`federated-warning` swaps content inside the same mounted `Dialog` with no focus move or live-region announcement telling a screen-reader user the content changed underneath them [web/src/components/settings/settings-page.tsx:108-134]. Deferred, pre-existing pattern: no multi-step dialog anywhere in this codebase establishes focus-management conventions yet, so this isn't a regression specific to this diff. Raised by adversarial review (Blind Hunter) and edge-case review.
 
@@ -469,8 +469,20 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: dev-story of story-11-7-security-headers-csp-rate-limiting (2026-10-17)
 
-- [open] For Story 11.8 (POST `/logout`): the production CSP has `form-action 'self'`, and Chrome also enforces `form-action` on redirects that follow a form submission. A `<form method="post" action="/logout">` whose response redirects to the Auth0 end-session URL can therefore be blocked. 11.8 must either POST with `fetch` and navigate to the returned URL, or widen `form-action` to the issuer on purpose, and re-run the live logout check with the console open.
 - [open] For Story 11.9: apply `RateLimitPolicies.MemberRemoval` (registered in `HttpRateLimiting.cs`, unused until the route exists) to the member-removal route, add it to `Expected` in `RateLimitedRoutesTests` and to the invite-revoke route if one is added.
 - [open] Per-IP `/login` limit keys on the full IPv6 address; a client with a whole `/64` can rotate addresses inside it. Accepted at household scale; group by prefix if it ever matters.
 - [open] The limiter is in-process (AD-24). A distributed limiter store is part of the multi-instance work already listed in `ARCHITECTURE-SPINE/deferred.md`; do it together with lifting `maxReplicas`.
 - [open] HSTS uses the framework defaults (30 days, no `includeSubDomains`, no preload). Raise it (a year, maybe `includeSubDomains`) once the production CSP/HSTS have run clean for a while.
+
+## Deferred from: dev-story of story-11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
+
+- [open] The 90-day cap is on the app's cookie only. An identity-provider session that is still alive re-authenticates silently, so "sign in again" after the cap may not show a login page. `prompt=login` or `max_age` on re-auth is a separate decision. [src/EnergyTracker.Api/SessionLifetime.cs]
+- [open] No server-side revocation of a stolen cookie before the cap (AD-17 accepts this). Removing a member is Story 11.9. [src/EnergyTracker.Api/SessionLifetime.cs]
+- [open] A request whose body fails minimal-API binding answers the binding's own 400 before the X-Requested-With filter runs (binding precedes endpoint filters), so a header-less malformed request shows the binding error, not the filter's. No handler logic runs either way; accepted (RequestedWithFilter remarks). [src/EnergyTracker.Api/RequestedWithFilter.cs]
+- [open] A tab that was open across the 11.8 deploy still runs the old bundle: its next mutation gets a 400 until the page is reloaded, and its logout (a navigation to the removed `GET /logout`) lands on the SPA instead of signing out. Reloading fixes both. Single-user app; not mitigated. [web/src/lib/api-client.ts]
+
+## Deferred from: code review of 11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
+
+- [open] `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched (the OIDC handler throws, `UseExceptionHandler` drops the cookie deletion), so during a provider outage a member cannot sign out locally. Pre-existing (the old `GET /logout` failed the same way); consider catching it and degrading to a local sign-out like the "no `end_session_endpoint`" path. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
+- [open] After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Version`, so its first toggle PUT answers 409 and only the refetch-and-retry works (seen in the 11.8 live rehearsal). Pre-existing. [web/src/components/ai-plausibility/ai-plausibility-form.tsx]
+

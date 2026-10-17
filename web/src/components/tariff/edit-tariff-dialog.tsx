@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { UnitInput } from '@/components/ui/unit-input'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
-import { ApiError, updateTariff, type TariffHistoryItemDto } from '@/lib/tariff-api'
+import { updateTariff, type TariffHistoryItemDto } from '@/lib/tariff-api'
+import { ApiError } from '@/lib/api-client'
 
 interface EditTariffDialogProps {
   tariff: TariffHistoryItemDto

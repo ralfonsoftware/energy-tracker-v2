@@ -50,6 +50,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
   const {
     logoffStep,
     logoffChecking,
+    logoffError,
     pendingReadingCount,
     openLogoffDialog,
     closeLogoffDialog,
@@ -131,6 +132,11 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
                 <DialogTitle>{t('settings.logoff.confirmTitle')}</DialogTitle>
                 <DialogDescription>{t('settings.logoff.confirmDescription')}</DialogDescription>
               </DialogHeader>
+              {logoffError && (
+                <p role="alert" className="text-destructive text-sm">
+                  {t('settings.logoff.error')}
+                </p>
+              )}
               <DialogFooter>
                 <Button variant="outline" onClick={closeLogoffDialog} disabled={logoffChecking}>
                   {t('settings.logoff.cancel')}
@@ -150,11 +156,16 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
                   {t('settings.logoff.queueWarningDescription', { count: pendingReadingCount })}
                 </DialogDescription>
               </DialogHeader>
+              {logoffError && (
+                <p role="alert" className="text-destructive text-sm">
+                  {t('settings.logoff.error')}
+                </p>
+              )}
               <DialogFooter>
-                <Button variant="outline" onClick={closeLogoffDialog}>
+                <Button variant="outline" onClick={closeLogoffDialog} disabled={logoffChecking}>
                   {t('settings.logoff.cancel')}
                 </Button>
-                <Button variant="glass-confirm" onClick={proceedPastQueueCheck}>
+                <Button variant="glass-confirm" onClick={proceedPastQueueCheck} disabled={logoffChecking}>
                   {t('settings.logoff.queueWarningProceed')}
                 </Button>
               </DialogFooter>
@@ -167,11 +178,16 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
                 <DialogTitle>{t('settings.logoff.federatedWarningTitle')}</DialogTitle>
                 <DialogDescription>{t('settings.logoff.federatedWarningDescription')}</DialogDescription>
               </DialogHeader>
+              {logoffError && (
+                <p role="alert" className="text-destructive text-sm">
+                  {t('settings.logoff.error')}
+                </p>
+              )}
               <DialogFooter>
-                <Button variant="outline" onClick={closeLogoffDialog}>
+                <Button variant="outline" onClick={closeLogoffDialog} disabled={logoffChecking}>
                   {t('settings.logoff.cancel')}
                 </Button>
-                <Button variant="glass-confirm" onClick={navigateToLogout}>
+                <Button variant="glass-confirm" onClick={navigateToLogout} disabled={logoffChecking}>
                   {t('settings.logoff.federatedWarningProceed')}
                 </Button>
               </DialogFooter>

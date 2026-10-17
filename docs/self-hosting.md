@@ -169,6 +169,20 @@ TLS-terminating reverse proxy (Caddy, nginx, Traefik, ...) in front of the
   HTTP `429` with a `Retry-After` header. Normal household use stays far
   below them.
 
+## Sessions and scripts that call the API
+
+- A session ends at the latest **90 days after sign-in**, however often you
+  use the app (it also ends after 14 days without a request). After that the
+  app sends you to sign in again; if your identity provider's own session is
+  still alive, that may happen without showing a login page. The first
+  release with this limit signs everybody out once, because older session
+  cookies carry no sign-in date.
+- Any script or integration that calls `/api` with a mutating verb (`POST`,
+  `PUT`, `PATCH`, `DELETE`) must send an `X-Requested-With` header. The value
+  does not matter, only that it is present; without it the request is
+  answered `400`. `GET` requests need nothing extra.
+- Signing out is a `POST /logout` (with the same header), not a link.
+
 ## 5. Stopping and restarting
 
 ```bash
