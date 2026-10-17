@@ -271,6 +271,9 @@ if (oidcConfigured)
 
 builder.Services.AddAuthorization();
 builder.Services.AddProblemDetails();
+// AD-27 (audit S3): per-route rate-limit policies, applied with RequireRateLimiting on the routes in
+// the Story 11.7 rate-limit table. In-process, so correct for one instance (AD-24).
+builder.Services.AddHttpRateLimiting();
 
 // AC #4: Data Protection keys persisted externally, not regenerated in memory on cold start —
 // the one registration that makes sessions survive a scale-to-zero Azure Container Apps restart.
@@ -463,18 +466,26 @@ var app = builder.Build();
 // set, runs the one-time key revocation (AD-17 cutover). Must run before the first request.
 DataProtectionKeyProtection.ApplyStartupActions(app.Services, dataProtectionKeyProtection, app.Logger);
 
+// AD-27 (audit S3): the security headers middleware is registered FIRST so it also covers error,
+// rate-limit and static-file responses. Production only: Vite dev mode injects inline scripts.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseSecurityHeaders();
+}
+
 // Must run before anything reads Request.Scheme/Host — Azure Container Apps (this story's own
 // deploy target, infra/modules/container-app.bicep) terminates TLS at its ingress and forwards
 // plain HTTP to the container. Without this, the OIDC handler builds an http:// redirect_uri
 // instead of https://, breaking login against any provider that requires an exact match.
 // Container Apps' external ingress is the only path into the container (no direct access
 // bypassing it), so trusting X-Forwarded-* headers here without a KnownProxies allowlist is safe.
-// Self-host (docs/self-hosting.md) exposes the container's port directly with no reverse proxy
-// required or documented, so this trust extends to any direct caller there too — but nothing in
-// this codebase treats RemoteIpAddress or X-Forwarded-For as a security signal (no rate limiting,
-// no IP-based auth), and the only consumers of Request.Scheme are the OIDC redirect_uri and the
-// cookie Secure-flag decision, neither exploitable by a client lying about its own scheme. See
-// Story 1.7 Dev Notes for the full per-target analysis.
+// Self-host (docs/self-hosting.md) must put a reverse proxy in front of the container: this trust
+// extends to any direct caller otherwise. The OIDC redirect_uri and the cookie Secure-flag
+// decision read Request.Scheme and are not exploitable by a client lying about its own scheme, but
+// the /login rate limiter (AD-27) keys on the client IP resolved here. On Azure that key is not
+// spoofable: ingress supplies the rightmost X-Forwarded-For entry and ForwardLimit stays at its
+// default of 1 (confirmed by a live probe, Story 11.7). Do not narrow these networks to "fix" that:
+// it re-breaks Story 1.7. See Story 1.7 and 11.7 Dev Notes for the per-target analysis.
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
@@ -485,6 +496,13 @@ var forwardedHeadersOptions = new ForwardedHeadersOptions
 forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
+
+// AD-27: HSTS over HTTPS only. After UseForwardedHeaders, which is what makes Request.IsHttps true
+// behind Container Apps' TLS-terminating ingress. The framework skips localhost and plain HTTP.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
 
 // Scopes the raised body-size limit to just /api/household-import (Code Review, Story 7.2 Pass 1)
 // — Minimal API's IFormFile model binding reads the whole body as part of invoking the endpoint,
@@ -514,6 +532,10 @@ app.UseExceptionHandler();
 
 app.UseAuthentication();
 app.UseAuthorization();
+// AD-27: after routing (implicit in WebApplication) and authentication, so identity-keyed policies see
+// the principal; after authorization so unauthenticated requests get a cheap 401 and never create
+// identity buckets. /login has no authorization metadata and still reaches the limiter.
+app.UseRateLimiter();
 
 // Liveness only — no DB/dependency check (AD-19): a slow Postgres/Azure SQL must never fail this probe.
 // Deliberately outside the /api auth requirement below and unaffected by it (AD-19 regression guard).

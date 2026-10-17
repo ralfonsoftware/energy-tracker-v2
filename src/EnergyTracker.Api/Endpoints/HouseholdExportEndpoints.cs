@@ -103,7 +103,7 @@ public static class HouseholdExportEndpoints
             }
 
             return Results.Empty;
-        });
+        }).RequireRateLimiting(RateLimitPolicies.Export);
 
         return api;
     }

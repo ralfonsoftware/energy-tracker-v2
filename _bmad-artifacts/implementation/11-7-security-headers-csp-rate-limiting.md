@@ -1,0 +1,264 @@
+---
+baseline_commit: cb6db30
+---
+
+# Story 11.7: Security Headers, CSP, Theme Script, Rate Limiting
+
+Status: in-progress
+
+<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+<!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md). Origin: codebase audit 2026-10-10 (docs/codebase-audit-2026-10-10.md) finding S3 (Medium); S8 (forwarded headers) is accepted, not fixed, here. Architecture: AD-27 (HTTP hardening baseline, the headers, theme script, rate limiting and forwarded-headers bullets; the CSRF bullets belong to Story 11.8), AD-17 (non-Development test hosts set the Data Protection opt-out), AD-24 (in-process limiter is correct for one instance), AD-13 (single artifact serves the SPA), AD-19. project-context.md "Auth (AD-17)", "Security", "CI" and the process gates. This file cites the AD and audit IDs, which satisfies the spec-per-fix gate. -->
+<!-- Branch already exists: feature/11-7-security-headers-rate-limiting (current checkout, clean, at cb6db30). ONE PR (no infra change, no migration, no new package). -->
+<!-- LIVE GATE (hard): this story touches login/logout and the whole SPA shell. It cannot move review -> done without (a) a real live Auth0/Chrome pass on Azure with a clean console (Task R2) and (b) the forged X-Forwarded-For probe (Task R1), both recorded. A passing test suite alone does not close it. If Chrome is not connected, say so immediately and pause (project-context.md process gate). -->
+<!-- Ralf-run steps (Part R) are listed explicitly; the dev prepares the exact commands but does not run anything against Azure production. -->
+<!-- DEPLOY-GATE BLIND SPOT: app-deploy.yml's health gate probes /health only. A CSP that blanks the SPA still passes it. That is why Task 7 (local Production rehearsal in Chrome) is mandatory BEFORE the PR merges. -->
+
+## Story
+
+As a household member,
+I want the app protected against framing, script injection, downgrade and request flooding,
+so that a single bug or a hostile site can't escalate into account takeover or lockout (audit S3).
+
+## Acceptance Criteria
+
+1. **Given** a non-Development environment, **when** any response is sent (including errors and static files), **then** a middleware registered first sets the AD-27 CSP (`script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `form-action 'self'`, `frame-ancestors 'none'`, ...), `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`, and `UseHsts()` is active. In Development none of these headers are present (integration tests).
+2. **Given** `web/index.html`, **when** it is built, **then** it contains no inline script. The theme initialisation lives in `web/public/theme-init.js`, loaded early in `<head>`, with no flash of the wrong theme (checked live in dark and light mode).
+3. **Given** the deployed app, **when** every surface is visited in Chrome, including login and logout, **then** the console shows no CSP violations (live check; `img-src data:` is kept only if the bundle needs it).
+4. **Given** the built-in rate limiter (`UseRateLimiter` after routing and authentication), **when** a limit is exceeded, **then** the response is 429 ProblemDetails. Partitions are per OIDC identity for upload, export, invite create/preview/accept and member removal, and per client IP for `/login`.
+5. **Given** forwarded headers, **when** this story is done, **then** their configuration is unchanged (Story 1.7). A live probe on Azure with a forged `X-Forwarded-For` confirms the rate-limit IP comes from ingress, and the result is recorded. `docs/self-hosting.md` requires a reverse proxy in front of the app.
+6. **Implied (not in the epic text; "exactly which CSP" must not be left to the dev):** the production CSP is exactly `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`. `data:` is dropped from `img-src` because the current build has no `data:` image/font/media URI (checked on the 2026-10-11 bundle in `src/EnergyTracker.Api/wwwroot/assets`; the `data:b,` hits are object keys). Re-scan a fresh build in Task 2.4; if a real `data:` URI turns up, add `data:` back to `img-src` only and say so in Completion Notes. No `script-src` hash or nonce, no `'unsafe-eval'`, no `report-uri`.
+7. **Implied (AC #1/#4 are untestable without a named limit table):** the limits, partitions and the route-to-policy mapping are the table in Dev Notes "Rate-limit table". A guard test asserts the mapping on the real endpoint data source, so a new upload/export/invite route cannot ship unthrottled and a policy cannot be silently dropped.
+8. **Implied (a limiter that can lock the household out is a regression):** a 429 on one policy never affects another policy or another identity; sign-in (`/login`) is throttled per client IP only; nothing under `/health` is throttled; every existing test and every existing UI flow still works (the five limited UI paths show their normal generic error on 429, no crash, no redirect loop).
+9. **Implied (docs that would otherwise go stale):** `_bmad-artifacts/project-context.md` ("Security", "Framework-Specific Rules", the localStorage guard note about `web/index.html`), `docs/self-hosting.md` (reverse-proxy requirement), `docs/local-vs-azure-deltas.md` (D1: where the client IP comes from per target, plus the probe result), `web/src/lib/color-scheme.ts` header comments (the inline copy is now `public/theme-init.js`), and `docs/local-development.md` if it mentions the inline script.
+
+## Tasks / Subtasks
+
+Write each test red first and record the red run in Debug Log References (Story 11.1-11.6 practice). One PR, branch `feature/11-7-security-headers-rate-limiting`.
+
+- [x] Task 1: Tests first, red (AC: #1, #4, #6, #7, #8)
+  - [x] 1.1 `tests/EnergyTracker.Api.Tests/SecurityHeadersTests.cs`. Production host built the `DataProtectionStartupTests` way (`new WebApplicationFactory<Program>().WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.UseSetting("DataProtection:AllowUnprotectedKeys", "true"); })`, no database needed). Assert the exact CSP string from AC #6, `nosniff`, `Referrer-Policy: same-origin` on: `GET /health` (200), an unauthenticated `GET /api/session` (401), an unknown path with a temp web root (static file / SPA fallback, see 1.2), a 429 (reuse a tiny limit trip) and an **error response** (a 500 through `UseExceptionHandler`; pick the simplest way to provoke one, for example a test-only endpoint registered through the factory, or an authenticated request against an unreachable database). The error case is the one that proves the headers survive the exception handler, which resets the response before writing ProblemDetails (see Dev Notes "Technical details").
+  - [x] 1.2 Static files: point the host at a temp web root (`builder.UseWebRoot(tempDir)`) holding a one-line `index.html` and `theme-init.js`, so the test does not depend on a built `wwwroot/` (gitignored, absent in CI before the web build). Assert `GET /` , `GET /theme-init.js` and a deep link like `/join/abc` (SPA fallback) all carry the headers.
+  - [x] 1.3 HSTS: client with `BaseAddress = new Uri("https://energytracker.example")` (HSTS skips `localhost`, `127.0.0.1` and `[::1]` and non-HTTPS requests) gets `Strict-Transport-Security` in Production; a plain-http request does not. Same https client against a **Development** host gets no HSTS.
+  - [x] 1.4 Development absence: a default (Development) host returns none of `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security` on `/health` and on a 401.
+  - [x] 1.5 `tests/EnergyTracker.Api.Tests/RateLimitingTests.cs` on `EnergyTrackerApiFactory` (Development is fine: the limiter is not environment-gated). Per policy in the table: send `limit` requests that are cheap to answer (export and invite create without a Household answer 403, preview with an unknown token 404, an upload with no file 400, `/login` whatever it answers, 500 included because OIDC is unconfigured in tests: assert only "not 429"), then request `limit + 1` and assert **429**, `Content-Type: application/problem+json`, `status == 429` in the body and a `Retry-After` header. Plus: identity A exhausted, identity B (different subject) still served; same subject under a different issuer is a separate partition; `/login` buckets by client IP (vary `X-Forwarded-For`), and **rotating the leftmost `X-Forwarded-For` entry while the rightmost stays fixed does not escape the bucket** (this encodes the property that R1 confirms live: `ForwardLimit` stays 1, the rightmost entry is the client). One policy being exhausted leaves the others and `/health` untouched.
+  - [x] 1.6 `tests/EnergyTracker.Api.Tests/RateLimitedRoutesTests.cs`: resolve `EndpointDataSource` from the factory and assert each route in the Rate-limit table carries `EnableRateLimitingAttribute` with the expected policy name, that `/health` and `GET /api/session` carry none, and that every `/api` route whose path contains `household-invites`, `household-import`, `smart-plug-imports` or `household-export` and is a mutation or download is in the table (a new route in those families fails the test until it is classified).
+  - [x] 1.7 `tests/EnergyTracker.Architecture.Tests/IndexHtmlHasNoInlineScriptTests.cs` (text scan, same style and `FindRepoRoot`/`FindWebSrcDirectory` helper as `FrontendDoesNotStoreAuthTokensTests`): `web/index.html` has no `<script>` without a `src`, no `on*=` attribute, no `javascript:` URL, the `theme-init.js` tag is a plain script (no `type="module"`, `async` or `defer`) inside `<head>` and appears **after** the `meta name="theme-color"` tag (the script reads it) and before the module script; `web/public/theme-init.js` exists.
+  - [x] 1.8 `web/src/lib/color-scheme.test.ts` (already allowlisted for `localStorage`, so the architecture guard stays untouched): a `describe` that reads `public/theme-init.js` with `node:fs`, runs it in jsdom (`new Function(source)()` or a script element) and asserts, against `THEME_STORAGE_KEY`, `THEME_COLOR_LIGHT`, `THEME_COLOR_DARK`: stored `dark` -> `html.dark` + dark theme-color; stored `light` -> no class + light color; nothing stored -> follows a stubbed `matchMedia`; storage that throws -> still falls back to the OS preference and does not throw. This replaces the old "keep in sync" comment with a test.
+  - [x] 1.9 Run the new tests and record that each is red for the right reason. Mutation-check the guards (delete one header, drop one `RequireRateLimiting`, put an inline script back) and record that the test fails.
+- [x] Task 2: Theme script out of `index.html` (AC: #2, #6, #9)
+  - [x] 2.1 Create `web/public/theme-init.js` with the logic and comments of the current inline script, unchanged in behavior (same storage key, same two theme-color literals, same try/catch shape, ES5 syntax as today; no import, it is not bundled). Keep the comment that it mirrors `getThemePreference()` and `THEME_COLOR_*` in `src/lib/color-scheme.ts`, and now point at the Vitest that enforces it (1.8).
+  - [x] 2.2 `web/index.html`: delete the inline `<script>` block, add `<script src="/theme-init.js"></script>` in the same position (after the `theme-color` meta, still in `<head>`, still before the CSS link and module script Vite injects). Plain tag: no `type="module"`, `async` or `defer`.
+  - [x] 2.3 `web/src/lib/color-scheme.ts` header comment and the `THEME_COLOR_*` comment: "inline script in index.html" becomes "`public/theme-init.js`". `FrontendDoesNotStoreAuthTokensTests` scans only `web/src/**/*.ts(x)`, so `theme-init.js` is, like the old inline block, outside the scan: say so in project-context (Task 6.1), do not widen the guard.
+  - [x] 2.4 `npm --prefix web run build`: confirm `src/EnergyTracker.Api/wwwroot/index.html` still has the `theme-init.js` tag unchanged and **before** the injected stylesheet link, `wwwroot/theme-init.js` exists, and the build prints no "can't be bundled without type=module" warning for it. Re-scan the fresh bundle for runtime `data:` URIs (`data:image`, `data:font`, `data:application`, `data:text`) per AC #6 and record the result.
+  - [x] 2.5 Run `web/e2e/app-shell.spec.ts` (the "no flash" theme test at ~line 870) and `locale-theme-sweep.spec.ts` against the built preview; they exercise the pre-paint script via `vite preview`, which serves `theme-init.js` from the build output. Record the run.
+- [x] Task 3: Security headers middleware and HSTS (AC: #1, #6)
+  - [x] 3.1 New `src/EnergyTracker.Api/SecurityHeaders.cs`: one small hand-written middleware plus a `UseSecurityHeaders(this WebApplication)` extension, the CSP as a single `const string` built from the AC #6 directives. No third-party header package.
+  - [x] 3.2 Set the three headers inside `context.Response.OnStarting(...)` (not directly before `next`), so they are written whatever happens downstream, including after `UseExceptionHandler` reset the response. Do not overwrite a header another component already set (`TryAdd`/set-if-absent is fine; none does today).
+  - [x] 3.3 `Program.cs`: `if (!app.Environment.IsDevelopment()) app.UseSecurityHeaders();` as the **first** `app.Use*` call, before `UseForwardedHeaders`. Then, after `UseForwardedHeaders(...)` (HSTS needs the forwarded scheme to see HTTPS) and still outside Development: `app.UseHsts();`. Leave `UseForwardedHeaders` and its comment block as they are, except the stale sentence "nothing in this codebase treats RemoteIpAddress or X-Forwarded-For as a security signal (no rate limiting ...)": the limiter now does; rewrite that sentence to say the `/login` limiter keys on it, why that is safe on Azure (ingress supplies the rightmost entry, `ForwardLimit` 1), and that self-host must sit behind a reverse proxy (AC #5).
+  - [x] 3.4 HSTS options: keep the framework defaults (30 days, no `includeSubDomains`, no `preload`). Raising it is Q4, a later change after the live gate has run clean.
+- [x] Task 4: Rate limiting (AC: #4, #7, #8)
+  - [x] 4.1 New `src/EnergyTracker.Api/HttpRateLimiting.cs`: `static class RateLimitPolicies` (string constants `Login`, `Upload`, `Export`, `InviteCreate`, `InviteRedeem`, `MemberRemoval`), `AddHttpRateLimiting(this IServiceCollection)` and the policy table as one readable block of constants (permit limit, window). Fixed window, `QueueLimit = 0` (reject at once, never queue), `AutoReplenishment = true`. `RejectionStatusCode = 429`.
+  - [x] 4.2 Partition keys. Identity policies: `issuer + "|" + subject` from `HouseholdClaimTypes.ValidatedIssuer` and `ClaimTypes.NameIdentifier` (the same pair `HouseholdInviteEndpoints.accept` reads, never the member id, so invitees without a membership are covered). If either claim is missing (cannot happen behind `RequireAuthorization`, but the limiter must not throw), fall back to the client IP. `/login` policy: `HttpContext.Connection.RemoteIpAddress` (already rewritten by `UseForwardedHeaders`), `"unknown"` if null.
+  - [x] 4.3 `OnRejected`: set `Retry-After` (whole seconds, from the lease's `MetadataName.RetryAfter` when present, else the window length) and write ProblemDetails through `IProblemDetailsService` (already registered by `AddProblemDetails()`), status 429, a plain-English `detail` such as "Too many requests. Wait a moment and try again." (the export panel renders `detail` verbatim). No ad hoc body shape (project-context: RFC 7807 only).
+  - [x] 4.4 `Program.cs`: `builder.Services.AddHttpRateLimiting();` next to the other service registration; `app.UseRateLimiter();` **immediately after `app.UseAuthorization()`** (after routing, which `WebApplication` adds implicitly, and after authentication; see Q2 for why after authorization). Do not touch `UseForwardedHeaders`.
+  - [x] 4.5 Attach `.RequireRateLimiting(RateLimitPolicies.X)` per the table: `AuthEndpoints` (`/login`), `HouseholdInviteEndpoints` (three routes), `SmartPlugImportEndpoints` (`POST /smart-plug-imports`), `HouseholdImportEndpoints` (`POST /household-import` and `POST /household-import/{token}/confirm`), `HouseholdExportEndpoints` (`GET /household-export`). `MemberRemoval` is registered now and unused until Story 11.9 maps the route; say so in a comment on the constant and in Completion Notes, so 11.9 applies it (the epic's AC for this story names member removal as an identity-keyed partition).
+  - [x] 4.6 Run the **whole** API test suite. Several test classes share one `EnergyTrackerApiFactory` and one subject across many tests (invite, import, export, smart-plug-import tests are the likely ones). If a legitimate test trips a limit, give it its own subject; do not raise a limit, add a "limiter off" switch or exempt Development.
+- [x] Task 5: Docs (AC: #5, #9)
+  - [x] 5.1 `docs/self-hosting.md`: a short "Put a reverse proxy in front" section. It states that the app must be reachable only through a TLS-terminating reverse proxy that sets `X-Forwarded-Proto` and **overwrites** (or appends the real peer to) `X-Forwarded-For`, that exposing port 8080 directly lets a client choose its own IP and so dodge the `/login` limiter, and that production responses now carry a CSP and HSTS (HSTS only over HTTPS). Keep the existing `http://localhost:8080` quick-start text; add one sentence that this local check works without a proxy.
+  - [x] 5.2 `docs/local-vs-azure-deltas.md` D1: add where the client IP comes from per target (Azure: ingress supplies the rightmost `X-Forwarded-For` entry; self-host: the reverse proxy; local dev: loopback), and leave a line for the R1 probe result.
+  - [x] 5.3 `docs/local-development.md`: only if it mentions the inline theme script or documents running in Production; otherwise leave it.
+- [x] Task 6: Project context and close-out (AC: #9)
+  - [x] 6.1 `_bmad-artifacts/project-context.md`: add the AD-27 baseline to "Framework-Specific Rules" (headers production-only and first, `OnStarting`, exact CSP, rate-limit policy table location, "new upload/export/invite route must be classified", forwarded headers untouched); fix the "Security" localStorage bullet (the inline script is now `web/public/theme-init.js`, also unscanned); extend the test-host sentence ("any new test host that runs outside Development sets the opt-out", already there) only if something new applies. Bump "Last Updated".
+  - [x] 6.2 Append to `deferred-work.md` (end of file, `[open]`, project-context convention): (a) for Story 11.8: CSP `form-action 'self'` is enforced by Chrome on redirects that follow a form submission, so a `<form method="post" action="/logout">` whose response redirects to the Auth0 end-session URL can be blocked; 11.8 must either POST with `fetch` and navigate to the returned URL, or widen `form-action` to the issuer deliberately; (b) anything found and deferred (for example IPv6 `/64` rotation against the per-IP limit, a distributed limiter store when `maxReplicas` > 1 per AD-24, `includeSubDomains`/longer HSTS).
+  - [x] 6.3 Sprint status `11-7-security-headers-csp-rate-limiting`: `in-progress` while coding, `review` when the PR is merged and Part R is **not** yet done, `done` only after R1-R3 are recorded. Tick tasks. Do not mark R2 done on the strength of tests (hard gate).
+- [ ] Task 7: Regression and local Production rehearsal (AC: #1, #2, #3, #8)
+  - [x] 7.1 `dotnet test` for the whole solution (the build already treats NuGet Audit advisories as errors), `npm --prefix web run lint`, `npm --prefix web test`, `npm --prefix web run build`, and the two Playwright specs from 2.5.
+  - [x] 7.2 **Local rehearsal in Chrome, before the PR merges.** Build the SPA into `wwwroot`, start the stack through `scripts/run-api.sh` with `ASPNETCORE_ENVIRONMENT=Production` and `DataProtection__AllowUnprotectedKeys=true` overridden on the command line (the launch profile sets Development; override it deliberately and say so; same technique as Story 11.6 task B6.3), sign in with the local Auth0 test user (`docs/local-development.md`, "Live browser verification with the test user"). Walk every surface from Task R2's list, open each Radix Select, Dialog, Sheet and DropdownMenu, trigger the export download and a failed import, sign out, and read the console for `Content Security Policy` / `Refused to` messages (`read_console_messages` with a pattern). Confirm the response headers on `/` and `/theme-init.js` with `curl -skI https://localhost:7005/`. Record the result. This does not replace R2.
+  - [ ] 7.3 Open the PR (title `feat: security headers, CSP and rate limiting (Story 11.7, audit S3)`), body lists tasks 1-7, links this story, AD-27 and audit S3, states "do not merge before 7.2 is recorded", and carries the commit/PR attribution.
+
+### Part R: Ralf's out-of-band steps (after the PR is merged and `app-deploy.yml` is green; the dev writes the exact commands into the PR body and this file, and does not run them against production)
+
+- [ ] Task R1: **Forged `X-Forwarded-For` probe on Azure (AC #5).** One client, one network. Confirm the active revision is the new one. Then run: `for i in $(seq 1 25); do curl -s -o /dev/null -w "%{http_code} " -H "X-Forwarded-For: 198.51.100.$i" https://energytracker.ralfonsoftware.de/login; done; echo`. Expected with the 20/min `/login` limit: twenty non-429 answers (302) followed by 429s. Every request claims a different client IP; if the app trusted the leftmost entry, none would be limited. 429s therefore prove the bucket is the IP ingress supplies. Control: one more request with **no** header inside the same minute is also 429 (same real IP, same bucket). Do not sign in during that minute (the bucket is shared by your own IP). Record the output, the date and who ran it in Completion Notes and in `docs/local-vs-azure-deltas.md` D1. If the forged values do escape the limit, stop: the limiter is bypassable, the key must change before this story can be `done` (open a follow-up, do not narrow `KnownIPNetworks`, that re-breaks Story 1.7).
+- [ ] Task R2: **LIVE Auth0/Chrome gate (hard, AC #1, #2, #3).** Against `https://energytracker.ralfonsoftware.de` (Claude-in-Chrome if connected, otherwise Ralf by hand, evidence recorded either way). (a) `curl -sI https://energytracker.ralfonsoftware.de/` and `/theme-init.js` and `/api/session` show the exact CSP, `nosniff`, `Referrer-Policy: same-origin` and, on HTTPS, `Strict-Transport-Security`. (b) Open a fresh tab, clear the console, sign out, sign in through Auth0 (login and logout both), then visit: Dashboard, Trend History, Tariff Radar, Events, Settings (every card: rooms and power points, household members and invite, locale and preferences, AI plausibility, yearly baseline, data export, data import), Smart Plug Import, a `/join/<token>` link, the Profile menu theme toggle. Open every Select, Dialog, Sheet and DropdownMenu once; run an export download; try an import with a bad file. In dark **and** light mode (stored preference) and at a narrow and a wide viewport (follow the live-resize order in project-context if the width matters). (c) After each group read the console (`read_console_messages`, pattern `Content Security Policy|Refused to|violat`): zero hits. (d) No flash: with the preference stored as `dark`, hard-reload five times and confirm `document.documentElement.classList.contains('dark')` is true at the first screenshot and that resource timing shows the script finished before first paint (`performance.getEntriesByType('resource').find(r => r.name.endsWith('/theme-init.js')).responseEnd` is less than `performance.getEntriesByName('first-paint')[0].startTime`); repeat for `light`. (e) Record date, what was observed and who did it. If Chrome is not connected, raise it at once and pause (project-context.md); the story stays in `review`, never `done`.
+- [ ] Task R3: Rate-limit sanity on Azure. Normal use is unaffected: a full sign-in plus export plus invite create/preview works in one sitting with no 429. (An actual flood of the upload or invite routes is not repeated on production; the tests cover it.) Record "no 429 during R2".
+
+### Review Findings
+
+_(to be filled by code review)_
+
+## Dev Notes
+
+### What this fixes and why it is safe to change
+
+- **S3 (Medium, verified):** `Program.cs` has no CSP, no `frame-ancestors`/`X-Frame-Options`, no `nosniff`, no `Referrer-Policy`, no `UseHsts`, no `AddRateLimiter`. Container Apps ingress adds no HSTS. A future XSS would have unlimited reach, destructive actions (restore, invite) can be framed, `/login` and the invite routes can be hammered.
+- All new behavior is additive: three response headers, one HSTS header over HTTPS, a 429 path that only triggers above the limits below, and the same theme script moved to a file. No schema, no EF migration, no API shape change except a new 429 response, no new package (`Microsoft.AspNetCore.RateLimiting` and HSTS ship in the ASP.NET Core 10 shared framework).
+- **Rollout (one PR):** merge triggers `app-deploy.yml`. Its health gate probes `/health` only, so a CSP mistake that blanks the SPA is not caught by the pipeline. Mitigations, in order: Task 7.2 before merge, R2 immediately after deploy, and the rollback is "revert the PR" (a revert on `main` redeploys the previous behavior) or re-activating the previous Container Apps revision. Ralf is the only user; the exposure window is minutes.
+
+### Current state of each file you will touch (read before editing)
+
+- `src/EnergyTracker.Api/Program.cs` (550 lines). Pipeline after `Build()` is, in order: `DataProtectionKeyProtection.ApplyStartupActions` (line 464), `UseForwardedHeaders(options with XForwardedFor | XForwardedProto, KnownIPNetworks/KnownProxies cleared)` (478-487), an inline body-size middleware scoped to `/api/household-import` (496-509), `UseExceptionHandler()` (513), `UseAuthentication()`, `UseAuthorization()` (515-516), `MapGet("/health")` (520), `MapAuthEndpoints(oidcConfigured)` (522), the `/api` group `.RequireAuthorization()` with 14 `Map*Endpoints` calls (527-541), then `UseDefaultFiles`, `UseStaticFiles`, `MapFallbackToFile("index.html")` (544-546). Services: `AddProblemDetails()` is at line 273, `AddAuthorization()` at 272. There is no explicit `UseRouting`: `WebApplication` inserts it for you at the start. `public partial class Program;` is the last line.
+- `src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs`: `app.MapGet("/login", ...)` and `app.MapGet("/logout", ...)` on the **root** route builder, outside `/api` and outside `RequireAuthorization`. `/login` returns `Results.Challenge` for the OIDC scheme; with OIDC unconfigured (every test host) the challenge throws, which is why the tests assert "not 429" for the allowed requests. `/logout` stays a GET and unthrottled here (11.8 makes it a POST).
+- `HouseholdInviteEndpoints.cs`: `POST /household-invites` (create), `GET /household-invites/{token}` (preview), `POST /household-invites/{token}/accept`. Identity claims come from `ClaimTypes.NameIdentifier` and `HouseholdClaimTypes.ValidatedIssuer`.
+- `SmartPlugImportEndpoints.cs` line 35 `POST /smart-plug-imports`; `HouseholdImportEndpoints.cs` lines 47 and 100; `HouseholdExportEndpoints.cs` line 39 (`GET /household-export`, streams, no content length).
+- `web/index.html`: charset, favicon, viewport, `meta name="theme-color" content="#F3F8ED"`, title, then the inline try/catch script (reads `localStorage['energy-tracker-theme']`, toggles `dark` on `<html>`, rewrites the theme-color meta to `#12201A`/`#F3F8ED`), then `<div id="root">` and `<script type="module" src="/src/main.tsx">`. `web/public/` holds only `favicon.svg`.
+- `web/src/lib/color-scheme.ts`: exports `THEME_STORAGE_KEY = 'energy-tracker-theme'`, `THEME_COLOR_LIGHT = '#F3F8ED'`, `THEME_COLOR_DARK = '#12201A'`; its header comment says the inline copy "MUST stay in sync". `color-scheme.test.ts` is allowlisted by `FrontendDoesNotStoreAuthTokensTests`.
+- `web/vite.config.ts` builds into `../src/EnergyTracker.Api/wwwroot` with `emptyOutDir`, so `public/theme-init.js` lands at `wwwroot/theme-init.js` and is served by `UseStaticFiles`. `playwright.config.ts` runs the e2e against `npm run preview` (the built output), so e2e never sees a CSP; only 7.2/R2 do.
+- Tests: `EnergyTrackerApiFactory` (Postgres Testcontainer, `TestAuthHandler` via `X-Test-Subject`/`X-Test-Issuer` headers, Development environment). `DataProtectionStartupTests` shows the database-free Production host (needs `DataProtection:AllowUnprotectedKeys=true`). `ForwardedHeadersTests` shows the fake-remote-IP startup filter for forwarded-header work. `FrontendDoesNotStoreAuthTokensTests` shows the repo-root text-scan helpers for the Architecture project.
+
+### What must be preserved (regression guard)
+
+- `UseForwardedHeaders` options, `KnownIPNetworks.Clear()`, `KnownProxies.Clear()` and `ForwardLimit` default 1: unchanged (Story 1.7 login fix; AD-27 "forwarded headers stay as they are"). `AllowedHosts` stays `*`.
+- `/health` stays liveness-only, unauthenticated, unthrottled (AD-19). The deploy health gate probes the revision FQDN.
+- Cookie auth, OIDC events, `OnRedirectToLogin` 401 for `/api`, the body-size middleware, `UseExceptionHandler`/ProblemDetails, static files and SPA fallback all behave as before.
+- The theme behavior: same storage key and values, no flash, `meta theme-color` follows the effective theme; `color-scheme.ts` takes over after mount (unchanged).
+- Nothing reads, stores or exposes tokens client-side (`FrontendDoesNotStoreAuthTokensTests`); `theme-init.js` stores nothing, it only reads the theme preference.
+
+### Design decisions already made (do not re-litigate)
+
+- Headers are **production only** (any non-Development environment), because Vite dev mode injects inline scripts (AD-27). No third-party header package. No `X-Frame-Options` (CSP `frame-ancestors 'none'` covers modern browsers), no `Permissions-Policy`, no COOP/COEP/CORP, no CSP report endpoint.
+- `style-src 'unsafe-inline'` stays, because Radix injects `<style>` at runtime (`react-style-singleton`: Select, and the scroll lock in Dialog, Sheet, DropdownMenu). Scripts stay strict: no hash, no nonce.
+- Rate limiting uses the built-in `AddRateLimiter` (in-process, correct for one instance under AD-24). A distributed store waits for the AD-24 multi-instance work.
+- The limiter keys: OIDC identity (issuer + subject) for the authenticated routes, client IP for `/login` only. The forwarded-headers trust model is not changed to make per-IP safer; the probe in R1 and the self-host proxy requirement are the answer (AD-27).
+- `AllowedHosts` stays `*` (audit S8's `AllowedHosts` part is accepted, not fixed).
+- CSRF header, POST `/logout`, the shared API client and the session cap are Story 11.8. Do not add them here.
+
+### Technical details the dev must get right
+
+- **Headers and `UseExceptionHandler`.** `ExceptionHandlerMiddleware` resets the response (status, headers, body) before it re-runs the pipeline to write ProblemDetails, so headers assigned directly to `Response.Headers` before `next()` can vanish on a 500. `Response.OnStarting` runs at the moment the response starts, after that reset, so it covers every path: endpoints, 401/403/404, 429, errors, static files, SPA fallback. The error-response test in 1.1 is the proof; if it passes with plain header assignment on your framework version, still keep `OnStarting` (it is also cheaper to reason about).
+- **HSTS needs HTTPS and a real host.** `UseHsts` only emits over HTTPS and skips `localhost`, `127.0.0.1`, `[::1]`. In production the scheme is HTTPS only after `UseForwardedHeaders` applied `X-Forwarded-Proto`, so `UseHsts` goes after it. In tests use an `https://energytracker.example` base address (or send `X-Forwarded-Proto: https`).
+- **Limiter placement.** `UseRateLimiter` reads endpoint metadata, so it must run after routing (implicit in `WebApplication`) and it needs the authenticated principal for identity keys, so after `UseAuthentication()`. Putting it after `UseAuthorization()` additionally means an unauthenticated request is turned away with 401 before it touches any identity bucket, and `/login` (no auth metadata) still reaches it. See Q2.
+- **Policies are per route, not global.** There is **no** global limiter; `GET /api/status` and the other read routes are unthrottled by design. Only routes carrying `.RequireRateLimiting(...)` are limited.
+- **ProblemDetails for 429.** The framework default rejection is a bare status; write the body in `OnRejected`. Use `IProblemDetailsService.WriteAsync(new ProblemDetailsContext { HttpContext = ..., ProblemDetails = { Status = 429, Title = ..., Detail = ... } })`. Set the status code on the response first.
+- **Concurrent uploads.** The Smart Plug import page uploads every dropped file in parallel (one `POST` per file, `smart-plug-import-page.tsx`). The upload budget must cover a realistic multi-file drop in one go, which is why it is 60 per 10 minutes, not 10 per minute.
+- **Fixed window cleanup.** `FixedWindowRateLimiterOptions { AutoReplenishment = true }` lets the framework evict idle partitions; do not build a custom dictionary.
+- **Vite and the new script tag.** Vite leaves an absolute `/theme-init.js` reference to a `public/` file alone. If the build rewrites it, hashes it or warns, stop and fix the reference rather than moving the file under `src/`.
+- **Caching.** `theme-init.js` is un-hashed and served with the static-file middleware's default ETag/Last-Modified. A future change to it reaches browsers on their next revalidation; acceptable (it changes almost never). Do not add a long `Cache-Control` for it in this story.
+- **429 in the UI.** All five limited UI paths already turn an unexpected status into a generic error: `data-export-panel.tsx` shows `ApiError.detail` (hence the readable `detail`), `invite-accept-form.tsx` maps anything but 404/409 to its `error` state, the smart-plug and household-import clients throw `ApiError`. No frontend change is expected; verify by reading, add a component test only if one of them mishandles a 429.
+
+### Rate-limit table (AC #7; the single source, change numbers here and in `HttpRateLimiting.cs` together)
+
+| Policy | Routes | Partition | Limit (fixed window) |
+|---|---|---|---|
+| `Login` | `GET /login` | client IP | 20 per 1 min |
+| `Upload` | `POST /api/smart-plug-imports`, `POST /api/household-import`, `POST /api/household-import/{token}/confirm` | OIDC identity | 60 per 10 min |
+| `Export` | `GET /api/household-export` | OIDC identity | 5 per 1 min |
+| `InviteCreate` | `POST /api/household-invites` | OIDC identity | 10 per 10 min |
+| `InviteRedeem` | `GET /api/household-invites/{token}`, `POST /api/household-invites/{token}/accept` | OIDC identity | 20 per 10 min |
+| `MemberRemoval` | (route arrives in Story 11.9) | OIDC identity | 10 per 10 min |
+
+The numbers are the dev's starting point (Q1), chosen so a household never meets them: five to six people behind one NAT use one `/login` bucket, a multi-file import drop is one burst, and nobody exports five times a minute. Preview and accept share `InviteRedeem` so token guessing is throttled across both.
+
+### Considered and left out (do not add to this story)
+
+- A global `/api` limiter, a limiter on `GET` read routes, and per-household partitions.
+- Narrowing `KnownIPNetworks`/`KnownProxies`, `UseHttpsRedirection`, `AllowedHosts` (audit S8, accepted).
+- CSP report-only phase, a report endpoint, nonces.
+- IPv6 `/64` grouping for the per-IP key: a single client can rotate addresses inside its prefix. Accepted at household scale; goes to `deferred-work.md`.
+- Binding `docker-compose.yml` to loopback (Q3).
+- The X-Requested-With filter, POST logout, the shared API client, the 90-day cap (Story 11.8) and member removal/invite revocation (Story 11.9).
+
+### Architecture compliance
+
+- **AD-27** is the contract for everything above. **AD-17**: every non-Development test host sets `DataProtection:AllowUnprotectedKeys=true`. **AD-24**: in-process limiter; the multi-instance upgrade is already listed in `ARCHITECTURE-SPINE/deferred.md`. **AD-13**: the SPA, including `theme-init.js`, ships in the one image. **AD-19**: no secret involved; `/health` untouched. **AD-1**: all new code lives in the `Api` project; nothing in Domain/Application.
+- Project conventions: file-scoped namespaces, one class per file, `Snake_case_with_underscores` test names, Shouldly (never raw `Assert`), NSubstitute only against Application ports (none needed here), `TestContext.Current.CancellationToken` in async tests, RFC 7807 for every error body. New public code gets a one-line `/// <summary>` that cites the AC or AD it serves.
+
+### Testing standards (from project-context.md)
+
+- Real-host tests via `WebApplicationFactory<Program>`; Testcontainers Postgres only where a database is truly needed (the limiter tests use `EnergyTrackerApiFactory`; the headers tests need none).
+- Executable guards for "must stay true" rules belong in the test projects, not only in prose (1.6, 1.7, 1.8).
+- Mutation-check each new guard (1.9) and keep the red runs in Debug Log References.
+
+### Previous work intelligence
+
+- **Story 11.6 (done, `c46c733`, `cb6db30`):** introduced the fail-closed Data Protection selection, so any Production-environment test host needs `DataProtection:AllowUnprotectedKeys=true`; `DataProtectionStartupTests` is the template. Its R3 live gate and the local Production rehearsal (B6.3) are the models for Task 7.2 and Part R. Its review practice: mutation-check guards, never substitute the live gate.
+- **Story 1.7 and `docs/local-vs-azure-deltas.md` D1:** the forwarded-headers trust was widened on purpose to fix a live Azure-only login bug. Anything touching the pipeline order near it needs a live check, and `ForwardedHeadersTests` must keep passing untouched.
+- **Epic 8 retro / Story 8.10:** the pre-paint theme script and its "no flash" e2e test; `app-shell.spec.ts` ~870 is what 2.5 reruns. Story 10.3: key presses in the Chrome sandbox only register after a screenshot has focused the page (matters for R2's dialog and menu walk).
+- **Epic 4/6 retros:** the only time the Auth0 live check was actually done it found a bug unit tests could not; do R2 properly, in a real session, with the console open.
+- **Git (last commits on `main`):** `cb6db30` 11.6 status, `c46c733` 11.6 app code, `b978153` 11.6 infra, `4e4cb45` NuGet pins (Pkcs/Xml 10.0.13), `3c0c71c` lucide bump. NuGet Audit gate is on: this story adds no package, so it should not trip it.
+
+### Latest tech information
+
+- Not researched online while writing this story. What follows is from my knowledge of the ASP.NET Core API, not verified against the .NET 10 docs, so confirm it against the compiler and the tests rather than trusting it: `Microsoft.AspNetCore.RateLimiting` (`AddRateLimiter`, `RateLimiterOptions.AddPolicy`, `RejectionStatusCode`, `OnRejected`, `RequireRateLimiting`, `EnableRateLimitingAttribute`, `MetadataName.RetryAfter`) and `RateLimitPartition.GetFixedWindowLimiter` are in the shared framework; `HstsOptions` defaults are 30 days, `IncludeSubDomains` false, excluded hosts `localhost`/`127.0.0.1`/`[::1]`. If a name differs, use the Microsoft Learn docs skill (`microsoft-docs:microsoft-docs`) rather than guessing.
+- Node 26 and Vite 8.2 are already in place; no frontend dependency changes.
+
+### Project Structure Notes
+
+- New: `src/EnergyTracker.Api/SecurityHeaders.cs`, `src/EnergyTracker.Api/HttpRateLimiting.cs` (flat in the Api project root, next to `DataProtectionKeyProtection.cs`), `web/public/theme-init.js`, `tests/EnergyTracker.Api.Tests/{SecurityHeadersTests,RateLimitingTests,RateLimitedRoutesTests}.cs`, `tests/EnergyTracker.Architecture.Tests/IndexHtmlHasNoInlineScriptTests.cs`.
+- Edited: `Program.cs`, the five endpoint files above, `web/index.html`, `web/src/lib/color-scheme.ts`, `web/src/lib/color-scheme.test.ts`, `docs/self-hosting.md`, `docs/local-vs-azure-deltas.md`, `_bmad-artifacts/project-context.md`, `_bmad-artifacts/implementation/deferred-work.md`, `sprint-status.yaml`.
+- No EF migration, no `infra/**` change (so `infra-deploy.yml` does not run), no new NuGet or npm package, no i18n key, no UX artefact (no new UI).
+- Detected variance: AD-27 says the limiter comes "after `UseRouting` and `UseAuthentication`"; this story puts it right after `UseAuthorization` (still after both). Flagged in Q2.
+
+### References
+
+- [Source: _bmad-artifacts/planning/epics/epic-11-codebase-audit-hardening.md#Story 11.7]
+- [Source: _bmad-artifacts/planning/architecture/architecture-energy-tracker-2026-08-09/ARCHITECTURE-SPINE/invariants-rules.md#AD-27 — HTTP hardening baseline]
+- [Source: _bmad-artifacts/planning/architecture/.../reviews/review-security-2026-10-10.md, findings 6-9]
+- [Source: docs/codebase-audit-2026-10-10.md#S3, #S8, #S9]
+- [Source: _bmad-artifacts/project-context.md#Auth (AD-17), #Security, #Critical Don't-Miss Rules (process gates)]
+- [Source: _bmad-artifacts/implementation/11-6-data-protection-key-encryption.md (live gate, rehearsal, non-Development test host)]
+- [Source: docs/local-vs-azure-deltas.md#D1]
+
+## Questions for Ralf (defaults above apply unless you overrule; none block starting Task 1)
+
+1. **Q1 Limits.** The table's numbers are my starting point, not from the AD. Want different ones (for example a stricter `InviteRedeem`, or a longer `Export` window)? Default: as in the table.
+2. **Q2 Limiter position.** AD-27 says after routing and authentication; I place it right after `UseAuthorization` so unauthenticated floods get a cheap 401 and never create identity buckets. Same intent, one line different. Default: after authorization.
+3. **Q3 Self-host compose.** Should `docker-compose.yml` bind `8080` to `127.0.0.1` by default so a direct-to-Kestrel client (IP spoofing against the `/login` limiter) is impossible without a proxy? It would break LAN access for existing installs, so the default is docs only.
+4. **Q4 HSTS.** Default framework values (30 days, no subdomains, no preload). Raise to a year, maybe `includeSubDomains`, after a clean R2? Default: not in this story.
+5. **Q5 `confirm` under `Upload`.** I throttle the restore confirm step with the upload bucket because it queues the heaviest job. Say if you want only the two raw upload routes limited.
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Sonnet 5.5 (claude-sonnet-5-5), via bmad-dev-story, 2026-10-17.
+
+### Debug Log References
+
+- **Red runs (1.9), before any implementation:** `SecurityHeadersTests` 7 of 8 failed (headers missing, no HSTS; the one pass is the Development-absence test, expected); the error-response case really produced a 500 and then failed on the missing CSP, so the provocation (authenticated request, unreachable Postgres on 127.0.0.1:1) works. `RateLimitingTests` + `RateLimitedRoutesTests`: 12 of 14 failed (no limiter; the two passes are `Health_and_session_are_not_throttled` and the family-classification test, which only checks table membership). `IndexHtmlHasNoInlineScriptTests` 2 of 2 failed (inline script present, `theme-init.js` missing). `color-scheme.test.ts` failed to load (`public/theme-init.js` ENOENT).
+- **Mutation checks (1.9), each restored afterwards:** M1 setting the three headers directly before `next()` instead of in `OnStarting` fails `Production_error_response_written_by_the_exception_handler_carries_the_hardening_headers` only, which confirms that `UseExceptionHandler` drops headers set earlier and that `OnStarting` is required. M2 removing `Referrer-Policy` fails 6 header tests. M3 removing `RequireRateLimiting` from the export route fails `Each_throttled_route_carries_its_policy` and 3 limiter tests. M4 an inline `<script>` in `index.html` fails both architecture tests. M5 changing the dark theme-color literal in `theme-init.js` fails 3 Vitest cases.
+- **Green:** 22 of 22 new API tests, 38 of 38 architecture tests, then the whole solution: 1170 of 1170 (no existing test tripped a limit, so no test needed its own subject). Vitest 573 of 573 (64 files). `oxlint` exit 0 (pre-existing warnings only). `npm run build` ok; Playwright `app-shell.spec.ts` + `locale-theme-sweep.spec.ts` 75 of 75 against `vite preview` (needed `npx playwright install chromium`; the browser was missing on this machine).
+- **oxlint finding:** `oxlint` lints `web/public/`, and `catch (e) {}` with an unused binding is an error there, so `theme-init.js` uses optional catch binding (`catch {}`) instead of the ES5 `catch (e)` the old inline script had. Every browser the app supports has it.
+- **Built bundle scan (2.4, AC #6):** fresh build, same bundle hashes as 2026-10-11; no `data:image|font|application|text|audio|video` URI in the JS or CSS, so `img-src 'self'` stands. The built `index.html` keeps `<script src="/theme-init.js">` unchanged and before the injected module script and stylesheet link; `wwwroot/theme-init.js` exists; no Vite warning for it.
+
+### Completion Notes List
+
+- **Implemented (Tasks 1-6, 7.1, 7.2):** `SecurityHeaders.cs` (CSP, `nosniff`, `Referrer-Policy` in `OnStarting`, first in the pipeline, non-Development only), `UseHsts()` after `UseForwardedHeaders` (non-Development, framework defaults), `HttpRateLimiting.cs` (policies and limits exactly as the story's table, fixed window, no queue, identity key = issuer|subject with client-IP fallback, 429 via `Results.Problem` plus `Retry-After`), `UseRateLimiter` right after `UseAuthorization`, `RequireRateLimiting` on `/login`, the three invite routes, `POST /smart-plug-imports`, both `household-import` POSTs and `GET /household-export`. `MemberRemoval` is registered and unused until Story 11.9 (also in `deferred-work.md`). `web/public/theme-init.js` replaces the inline script, `index.html` loads it, comments in `color-scheme.ts` updated. Forwarded-headers configuration is unchanged; only its explanatory comment was rewritten (it claimed nothing keys on the client IP).
+- **Guards added:** the route-to-policy mapping and family classification (`RateLimitedRoutesTests`), `index.html` structure (`IndexHtmlHasNoInlineScriptTests`), and `theme-init.js` run in jsdom against `color-scheme.ts`'s key and colors (in `color-scheme.test.ts`, so the localStorage allowlist guard needed no change).
+- **Task 5.3:** `docs/local-development.md` mentions neither the inline script nor Production runs, so it is unchanged.
+- **Task 7.2, local Production rehearsal (done 2026-10-17):** `scripts/run-api.sh -- --environment Production` (log: `Hosting environment: Production`, certificate protector), Postgres via `docker compose -f docker-compose.yml -f docker-compose.local.yml up postgres -d`, SPA built into `wwwroot`. `curl -skI https://localhost:7005/` and `/theme-init.js`: exact CSP, `nosniff`, `Referrer-Policy: same-origin`; no HSTS on localhost (framework exclusion, expected). In Chrome (Claude-in-Chrome, the browser already held a valid local session, so no sign-in was needed): Dashboard, Verlauf, Tarifradar, Einstellungen (12 headings, invite panel), Smart-Plug-Import page, the meter-reading dialog, the event dialog and the profile menu all rendered and behaved, **zero `securitypolicyviolation` events**; `GET /api/household-export` fetch 200, a bad `POST /api/household-import` 400 with no violation. Theme: dark stored via the profile menu, hard reload: `html.dark` true, background `rgb(18, 32, 26)`, `theme-init.js` finished at 22 ms and first paint was at 28 ms; preference restored to System afterwards. Playwright Chromium cold load of `/` and `/join/abc` against the same host: no CSP console output, the SPA redirected to the Auth0 authorize URL on its own 401. **Not covered locally:** sign-out and a fresh Auth0 sign-in (needs Ralf's password), the household-creation and tariff-configuration forms (the only two `ui/select` users; the first is only reachable for a household-less account), and the real Azure ingress.
+- **IMPORTANT for Task R2 (instruction was wrong in the story):** `read_console_messages` does **not** show CSP violations. A deliberate inline script was blocked by the CSP (it did not run) and the extension's console tool still returned nothing. So an empty console result there proves nothing. Use a page-level listener instead (`document.addEventListener('securitypolicyviolation', ...)` pushing into `window.__v`, installed before the walk; SPA navigation keeps it, a full reload drops it) and run a positive control (inject an inline script, confirm it is reported). For load-time violations use Playwright's console and `addInitScript` as in the rehearsal, or check the page is not visibly broken. Also: open the tariff-configuration Select in R2, and do not use the in-page export button for a download without Ralf's say-so (a `fetch` of `/api/household-export` covers the CSP/limiter path without saving a file).
+- **Not done, needs Ralf:** Task 7.3 (commit, push, open the PR: nothing was committed or pushed, you did not ask for it), Part R (R1 forged `X-Forwarded-For` probe, R2 live Azure Auth0/Chrome pass, R3). Per the story's hard gate the story cannot reach `done` without R1 and R2, and it should not merge before 7.2 is accepted by you. Status stays `in-progress` until 7.3 is done; then `review`.
+- **Environment changes on this machine:** `npx playwright install chromium` (99 MiB, in `~/Library/Caches/ms-playwright`); local Postgres container started and stopped again; the API was started and stopped; `web/` and `src/EnergyTracker.Api/wwwroot` were rebuilt (wwwroot is gitignored).
+
+### File List
+
+New:
+- `src/EnergyTracker.Api/SecurityHeaders.cs`
+- `src/EnergyTracker.Api/HttpRateLimiting.cs`
+- `web/public/theme-init.js`
+- `tests/EnergyTracker.Api.Tests/SecurityHeadersTests.cs`
+- `tests/EnergyTracker.Api.Tests/RateLimitingTests.cs`
+- `tests/EnergyTracker.Api.Tests/RateLimitedRoutesTests.cs`
+- `tests/EnergyTracker.Architecture.Tests/IndexHtmlHasNoInlineScriptTests.cs`
+- `_bmad-artifacts/implementation/11-7-security-headers-csp-rate-limiting.md`
+
+Modified:
+- `src/EnergyTracker.Api/Program.cs`
+- `src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs`
+- `src/EnergyTracker.Api/Endpoints/HouseholdInviteEndpoints.cs`
+- `src/EnergyTracker.Api/Endpoints/SmartPlugImportEndpoints.cs`
+- `src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs`
+- `src/EnergyTracker.Api/Endpoints/HouseholdExportEndpoints.cs`
+- `web/index.html`
+- `web/src/lib/color-scheme.ts`
+- `web/src/lib/color-scheme.test.ts`
+- `docs/self-hosting.md`
+- `docs/local-vs-azure-deltas.md`
+- `_bmad-artifacts/project-context.md`
+- `_bmad-artifacts/implementation/deferred-work.md`
+- `_bmad-artifacts/implementation/sprint-status.yaml`
+
+### Change Log
+
+- 2026-10-17: Story created (create-story), status ready-for-dev.
+- 2026-10-17: Implemented Tasks 1-6 and 7.1/7.2 (dev-story): security headers + HSTS, rate limiter on the table's routes, theme script moved to `web/public/theme-init.js`, docs and project context updated, local Production rehearsal done. Open: 7.3 (PR) and Part R (live gate). Status stays in-progress.

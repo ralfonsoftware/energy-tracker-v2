@@ -466,3 +466,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: Story 11.6 close-out (2026-10-17)
 
 - [open] Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key version (`az keyvault key list-versions --vault-name <vault> -n data-protection`; one version today, 105399eb...). Not run before close because `infra-deploy.yml` has run only once since the vault exists. A second version would be harmless (older versions stay usable for unwrap), but record it. Check after the next routine infra deploy. [infra/modules/key-vault.bicep]
+
+## Deferred from: dev-story of story-11-7-security-headers-csp-rate-limiting (2026-10-17)
+
+- [open] For Story 11.8 (POST `/logout`): the production CSP has `form-action 'self'`, and Chrome also enforces `form-action` on redirects that follow a form submission. A `<form method="post" action="/logout">` whose response redirects to the Auth0 end-session URL can therefore be blocked. 11.8 must either POST with `fetch` and navigate to the returned URL, or widen `form-action` to the issuer on purpose, and re-run the live logout check with the console open.
+- [open] For Story 11.9: apply `RateLimitPolicies.MemberRemoval` (registered in `HttpRateLimiting.cs`, unused until the route exists) to the member-removal route, add it to `Expected` in `RateLimitedRoutesTests` and to the invite-revoke route if one is added.
+- [open] Per-IP `/login` limit keys on the full IPv6 address; a client with a whole `/64` can rotate addresses inside it. Accepted at household scale; group by prefix if it ever matters.
+- [open] The limiter is in-process (AD-24). A distributed limiter store is part of the multi-instance work already listed in `ARCHITECTURE-SPINE/deferred.md`; do it together with lifting `maxReplicas`.
+- [open] HSTS uses the framework defaults (30 days, no `includeSubDomains`, no preload). Raise it (a year, maybe `includeSubDomains`) once the production CSP/HSTS have run clean for a while.

@@ -1,9 +1,11 @@
 // Theme preference: System | Light | Dark, stored per device (FR-35) — never on the Household.
 // System (the default, stored as "nothing") follows the OS color scheme live; Light/Dark override it
 // and ignore OS changes. DESIGN.md treats Dark and Light as equal citizens.
-// index.html carries a synchronous inline copy of the read logic (same key and values as
-// getThemePreference) applied before first paint to avoid a flash of the wrong theme — the two
-// MUST stay in sync. This module keeps things live after mount.
+// public/theme-init.js (loaded synchronously from index.html's <head>; an external file because the
+// production CSP forbids inline scripts, AD-27) carries a copy of the read logic (same key and values
+// as getThemePreference), applied before first paint to avoid a flash of the wrong theme — the two
+// MUST stay in sync, which color-scheme.test.ts enforces by running that file. This module keeps
+// things live after mount.
 // This file (and its test) is the single allowlisted localStorage user — see
 // FrontendDoesNotStoreAuthTokensTests. The stored value is only 'light' | 'dark', never a token.
 
@@ -11,7 +13,7 @@ export type ThemePreference = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
 export const THEME_STORAGE_KEY = 'energy-tracker-theme'
-// Same literals as the inline script in index.html (duplicated there by necessity).
+// Same literals as public/theme-init.js (duplicated there by necessity).
 export const THEME_COLOR_LIGHT = '#F3F8ED'
 export const THEME_COLOR_DARK = '#12201A'
 

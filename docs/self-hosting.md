@@ -150,6 +150,25 @@ stays accurate even while Postgres is still starting up.
 Then open [http://localhost:8080](http://localhost:8080) in a browser — you
 should see the Energy Tracker application shell load.
 
+## Put a reverse proxy in front
+
+The quick start above talks to port `8080` directly, which is fine for trying
+the app on your own machine. For anything reachable by other people, put a
+TLS-terminating reverse proxy (Caddy, nginx, Traefik, ...) in front of the
+`api` container and expose only the proxy:
+
+- The proxy must set `X-Forwarded-Proto` and `X-Forwarded-For`, and must
+  **overwrite** (or append the real peer address to) any `X-Forwarded-For`
+  a client sends. The app trusts those headers from any caller.
+- If clients can reach port `8080` directly, a client can choose its own IP
+  address and so get around the sign-in rate limit (`/login`).
+- Production responses carry a Content-Security-Policy, `nosniff` and
+  `Referrer-Policy: same-origin`, plus `Strict-Transport-Security` over HTTPS.
+  A proxy must not strip or replace them.
+- Requests above the rate limits (sign-in, uploads, export, invites) get an
+  HTTP `429` with a `Retry-After` header. Normal household use stays far
+  below them.
+
 ## 5. Stopping and restarting
 
 ```bash

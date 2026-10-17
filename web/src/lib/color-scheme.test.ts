@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getResolvedTheme,
@@ -227,5 +229,50 @@ describe('theme preference (Story 8.10, FR-35)', () => {
     window.dispatchEvent(new StorageEvent('storage', { key: 'other', newValue: 'x' }))
     // Cache untouched by the unrelated event.
     expect(getThemePreference()).toBe('light')
+  })
+})
+
+// Story 11.7 (AD-27): the pre-paint script is public/theme-init.js (index.html may not carry an inline
+// script under the production CSP). It cannot import color-scheme.ts, so this test runs the real file
+// and pins it to the same key, values and theme-color literals.
+describe('public/theme-init.js mirrors the theme preference logic', () => {
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../../public/theme-init.js'), 'utf8')
+
+  const runThemeInit = () => {
+    const meta = document.createElement('meta')
+    meta.setAttribute('name', 'theme-color')
+    meta.setAttribute('content', THEME_COLOR_LIGHT)
+    document.head.appendChild(meta)
+    new Function(source)()
+    return meta.getAttribute('content')
+  }
+
+  it('stored dark → dark class and dark theme-color, even when the OS prefers light', () => {
+    mockMatchMedia(false)
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'dark')
+    expect(runThemeInit()).toBe(THEME_COLOR_DARK)
+    expect(isDark()).toBe(true)
+  })
+
+  it('stored light → no dark class and light theme-color, even when the OS prefers dark', () => {
+    mockMatchMedia(true)
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light')
+    expect(runThemeInit()).toBe(THEME_COLOR_LIGHT)
+    expect(isDark()).toBe(false)
+  })
+
+  it('nothing stored → follows the OS', () => {
+    mockMatchMedia(true)
+    expect(runThemeInit()).toBe(THEME_COLOR_DARK)
+    expect(isDark()).toBe(true)
+  })
+
+  it('unreadable storage → falls back to the OS preference without throwing', () => {
+    mockMatchMedia(true)
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    expect(runThemeInit()).toBe(THEME_COLOR_DARK)
+    expect(isDark()).toBe(true)
   })
 })

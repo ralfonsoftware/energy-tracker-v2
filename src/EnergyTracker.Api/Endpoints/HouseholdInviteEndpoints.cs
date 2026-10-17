@@ -26,7 +26,7 @@ public static class HouseholdInviteEndpoints
             var invite = await createHouseholdInvite.ExecuteAsync(householdId.Value, cancellationToken);
 
             return Results.Ok(new HouseholdInviteResponse(invite.Token, invite.ExpiresAtUtc));
-        });
+        }).RequireRateLimiting(RateLimitPolicies.InviteCreate);
 
         // Side-effect-free preview/validity check — this endpoint must never consume the
         // invite. Correct REST semantics for a GET, and defense in depth: the route sits behind
@@ -52,7 +52,7 @@ public static class HouseholdInviteEndpoints
             }
 
             return Results.Ok(new HouseholdInvitePreviewResponse(invite.ExpiresAtUtc));
-        });
+        }).RequireRateLimiting(RateLimitPolicies.InviteRedeem);
 
         api.MapPost("/household-invites/{token}/accept", async (
             string token,
@@ -98,7 +98,7 @@ public static class HouseholdInviteEndpoints
                 // underlying "this principal already has a Household" condition.
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
-        });
+        }).RequireRateLimiting(RateLimitPolicies.InviteRedeem);
 
         return api;
     }
