@@ -145,7 +145,7 @@ development_status:
   11-4-unmapped-smart-plug-readings-keyed-by-device: done
   11-5-ci-identity-split-supply-chain-hygiene: done
   11-6-data-protection-key-encryption: done
-  11-7-security-headers-csp-rate-limiting: in-progress
+  11-7-security-headers-csp-rate-limiting: review
   11-8-auth-hardening-csrf-logout-session-cap: backlog
   11-9-member-removal-revocable-invites: backlog
   11-10-upload-hardening: backlog
