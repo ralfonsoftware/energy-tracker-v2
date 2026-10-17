@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using NSubstitute;
@@ -10,26 +11,27 @@ public class CreateHouseholdInviteTests
     private readonly IHouseholdRepository _repository = Substitute.For<IHouseholdRepository>();
 
     [Fact]
-    public async Task Creates_a_single_use_invite_expiring_seven_days_out_and_persists_it()
+    public async Task Creates_a_single_use_invite_expiring_seven_days_out_and_persists_only_the_hash()
     {
         var householdId = Guid.NewGuid();
         var sut = new CreateHouseholdInvite(_repository);
+        HouseholdInvite? stored = null;
+        await _repository.AddInviteAsync(Arg.Do<HouseholdInvite>(i => stored = i), Arg.Any<CancellationToken>());
 
         var before = DateTimeOffset.UtcNow;
-        var invite = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+        var created = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
         var after = DateTimeOffset.UtcNow;
 
-        invite.HouseholdId.ShouldBe(householdId);
-        invite.Id.ShouldNotBe(Guid.Empty);
-        invite.Token.ShouldNotBeNullOrWhiteSpace();
-        invite.Token.Length.ShouldBe(32);
-        invite.ConsumedAtUtc.ShouldBeNull();
-        (invite.ExpiresAtUtc - invite.CreatedAtUtc).ShouldBe(CreateHouseholdInvite.InviteLifetime);
-        invite.CreatedAtUtc.ShouldBeInRange(before, after);
-
-        await _repository.Received(1).AddInviteAsync(
-            Arg.Is<HouseholdInvite>(i => i.Id == invite.Id && i.HouseholdId == householdId && i.Token == invite.Token),
-            Arg.Any<CancellationToken>());
+        Regex.IsMatch(created.Token, "^[A-Za-z0-9_-]{43}$").ShouldBeTrue();
+        stored.ShouldNotBeNull();
+        stored.HouseholdId.ShouldBe(householdId);
+        stored.Id.ShouldNotBe(Guid.Empty);
+        stored.Token.ShouldBeNull();
+        stored.TokenHash.ShouldBe(InviteToken.Hash(created.Token));
+        stored.ConsumedAtUtc.ShouldBeNull();
+        (stored.ExpiresAtUtc - stored.CreatedAtUtc).ShouldBe(CreateHouseholdInvite.InviteLifetime);
+        stored.CreatedAtUtc.ShouldBeInRange(before, after);
+        created.ExpiresAtUtc.ShouldBe(stored.ExpiresAtUtc);
     }
 
     [Fact]

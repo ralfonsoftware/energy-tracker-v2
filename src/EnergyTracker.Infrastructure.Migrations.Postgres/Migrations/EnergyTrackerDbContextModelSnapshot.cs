@@ -17,7 +17,7 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -264,9 +264,12 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Token")
-                        .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
@@ -278,6 +281,8 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
 
                     b.HasIndex("Token")
                         .IsUnique();
+
+                    b.HasIndex("TokenHash");
 
                     b.ToTable("HouseholdInvites", (string)null);
                 });

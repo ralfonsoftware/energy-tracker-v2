@@ -15,7 +15,6 @@ internal static class RateLimitPolicies
     public const string InviteCreate = "InviteCreate";
     public const string InviteRedeem = "InviteRedeem";
 
-    // Registered now, applied by Story 11.9 when the member-removal route exists.
     public const string MemberRemoval = "MemberRemoval";
 }
 

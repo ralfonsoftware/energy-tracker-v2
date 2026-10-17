@@ -19,6 +19,7 @@ public class RateLimitingTests(EnergyTrackerApiFactory factory) : IClassFixture<
         ["Export"] = 5,
         ["InviteCreate"] = 10,
         ["InviteRedeem"] = 20,
+        ["MemberRemoval"] = 10,
     };
 
     private static HttpRequestMessage Request(string policy, int index = 0) => policy switch
@@ -30,6 +31,8 @@ public class RateLimitingTests(EnergyTrackerApiFactory factory) : IClassFixture<
         "InviteRedeem" => index % 2 == 0
             ? new HttpRequestMessage(HttpMethod.Get, "/api/household-invites/does-not-exist")
             : new HttpRequestMessage(HttpMethod.Post, "/api/household-invites/does-not-exist/accept"),
+        // Random guids: the 404/403 answers still consume permits, which is all the limiter test needs.
+        "MemberRemoval" => new HttpRequestMessage(HttpMethod.Delete, $"/api/household-members/{Guid.NewGuid()}"),
         _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, null),
     };
 
@@ -72,6 +75,7 @@ public class RateLimitingTests(EnergyTrackerApiFactory factory) : IClassFixture<
     [InlineData("Export")]
     [InlineData("InviteCreate")]
     [InlineData("InviteRedeem")]
+    [InlineData("MemberRemoval")]
     public async Task Exceeding_the_limit_returns_429_problem_details_with_retry_after(string policy)
     {
         var limit = Limits[policy];

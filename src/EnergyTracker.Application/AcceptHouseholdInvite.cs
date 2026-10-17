@@ -17,12 +17,18 @@ public class AcceptHouseholdInvite(IHouseholdRepository repository)
         string? displayName,
         CancellationToken cancellationToken)
     {
+        // Same answer as an unknown token, before the value can become a database parameter (AC #11c).
+        if (!InviteToken.IsPlausible(token))
+        {
+            throw new HouseholdInviteNotFoundException();
+        }
+
         var invite = await repository.FindInviteByTokenAsync(token, cancellationToken)
-            ?? throw new HouseholdInviteNotFoundException(token);
+            ?? throw new HouseholdInviteNotFoundException();
 
         if (invite.ConsumedAtUtc is not null || invite.ExpiresAtUtc <= DateTimeOffset.UtcNow)
         {
-            throw new HouseholdInviteExpiredOrConsumedException(token);
+            throw new HouseholdInviteExpiredOrConsumedException();
         }
 
         var existingMember = await repository.FindMemberAsync(externalIssuer, externalSubjectId, cancellationToken);

@@ -16,7 +16,7 @@ public class ListSmartPlugImportJobsTests
     {
         _smartPlugImportRepository.FindAllByBackgroundJobIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<SmartPlugImport>)[]);
-        _backgroundJobRepository.FindMembersByIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+        _backgroundJobRepository.FindMembersByIdsAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<HouseholdMember>)[]);
         _smartPlugImportRepository.ListGapsByImportIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .Returns((IReadOnlyList<SmartPlugImportGap>)[]);
@@ -224,7 +224,7 @@ public class ListSmartPlugImportJobsTests
         };
         var job = MakeJob(BackgroundJobStatus.Queued, queuedByHouseholdMemberId: memberId);
         ReturnJobs(job);
-        _backgroundJobRepository.FindMembersByIdsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+        _backgroundJobRepository.FindMembersByIdsAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .Returns([member]);
         var sut = Sut();
 

@@ -28,6 +28,52 @@ public static class HouseholdInviteEndpoints
             return Results.Ok(new HouseholdInviteResponse(invite.Token, invite.ExpiresAtUtc));
         }).RequireRateLimiting(RateLimitPolicies.InviteCreate);
 
+        // Open invites only: never a token or a hash (only the hash is stored, so a new invite's link cannot be shown again).
+        api.MapGet("/household-invites", async (
+            ICurrentHouseholdAccessor householdAccessor,
+            ListOpenHouseholdInvites listOpenHouseholdInvites,
+            CancellationToken cancellationToken) =>
+        {
+            var householdId = householdAccessor.HouseholdId;
+            if (householdId is null)
+            {
+                return HouseholdMemberEndpoints.NoHousehold();
+            }
+
+            var invites = await listOpenHouseholdInvites.ExecuteAsync(householdId.Value, cancellationToken);
+
+            return Results.Ok(new OpenHouseholdInvitesResponse(invites
+                .Select(i => new OpenHouseholdInviteResponse(i.Id, i.CreatedAtUtc, i.ExpiresAtUtc))
+                .ToList()));
+        });
+
+        api.MapDelete("/household-invites/{id:guid}", async (
+            Guid id,
+            ICurrentHouseholdAccessor householdAccessor,
+            RevokeHouseholdInvite revokeHouseholdInvite,
+            CancellationToken cancellationToken) =>
+        {
+            var householdId = householdAccessor.HouseholdId;
+            if (householdId is null)
+            {
+                return HouseholdMemberEndpoints.NoHousehold();
+            }
+
+            try
+            {
+                await revokeHouseholdInvite.ExecuteAsync(householdId.Value, id, cancellationToken);
+                return Results.NoContent();
+            }
+            catch (HouseholdInviteNotOpenException)
+            {
+                // Unknown, another Household's, consumed, expired and already revoked all answer the same.
+                return Results.Problem(
+                    detail: "That invite is not open.",
+                    statusCode: StatusCodes.Status404NotFound,
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "invite-not-found" });
+            }
+        }).RequireRateLimiting(RateLimitPolicies.MemberRemoval);
+
         // Side-effect-free preview/validity check — this endpoint must never consume the
         // invite. Correct REST semantics for a GET, and defense in depth: the route sits behind
         // RequireAuthorization() so an anonymous link-preview bot can't reach it today, but a
@@ -38,7 +84,9 @@ public static class HouseholdInviteEndpoints
             IHouseholdRepository repository,
             CancellationToken cancellationToken) =>
         {
-            var invite = await repository.FindInviteByTokenAsync(token, cancellationToken);
+            var invite = InviteToken.IsPlausible(token)
+                ? await repository.FindInviteByTokenAsync(token, cancellationToken)
+                : null;
             if (invite is null)
             {
                 return Results.NotFound();
@@ -86,6 +134,7 @@ public static class HouseholdInviteEndpoints
             }
             catch (HouseholdInviteNotFoundException ex)
             {
+                // The exceptions carry no token, so nothing the caller presented is echoed back (Story 11.9 AC #11).
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
             }
             catch (HouseholdInviteExpiredOrConsumedException ex)
@@ -107,3 +156,7 @@ public static class HouseholdInviteEndpoints
 public record HouseholdInviteResponse(string Token, DateTimeOffset ExpiresAtUtc);
 
 public record HouseholdInvitePreviewResponse(DateTimeOffset ExpiresAtUtc);
+
+public record OpenHouseholdInvitesResponse(IReadOnlyList<OpenHouseholdInviteResponse> Invites);
+
+public record OpenHouseholdInviteResponse(Guid Id, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc);

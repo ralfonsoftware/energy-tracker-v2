@@ -147,7 +147,7 @@ development_status:
   11-6-data-protection-key-encryption: done
   11-7-security-headers-csp-rate-limiting: done
   11-8-auth-hardening-csrf-logout-session-cap: done
-  11-9-member-removal-revocable-invites: backlog
+  11-9-member-removal-revocable-invites: in-progress
   11-10-upload-hardening: backlog
   11-11-container-config-correctness: backlog
   11-12-async-per-request-household-resolution: backlog

@@ -20,15 +20,20 @@ public class RateLimitedRoutesTests(EnergyTrackerApiFactory factory) : IClassFix
         ("POST", "/api/household-invites", "InviteCreate"),
         ("GET", "/api/household-invites/{token}", "InviteRedeem"),
         ("POST", "/api/household-invites/{token}/accept", "InviteRedeem"),
+        ("DELETE", "/api/household-members/{id:guid}", "MemberRemoval"),
+        ("DELETE", "/api/household-invites/{id:guid}", "MemberRemoval"),
     ];
 
     // Routes in the throttled families that are deliberately not limited (a single-use, id-addressed step).
     private static readonly HashSet<string> UnthrottledByDesign =
     [
         "POST /api/smart-plug-imports/{id:guid}/power-point-mapping",
+        // Cheap, member-only reads of the Household's own rows (Story 11.9).
+        "GET /api/household-members",
+        "GET /api/household-invites",
     ];
 
-    private static readonly string[] Families = ["household-invites", "household-import", "smart-plug-imports", "household-export"];
+    private static readonly string[] Families = ["household-invites", "household-import", "smart-plug-imports", "household-export", "household-members"];
 
     private List<(string Method, string Route, string? Policy)> AllRoutes() =>
         factory.Services.GetRequiredService<EndpointDataSource>().Endpoints

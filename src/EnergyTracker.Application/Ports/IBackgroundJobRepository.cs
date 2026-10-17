@@ -13,7 +13,7 @@ public interface IBackgroundJobRepository
 
     // Batch-load, for resolving BackgroundJob.QueuedByHouseholdMemberId into a "Queued by
     // {member}" display name (Story 3.6/UX-DR21) without an N+1 query per job row.
-    Task<IReadOnlyList<HouseholdMember>> FindMembersByIdsAsync(IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken);
+    Task<IReadOnlyList<HouseholdMember>> FindMembersByIdsAsync(Guid householdId, IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken);
 
     // Story 11.2 (AC #7): deletes, for one Household, terminal (Completed or Failed) rows of a job
     // type whose CompletedAtUtc is older than the cutoff (null = no age limit), at most one bounded

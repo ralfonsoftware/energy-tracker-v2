@@ -169,6 +169,26 @@ TLS-terminating reverse proxy (Caddy, nginx, Traefik, ...) in front of the
   HTTP `429` with a `Retry-After` header. Normal household use stays far
   below them.
 
+## Members and access
+
+- Every member of a household has the same rights. There are no roles and no
+  owner: **any member can remove any other member**, and any member can leave.
+  Removing a member also cancels every open invite link of the household.
+  Both are done in **Settings → Household**.
+- The last remaining member cannot leave or be removed through the app.
+- A removed person keeps their sign-in but lands in the household set-up flow
+  on their next request; the household's data stays with the household.
+- Invite links are single use, expire after 7 days, and can be revoked in
+  Settings. A link is shown once, when it is created: the server stores only a
+  hash of it, so a lost link cannot be shown again (create a new one).
+- **Recovering a household whose members are all gone is an operator task.**
+  The app has no path for it. Either restore the database from a backup taken
+  before the removal, or insert a row into the `HouseholdMembers` table for the
+  person who should regain access: a new `Id`, the household's `HouseholdId`,
+  that person's `ExternalIssuer` and `ExternalSubjectId` (the OIDC issuer and
+  `sub` of their sign-in), an optional `DisplayName` and `CreatedAtUtc`. There
+  is no script for this.
+
 ## Sessions and scripts that call the API
 
 - A session ends at the latest **90 days after sign-in**, however often you

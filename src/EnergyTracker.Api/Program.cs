@@ -308,6 +308,10 @@ builder.Services.AddScoped<ICurrentHouseholdAccessor, CurrentHouseholdAccessor>(
 builder.Services.AddScoped<CreateHousehold>();
 builder.Services.AddScoped<CreateHouseholdInvite>();
 builder.Services.AddScoped<AcceptHouseholdInvite>();
+builder.Services.AddScoped<RemoveHouseholdMember>();
+builder.Services.AddScoped<ListHouseholdMembers>();
+builder.Services.AddScoped<ListOpenHouseholdInvites>();
+builder.Services.AddScoped<RevokeHouseholdInvite>();
 builder.Services.AddScoped<SetYearlyBaseline>();
 builder.Services.AddScoped<SetHouseholdLocale>();
 
@@ -567,6 +571,7 @@ var api = app.MapGroup("/api").RequireAuthorization().RequireRequestedWith();
 api.MapSessionEndpoints();
 api.MapHouseholdEndpoints();
 api.MapHouseholdInviteEndpoints();
+api.MapHouseholdMemberEndpoints();
 api.MapTaggingScaffoldEndpoints();
 api.MapMeterReadingEndpoints();
 api.MapTariffEndpoints();

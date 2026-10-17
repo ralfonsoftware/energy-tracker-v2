@@ -64,7 +64,7 @@ public class ListSmartPlugImportJobs(
             .Distinct()
             .ToList();
         var members = memberIds.Count > 0
-            ? await backgroundJobRepository.FindMembersByIdsAsync(memberIds, cancellationToken)
+            ? await backgroundJobRepository.FindMembersByIdsAsync(householdId, memberIds, cancellationToken)
             : [];
         var displayNamesByMemberId = members.ToDictionary(m => m.Id, m => m.DisplayName);
 

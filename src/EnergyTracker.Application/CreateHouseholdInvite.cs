@@ -4,7 +4,8 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>
-/// Creates a single-use, expiring HouseholdInvite for the caller's own Household (AC #1).
+/// Creates a single-use, expiring HouseholdInvite for the caller's own Household and returns its
+/// plaintext token once; only the token's hash is stored (AC #1, Story 11.9 AC #5).
 /// Plain class with a constructor-injected repository port, matching CreateHousehold's shape.
 /// </summary>
 public class CreateHouseholdInvite(IHouseholdRepository repository)
@@ -13,20 +14,21 @@ public class CreateHouseholdInvite(IHouseholdRepository repository)
     // how long a leaked/forwarded invite link stays dangerous.
     public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(7);
 
-    public async Task<HouseholdInvite> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
+    public async Task<CreatedHouseholdInvite> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
+        var token = InviteToken.Generate();
         var invite = new HouseholdInvite
         {
             Id = Guid.NewGuid(),
             HouseholdId = householdId,
-            Token = Guid.NewGuid().ToString("N"),
+            TokenHash = InviteToken.Hash(token),
             CreatedAtUtc = now,
             ExpiresAtUtc = now + InviteLifetime,
         };
 
         await repository.AddInviteAsync(invite, cancellationToken);
 
-        return invite;
+        return new CreatedHouseholdInvite(token, invite.ExpiresAtUtc);
     }
 }
