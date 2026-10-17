@@ -101,7 +101,8 @@ public static class SmartPlugImportEndpoints
         // endpoint would 500 on every request without this. Auth (RequireAuthorization on the
         // /api group) plus SameSite=Lax already protects the upload the way this app protects
         // every other write endpoint.
-        .DisableAntiforgery();
+        .DisableAntiforgery()
+        .RequireRateLimiting(RateLimitPolicies.Upload);
 
         api.MapPost("/smart-plug-imports/{id:guid}/power-point-mapping", async (
             Guid id,

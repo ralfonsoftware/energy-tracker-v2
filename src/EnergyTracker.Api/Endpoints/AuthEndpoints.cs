@@ -18,7 +18,9 @@ public static class AuthEndpoints
         app.MapGet("/login", (string? returnUrl) =>
             Results.Challenge(
                 new AuthenticationProperties { RedirectUri = IsSafeLocalReturnUrl(returnUrl) ? returnUrl! : "/" },
-                [OpenIdConnectDefaults.AuthenticationScheme]));
+                [OpenIdConnectDefaults.AuthenticationScheme]))
+            // AD-27: per client IP, the one unauthenticated throttled route (audit S3).
+            .RequireRateLimiting(RateLimitPolicies.Login);
 
         // Signs out the cookie scheme, plus the OIDC scheme (provider-side end-session, if
         // supported) only when it's actually registered — /logout is reachable by anyone,

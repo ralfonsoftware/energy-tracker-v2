@@ -66,6 +66,25 @@ post-deploy login check against Azure — this fix does not replace that
 (see the retro's action item 1, the blocking "verified against the real
 deployed environment" AC).
 
+**Client IP for rate limiting (Story 11.7, AD-27):** the `/login` limiter
+keys on `HttpContext.Connection.RemoteIpAddress`, i.e. the address
+`UseForwardedHeaders` resolved. Where it comes from differs per target:
+
+- **Azure:** Container Apps ingress appends the real client IP as the
+  *rightmost* `X-Forwarded-For` entry. `ForwardLimit` is left at its default
+  of 1, so only that entry is used and a client cannot choose its own bucket by
+  forging the header. Confirmed by a live probe (Story 11.7, Task R1; result
+  below).
+- **Self-host:** the reverse proxy in front of the container must set the
+  header (`docs/self-hosting.md`, "Put a reverse proxy in front"). Reaching
+  Kestrel directly lets a client pick its own IP and dodge the limiter.
+- **Local dev:** loopback, no header; one shared bucket.
+
+Do **not** narrow `KnownIPNetworks`/`KnownProxies` to harden this: it
+re-breaks the Story 1.7 login fix above.
+
+**Live probe result (Story 11.7, R1):** _not run yet._
+
 **Incident record:** production outage, 2026-08-13; fixed in Story 1.7.
 
 ---

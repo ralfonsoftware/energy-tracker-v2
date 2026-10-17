@@ -95,7 +95,8 @@ public static class HouseholdImportEndpoints
         // Same reasoning as SmartPlugImportEndpoints' own upload endpoint — Minimal APIs attach
         // antiforgery metadata to any IFormFile-binding endpoint by default; this app has no
         // app.UseAntiforgery() middleware (session identity is a cookie the SPA never reads).
-        .DisableAntiforgery();
+        .DisableAntiforgery()
+        .RequireRateLimiting(RateLimitPolicies.Upload);
 
         api.MapPost("/household-import/{token:guid}/confirm", async (
             Guid token,
@@ -176,7 +177,7 @@ public static class HouseholdImportEndpoints
             // like every other async job in this codebase (AD-6). No backend change needed there
             // (JobEndpoints.cs is already generic across JobType).
             return Results.Accepted($"/api/jobs/{jobId}", new HouseholdImportConfirmResponse(jobId));
-        });
+        }).RequireRateLimiting(RateLimitPolicies.Upload);
 
         return api;
     }
