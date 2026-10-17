@@ -462,3 +462,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover (Ralf's call, Q2/R4). Removes live plaintext key material; backups keep it until they expire. [infra/README.md]
 - [open] Key Vault diagnostic settings to Log Analytics (audit trail of wrap/unwrap) were left out on purpose: a second ingestion path against the shared daily cap (AD-19 OTel note). Revisit if an audit trail of key use is wanted. [infra/modules/key-vault.bicep]
 - [open] `Azure.Identity` is now an explicit 1.21.0 pin while `Microsoft.Data.SqlClient` 6.1.6 asks for 1.17.1; a later SqlClient major may need the pin re-checked (AD-21/AD-23 Entra `Active Directory Default` migration path). [Directory.Packages.props]
+
+## Deferred from: Story 11.6 close-out (2026-10-17)
+
+- [open] Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key version (`az keyvault key list-versions --vault-name <vault> -n data-protection`; one version today, 105399eb...). Not run before close because `infra-deploy.yml` has run only once since the vault exists. A second version would be harmless (older versions stay usable for unwrap), but record it. Check after the next routine infra deploy. [infra/modules/key-vault.bicep]
