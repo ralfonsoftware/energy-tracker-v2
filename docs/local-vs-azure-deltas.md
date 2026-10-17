@@ -83,7 +83,22 @@ keys on `HttpContext.Connection.RemoteIpAddress`, i.e. the address
 Do **not** narrow `KnownIPNetworks`/`KnownProxies` to harden this: it
 re-breaks the Story 1.7 login fix above.
 
-**Live probe result (Story 11.7, R1):** _not run yet._
+**Revisit trigger:** if a CDN or WAF (Azure Front Door, Cloudflare, ...) is
+ever put in front of the Container App, the rightmost `X-Forwarded-For` entry
+becomes that service's egress address, so with `ForwardLimit` at 1 every client
+would share one `/login` bucket (20 per minute for everyone). Change
+`ForwardLimit` (or take the client IP from the CDN's own header) at the same
+time as adding the CDN, and re-run the forged-header probe below.
+
+**Live probe result (Story 11.7, R1):** run 2026-10-17 11:55 UTC against
+`https://energytracker.ralfonsoftware.de/login` after the Story 11.7 deploy,
+one client, 25 requests, each with a different forged
+`X-Forwarded-For: 198.51.100.<n>`: the first 20 answered `302`, the 21st to
+25th answered `429`. A 26th request with no header, in the same minute, also
+answered `429`. All 25 forged addresses therefore landed in one bucket, the
+real client IP that ingress supplies; the leftmost forged entries are ignored
+(`ForwardLimit` 1). The `429` was `application/problem+json` with
+`Retry-After: 60` and the CSP header, and `/health` stayed `200`.
 
 **Incident record:** production outage, 2026-08-13; fixed in Story 1.7.
 
