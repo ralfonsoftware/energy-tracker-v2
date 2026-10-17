@@ -1,28 +1,8 @@
 import { enqueue, listPending, remove, type QueuedMeterReading } from '@/lib/offline-queue'
+import { apiFetch, toApiError } from '@/lib/api-client'
 
-// Same shape as tagging-scaffold-manager.tsx's ApiError/toApiError pattern (Dev Notes) — a real
-// error *response* (e.g. a 400 from MeterReadingValidationException) is surfaced to the caller,
-// never queued, since a request that can never succeed must not sit in IndexedDB forever.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
-
+// A real error *response* (e.g. a 400 from MeterReadingValidationException) is surfaced to the caller
+// as an ApiError, never queued, since a request that can never succeed must not sit in IndexedDB forever.
 export interface MeterReadingDto {
   id: string
   kwhValue: number
@@ -40,9 +20,8 @@ const REQUEST_TIMEOUT_MS = 10_000
 // the Household from the authenticated session (AD-3), not from client input, so the request body
 // only ever carries the three fields CreateMeterReading actually expects.
 async function post(reading: QueuedMeterReading): Promise<Response> {
-  return fetch('/api/meter-readings', {
+  return apiFetch('/api/meter-readings', {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       kwhValue: reading.kwhValue,

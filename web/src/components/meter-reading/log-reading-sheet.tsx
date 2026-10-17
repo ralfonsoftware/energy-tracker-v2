@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/sheet'
 import { UnitInput } from '@/components/ui/unit-input'
 import { GLASS_SHEET_CLASSNAME } from '@/lib/glass-classnames'
-import { attemptSend, ApiError } from '@/lib/meter-reading-sync'
+import { attemptSend } from '@/lib/meter-reading-sync'
+import { ApiError } from '@/lib/api-client'
 
 // datetime-local's value format is local time with no offset (YYYY-MM-DDTHH:mm) — this is what
 // both the <input> itself and `new Date(value)` (which interprets it as local time) expect.

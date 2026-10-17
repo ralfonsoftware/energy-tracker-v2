@@ -1,26 +1,4 @@
-// Same ApiError/toApiError shape as tariff-api.ts/status-api.ts — copied per API file, not shared,
-// per this repo's own established convention.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-  errorCode: string | null
-
-  constructor(status: number, detail: string | null, errorCode: string | null = null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-    this.errorCode = errorCode
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string; errorCode?: string }
-    return new ApiError(response.status, body.detail ?? null, body.errorCode ?? null)
-  } catch {
-    return new ApiError(response.status, null, null)
-  }
-}
+import { ApiError, apiFetch, toApiError } from '@/lib/api-client'
 
 export interface RoomDto {
   id: string
@@ -74,9 +52,8 @@ export interface EventHistoryPageDto {
 export async function createEvent(input: CreateEventInput): Promise<EventDto> {
   // Plain fetch, not attemptSend/the offline queue — Event creation is deliberately not extended
   // into the Meter-Reading-only offline pattern (see the story's Dev Notes).
-  const response = await fetch('/api/events', {
+  const response = await apiFetch('/api/events', {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
@@ -89,7 +66,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventDto> {
 }
 
 export async function fetchEventHistory(page: number, pageSize: number): Promise<EventHistoryPageDto> {
-  const response = await fetch(`/api/events?page=${page}&pageSize=${pageSize}`, { credentials: 'include' })
+  const response = await apiFetch(`/api/events?page=${page}&pageSize=${pageSize}`)
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -98,7 +75,7 @@ export async function fetchEventHistory(page: number, pageSize: number): Promise
 }
 
 // Shared by log-event-sheet.tsx and events-card.tsx — both surfaces need identical behavior, so this
-// lives in one place rather than being copied per-file the way ApiError/toApiError deliberately are.
+// lives in one place.
 // The server's `detail` is English by contract; `errorCode` is what gets localized (AD-18). A 401 is
 // called out separately so an expired session doesn't read as a generic failure the user would retry
 // forever — matching App.tsx's own 401 handling.
@@ -124,9 +101,9 @@ export function messageForEventError(err: unknown, t: (key: string, options?: Re
  */
 export async function fetchTagOptions(): Promise<TagOption[]> {
   const [roomsResponse, powerPointsResponse, devicesResponse] = await Promise.all([
-    fetch('/api/rooms', { credentials: 'include' }),
-    fetch('/api/power-points', { credentials: 'include' }),
-    fetch('/api/devices', { credentials: 'include' }),
+    apiFetch('/api/rooms'),
+    apiFetch('/api/power-points'),
+    apiFetch('/api/devices'),
   ])
 
   if (!roomsResponse.ok || !powerPointsResponse.ok || !devicesResponse.ok) {

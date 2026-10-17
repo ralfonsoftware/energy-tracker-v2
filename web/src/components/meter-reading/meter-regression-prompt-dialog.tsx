@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label'
 import { UnitInput } from '@/components/ui/unit-input'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 import { cn } from '@/lib/utils'
-import { ApiError, resolveMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
+import { resolveMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
+import { ApiError } from '@/lib/api-client'
 
 // This is a normal classification step the household resolves in one tap, not a system error
 // (AC #8, UX-DR4) — never dismissible without resolving (AC #5: no silent expiry, no default

@@ -47,9 +47,17 @@ public class EnergyTrackerApiFactory : WebApplicationFactory<Program>, IAsyncLif
         });
     }
 
-    public HttpClient CreateAuthenticatedClient(string subject, string? issuer = null, string? name = null, string? email = null)
+    // Story 11.8 (AD-27): every /api mutation needs X-Requested-With, so an authenticated client sends it
+    // by default, as the SPA's shared client does. Pass sendRequestedWith: false to prove its absence.
+    public HttpClient CreateAuthenticatedClient(
+        string subject, string? issuer = null, string? name = null, string? email = null, bool sendRequestedWith = true)
     {
         var client = CreateClient();
+        if (sendRequestedWith)
+        {
+            client.DefaultRequestHeaders.Add("X-Requested-With", "fetch");
+        }
+
         client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, subject);
         client.DefaultRequestHeaders.Add(TestAuthHandler.IssuerHeader, issuer ?? TestAuthHandler.DefaultIssuer);
         if (name is not null)

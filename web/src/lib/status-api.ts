@@ -1,24 +1,4 @@
-// Same ApiError/toApiError shape as meter-regression-api.ts — a real error response is surfaced
-// to the caller via a thrown ApiError, never silently swallowed.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
+import { apiFetch, toApiError } from '@/lib/api-client'
 
 export type StatusValue = 'withinRange' | 'belowBaseline' | 'trending'
 
@@ -41,7 +21,7 @@ export interface StatusDetailDto {
 }
 
 export async function fetchCurrentStatus(): Promise<StatusDto | null> {
-  const response = await fetch('/api/status', { credentials: 'include' })
+  const response = await apiFetch('/api/status')
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -54,7 +34,7 @@ export async function fetchCurrentStatus(): Promise<StatusDto | null> {
 }
 
 export async function fetchStatusDetail(): Promise<StatusDetailDto | null> {
-  const response = await fetch('/api/status/detail', { credentials: 'include' })
+  const response = await apiFetch('/api/status/detail')
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -73,7 +53,7 @@ export interface StatusHistoryEntryDto {
 }
 
 export async function fetchStatusHistory(): Promise<StatusHistoryEntryDto[]> {
-  const response = await fetch('/api/status/history', { credentials: 'include' })
+  const response = await apiFetch('/api/status/history')
   if (!response.ok) {
     throw await toApiError(response)
   }

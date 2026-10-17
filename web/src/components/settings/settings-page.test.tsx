@@ -13,11 +13,15 @@ function jsonResponse(body: object | null, status = 200) {
 
 const householdId = '11111111-1111-1111-1111-111111111111'
 
-function stubFetch(meterReadingsResponse: () => Response = () => jsonResponse(null)) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((input: string | URL | Request) => {
+function stubFetch(
+  meterReadingsResponse: () => Response = () => jsonResponse(null),
+  logoutResponse: () => Promise<Response> = () => Promise.resolve(jsonResponse({ redirectUrl: '/' })),
+) {
+  const fetchMock = vi.fn((input: string | URL | Request, _init?: RequestInit) => {
       const url = String(input)
+      if (url === '/logout') {
+        return logoutResponse()
+      }
       if (url === '/api/rooms' || url === '/api/power-points' || url === '/api/devices') {
         return Promise.resolve(jsonResponse([]))
       }
@@ -31,8 +35,9 @@ function stubFetch(meterReadingsResponse: () => Response = () => jsonResponse(nu
         return Promise.resolve(meterReadingsResponse())
       }
       return Promise.resolve(jsonResponse(null))
-    }),
-  )
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
 }
 
 function renderSettingsPage(supportsFederatedLogout: boolean) {
@@ -224,22 +229,25 @@ describe('SettingsPage', () => {
       expect(await screen.findByRole('heading', { name: 'Log off?' })).toBeInTheDocument()
     })
 
-    it('navigates straight to /logout when federated logout is supported and no readings are queued (AC #2, #6)', async () => {
+    it('POSTs /logout with the CSRF header and navigates to the returned URL when federated logout is supported and no readings are queued (AC #3, #5)', async () => {
       const user = userEvent.setup()
-      stubFetch()
+      const fetchMock = stubFetch(undefined, () => Promise.resolve(jsonResponse({ redirectUrl: 'https://tenant.example/oidc/logout?state=abc' })))
       const restoreLocation = stubLocation()
       renderSettingsPage(true)
 
       await user.click(await screen.findByRole('button', { name: 'Log off' }))
       await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
 
-      await waitFor(() => expect(window.location.href).toBe('/logout'))
+      await waitFor(() => expect(window.location.href).toBe('https://tenant.example/oidc/logout?state=abc'))
+      const [, init] = fetchMock.mock.calls.find(([url]) => url === '/logout')!
+      expect(init?.method).toBe('POST')
+      expect(new Headers(init?.headers).get('X-Requested-With')).toBe('fetch')
       restoreLocation()
     })
 
-    it('shows a warning instead of navigating when federated logout is not supported, and proceeds only after Continue (AC #3)', async () => {
+    it('shows a warning instead of POSTing when federated logout is not supported, and proceeds only after Continue (AC #3)', async () => {
       const user = userEvent.setup()
-      stubFetch()
+      const fetchMock = stubFetch()
       const restoreLocation = stubLocation()
       renderSettingsPage(false)
 
@@ -248,13 +256,14 @@ describe('SettingsPage', () => {
 
       expect(await screen.findByRole('heading', { name: 'You may still be signed in elsewhere' })).toBeInTheDocument()
       expect(window.location.href).toBe('')
+      expect(fetchMock.mock.calls.some(([url]) => url === '/logout')).toBe(false)
 
       await user.click(screen.getByRole('button', { name: 'Continue' }))
-      await waitFor(() => expect(window.location.href).toBe('/logout'))
+      await waitFor(() => expect(window.location.href).toBe('/'))
       restoreLocation()
     })
 
-    it('surfaces still-queued readings instead of silently discarding them, and only navigates after an explicit choice (AC #4)', async () => {
+    it('surfaces still-queued readings instead of silently discarding them, and only POSTs after an explicit choice (AC #3)', async () => {
       const user = userEvent.setup()
       // The flush attempt fails (simulating offline/transient failure) — the queued reading
       // survives, which is exactly what AC #4 requires to be surfaced explicitly.
@@ -271,7 +280,45 @@ describe('SettingsPage', () => {
       expect(window.location.href).toBe('')
 
       await user.click(screen.getByRole('button', { name: 'Log off anyway' }))
-      await waitFor(() => expect(window.location.href).toBe('/logout'))
+      await waitFor(() => expect(window.location.href).toBe('/'))
+      restoreLocation()
+    })
+
+    it('shows an inline error and keeps the dialog open when the POST fails (AC #10)', async () => {
+      const user = userEvent.setup()
+      stubFetch(undefined, () => Promise.reject(new TypeError('Failed to fetch')))
+      const restoreLocation = stubLocation()
+      renderSettingsPage(true)
+
+      await user.click(await screen.findByRole('button', { name: 'Log off' }))
+      await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent("Logging off didn't work. Check your connection and try again.")
+      expect(screen.getByRole('heading', { name: 'Log off?' })).toBeInTheDocument()
+      expect(window.location.href).toBe('')
+      expect(screen.getByRole('button', { name: 'Yes, log off' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+      restoreLocation()
+    })
+
+    it('disables the dialog buttons while the POST is in flight (AC #10)', async () => {
+      const user = userEvent.setup()
+      let finish: (response: Response) => void = () => {}
+      const fetchMock = stubFetch(undefined, () => new Promise<Response>((resolve) => { finish = resolve }))
+      const restoreLocation = stubLocation()
+      renderSettingsPage(true)
+
+      await user.click(await screen.findByRole('button', { name: 'Log off' }))
+      await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+      // The queue check runs first; only once /logout has actually been requested is the POST in flight.
+      await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === '/logout')).toBe(true))
+      // The confirm button reads "Checking…" for as long as the request is in flight.
+      expect(screen.getByRole('button', { name: 'Checking…' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+
+      finish(jsonResponse({ redirectUrl: '/' }))
+      await waitFor(() => expect(window.location.href).toBe('/'))
       restoreLocation()
     })
 

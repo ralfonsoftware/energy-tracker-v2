@@ -13,6 +13,7 @@ import { registerOfflineSync } from '@/lib/meter-reading-sync'
 import { fetchOpenMeterRegressionPrompt, type MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import { fetchCurrentStatus, type StatusDto } from '@/lib/status-api'
 import { fetchTariffCheckReminder, type TariffCheckReminderDto } from '@/lib/tariff-check-api'
+import { apiFetch } from '@/lib/api-client'
 
 interface SessionResponse {
   hasHousehold: boolean
@@ -147,7 +148,7 @@ function App() {
   useEffect(() => {
     let cancelled = false
 
-    fetch('/api/session', { credentials: 'include' })
+    apiFetch('/api/session')
       .then((response) => {
         // The SPA's response to a 401 here is what triggers navigation to /login — a
         // server-initiated OIDC challenge, not an SPA client route (AC #1).

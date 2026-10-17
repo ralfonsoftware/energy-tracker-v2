@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchMeterReadingHistory, updateMeterReading } from './meter-reading-history-api'
+import { fetchMeterReadingHistory, updateMeterReading } from './meter-reading-history-api'
+import { ApiError } from '@/lib/api-client'
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })
@@ -27,13 +28,16 @@ describe('fetchMeterReadingHistory', () => {
       page: 1,
       pageSize: 20,
     }
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(page)))
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) => Promise.resolve(jsonResponse(page)))
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await fetchMeterReadingHistory(1, 20)
 
     expect(result).toEqual(page)
-    expect(fetchMock).toHaveBeenCalledWith('/api/meter-readings?page=1&pageSize=20', { credentials: 'include' })
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toBe('/api/meter-readings?page=1&pageSize=20')
+    expect(init).toMatchObject({ credentials: 'include' })
+    expect(new Headers(init?.headers).get('X-Requested-With')).toBe('fetch')
   })
 
   it('throws an ApiError on a non-2xx response', async () => {
@@ -59,18 +63,18 @@ describe('updateMeterReading', () => {
       readingTimestamp: '2026-08-15T14:32:00+00:00',
       version: 1,
     }
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(updated)))
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) => Promise.resolve(jsonResponse(updated)))
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await updateMeterReading('11111111-1111-1111-1111-111111111111', 4900, 0)
 
     expect(result).toEqual(updated)
-    expect(fetchMock).toHaveBeenCalledWith('/api/meter-readings/11111111-1111-1111-1111-111111111111', {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kwhValue: 4900, version: 0 }),
-    })
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toBe('/api/meter-readings/11111111-1111-1111-1111-111111111111')
+    expect(init).toMatchObject({ method: 'PUT', credentials: 'include', body: JSON.stringify({ kwhValue: 4900, version: 0 }) })
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('X-Requested-With')).toBe('fetch')
   })
 
   it('throws an ApiError on a non-2xx response', async () => {

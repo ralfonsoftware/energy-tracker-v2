@@ -1,24 +1,4 @@
-// Same ApiError/toApiError shape as meter-reading-sync.ts — a real error response is surfaced to
-// the caller via a thrown ApiError, never silently swallowed.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
+import { apiFetch, toApiError } from '@/lib/api-client'
 
 export interface MeterRegressionPromptDto {
   id: string
@@ -34,7 +14,7 @@ export interface MeterRegressionPromptDto {
 export type MeterRegressionClassification = 'reset' | 'rollover'
 
 export async function fetchOpenMeterRegressionPrompt(): Promise<MeterRegressionPromptDto | null> {
-  const response = await fetch('/api/meter-regression-prompts/open', { credentials: 'include' })
+  const response = await apiFetch('/api/meter-regression-prompts/open')
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -51,9 +31,8 @@ export async function resolveMeterRegressionPrompt(
   classification: MeterRegressionClassification,
   digitCapacityKwh?: number,
 ): Promise<void> {
-  const response = await fetch(`/api/meter-regression-prompts/${id}/resolve`, {
+  const response = await apiFetch(`/api/meter-regression-prompts/${id}/resolve`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ classification, digitCapacityKwh: digitCapacityKwh ?? null }),
   })

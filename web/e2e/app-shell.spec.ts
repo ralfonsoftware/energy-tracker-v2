@@ -1121,3 +1121,42 @@ test('a failed language save in the card reverts the strip and shows the alert',
   await expect(page.getByTestId('preferences-card').getByRole('radio', { name: 'Deutsch', exact: true })).toBeChecked()
   await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE')
 })
+
+// Story 11.8/Task 6.5 (AC #3, #5): log-off is a fetch POST carrying the CSRF header. `vite preview` has no
+// backend, so this only proves the request the SPA makes and that it lands on the returned URL; the CSP and
+// the real end-session redirect are covered by the local Production rehearsal and the live check.
+test('log off from the Profile menu POSTs /logout with X-Requested-With and follows the returned URL', async ({ page }) => {
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        hasHousehold: true,
+        householdId: '11111111-1111-1111-1111-111111111111',
+        locale: 'en-US',
+        currency: 'USD',
+        supportsFederatedLogout: true,
+        email: 'ralf@example.com',
+      }),
+    }),
+  )
+  await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/tariff-check', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
+  await page.route('**/api/meter-regression-prompts/open', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+  )
+  let logoutRequest: { method: string; requestedWith: string | undefined } | null = null
+  await page.route('**/logout', (route) => {
+    logoutRequest = { method: route.request().method(), requestedWith: route.request().headers()['x-requested-with'] }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ redirectUrl: '/?signed-out=1' }) })
+  })
+
+  await page.setViewportSize({ width: 900, height: 800 })
+  await page.goto('/')
+  await page.locator('nav[data-slot="nav-chrome-top"]').getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('menuitem', { name: 'Log off' }).click()
+  await page.getByRole('button', { name: 'Yes, log off' }).click()
+
+  await expect(page).toHaveURL(/signed-out=1/)
+  expect(logoutRequest).toEqual({ method: 'POST', requestedWith: 'fetch' })
+})

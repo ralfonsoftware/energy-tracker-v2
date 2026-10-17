@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
+import { ApiError, apiFetch, toApiError } from '@/lib/api-client'
 
 interface RoomDto {
   id: string
@@ -47,26 +48,6 @@ type DialogState =
   | { kind: 'rename-device'; device: DeviceDto }
   | { kind: 'delete-device'; device: DeviceDto }
   | { kind: 'move-device'; device: DeviceDto }
-
-class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
 
 // Shared between a Room's suppressed-row `<div>` wrapper and its normal `<details>` wrapper so the
 // two branches can't visually drift apart independently.
@@ -166,9 +147,9 @@ export function TaggingScaffoldManager() {
     let cancelled = false
 
     Promise.all([
-      fetch('/api/rooms', { credentials: 'include' }),
-      fetch('/api/power-points', { credentials: 'include' }),
-      fetch('/api/devices', { credentials: 'include' }),
+      apiFetch('/api/rooms'),
+      apiFetch('/api/power-points'),
+      apiFetch('/api/devices'),
     ])
       .then(async ([roomsResponse, powerPointsResponse, devicesResponse]) => {
         if (!roomsResponse.ok || !powerPointsResponse.ok || !devicesResponse.ok) {
@@ -281,9 +262,8 @@ export function TaggingScaffoldManager() {
     try {
       switch (dialog.kind) {
         case 'create-room': {
-          const response = await fetch('/api/rooms', {
+          const response = await apiFetch('/api/rooms', {
             method: 'POST',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: nameInput }),
           })
@@ -295,9 +275,8 @@ export function TaggingScaffoldManager() {
           break
         }
         case 'rename-room': {
-          const response = await fetch(`/api/rooms/${dialog.room.id}`, {
+          const response = await apiFetch(`/api/rooms/${dialog.room.id}`, {
             method: 'PUT',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: nameInput }),
           })
@@ -309,9 +288,8 @@ export function TaggingScaffoldManager() {
           break
         }
         case 'create-power-point': {
-          const response = await fetch('/api/power-points', {
+          const response = await apiFetch('/api/power-points', {
             method: 'POST',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ roomId: dialog.roomId, name: nameInput }),
           })
@@ -323,9 +301,8 @@ export function TaggingScaffoldManager() {
           break
         }
         case 'rename-power-point': {
-          const response = await fetch(`/api/power-points/${dialog.powerPoint.id}`, {
+          const response = await apiFetch(`/api/power-points/${dialog.powerPoint.id}`, {
             method: 'PUT',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: nameInput }),
           })
@@ -337,9 +314,8 @@ export function TaggingScaffoldManager() {
           break
         }
         case 'create-device': {
-          const response = await fetch('/api/devices', {
+          const response = await apiFetch('/api/devices', {
             method: 'POST',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ powerPointId: dialog.powerPointId, name: nameInput }),
           })
@@ -351,9 +327,8 @@ export function TaggingScaffoldManager() {
           break
         }
         case 'rename-device': {
-          const response = await fetch(`/api/devices/${dialog.device.id}`, {
+          const response = await apiFetch(`/api/devices/${dialog.device.id}`, {
             method: 'PUT',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: nameInput }),
           })
@@ -396,21 +371,21 @@ export function TaggingScaffoldManager() {
 
     try {
       if (dialog.kind === 'delete-room') {
-        const response = await fetch(`/api/rooms/${dialog.room.id}`, { method: 'DELETE', credentials: 'include' })
+        const response = await apiFetch(`/api/rooms/${dialog.room.id}`, { method: 'DELETE' })
         if (!response.ok) {
           throw await toApiError(response)
         }
         const room = (await response.json()) as RoomDto
         setRooms((current) => current.map((r) => (r.id === room.id ? room : r)))
       } else if (dialog.kind === 'delete-power-point') {
-        const response = await fetch(`/api/power-points/${dialog.powerPoint.id}`, { method: 'DELETE', credentials: 'include' })
+        const response = await apiFetch(`/api/power-points/${dialog.powerPoint.id}`, { method: 'DELETE' })
         if (!response.ok) {
           throw await toApiError(response)
         }
         const powerPoint = (await response.json()) as PowerPointDto
         setPowerPoints((current) => current.map((p) => (p.id === powerPoint.id ? powerPoint : p)))
       } else if (dialog.kind === 'delete-device') {
-        const response = await fetch(`/api/devices/${dialog.device.id}`, { method: 'DELETE', credentials: 'include' })
+        const response = await apiFetch(`/api/devices/${dialog.device.id}`, { method: 'DELETE' })
         if (!response.ok) {
           throw await toApiError(response)
         }
@@ -439,9 +414,8 @@ export function TaggingScaffoldManager() {
 
     try {
       if (dialog.kind === 'move-power-point') {
-        const response = await fetch(`/api/power-points/${dialog.powerPoint.id}/room`, {
+        const response = await apiFetch(`/api/power-points/${dialog.powerPoint.id}/room`, {
           method: 'PUT',
-          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roomId: destinationId }),
         })
@@ -451,9 +425,8 @@ export function TaggingScaffoldManager() {
         const powerPoint = (await response.json()) as PowerPointDto
         setPowerPoints((current) => current.map((p) => (p.id === powerPoint.id ? powerPoint : p)))
       } else {
-        const response = await fetch(`/api/devices/${dialog.device.id}/power-point`, {
+        const response = await apiFetch(`/api/devices/${dialog.device.id}/power-point`, {
           method: 'PUT',
-          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ powerPointId: destinationId }),
         })

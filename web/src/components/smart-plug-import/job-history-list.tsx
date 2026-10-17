@@ -10,14 +10,8 @@ import { PowerPointMappingDialog } from '@/components/smart-plug-import/power-po
 import { formatRelativeTime } from '@/lib/format-relative-time'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
 import { translateJobError } from '@/lib/job-error'
-import {
-  ApiError,
-  cleanUpSmartPlugImportJobs,
-  fetchJobStatus,
-  fetchSmartPlugImportJobs,
-  type SmartPlugImportJobDto,
-  type SmartPlugImportJobStateValue,
-} from '@/lib/smart-plug-import-api'
+import { cleanUpSmartPlugImportJobs, fetchJobStatus, fetchSmartPlugImportJobs, type SmartPlugImportJobDto, type SmartPlugImportJobStateValue } from '@/lib/smart-plug-import-api'
+import { ApiError } from '@/lib/api-client'
 
 // Distinct from, and slower than, useSmartPlugImportJob's own 2s per-item poll — no story/
 // architecture doc pins an exact number, an implementation default (Task 5's own Dev Notes).

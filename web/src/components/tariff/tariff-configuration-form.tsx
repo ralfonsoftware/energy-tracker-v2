@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { UnitInput } from '@/components/ui/unit-input'
-import { ApiError, createTariff, type TariffHistoryItemDto } from '@/lib/tariff-api'
+import { createTariff, type TariffHistoryItemDto } from '@/lib/tariff-api'
+import { ApiError } from '@/lib/api-client'
 
 // Fixed preset list (Ralf's resolved Open Question #3) — no free-form months integer, no existing
 // preset-list component in this codebase to copy so this hand-rolls a plain Select.

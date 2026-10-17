@@ -11,15 +11,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { GLASS_MODAL_CLASSNAME } from '@/lib/glass-classnames'
-import {
-  ApiError,
-  confirmHouseholdImport,
-  HouseholdImportValidationError,
-  uploadHouseholdImportFile,
-  type HouseholdImportSummary,
-} from '@/lib/household-import-api'
+import { confirmHouseholdImport, HouseholdImportValidationError, uploadHouseholdImportFile, type HouseholdImportSummary } from '@/lib/household-import-api'
 import { useHouseholdImportJobPoll } from '@/components/data-import/use-household-import-job'
 import { InviteGeneratePanel } from '@/components/household-invite/invite-generate-panel'
+import { ApiError } from '@/lib/api-client'
 
 // Story 7.2: the import half of "Data export & import" (DataExportPanel ships only the export
 // half, Story 7.1). No dedicated UX mockup exists for this screen (same "No UX mockup" precedent

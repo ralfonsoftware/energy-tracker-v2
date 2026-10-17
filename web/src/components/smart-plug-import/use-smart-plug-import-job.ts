@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translateJobError } from '@/lib/job-error'
-import { ApiError, fetchJobStatus, uploadSmartPlugFile, type SmartPlugImportGapDto } from '@/lib/smart-plug-import-api'
+import { fetchJobStatus, uploadSmartPlugFile, type SmartPlugImportGapDto } from '@/lib/smart-plug-import-api'
+import { ApiError } from '@/lib/api-client'
 
 export type ImportJobState = 'uploading' | 'processing' | 'completed' | 'awaitingMapping' | 'flaggedForReview' | 'failed'
 

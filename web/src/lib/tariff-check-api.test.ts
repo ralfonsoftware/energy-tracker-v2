@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchTariffCheckReminder } from './tariff-check-api'
+import { fetchTariffCheckReminder } from './tariff-check-api'
+import { ApiError } from '@/lib/api-client'
 
 function jsonResponse(body: object | null, status = 200) {
   return new Response(body === null ? null : JSON.stringify(body), { status })

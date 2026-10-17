@@ -1,24 +1,4 @@
-// Same ApiError/toApiError shape as status-api.ts/meter-regression-api.ts — a real error response
-// is surfaced to the caller via a thrown ApiError, never silently swallowed.
-export class ApiError extends Error {
-  status: number
-  detail: string | null
-
-  constructor(status: number, detail: string | null) {
-    super(`Request failed with status ${status}`)
-    this.status = status
-    this.detail = detail
-  }
-}
-
-async function toApiError(response: Response): Promise<ApiError> {
-  try {
-    const body = (await response.json()) as { detail?: string }
-    return new ApiError(response.status, body.detail ?? null)
-  } catch {
-    return new ApiError(response.status, null)
-  }
-}
+import { apiFetch, toApiError } from '@/lib/api-client'
 
 // 'queued' added review-round-2 (Story 3.6): the backend now inserts a Queued BackgroundJob row
 // at enqueue time, so GET /api/jobs/{id} returns 200 status:'queued' for a job not yet dequeued
@@ -76,9 +56,8 @@ export async function uploadSmartPlugFile(file: File, signal?: AbortSignal): Pro
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch('/api/smart-plug-imports', {
+  const response = await apiFetch('/api/smart-plug-imports', {
     method: 'POST',
-    credentials: 'include',
     body: formData,
     signal,
   })
@@ -92,7 +71,7 @@ export async function uploadSmartPlugFile(file: File, signal?: AbortSignal): Pro
 }
 
 export async function fetchJobStatus(jobId: string): Promise<JobStatusDto> {
-  const response = await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })
+  const response = await apiFetch(`/api/jobs/${jobId}`)
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -103,9 +82,8 @@ export async function fetchJobStatus(jobId: string): Promise<JobStatusDto> {
 // Resolves a Smart Plug import parked 'awaitingpowerpointmapping' by attaching it to an existing
 // (or just-created) Power Point (AC #1, #2).
 export async function mapSmartPlugImportToPowerPoint(smartPlugImportId: string, powerPointId: string): Promise<void> {
-  const response = await fetch(`/api/smart-plug-imports/${smartPlugImportId}/power-point-mapping`, {
+  const response = await apiFetch(`/api/smart-plug-imports/${smartPlugImportId}/power-point-mapping`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ powerPointId }),
   })
@@ -116,7 +94,7 @@ export async function mapSmartPlugImportToPowerPoint(smartPlugImportId: string, 
 }
 
 export async function fetchRooms(): Promise<RoomDto[]> {
-  const response = await fetch('/api/rooms', { credentials: 'include' })
+  const response = await apiFetch('/api/rooms')
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -125,7 +103,7 @@ export async function fetchRooms(): Promise<RoomDto[]> {
 }
 
 export async function fetchPowerPoints(): Promise<PowerPointDto[]> {
-  const response = await fetch('/api/power-points', { credentials: 'include' })
+  const response = await apiFetch('/api/power-points')
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -153,7 +131,7 @@ export interface SmartPlugImportJobDto {
 // Story 3.6/FR-32: the household-wide Job Status & History list — every import job any member
 // has ever queued, not just the caller's own (AC #1).
 export async function fetchSmartPlugImportJobs(): Promise<SmartPlugImportJobDto[]> {
-  const response = await fetch('/api/smart-plug-import-jobs', { credentials: 'include' })
+  const response = await apiFetch('/api/smart-plug-import-jobs')
   if (!response.ok) {
     throw await toApiError(response)
   }
@@ -171,9 +149,8 @@ export async function fetchSmartPlugImportJobs(): Promise<SmartPlugImportJobDto[
 // ~240s HTTP ingress ceiling even with every DB command individually bounded, so this can no
 // longer execute synchronously. Returns the jobId; the caller polls fetchJobStatus for completion.
 export async function cleanUpSmartPlugImportJobs(deleteAll: boolean): Promise<string> {
-  const response = await fetch(`/api/smart-plug-import-jobs?deleteAll=${deleteAll}`, {
+  const response = await apiFetch(`/api/smart-plug-import-jobs?deleteAll=${deleteAll}`, {
     method: 'DELETE',
-    credentials: 'include',
   })
   if (!response.ok) {
     throw await toApiError(response)
@@ -184,9 +161,8 @@ export async function cleanUpSmartPlugImportJobs(deleteAll: boolean): Promise<st
 }
 
 export async function createPowerPoint(roomId: string, name: string): Promise<PowerPointDto> {
-  const response = await fetch('/api/power-points', {
+  const response = await apiFetch('/api/power-points', {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ roomId, name }),
   })
