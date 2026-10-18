@@ -45,6 +45,24 @@ async function fakeApi(page: Page) {
       }),
     ),
   )
+  // Story 11.9: the Household section loads its member and open-invite lists on mount.
+  await page.route('**/api/household-members', (route) =>
+    route.fulfill(json({
+      members: [
+        { id: 'm-me', displayName: 'Ralf', isCurrentMember: true, joinedAtUtc: '2026-08-12T12:00:00Z' },
+        { id: 'm-mira', displayName: 'Mira', isCurrentMember: false, joinedAtUtc: '2026-09-03T12:00:00Z' },
+        { id: 'm-tobias', displayName: 'Tobias', isCurrentMember: false, joinedAtUtc: '2026-10-01T12:00:00Z' },
+      ],
+    })),
+  )
+  await page.route('**/api/household-invites', (route) =>
+    route.fulfill(json({
+      invites: [
+        { id: 'i-1', createdAtUtc: '2026-10-14T12:00:00Z', expiresAtUtc: '2026-10-21T12:00:00Z' },
+        { id: 'i-2', createdAtUtc: '2026-10-17T12:00:00Z', expiresAtUtc: '2026-10-24T12:00:00Z' },
+      ],
+    })),
+  )
   await page.route('**/api/status', (route) =>
     route.fulfill(json({ status: 'withinRange', paceToDateKwh: 1234.5, baselineToDateKwh: 1300, isLowConfidence: false })),
   )
@@ -272,9 +290,10 @@ function expectTabOrderMatchesVisual(stops: Stop[], expected: string[]) {
 
 const WIDE_WIDTHS = [660, 900]
 
-// --- Settings: wide:order-1..4 wrappers, the AI Plausibility + Household pair ---------------------
+// --- Settings: wide:order-1..5 wrappers; AI Plausibility and Household are stacked (Story 11.9) --------
 // Wide only: the section labels used to tag groups are `hidden wide:block`, and below 660px the
-// wrappers are plain DOM-order stacks with no reordering to verify.
+// wrappers are plain DOM-order stacks with no reordering to verify. The Household card carries its own
+// heading (the same classes as a SectionLabel), so tagGroups finds it by text like the others.
 
 const SETTINGS_SECTIONS = ['Yearly Baseline', 'AI Plausibility Check', 'Household', 'Rooms, Power Points & Devices', 'Data']
 
@@ -282,15 +301,31 @@ for (const width of WIDE_WIDTHS) {
   test(`Settings sections tab in visual order at ${width}px`, async ({ page }) => {
     await openScreen(page, 'settings', width)
     await page.getByText('Room 1', { exact: true }).first().waitFor()
+    await page.getByRole('button', { name: 'Remove Mira', exact: true }).waitFor()
     await tagGroups(page, { sectionLabels: SETTINGS_SECTIONS }, SETTINGS_SECTIONS)
     const stops = await tabThrough(page)
     expectTabOrderMatchesVisual(stops, SETTINGS_SECTIONS)
 
-    // The pair really sits side by side (otherwise a stacked layout would pass for the wrong reason).
+    // Story 11.9 (approved mock): Household left the AI Plausibility pairing, so the two are stacked, AI first,
+    // and both span the column. A side-by-side layout would pass the order check for the wrong reason.
     const ai = stops.find((s) => s.group === 'AI Plausibility Check')!.groupRect!
     const household = stops.find((s) => s.group === 'Household')!.groupRect!
-    expect(Math.abs(ai.top - household.top), 'AI Plausibility and Household share a row at >=660px').toBeLessThan(8)
-    expect(household.left, 'Household sits to the right of AI Plausibility').toBeGreaterThan(ai.right - 1)
+    expect(household.top, 'Household sits below AI Plausibility').toBeGreaterThan(ai.bottom - 1)
+    expect(Math.abs(household.left - ai.left), 'both start at the column edge').toBeLessThan(2)
+    expect(Math.abs(household.right - ai.right), 'both span the same width').toBeLessThan(2)
+
+    // Inside the Household card the stops follow the reading order: members (the caller's Leave first, then
+    // Remove per row), the open invites' Revoke buttons, then the invite action (the narrow-only panel is
+    // display:none at this width, so it is not a stop).
+    const householdStops = stops.filter((s) => s.group === 'Household').map((s) => s.name)
+    expect(householdStops).toEqual([
+      'button "Leave household"',
+      'button "Remove Mira"',
+      'button "Remove Tobias"',
+      'button "Revoke invite created Oct 14, 2026"',
+      'button "Revoke invite created Oct 17, 2026"',
+      'button "Invite a member→"', // the row's visible label plus its arrow
+    ])
   })
 }
 

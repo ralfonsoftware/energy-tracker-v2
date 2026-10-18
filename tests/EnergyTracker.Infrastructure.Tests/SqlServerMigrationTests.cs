@@ -508,4 +508,47 @@ public class SqlServerMigrationTests : IAsyncLifetime
         after.Count(d => d == "HouseholdId,DeviceName,IntervalStart WHERE ([PowerPointId] IS NULL)").ShouldBe(1);
         after.Count(d => d == "PowerPointId,IntervalStart WHERE ([PowerPointId] IS NOT NULL)").ShouldBe(1);
     }
+
+    // --- Story 11.9 (AD-26, audit S10): expand-only. TokenHash is added and Token becomes nullable. ---
+
+    private const string TokenHashMigrationSuffix = "_AddHouseholdInviteTokenHash";
+
+    [Fact]
+    public async Task AddHouseholdInviteTokenHash_migration_adds_TokenHash_relaxes_Token_keeps_legacy_rows_and_allows_many_hash_only_invites()
+    {
+        var householdId = Guid.NewGuid();
+        var legacyId = Guid.NewGuid();
+        await using var dbContext = NewDeviceNameKeyDbContext(householdId);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var migrations = dbContext.Database.GetMigrations().ToList();
+        var tokenHash = migrations.Single(m => m.EndsWith(TokenHashMigrationSuffix, StringComparison.Ordinal));
+        await migrator.MigrateAsync(migrations[migrations.IndexOf(tokenHash) - 1], TestContext.Current.CancellationToken);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [Households] ([Id], [Locale], [Currency], [CreatedAtUtc]) VALUES ({householdId}, 'en-US', 'USD', {DateTimeOffset.UtcNow})
+            """, TestContext.Current.CancellationToken);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [HouseholdInvites] ([Id], [HouseholdId], [Token], [CreatedAtUtc], [ExpiresAtUtc], [Version])
+            VALUES ({legacyId}, {householdId}, 'legacytoken000000000000000001', {DateTimeOffset.UtcNow}, {DateTimeOffset.UtcNow.AddDays(1)}, 0)
+            """, TestContext.Current.CancellationToken);
+
+        await migrator.MigrateAsync(tokenHash, TestContext.Current.CancellationToken);
+
+        (await dbContext.Database.SqlQueryRaw<int>("SELECT CAST(max_length AS int) / 2 AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('dbo.HouseholdInvites') AND name = 'TokenHash'").SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(64);
+        (await dbContext.Database.SqlQueryRaw<string>("SELECT CASE WHEN is_nullable = 1 THEN 'YES' ELSE 'NO' END AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('dbo.HouseholdInvites') AND name = 'Token'").SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBe("YES");
+        dbContext.ChangeTracker.Clear();
+        var legacy = await dbContext.HouseholdInvites.AsNoTracking().SingleAsync(i => i.Id == legacyId, TestContext.Current.CancellationToken);
+        legacy.Token.ShouldBe("legacytoken000000000000000001");
+        legacy.TokenHash.ShouldBeNull();
+
+        dbContext.HouseholdInvites.AddRange(
+            new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, TokenHash = new string('a', 64), CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) },
+            new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, TokenHash = new string('b', 64), CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) });
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // The legacy Token column stays unique for its own rows; the filtered index ignores NULL tokens.
+        dbContext.HouseholdInvites.Add(new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, Token = "legacytoken000000000000000001", CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) });
+        await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
+    }
 }

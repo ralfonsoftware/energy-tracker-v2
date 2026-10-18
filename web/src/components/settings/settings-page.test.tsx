@@ -34,6 +34,15 @@ function stubFetch(
       if (url === '/api/meter-readings') {
         return Promise.resolve(meterReadingsResponse())
       }
+      // Story 11.9: the Household section loads both lists on mount.
+      if (url === '/api/household-members') {
+        return Promise.resolve(
+          jsonResponse({ members: [{ id: 'm-me', displayName: 'Ralf', isCurrentMember: true, joinedAtUtc: '2026-08-12T12:00:00Z' }] }),
+        )
+      }
+      if (url === '/api/household-invites') {
+        return Promise.resolve(jsonResponse({ invites: [] }))
+      }
       return Promise.resolve(jsonResponse(null))
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -126,8 +135,8 @@ describe('SettingsPage', () => {
     })
   })
 
-  describe('section pairing (Story 8.8 Task 1, AC #4, #5)', () => {
-    // Each section's SectionLabel is the first child of its section wrapper (`hidden wide:block` <h2>).
+  describe('section layout (Story 8.8 Task 1; amended by Story 11.9, approved mock key-household-members-2026-10-17)', () => {
+    // Each SectionLabel is the first child of its section wrapper (`hidden wide:block` <h2>).
     function sectionOf(name: string) {
       const label = screen
         .getAllByRole('heading', { name, level: 2 })
@@ -136,23 +145,29 @@ describe('SettingsPage', () => {
       return label.parentElement
     }
 
-    it('places AI Plausibility and Household in one wide:flex-row wrapper; Baseline, Rooms and Data stay outside it', async () => {
+    // The Household card carries its own heading (an <h2> that is visible at every width), so it has no SectionLabel.
+    function householdSection() {
+      // GlassCard wraps its card in a "glass-card-stack"; the section block is that stack's parent.
+      const block = document.querySelector('[data-slot="household-members"]')?.closest('[data-slot="glass-card-stack"]')?.parentElement
+      if (!block) throw new Error('No Household section')
+      return block
+    }
+
+    it('no longer pairs AI Plausibility and Household: each is its own full-width block, and no wrapper is a wide:flex-row', async () => {
       stubFetch()
       renderSettingsPage(true)
       expect(await screen.findByRole('heading', { name: 'Household', level: 2 })).toBeInTheDocument()
 
       const ai = sectionOf('AI Plausibility Check')
-      const household = sectionOf('Household')
-      const pair = ai.parentElement as HTMLElement
+      const household = householdSection()
 
-      expect(pair).toBe(household.parentElement)
-      expect(pair.className).toContain('wide:flex-row')
-      expect(pair.className).toContain('flex-col')
-      expect(ai.className).toContain('wide:flex-1')
-      expect(household.className).toContain('wide:flex-1')
-
-      for (const name of ['Yearly Baseline', 'Rooms, Power Points & Devices', 'Data']) {
-        expect(pair.contains(sectionOf(name))).toBe(false)
+      expect(ai.parentElement).toBe(household.parentElement)
+      expect(ai).not.toBe(household)
+      expect(ai.contains(household)).toBe(false)
+      expect(household.contains(ai)).toBe(false)
+      for (const block of [ai, household]) {
+        expect(block.className).not.toContain('wide:flex-1')
+        expect(block.parentElement?.className).not.toContain('wide:flex-row')
       }
     })
 
@@ -161,10 +176,24 @@ describe('SettingsPage', () => {
       renderSettingsPage(true)
       expect(await screen.findByRole('heading', { name: 'Household', level: 2 })).toBeInTheDocument()
 
-      const sections = ['Yearly Baseline', 'AI Plausibility Check', 'Household', 'Rooms, Power Points & Devices', 'Data'].map(sectionOf)
+      const sections = [
+        sectionOf('Yearly Baseline'),
+        sectionOf('AI Plausibility Check'),
+        householdSection(),
+        sectionOf('Rooms, Power Points & Devices'),
+        sectionOf('Data'),
+      ]
       for (let i = 0; i < sections.length - 1; i++) {
         expect(sections[i].compareDocumentPosition(sections[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       }
+    })
+
+    it('renders the Household section with its members and open invites (Story 11.9, AC #1)', async () => {
+      stubFetch()
+      renderSettingsPage(true)
+
+      expect(await screen.findByText('Ralf')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Leave household' })).toBeInTheDocument()
     })
   })
 

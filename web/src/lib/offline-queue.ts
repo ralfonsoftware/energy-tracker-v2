@@ -61,3 +61,14 @@ export async function remove(idempotencyKey: string): Promise<void> {
     transaction.onerror = () => reject(transaction.error)
   })
 }
+
+// Story 11.9 (AC #13b): leaving a Household discards that Household's unsynced readings from this device.
+// Entries of other Households stay: they flush under their own session (AC #4, Story 1.12).
+export async function removeForHousehold(householdId: string): Promise<void> {
+  const pending = await listPending()
+  for (const reading of pending) {
+    if (reading.householdId === householdId) {
+      await remove(reading.idempotencyKey)
+    }
+  }
+}

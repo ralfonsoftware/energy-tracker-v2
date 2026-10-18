@@ -46,6 +46,24 @@ async function fakeApi(page: Page, locale: Locale) {
       }),
     ),
   )
+  // Story 11.9: the Household section loads its member and open-invite lists on mount.
+  await page.route('**/api/household-members', (route) =>
+    route.fulfill(json({
+      members: [
+        { id: 'm-me', displayName: 'Ralf', isCurrentMember: true, joinedAtUtc: '2026-08-12T12:00:00Z' },
+        { id: 'm-mira', displayName: 'Mira', isCurrentMember: false, joinedAtUtc: '2026-09-03T12:00:00Z' },
+        { id: 'm-tobias', displayName: 'Tobias', isCurrentMember: false, joinedAtUtc: '2026-10-01T12:00:00Z' },
+      ],
+    })),
+  )
+  await page.route('**/api/household-invites', (route) =>
+    route.fulfill(json({
+      invites: [
+        { id: 'i-1', createdAtUtc: '2026-10-14T12:00:00Z', expiresAtUtc: '2026-10-21T12:00:00Z' },
+        { id: 'i-2', createdAtUtc: '2026-10-17T12:00:00Z', expiresAtUtc: '2026-10-24T12:00:00Z' },
+      ],
+    })),
+  )
   await page.route('**/api/status', (route) =>
     route.fulfill(json({ status: 'withinRange', paceToDateKwh: 1234.5, baselineToDateKwh: 1300, isLowConfidence: false })),
   )
@@ -174,6 +192,14 @@ async function openScreen(page: Page, screen: Screen, locale: Locale, theme: The
     await page.getByLabel(locale === 'de-DE' ? /Wechselbonus/ : /switching bonus/i).first().fill('350')
     await page.getByRole('button', { name: locale === 'de-DE' ? 'Vergleichen' : 'Compare', exact: true }).click()
     await expect(page.getByText(locale === 'de-DE' ? 'Mit Wechselbonus' : 'With the switching bonus', { exact: true }).first()).toBeVisible()
+  }
+  if (screen === 'settings') {
+    // Story 11.9: the Household section must be populated (members and an open invite), so the audit covers its
+    // rows in this locale and theme instead of an empty or loading card. de-DE strings are the longer ones.
+    await expect(page.getByRole('button', { name: locale === 'de-DE' ? 'Mira entfernen' : 'Remove Mira', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: locale === 'de-DE' ? 'Einladung vom 14.10.2026 widerrufen' : 'Revoke invite created Oct 14, 2026', exact: true }),
+    ).toBeVisible()
   }
   // The click must really have switched screens — a silent miss would audit the Dashboard under
   // another screen's name.

@@ -18,10 +18,11 @@ public class BackgroundJobRepository(EnergyTrackerDbContext dbContext) : IBackgr
             .OrderByDescending(j => j.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<HouseholdMember>> FindMembersByIdsAsync(IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<HouseholdMember>> FindMembersByIdsAsync(Guid householdId, IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken) =>
+        // HouseholdMember is an AD-3 query-filter exception, so the Household predicate is explicit (AD-26).
         await dbContext.HouseholdMembers
             .AsNoTracking()
-            .Where(m => memberIds.Contains(m.Id))
+            .Where(m => m.HouseholdId == householdId && memberIds.Contains(m.Id))
             .ToListAsync(cancellationToken);
 
     public async Task<int> DeleteTerminalByJobTypeAsync(

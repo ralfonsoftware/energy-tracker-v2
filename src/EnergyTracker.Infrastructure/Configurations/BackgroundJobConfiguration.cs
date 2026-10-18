@@ -29,7 +29,7 @@ public class BackgroundJobConfiguration : IEntityTypeConfiguration<BackgroundJob
         // Optional FK — no .IsRequired(), unlike every other FK to Household in this file.
         // SetNull, not Restrict (changed in Story 7.2, when restore still deleted and reinserted
         // HouseholdMember rows). Restore no longer touches members at all (AD-25, Story 11.1), but
-        // this stays SetNull: member removal (Story 11.9) will delete members while BackgroundJob
+        // this stays SetNull: member removal (Story 11.9) deletes members while BackgroundJob
         // rows (never deleted by it, per docs/data-import-restore.md) still reference them, and
         // Restrict would make that removal fail with a foreign-key violation. SetNull
         // mirrors SmartPlugReading.SmartPlugImportId's own precedent: job/reading history survives

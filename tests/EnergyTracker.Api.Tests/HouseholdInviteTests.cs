@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using EnergyTracker.Api.Endpoints;
+using EnergyTracker.Application;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -118,7 +119,7 @@ public class HouseholdInviteTests(EnergyTrackerApiFactory factory) : IClassFixtu
 
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-        var persisted = await dbContext.HouseholdInvites.SingleAsync(i => i.Token == invite.Token, TestContext.Current.CancellationToken);
+        var persisted = await dbContext.HouseholdInvites.SingleAsync(i => i.TokenHash == InviteToken.Hash(invite.Token), TestContext.Current.CancellationToken);
         persisted.Version.ShouldNotBe(0);
     }
 

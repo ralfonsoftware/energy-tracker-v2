@@ -12,12 +12,20 @@ public class HouseholdInviteConfiguration : IEntityTypeConfiguration<HouseholdIn
 
         builder.HasKey(i => i.Id);
 
+        // Legacy plaintext token (Story 11.9): nullable, never written for new invites. The unique
+        // index stays for the legacy rows; EF's SQL Server provider filters it to NOT NULL itself.
         builder.Property(i => i.Token)
-            .HasMaxLength(32)
-            .IsRequired();
+            .HasMaxLength(32);
 
         builder.HasIndex(i => i.Token)
             .IsUnique();
+
+        // Lowercase hex SHA-256 of the token (AD-26). Plain non-unique index: 256 random bits need no
+        // uniqueness constraint, and legacy rows have a NULL hash.
+        builder.Property(i => i.TokenHash)
+            .HasMaxLength(64);
+
+        builder.HasIndex(i => i.TokenHash);
 
         builder.Property(i => i.CreatedAtUtc)
             .IsRequired();
@@ -38,6 +46,9 @@ public class HouseholdInviteConfiguration : IEntityTypeConfiguration<HouseholdIn
         // every row, and the join flow could never find any invite. HouseholdInvite creation
         // (AddInviteAsync) is always called with an already-known-trusted HouseholdId from the
         // authenticated creator, so the absence of a filter costs nothing on that path either.
+        // Story 11.9 (AD-26): invite ids are now client-supplied (revoke), so the two id-based
+        // repository methods, RevokeInviteAsync and ListOpenInvitesAsync, carry an explicit
+        // HouseholdId predicate; HouseholdMemberLookupsAreHouseholdScopedTests guards that.
         builder.HasOne<Household>()
             .WithMany()
             .HasForeignKey(i => i.HouseholdId)

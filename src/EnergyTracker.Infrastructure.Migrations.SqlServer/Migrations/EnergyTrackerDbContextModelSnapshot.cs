@@ -17,7 +17,7 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -264,9 +264,12 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Token")
-                        .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
@@ -277,7 +280,10 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasIndex("HouseholdId");
 
                     b.HasIndex("Token")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[Token] IS NOT NULL");
+
+                    b.HasIndex("TokenHash");
 
                     b.ToTable("HouseholdInvites", (string)null);
                 });

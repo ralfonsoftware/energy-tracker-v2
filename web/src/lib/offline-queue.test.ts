@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { enqueue, listPending, remove } from './offline-queue'
+import { enqueue, listPending, remove, removeForHousehold } from './offline-queue'
 import { IDBFactory } from 'fake-indexeddb'
 
 beforeEach(() => {
@@ -42,6 +42,26 @@ describe('offline-queue', () => {
     await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
 
     await remove('nonexistent-key')
+
+    expect(await listPending()).toHaveLength(1)
+  })
+
+  // Story 11.9 (AC #13b, amended): leaving a Household discards that Household's unsynced readings only.
+  it('removeForHousehold deletes only the entries of that Household', async () => {
+    const other = '22222222-2222-2222-2222-222222222222'
+    await enqueue({ householdId, kwhValue: 100, readingTimestamp: '2026-08-15T08:00:00Z', idempotencyKey: 'key-1' })
+    await enqueue({ householdId, kwhValue: 105, readingTimestamp: '2026-08-15T12:00:00Z', idempotencyKey: 'key-2' })
+    await enqueue({ householdId: other, kwhValue: 7, readingTimestamp: '2026-08-15T12:00:00Z', idempotencyKey: 'key-3' })
+
+    await removeForHousehold(householdId)
+
+    expect((await listPending()).map((r) => r.idempotencyKey)).toEqual(['key-3'])
+  })
+
+  it('removeForHousehold is a no-op when the Household has no queued entries', async () => {
+    await enqueue({ householdId, kwhValue: 100, readingTimestamp: '2026-08-15T08:00:00Z', idempotencyKey: 'key-1' })
+
+    await removeForHousehold('33333333-3333-3333-3333-333333333333')
 
     expect(await listPending()).toHaveLength(1)
   })
