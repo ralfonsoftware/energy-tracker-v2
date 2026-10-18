@@ -618,6 +618,29 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
     }),
   )
 
+  // Story 11.9: the Household section loads its two lists on mount; POST creates an invite.
+  await page.route('**/api/household-members', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        members: [
+          { id: 'm-me', displayName: 'Ralf', isCurrentMember: true, joinedAtUtc: '2026-08-12T12:00:00Z' },
+          { id: 'm-mira', displayName: 'Mira', isCurrentMember: false, joinedAtUtc: '2026-09-03T12:00:00Z' },
+        ],
+      }),
+    }),
+  )
+  await page.route('**/api/household-invites', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }),
+        })
+      : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invites: [] }) }),
+  )
+
   const contentColumn = page.locator('div[data-slot="settings-content"]')
 
   await page.setViewportSize({ width: 500, height: 800 })
@@ -626,19 +649,24 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   await page.getByRole('button', { name: 'Settings' }).first().click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
+  // Story 11.9: the Household card carries its own heading (visible at every width), so the SectionLabel
+  // breakpoint probe uses AI Plausibility, which still has a `hidden wide:block` label.
   const householdSectionLabel = page.getByRole('heading', { name: 'Household', level: 2 })
+  const householdCard = page.locator('[data-slot="household-members"]')
+  const aiProbe = page.locator('h2[class*="wide:block"]', { hasText: 'AI Plausibility Check' })
+  await expect(householdSectionLabel).toBeVisible()
 
   // Below 660px: content tracks the viewport (not capped), no section labels, flat layout.
   const narrowColumnBox = await contentColumn.boundingBox()
   expect(narrowColumnBox?.width).toBeGreaterThan(400)
-  await expect(householdSectionLabel).toBeHidden()
+  await expect(aiProbe).toBeHidden()
 
   // Exact-boundary check, same precedent as Dashboard/Trend History/Tariff Radar.
   await page.setViewportSize({ width: 659, height: 800 })
-  await expect(householdSectionLabel).toBeHidden()
+  await expect(aiProbe).toBeHidden()
 
   await page.setViewportSize({ width: 660, height: 800 })
-  await expect(householdSectionLabel).toBeVisible()
+  await expect(aiProbe).toBeVisible()
 
   // 660-900px: the column fills the viewport (minus page padding) rather than pinning to a cap (AC #2).
   await page.setViewportSize({ width: 800, height: 800 })
@@ -677,20 +705,20 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   )
   expect(yPositions).toEqual([...yPositions].sort((a, b) => a - b))
 
-  // Story 8.8 (AC #4): at 1000px (column exactly 900px) AI Plausibility and Household sit side by
-  // side — same y, different x, together spanning the column — while Yearly Baseline and Rooms
-  // stay full width.
+  // Story 11.9 (approved mock key-household-members-2026-10-17): Household left the AI Plausibility pairing
+  // (UX-DR30, Story 8.8 AC #4). At 1000px (column exactly 900px) the two sections are stacked, AI first, and both
+  // span the whole column.
   const columnBox = (await contentColumn.boundingBox())!
   const aiBox = (await aiPlausibilityLabel.boundingBox())!
   const householdBox = (await householdSectionLabel.boundingBox())!
-  expect(Math.abs(aiBox.y - householdBox.y)).toBeLessThan(1)
-  expect(householdBox.x).toBeGreaterThan(aiBox.x)
-  const aiCard = (await page.locator('div:has(> h2:text-is("AI Plausibility Check")):not(:has(h2:text-is("Household")))').last().boundingBox())!
-  const householdCard = (await page.locator('div:has(> h2:text-is("Household"))').last().boundingBox())!
+  expect(householdBox.y).toBeGreaterThan(aiBox.y)
+  const aiCard = (await page.locator('div:has(> h2:text-is("AI Plausibility Check"))').last().boundingBox())!
+  const householdCardBox = (await householdCard.boundingBox())!
   expect(aiCard.x).toBeCloseTo(columnBox.x, 0)
-  expect(householdCard.x + householdCard.width).toBeCloseTo(columnBox.x + columnBox.width, 0)
-  expect(aiCard.width).toBeCloseTo(householdCard.width, 0)
-  expect(aiCard.width + householdCard.width + (householdCard.x - (aiCard.x + aiCard.width))).toBeCloseTo(columnBox.width, 0)
+  expect(aiCard.width).toBeCloseTo(columnBox.width, 0)
+  expect(householdCardBox.x).toBeCloseTo(columnBox.x, 0)
+  expect(householdCardBox.width).toBeCloseTo(columnBox.width, 0)
+  expect(householdCardBox.y).toBeGreaterThan(aiCard.y + aiCard.height - 1)
   const baselineCard = (await page.locator('div:has(> h2:text-is("Yearly Baseline"))').last().boundingBox())!
   const roomsSection = (await page.locator('div:has(> h2:text-is("Rooms, Power Points & Devices"))').last().boundingBox())!
   expect(baselineCard.width).toBeCloseTo(columnBox.width, 0)
@@ -718,13 +746,6 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   for (const b of firstRow) expect(b.width).toBeCloseTo(expectedTileWidth, 0)
 
   // "Invite a member" opens a working invite-generation dialog from inside the Household section.
-  await page.route('**/api/household-invites', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ token: 'abcd1234', expiresAtUtc: '2026-08-21T00:00:00Z' }),
-    }),
-  )
   await page.getByRole('button', { name: 'Invite a member' }).last().click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('dialog').getByRole('button', { name: 'Invite a member' }).click()
@@ -782,12 +803,12 @@ test('the Settings content column, labeled sections, and Room/Power Point tree c
   expect((page.viewportSize()?.width ?? 0)).toBeGreaterThanOrEqual(660)
   await expect(page.locator('[data-slot="entry-grid"]')).toHaveCount(0)
 
-  // Story 8.8 (AC #5): at 659px the pair stacks and the tree is the flat Story 8.5 bordered-row list.
+  // Story 8.8 (AC #5): at 659px the sections stack and the tree is the flat Story 8.5 bordered-row list.
   await page.setViewportSize({ width: 659, height: 800 })
-  await expect(householdSectionLabel).toBeHidden()
+  await expect(aiProbe).toBeHidden()
   // The SectionLabel <h2>s (class `hidden`) are display:none here; their parent wrappers are the sections.
   const aiNarrow = (await page.locator('h2.hidden', { hasText: 'AI Plausibility Check' }).locator('xpath=..').boundingBox())!
-  const householdNarrow = (await page.locator('h2.hidden', { hasText: 'Household' }).locator('xpath=..').boundingBox())!
+  const householdNarrow = (await householdCard.boundingBox())!
   expect(householdNarrow.y).toBeGreaterThan(aiNarrow.y)
   expect(Math.abs(householdNarrow.x - aiNarrow.x)).toBeLessThan(1)
   expect(Math.abs(householdNarrow.width - aiNarrow.width)).toBeLessThan(1)
@@ -954,6 +975,51 @@ for (const { stored, os, dark, color } of [
   })
 }
 
+// Story 11.9 (Task 7.6): runs against `vite preview` with every route mocked, so it cannot see the real session,
+// the CSP or the live removed-member behaviour (Task 11 and Part R do); it proves the browser sends the CSRF header
+// on the DELETE and that the list and status line follow.
+test('removing a member from Settings sends a DELETE with the CSRF header and refreshes the list', async ({ page }) => {
+  await openSettingsAt(page, 900, 'en-US')
+  await expect(page.getByRole('button', { name: 'Remove Mira' })).toBeVisible()
+
+  let removed = false
+  let deleteRequest: { method: string; url: string; headers: Record<string, string> } | null = null
+  await page.route('**/api/household-members/*', (route) => {
+    const request = route.request()
+    deleteRequest = { method: request.method(), url: request.url(), headers: request.headers() }
+    removed = true
+    return route.fulfill({ status: 204 })
+  })
+  await page.route('**/api/household-members', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        members: [
+          { id: 'm-me', displayName: 'Ralf', isCurrentMember: true, joinedAtUtc: '2026-08-12T12:00:00Z' },
+          ...(removed ? [] : [{ id: 'm-mira', displayName: 'Mira', isCurrentMember: false, joinedAtUtc: '2026-09-03T12:00:00Z' }]),
+        ],
+      }),
+    }),
+  )
+
+  await page.getByRole('button', { name: 'Remove Mira' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Remove Mira?' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click()
+
+  await expect(dialog).toBeHidden()
+  expect(deleteRequest).not.toBeNull()
+  expect(deleteRequest!.method).toBe('DELETE')
+  expect(new URL(deleteRequest!.url).pathname).toBe('/api/household-members/m-mira')
+  expect(deleteRequest!.headers['x-requested-with']).toBe('fetch')
+  await expect(page.getByRole('button', { name: 'Remove Mira' })).toHaveCount(0)
+  await expect(page.getByRole('status').filter({ hasText: 'Mira was removed.' })).toBeVisible()
+  // Now the only member: Leave is aria-disabled and its reason is on screen.
+  await expect(page.getByRole('button', { name: 'Leave household' })).toHaveAttribute('aria-disabled', 'true')
+  await expect(page.getByText("You're the only member. Invite someone before you can leave.")).toBeVisible()
+})
+
 // Story 8.12: Settings' Preferences card below 660px. Geometry (no wrap/overflow, hit area) and the
 // breakpoint swap are browser-only; jsdom proves structure and order.
 async function openSettingsAt(page: import('@playwright/test').Page, width: number, locale: 'de-DE' | 'en-US', putStatus = 200) {
@@ -971,6 +1037,26 @@ async function openSettingsAt(page: import('@playwright/test').Page, width: numb
         supportsFederatedLogout: true,
         email: 'ralf@example.com',
       }),
+    }),
+  )
+  // Story 11.9: the Household section loads its member and open-invite lists on mount.
+  await page.route('**/api/household-members', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        members: [
+          { id: 'm-me', displayName: 'Ralf', isCurrentMember: true, joinedAtUtc: '2026-08-12T12:00:00Z' },
+          { id: 'm-mira', displayName: 'Mira', isCurrentMember: false, joinedAtUtc: '2026-09-03T12:00:00Z' },
+        ],
+      }),
+    }),
+  )
+  await page.route('**/api/household-invites', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ invites: [{ id: 'i-1', createdAtUtc: '2026-10-14T12:00:00Z', expiresAtUtc: '2026-10-21T12:00:00Z' }] }),
     }),
   )
   await page.route('**/api/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))

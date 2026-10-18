@@ -15,7 +15,7 @@ import { YearlyBaselineForm } from '@/components/yearly-baseline/yearly-baseline
 import { AiPlausibilityForm } from '@/components/ai-plausibility/ai-plausibility-form'
 import { DataExportPanel } from '@/components/data-export/data-export-panel'
 import { DataImportPanel } from '@/components/data-import/data-import-panel'
-import { InviteMemberRow } from '@/components/household-invite/invite-member-row'
+import { HouseholdMembersSection } from '@/components/household-members/household-members-section'
 import { NavChrome } from '@/components/dashboard/nav-chrome'
 import { PreferencesCard } from '@/components/preferences/preferences-card'
 import { useLogoff } from '@/hooks/use-logoff'
@@ -87,23 +87,22 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
             <SectionLabel>{t('yearlyBaseline.heading')}</SectionLabel>
             <YearlyBaselineForm householdId={householdId} />
           </div>
-          {/* AI Plausibility + Household are the only short, unrelated pair (UX-DR30). DOM order is
-              unchanged; the wrapper is one wide:order item so wide-only visual order still holds. */}
-          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:flex-row wide:order-2">
-            <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:flex-1 wide:basis-0 wide:min-w-0">
-              <SectionLabel>{t('settings.sections.aiPlausibilityCheck')}</SectionLabel>
-              <AiPlausibilityForm householdId={householdId} />
-            </div>
-            <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:flex-1 wide:basis-0 wide:min-w-0">
-              <SectionLabel>{t('settings.sections.household')}</SectionLabel>
-              <InviteMemberRow />
-            </div>
+          {/* Story 11.9 (approved mock key-household-members-2026-10-17): Household now holds a members list and an
+              open-invites list, so it is no longer short and leaves the UX-DR30 pairing with AI Plausibility; both are
+              full width at >=660px. DOM order is unchanged (AI toggle, then Household controls). The Household card
+              carries its own heading, so no SectionLabel here. */}
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-2">
+            <SectionLabel>{t('settings.sections.aiPlausibilityCheck')}</SectionLabel>
+            <AiPlausibilityForm householdId={householdId} />
           </div>
           <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-3">
+            <HouseholdMembersSection householdId={householdId} />
+          </div>
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-4">
             <SectionLabel>{t('taggingScaffold.heading')}</SectionLabel>
             <TaggingScaffoldManager />
           </div>
-          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-4">
+          <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-5">
             <SectionLabel>{t('settings.sections.data')}</SectionLabel>
             <DataExportPanel />
             <DataImportPanel />

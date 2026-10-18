@@ -16,9 +16,12 @@ interface InviteGeneratePanelProps {
   // DataImportPanel (Story 11.1, Task 7.4: a nested glass card read as card-in-card). Default false,
   // so Settings and InviteMemberRow keep the card exactly as before.
   bare?: boolean
+  // Story 11.9: called after an invite was created, so the Household section's open-invites list can refetch.
+  // Optional: DataImportPanel renders the panel without it.
+  onCreated?: () => void
 }
 
-export function InviteGeneratePanel({ bare = false }: InviteGeneratePanelProps) {
+export function InviteGeneratePanel({ bare = false, onCreated }: InviteGeneratePanelProps) {
   const { t } = useTranslation()
   const [generating, setGenerating] = useState(false)
   const [link, setLink] = useState<string | null>(null)
@@ -43,6 +46,7 @@ export function InviteGeneratePanel({ bare = false }: InviteGeneratePanelProps) 
       // self-host and Azure (AD-13).
       setLink(`${window.location.origin}/join/${invite.token}`)
       setCopied(false)
+      onCreated?.()
     } catch {
       setError(t('householdInvite.errorGeneric'))
     } finally {

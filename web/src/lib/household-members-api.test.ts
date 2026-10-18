@@ -99,4 +99,16 @@ describe('household-members-api', () => {
     await expect(fetchHouseholdMembers()).rejects.toBeInstanceOf(ApiError)
     await expect(fetchOpenInvites()).rejects.toBeInstanceOf(ApiError)
   })
+
+  it.each([
+    ['an empty array', '[]'],
+    ['null', 'null'],
+    ['an object without the list', '{}'],
+  ])('a 200 with %s is a failed load, not an empty household', async (_label, body) => {
+    stubFetch(new Response(body, { status: 200 }))
+    await expect(fetchHouseholdMembers()).rejects.toThrow()
+
+    stubFetch(new Response(body, { status: 200 }))
+    await expect(fetchOpenInvites()).rejects.toThrow()
+  })
 })

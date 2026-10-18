@@ -20,7 +20,10 @@ export interface OpenInvite {
 export async function fetchHouseholdMembers(signal?: AbortSignal): Promise<HouseholdMember[]> {
   const response = await apiFetch('/api/household-members', { signal })
   if (!response.ok) throw await toApiError(response)
-  return ((await response.json()) as { members: HouseholdMember[] }).members
+  const body = (await response.json()) as { members?: unknown } | null
+  // A 200 with another shape (a proxy's HTML or an unexpected body) is a failed load, not an empty household.
+  if (!Array.isArray(body?.members)) throw new Error('Unexpected /api/household-members response body')
+  return body.members as HouseholdMember[]
 }
 
 export async function removeHouseholdMember(memberId: string): Promise<void> {
@@ -31,7 +34,9 @@ export async function removeHouseholdMember(memberId: string): Promise<void> {
 export async function fetchOpenInvites(signal?: AbortSignal): Promise<OpenInvite[]> {
   const response = await apiFetch('/api/household-invites', { signal })
   if (!response.ok) throw await toApiError(response)
-  return ((await response.json()) as { invites: OpenInvite[] }).invites
+  const body = (await response.json()) as { invites?: unknown } | null
+  if (!Array.isArray(body?.invites)) throw new Error('Unexpected /api/household-invites response body')
+  return body.invites as OpenInvite[]
 }
 
 export async function revokeInvite(inviteId: string): Promise<void> {

@@ -34,4 +34,31 @@ describe('InviteGeneratePanel', () => {
     expect(await screen.findByLabelText('Invite link')).toHaveValue(`${window.location.origin}/join/abc123`)
     expect(container.querySelectorAll('[data-slot="glass-card"]')).toHaveLength(0)
   })
+
+  // Story 11.9: the Household section refetches its open-invites list when an invite was created.
+  it('calls onCreated once after a successful create, and not when the create fails', async () => {
+    const onCreated = vi.fn()
+    stubInviteFetch()
+    const { unmount } = render(<InviteGeneratePanel onCreated={onCreated} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Invite a member' }))
+    await screen.findByLabelText('Invite link')
+    expect(onCreated).toHaveBeenCalledTimes(1)
+    unmount()
+
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null, { status: 500 }))))
+    render(<InviteGeneratePanel onCreated={onCreated} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Invite a member' }))
+    await screen.findByText(/Something went wrong creating the invite/)
+    expect(onCreated).toHaveBeenCalledTimes(1)
+  })
+
+  it('works without onCreated (DataImportPanel renders it without the callback)', async () => {
+    stubInviteFetch()
+    render(<InviteGeneratePanel bare />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Invite a member' }))
+
+    expect(await screen.findByLabelText('Invite link')).toBeInTheDocument()
+  })
 })
