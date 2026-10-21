@@ -19,15 +19,17 @@ internal sealed class HouseholdImportJsonReader : IDisposable
     // Same limits as JsonDocument.Parse (default JsonReaderOptions: no comments, no trailing commas,
     // depth 64), so a file the old whole-string validator accepted is still accepted.
     private readonly Stream _stream;
+    private readonly CancellationToken _cancellationToken;
     private byte[] _buffer = ArrayPool<byte>.Shared.Rent(InitialBufferBytes);
     private int _start;
     private int _length;
     private bool _final;
     private JsonReaderState _state;
 
-    public HouseholdImportJsonReader(Stream stream)
+    public HouseholdImportJsonReader(Stream stream, CancellationToken cancellationToken = default)
     {
         _stream = stream;
+        _cancellationToken = cancellationToken;
         Rewind();
     }
 
@@ -66,6 +68,10 @@ internal sealed class HouseholdImportJsonReader : IDisposable
     // cap when they already fill it, and marks the end of input when the stream has nothing left.
     private void Fill()
     {
+        // Validation is synchronous, so the request's token is observed here, once per buffer refill (at
+        // most a buffer's worth of parsing after a disconnect), instead of running a dead request to the end.
+        _cancellationToken.ThrowIfCancellationRequested();
+
         if (_start > 0)
         {
             Buffer.BlockCopy(_buffer, _start, _buffer, 0, _length - _start);

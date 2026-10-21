@@ -763,4 +763,26 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         persisted.ErrorMessage.ShouldBe("spreadsheet-too-large");
         persisted.CompletedAtUtc.ShouldNotBeNull();
     }
+
+    [Fact]
+    public async Task ProcessAsync_leaves_ErrorMessage_null_for_an_XmlException_so_the_client_shows_its_generic_fallback()
+    {
+        // Story 11.10 AC #10e: when OpenSettings.MaxCharactersInPart trips without the pre-scan having tripped, the
+        // XmlException (localized text, the same type a corrupt file throws) is an ordinary generic failure, never
+        // mapped to a stable code and never forwarded verbatim.
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new System.Xml.XmlException("The input document has exceeded a limit set by MaxCharactersInDocument.")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBeNull();
+    }
 }

@@ -190,7 +190,7 @@ public static class HouseholdImportEndpoints
             await using (var validated = new FileStream(
                 tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.SequentialScan))
             {
-                result = validateHouseholdImport.Execute(validated);
+                result = validateHouseholdImport.Execute(validated, cancellationToken);
             }
 
             if (!result.IsValid)
@@ -201,6 +201,8 @@ public static class HouseholdImportEndpoints
                     extensions: new Dictionary<string, object?> { ["failures"] = result.Failures });
             }
 
+            // A client that left while the file validated must not replace the Household's earlier, good pending upload.
+            cancellationToken.ThrowIfCancellationRequested();
             var token = Guid.NewGuid();
             uploadRegistry.Register(token, new HouseholdImportUploadReference(householdId, tempFilePath, file.FileName));
             registered = true;

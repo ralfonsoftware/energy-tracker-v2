@@ -951,8 +951,186 @@ public class ValidateHouseholdImportTests
         result.Inventory!.SmartPlugReadings.ShouldBe(readings);
         result.Inventory.Rooms.ShouldBe(1);
         result.Inventory.PowerPoints.ShouldBe(1);
-        stream.LargestReadRequest.ShouldBeLessThanOrEqualTo(4 * 1024 * 1024);
+        // Small elements never grow the buffer past its initial 64 KiB, so no read asks for more (the 4 MiB cap
+        // is the hard limit; this also catches a reader that grows for no reason).
+        stream.LargestReadRequest.ShouldBeLessThanOrEqualTo(64 * 1024);
         stream.TotalBytesRead.ShouldBeGreaterThanOrEqualTo(document.Length);
+    }
+
+
+    // --- Code review of Story 11.10: findings that were regressions against the whole-document validator. ---
+
+    [Theory]
+    [InlineData("[1,2]")]
+    [InlineData("[]")]
+    [InlineData("\"text\"")]
+    [InlineData("5")]
+    [InlineData("true")]
+    public void A_mainMeter_that_is_neither_an_object_nor_null_is_reported(string rawValue)
+    {
+        var json = ValidDocument().Without("mainMeter").Build();
+        json = json[..^1] + $",\"mainMeter\":{rawValue}}}";
+
+        var result = Validate(json);
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.ShouldBe(["'mainMeter' must be an object or null."]);
+    }
+
+    [Theory]
+    [InlineData("{\"a\":1}")]
+    [InlineData("[1]")]
+    [InlineData("5")]
+    public void An_exportedAtUtc_that_is_not_a_timestamp_string_is_reported_whatever_its_kind(string rawValue)
+    {
+        var json = ValidDocument().Without("exportedAtUtc").Build();
+        json = json[..^1] + $",\"exportedAtUtc\":{rawValue}}}";
+
+        var result = Validate(json);
+
+        result.Failures.ShouldBe(["(root): 'exportedAtUtc' must be an ISO 8601 timestamp."]);
+    }
+
+    // The restore keeps only the last occurrence of a repeated key, so a repeated field is a failure rather
+    // than two arrays validated, counted and cross-referenced as if both were restored.
+    [Fact]
+    public void A_field_that_appears_twice_is_reported_and_not_counted_twice()
+    {
+        var json = ValidDocument().Build();
+        json = json[..^1] + ",\"tariffs\":[]}";
+
+        var result = Validate(json);
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.ShouldBe(["'tariffs' appears more than once."]);
+    }
+
+    [Fact]
+    public void A_reference_that_only_resolves_in_a_repeated_arrays_dropped_copy_is_not_resolved()
+    {
+        var roomId = Guid.NewGuid();
+        var room = new Dictionary<string, object?> { ["id"] = roomId.ToString(), ["name"] = "Kitchen", ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null };
+        var powerPoint = new Dictionary<string, object?>
+        {
+            ["id"] = Guid.NewGuid().ToString(), ["roomId"] = roomId.ToString(), ["name"] = "Outlet", ["createdAtUtc"] = "2026-01-05T08:16:00+00:00", ["archivedAt"] = null,
+        };
+        // rooms: [room] first, then rooms: [] again. The restore would see the second (empty) one.
+        var json = ValidDocument().With("rooms", new List<object?> { room }).With("powerPoints", new List<object?> { powerPoint }).Build();
+        json = json[..^1] + ",\"rooms\":[]}";
+
+        var result = Validate(json);
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.ShouldContain("'rooms' appears more than once.");
+    }
+
+    // "ZZ" marks where a lone 0xFC (a Latin-1 u-umlaut, not valid UTF-8) goes.
+    private HouseholdImportValidationResult ValidateWithInvalidUtf8(string json)
+    {
+        var bytes = Encoding.UTF8.GetBytes(json).ToList();
+        var at = bytes.FindIndex(i => i == (byte)'Z');
+        while (at >= 0 && !(at + 1 < bytes.Count && bytes[at + 1] == (byte)'Z'))
+        {
+            at = bytes.FindIndex(at + 1, i => i == (byte)'Z');
+        }
+
+        at.ShouldBeGreaterThanOrEqualTo(0, "the ZZ marker is missing from the test document");
+        bytes.RemoveRange(at, 2);
+        bytes.Insert(at, 0xFC);
+        return Validate(bytes.ToArray());
+    }
+
+    // The old StreamReader substituted U+FFFD; Utf8JsonReader only throws when the string is read, as an
+    // InvalidOperationException. That is a reported 400 failure, never an unhandled 500.
+    [Fact]
+    public void Invalid_UTF8_in_a_member_name_is_a_reported_failure_not_an_unhandled_exception()
+    {
+        var members = new List<object?> { new Dictionary<string, object?> { ["id"] = Guid.NewGuid().ToString(), ["displayName"] = "JZZr" } };
+
+        var result = ValidateWithInvalidUtf8(ValidDocument().With("householdMembers", members).Build());
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.Count.ShouldBe(1);
+        result.Failures.Single().ShouldStartWith("The file is not valid JSON:");
+    }
+
+    [Fact]
+    public void Invalid_UTF8_in_a_root_property_name_is_a_reported_failure_not_an_unhandled_exception()
+    {
+        var json = ValidDocument().Build();
+        json = json[..^1] + ",\"fooZZ\":1}";
+
+        var result = ValidateWithInvalidUtf8(json);
+
+        result.IsValid.ShouldBeFalse();
+        result.Failures.Single().ShouldStartWith("The file is not valid JSON:");
+    }
+
+    [Fact]
+    public void A_cancelled_token_stops_validation_before_it_reads_anything()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(ValidDocument().Build()));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Should.Throw<OperationCanceledException>(() => _sut.Execute(stream, cancelled.Token));
+        stream.Position.ShouldBe(0);
+    }
+
+    // A client that disconnects mid-validation must stop the work at the next buffer refill, not run a
+    // dead request to the end of a 250 MB file.
+    [Fact]
+    public void Cancelling_during_validation_stops_it_at_the_next_buffer_refill()
+    {
+        var rooms = Enumerable.Range(0, 3000).Select(i => (object?)new Dictionary<string, object?>
+        {
+            ["id"] = Guid.NewGuid().ToString(), ["name"] = $"Room {i}", ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null,
+        }).ToList();
+        var bytes = Encoding.UTF8.GetBytes(ValidDocument().With("rooms", rooms).Build());
+        bytes.Length.ShouldBeGreaterThan(3 * 64 * 1024);
+        using var cancel = new CancellationTokenSource();
+        using var stream = new CancelAfterReadsStream(new MemoryStream(bytes), cancel, reads: 3);
+
+        Should.Throw<OperationCanceledException>(() => _sut.Execute(stream, cancel.Token));
+
+        stream.Reads.ShouldBeLessThan(10);
+    }
+
+    private sealed class CancelAfterReadsStream(Stream inner, CancellationTokenSource source, int reads) : Stream
+    {
+        public int Reads { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            if (++Reads == reads)
+            {
+                source.Cancel();
+            }
+
+            return inner.Read(buffer);
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
     }
 
     private sealed class CountingStream(Stream inner) : Stream

@@ -387,11 +387,11 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         new(directory.Path, maxFileSizeBytes);
 
     private static Task<IResult> ReceiveAsync(
-        IFormFile file, UploadDirectory directory, IHouseholdImportUploadRegistry? registry = null, CancellationToken cancellationToken = default,
-        long maxFileSizeBytes = HouseholdImportEndpoints.MaxFileSizeBytes) =>
+        IFormFile file, UploadDirectory directory, IHouseholdImportUploadRegistry? registry = null, CancellationToken? cancellationToken = null,
+        long maxFileSizeBytes = HouseholdImportEndpoints.MaxFileSizeBytes, Guid? householdId = null) =>
         HouseholdImportEndpoints.ReceiveUploadAsync(
-            file, Guid.NewGuid(), new ValidateHouseholdImport(), registry ?? new MemoryHouseholdImportUploadRegistry(),
-            SettingsFor(directory, maxFileSizeBytes), cancellationToken);
+            file, householdId ?? Guid.NewGuid(), new ValidateHouseholdImport(), registry ?? new MemoryHouseholdImportUploadRegistry(),
+            SettingsFor(directory, maxFileSizeBytes), cancellationToken ?? TestContext.Current.CancellationToken);
 
     private const string MinimalValidDocument =
         """
@@ -482,6 +482,73 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
 
         await Should.ThrowAsync<InvalidOperationException>(() => ReceiveAsync(FormFileOf(MinimalValidDocument), directory, registry));
 
+        directory.Files.ShouldBeEmpty();
+    }
+
+
+    // An IFormFile whose stream cancels the request when the copy has finished and closed it, so the
+    // cancellation lands between the copy and the validation, a window a real disconnect can hit.
+    private sealed class CancelAfterCopyFormFile(byte[] bytes, CancellationTokenSource source) : IFormFile
+    {
+        public string ContentType => "application/json";
+        public string ContentDisposition => string.Empty;
+        public IHeaderDictionary Headers => new HeaderDictionary();
+        public long Length => bytes.Length;
+        public string Name => "file";
+        public string FileName => "export.json";
+        public void CopyTo(Stream target) => throw new NotSupportedException();
+        public Task CopyToAsync(Stream target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Stream OpenReadStream() => new CancelOnDisposeStream(bytes, source);
+
+        private sealed class CancelOnDisposeStream(byte[] bytes, CancellationTokenSource source) : MemoryStream(bytes)
+        {
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    source.Cancel();
+                }
+
+                base.Dispose(disposing);
+            }
+        }
+    }
+
+    // Code review of Story 11.10 / AC #9a: a client that disconnects while its file validates must not
+    // replace the Household's earlier, good pending upload with a token nobody will receive.
+    [Fact]
+    public async Task A_request_cancelled_after_the_copy_leaves_no_temp_file_and_keeps_the_earlier_pending_upload()
+    {
+        using var directory = new UploadDirectory();
+        var registry = new MemoryHouseholdImportUploadRegistry();
+        var household = Guid.NewGuid();
+        var first = await ReceiveAsync(FormFileOf(MinimalValidDocument), directory, registry, householdId: household);
+        var firstToken = first.ShouldBeOfType<Ok<HouseholdImportValidationResponse>>().Value!.Token;
+        using var cancel = new CancellationTokenSource();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => ReceiveAsync(new CancelAfterCopyFormFile(Encoding.UTF8.GetBytes(MinimalValidDocument), cancel), directory, registry, cancel.Token, householdId: household));
+
+        directory.Files.Length.ShouldBe(1);
+        registry.Consume(firstToken, household).ShouldNotBeNull();
+    }
+
+    // Code review: invalid UTF-8 is a 400 with failures, never a 500.
+    [Fact]
+    public async Task A_file_with_invalid_UTF8_answers_400_with_a_failure_and_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+        // The member's display name is read as text, which is where Utf8JsonReader notices a bad byte.
+        var json = MinimalValidDocument.Replace(
+            "\"householdMembers\":[]", "\"householdMembers\":[{\"id\":\"22222222-2222-2222-2222-222222222222\",\"displayName\":\"d_\"}]");
+        json.ShouldContain("d_");
+        var bytes = Encoding.UTF8.GetBytes(json).ToList();
+        bytes[bytes.IndexOf((byte)'_')] = 0xFC;
+        using var stream = new MemoryStream(bytes.ToArray());
+
+        var result = await ReceiveAsync(FormFileOf(stream), directory);
+
+        result.ShouldBeAssignableTo<IStatusCodeHttpResult>()!.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
         directory.Files.ShouldBeEmpty();
     }
 

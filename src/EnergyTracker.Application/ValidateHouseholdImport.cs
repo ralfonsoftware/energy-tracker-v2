@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using EnergyTracker.Domain;
 
@@ -57,16 +58,17 @@ public class ValidateHouseholdImport
     // FileStream): the first pass proves the file is well-formed and collects the ids that references
     // point at, which may sit later in the file; the second pass validates each array element as it
     // streams by. Never copies the stream into memory.
-    public HouseholdImportValidationResult Execute(Stream stream)
+    public HouseholdImportValidationResult Execute(Stream stream, CancellationToken cancellationToken = default)
     {
         if (!stream.CanSeek)
         {
             throw new ArgumentException("The stream must be seekable: the file is read twice and never buffered whole.", nameof(stream));
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            using var reader = new HouseholdImportJsonReader(stream);
+            using var reader = new HouseholdImportJsonReader(stream, cancellationToken);
             var prescan = Prescan(reader);
             if (prescan.Failure is not null)
             {
@@ -80,6 +82,12 @@ public class ValidateHouseholdImport
         {
             // Malformed JSON anywhere is the single failure, never the partial structural failures
             // collected before it.
+            return HouseholdImportValidationResult.Invalid([$"The file is not valid JSON: {ex.Message}"]);
+        }
+        catch (InvalidOperationException ex) when (ex.InnerException is DecoderFallbackException)
+        {
+            // Invalid UTF-8 in a string: Utf8JsonReader only notices when the text is read. The old
+            // StreamReader substituted U+FFFD; this is a 400 failure, never a 500.
             return HouseholdImportValidationResult.Invalid([$"The file is not valid JSON: {ex.Message}"]);
         }
         catch (HouseholdImportJsonReader.TooLargeException)
@@ -111,9 +119,19 @@ public class ValidateHouseholdImport
 
         string? formatVersion = null;
         Guid? mainMeterId = null;
+        var seenFields = new HashSet<string>();
         while (reader.ReadToken(captureName: true) != JsonTokenType.EndObject)
         {
-            switch (reader.PropertyName)
+            var name = reader.PropertyName;
+
+            // A repeated field is reported by pass 2; only its first occurrence feeds the id sets.
+            if (name is not null && Array.IndexOf(FieldOrder, name) >= 0 && !seenFields.Add(name))
+            {
+                reader.SkipValue();
+                continue;
+            }
+
+            switch (name)
             {
                 case "formatVersion" when reader.PeekToken() == JsonTokenType.String:
                     using (var formatVersionDocument = reader.ReadValue())
@@ -245,21 +263,38 @@ public class ValidateHouseholdImport
                 continue;
             }
 
-            seen.Add(field);
+            // The restore keeps only the last occurrence of a repeated key, so validating each one (and summing
+            // their counts) would describe a file the restore does not see: a repeated field is a failure.
+            if (!seen.Add(field))
+            {
+                reader.SkipValue();
+                bucket.Add($"'{field}' appears more than once.");
+                continue;
+            }
+
             if (field == ExportedAtUtc)
             {
-                ValidateExportedAt(ReadSmallValue(reader), bucket);
+                ValidateExportedAt(ReadSmallValue(reader, expectsObject: false), bucket);
             }
             else if (field == HouseholdField)
             {
-                ValidateHouseholdSettings(ReadSmallValue(reader), scratch);
+                ValidateHouseholdSettings(ReadSmallValue(reader, expectsObject: true), scratch);
                 Flush(scratch, bucket);
             }
             else if (field == MainMeterField)
             {
-                using var document = ReadSmallValue(reader);
-                hasMainMeter = document?.RootElement.ValueKind == JsonValueKind.Object;
-                ValidateMainMeter(document?.RootElement ?? default, scratch);
+                // null (the JSON literal) is valid; a skipped container or a wrong-kind scalar is not.
+                using var document = ReadSmallValue(reader, expectsObject: true);
+                if (document is null)
+                {
+                    scratch.Add("'mainMeter' must be an object or null.");
+                }
+                else
+                {
+                    hasMainMeter = document.RootElement.ValueKind == JsonValueKind.Object;
+                    ValidateMainMeter(document.RootElement, scratch);
+                }
+
                 Flush(scratch, bucket);
             }
             else
@@ -314,12 +349,13 @@ public class ValidateHouseholdImport
         scratch.Clear();
     }
 
-    // A root-level singleton (exportedAtUtc, household, mainMeter): a small value read whole. A
-    // container where a scalar belongs, or an array where an object belongs, is crossed token by token
-    // and reported as the wrong kind (null), so a hostile huge value costs nothing.
-    private static JsonDocument? ReadSmallValue(HouseholdImportJsonReader reader)
+    // A root-level singleton (exportedAtUtc, household, mainMeter): a small value read whole. A container
+    // of the wrong kind (an array anywhere, an object where a scalar belongs) is crossed token by token and
+    // reported as the wrong kind (null), so a hostile huge value costs nothing.
+    private static JsonDocument? ReadSmallValue(HouseholdImportJsonReader reader, bool expectsObject)
     {
-        if (reader.PeekToken() == JsonTokenType.StartArray)
+        var first = reader.PeekToken();
+        if (first == JsonTokenType.StartArray || (first == JsonTokenType.StartObject && !expectsObject))
         {
             reader.SkipValue();
             return null;

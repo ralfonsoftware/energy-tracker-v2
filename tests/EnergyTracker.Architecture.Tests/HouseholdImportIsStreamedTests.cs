@@ -71,7 +71,7 @@ public class HouseholdImportIsStreamedTests
         code.ShouldContain("MaxCharactersInPart", Case.Sensitive, $"{XlsxParser} no longer mentions MaxCharactersInPart.");
         CountOf(code, "SpreadsheetDocument.Open(").ShouldBe(1, $"{XlsxParser} must open a package in exactly one place (the OpenDocument helper), so no caller can skip the limits.");
 
-        var helper = MethodBody(code, "private SpreadsheetDocument OpenDocument(Stream fileContent)");
+        var helper = MethodBody(code, "private SpreadsheetDocument OpenDocument(Stream fileContent, CancellationToken cancellationToken)");
         helper.ShouldContain("SpreadsheetDocument.Open(", Case.Sensitive, "The one SpreadsheetDocument.Open( call must be inside OpenDocument.");
         helper.ShouldContain("MaxCharactersInPart", Case.Sensitive, "OpenDocument must set OpenSettings.MaxCharactersInPart.");
         helper.ShouldContain("RejectOversizedEntries", Case.Sensitive, "OpenDocument must run the decompressed-size pre-scan before OpenXml opens the package.");

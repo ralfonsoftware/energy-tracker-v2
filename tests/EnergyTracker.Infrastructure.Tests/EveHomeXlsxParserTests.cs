@@ -451,10 +451,10 @@ public class EveHomeXlsxParserTests
     // size, so a small file can decompress to gigabytes; a bomb must end as a recognizable
     // SpreadsheetTooLargeException (the job's stable code), not as a memory spike or a bare XmlException. ---
 
-    // The sample package with one entry replaced by `characters` of filler that deflates to a tiny size
-    // (an 80 million character entry is about 80 KB zipped). Built in the test, written through a
-    // streaming writer, never committed as a binary.
-    private static MemoryStream BuildPackageWithOversizedEntry(string entryName, long characters)
+    // The sample package with some entries replaced and some added, each written through a streaming writer so a
+    // package that inflates to tens of millions of characters costs the test a few KB (never committed as a binary).
+    private static MemoryStream BuildPackage(
+        IReadOnlyDictionary<string, Action<Stream>> replaced, params (string Name, Action<Stream> Write)[] added)
     {
         var result = new MemoryStream();
         using (var source = ZipFile.OpenRead(SampleFilePath))
@@ -462,39 +462,60 @@ public class EveHomeXlsxParserTests
         {
             foreach (var entry in source.Entries)
             {
-                var created = target.CreateEntry(entry.FullName, CompressionLevel.Optimal);
-                using var to = created.Open();
-                if (entry.FullName == entryName)
+                if (entry.FullName.EndsWith('/'))
                 {
-                    var head = Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"utf-8\"?><x:sst xmlns:x=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><x:si><x:t>");
-                    to.Write(head);
-                    var chunk = Encoding.UTF8.GetBytes(new string('A', 65536));
-                    for (long written = 0; written < characters; written += chunk.Length)
-                    {
-                        to.Write(chunk);
-                    }
+                    continue;
+                }
 
-                    to.Write(Encoding.UTF8.GetBytes("</x:t></x:si></x:sst>"));
-                }
-                else if (!entry.FullName.EndsWith('/'))
+                using var to = target.CreateEntry(entry.FullName, CompressionLevel.Optimal).Open();
+                if (replaced.TryGetValue(entry.FullName, out var write))
                 {
-                    // Two docProps entries of the real exports cannot be inflated by .NET (and the parser never
-                    // reads them); they are left empty in the copy.
-                    try
-                    {
-                        using var from = entry.Open();
-                        from.CopyTo(to);
-                    }
-                    catch (InvalidDataException)
-                    {
-                    }
+                    write(to);
+                    continue;
                 }
+
+                // Two docProps entries of the real exports cannot be inflated by .NET (and the parser never
+                // reads them); they are left empty in the copy.
+                try
+                {
+                    using var from = entry.Open();
+                    from.CopyTo(to);
+                }
+                catch (InvalidDataException)
+                {
+                }
+            }
+
+            foreach (var (name, write) in added)
+            {
+                using var to = target.CreateEntry(name, CompressionLevel.Optimal).Open();
+                write(to);
             }
         }
 
         result.Position = 0;
         return result;
     }
+
+    private static void WriteFiller(Stream to, string head, long characters, string tail)
+    {
+        to.Write(Encoding.UTF8.GetBytes(head));
+        var chunk = Encoding.UTF8.GetBytes(new string('A', 65536));
+        for (long written = 0; written < characters; written += chunk.Length)
+        {
+            to.Write(chunk);
+        }
+
+        to.Write(Encoding.UTF8.GetBytes(tail));
+    }
+
+    private const string SstHead = "<?xml version=\"1.0\" encoding=\"utf-8\"?><x:sst xmlns:x=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><x:si><x:t>";
+    private const string SstTail = "</x:t></x:si></x:sst>";
+
+    // The sample package with one entry replaced by `characters` of filler that deflates to a tiny size
+    // (an 80 million character entry is about 80 KB zipped).
+    private static MemoryStream BuildPackageWithOversizedEntry(string entryName, long characters) =>
+        BuildPackage(new Dictionary<string, Action<Stream>> { [entryName] = to => WriteFiller(to, SstHead, characters, SstTail) });
 
     private const long EightyMillionCharacters = 80_000_000;
 
@@ -667,5 +688,116 @@ public class EveHomeXlsxParserTests
         using var stream = BuildWorkbookWithSharedStringCells(dataSharedStringIndex: 99);
 
         Should.Throw<ArgumentOutOfRangeException>(() => parser.Parse(stream, "bad-index.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    // Code review of Story 11.10: the limit counts all entries together. A per-entry limit alone lets a small
+    // upload hold hundreds of near-limit entries, tens of GB of inflate work.
+    [Fact]
+    public void Many_entries_that_are_each_under_the_limit_but_together_over_it_are_rejected()
+    {
+        var parser = new EveHomeXlsxParser(maxDecompressedBytes: 1_000_000, maxCharactersInPart: 1_000_000, maxRows: 1_000);
+        using var package = BuildPackage(
+            new Dictionary<string, Action<Stream>>(),
+            ("customXml/a.xml", to => WriteFiller(to, SstHead, 450_000, SstTail)),
+            ("customXml/b.xml", to => WriteFiller(to, SstHead, 450_000, SstTail)),
+            ("customXml/c.xml", to => WriteFiller(to, SstHead, 450_000, SstTail)));
+
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(package, "many.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void The_same_entries_under_the_total_limit_are_accepted()
+    {
+        var parser = new EveHomeXlsxParser(maxDecompressedBytes: 1_000_000, maxCharactersInPart: 1_000_000, maxRows: 1_000);
+        using var package = BuildPackage(
+            new Dictionary<string, Action<Stream>>(),
+            ("customXml/a.xml", to => WriteFiller(to, SstHead, 300_000, SstTail)),
+            ("customXml/b.xml", to => WriteFiller(to, SstHead, 300_000, SstTail)));
+
+        parser.Parse(package, "few.xlsx", watermark: null, TestContext.Current.CancellationToken).Readings.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void The_pre_scan_observes_cancellation()
+    {
+        var parser = new EveHomeXlsxParser();
+        using var bomb = BuildPackageWithOversizedEntry("xl/sharedStrings.xml", 10_000_000);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Should.Throw<OperationCanceledException>(() => parser.Parse(bomb, "cancelled.xlsx", watermark: null, cancelled.Token));
+    }
+
+    // A real row has two cells. A row is read cell by cell, so a hostile row of millions of cells (inside the
+    // character limit) is rejected after MaxCellsPerRow instead of being built as one huge DOM element.
+    private static MemoryStream BuildWorkbookWithWideDataRow(int cellCount)
+    {
+        var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook, autoSave: false))
+        {
+            var workbookPart = document.AddWorkbookPart();
+            workbookPart.Workbook = new Workbook();
+            var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            var sheetData = new SheetData();
+            worksheetPart.Worksheet = new Worksheet(sheetData);
+            workbookPart.Workbook.AppendChild(new Sheets()).Append(new Sheet
+            {
+                Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Gesamtverbrauch",
+            });
+            sheetData.Append(BuildRow(1, "Gerät: Steckdose 1"));
+            sheetData.Append(BuildRow(2, "Raum: Zimmer 1"));
+            sheetData.Append(BuildRow(3, "Zuhause: Test"));
+            sheetData.Append(BuildRow(4, "Datum", "Wh"));
+            sheetData.Append(BuildRow(5, new[] { "2026-06-20 12:00:00", "500" }.Concat(Enumerable.Repeat("0", cellCount - 2)).ToArray()));
+            worksheetPart.Worksheet.Save();
+            workbookPart.Workbook.Save();
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    [Fact]
+    public void A_row_at_the_cell_cap_parses_and_one_cell_more_is_rejected()
+    {
+        var parser = new EveHomeXlsxParser();
+
+        using (var atCap = BuildWorkbookWithWideDataRow(EveHomeXlsxParser.MaxCellsPerRow))
+        {
+            parser.Parse(atCap, "at-cap.xlsx", watermark: null, TestContext.Current.CancellationToken).Readings.ShouldHaveSingleItem();
+        }
+
+        using var overCap = BuildWorkbookWithWideDataRow(EveHomeXlsxParser.MaxCellsPerRow + 1);
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(overCap, "over-cap.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void A_single_row_of_millions_of_cells_inside_the_character_limit_is_rejected_cheaply()
+    {
+        const string sheetHead = "<?xml version=\"1.0\" encoding=\"utf-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\">";
+        const string cell = "<c><v>1</v></c>";
+        // 4,000,000 cells of 15 characters = 60 million, under the 64 million limit: only the cell cap can stop it.
+        var parser = new EveHomeXlsxParser();
+        using var bomb = BuildPackage(new Dictionary<string, Action<Stream>>
+        {
+            ["xl/worksheets/sheet1.xml"] = to =>
+            {
+                to.Write(Encoding.UTF8.GetBytes(sheetHead));
+                var chunk = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat(cell, 4_000)));
+                for (var i = 0; i < 1_000; i++)
+                {
+                    to.Write(chunk);
+                }
+
+                to.Write(Encoding.UTF8.GetBytes("</row></sheetData></worksheet>"));
+            },
+        });
+        bomb.Length.ShouldBeLessThan(2 * 1024 * 1024);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(bomb, "cells.xlsx", watermark: null, TestContext.Current.CancellationToken))
+            .Message.ShouldContain("cells");
+
+        (GC.GetAllocatedBytesForCurrentThread() - before).ShouldBeLessThan(32L * 1024 * 1024);
     }
 }
