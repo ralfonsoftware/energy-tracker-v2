@@ -17,6 +17,10 @@ describe('translateJobError', () => {
       'device-tag-too-long',
       "The device name in this file is longer than 200 characters, so it can't be imported. Please shorten it in the app that created the file and upload it again.",
     ],
+    [
+      'spreadsheet-too-large',
+      'This spreadsheet is too large to import. Please export a shorter period from the app that created the file and upload it again.',
+    ],
   ])('renders the en-US sentence for the code %s', (code, sentence) => {
     expect(translateJobError(i18n.t, code, fallback)).toBe(sentence)
   })
@@ -33,6 +37,13 @@ describe('translateJobError', () => {
     expect(translateJobError(i18n.t, 'device-tag-too-long', fallback)).toBe(
       'Der Gerätename in dieser Datei ist länger als 200 Zeichen und kann deshalb nicht importiert werden. Bitte kürze ihn in der App, mit der die Datei erstellt wurde, und lade sie erneut hoch.',
     )
+    expect(translateJobError(i18n.t, 'spreadsheet-too-large', fallback)).toBe(
+      'Diese Tabelle ist zu groß, um sie zu importieren. Bitte exportiere in der App, mit der die Datei erstellt wurde, einen kürzeren Zeitraum und lade sie erneut hoch.',
+    )
+  })
+
+  it('shows a number-free sentence for spreadsheet-too-large, so the limits can change without a copy change', () => {
+    expect(translateJobError(i18n.t, 'spreadsheet-too-large', fallback)).not.toMatch(/\d/)
   })
 
   it('never shows a raw code to a member', () => {

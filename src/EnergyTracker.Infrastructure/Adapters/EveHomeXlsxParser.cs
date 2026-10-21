@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -18,6 +19,30 @@ public class EveHomeXlsxParser : ISmartPlugParser
 {
     private const string Sheet = "Gesamtverbrauch";
 
+    // Story 11.10 (audit S4): the 20 MB upload cap is on the compressed size, so a small file can
+    // decompress to gigabytes. Both limits are sized from the real sample data (the largest sheet is 16.8
+    // million characters and 121,644 rows, about 2.3 years of 10-minute samples) at about 3.8x and 3.3x
+    // that, so roughly 8 years of one plug; raise them if a household has a longer history.
+    internal const long MaxCharactersInPart = 64_000_000;
+    internal const int MaxRows = 400_000;
+
+    private readonly long _maxDecompressedBytes;
+    private readonly long _maxCharactersInPart;
+    private readonly int _maxRows;
+
+    public EveHomeXlsxParser() : this(MaxCharactersInPart, MaxCharactersInPart, MaxRows)
+    {
+    }
+
+    // Tests pass small limits so a bomb does not have to be 64 million characters, and pull the two size
+    // limits apart to prove the backstop alone is an ordinary failure.
+    internal EveHomeXlsxParser(long maxDecompressedBytes, long maxCharactersInPart, int maxRows)
+    {
+        _maxDecompressedBytes = maxDecompressedBytes;
+        _maxCharactersInPart = maxCharactersInPart;
+        _maxRows = maxRows;
+    }
+
     public SmartPlugVendorFormat Vendor => SmartPlugVendorFormat.EveHome;
 
     public bool CanParse(string fileName) => fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase);
@@ -29,7 +54,7 @@ public class EveHomeXlsxParser : ISmartPlugParser
     // silently defeating the memory goal even though the row loop itself only reads two rows).
     public string ReadDeviceTag(Stream fileContent, string fileName, CancellationToken cancellationToken = default)
     {
-        using var document = SpreadsheetDocument.Open(fileContent, isEditable: false);
+        using var document = OpenDocument(fileContent);
         var (worksheetPart, sharedStrings) = OpenWorksheetPart(document, fileName);
 
         using var reader = OpenXmlReader.Create(worksheetPart);
@@ -70,7 +95,7 @@ public class EveHomeXlsxParser : ISmartPlugParser
     public SmartPlugParseResult Parse(
         Stream fileContent, string fileName, DateTimeOffset? watermark, CancellationToken cancellationToken = default)
     {
-        using var document = SpreadsheetDocument.Open(fileContent, isEditable: false);
+        using var document = OpenDocument(fileContent);
         var (worksheetPart, sharedStrings) = OpenWorksheetPart(document, fileName);
 
         using var reader = OpenXmlReader.Create(worksheetPart);
@@ -96,6 +121,14 @@ public class EveHomeXlsxParser : ISmartPlugParser
             if (reader.ElementType != typeof(Row) || reader.LoadCurrentElement() is not Row row)
             {
                 continue;
+            }
+
+            // Every Row element counts, empty ones too: the cap bounds the work a file can cost, not the
+            // readings it yields. An incremental import that early-stops at the watermark reads few rows
+            // and never nears it; a first import of a very long history is what it protects.
+            if (rowIndex + 1 > _maxRows)
+            {
+                throw new SpreadsheetTooLargeException($"'{fileName}' has more than {_maxRows} rows.");
             }
 
             ValidateRowOrder(row, fileName, ref lastSeenExcelRowIndex);
@@ -177,7 +210,62 @@ public class EveHomeXlsxParser : ISmartPlugParser
         lastSeenExcelRowIndex = excelRowIndex;
     }
 
-    private static (WorksheetPart worksheetPart, SharedStringTable? sharedStrings) OpenWorksheetPart(
+    // The one place a package is opened (ReadDeviceTag and Parse both use it), so the limits cannot be
+    // skipped by a new caller. MaxCharactersInPart alone cannot give a recognizable failure: it surfaces as
+    // the same XmlException a corrupt file throws, and OpenXml would already have loaded a hostile shared
+    // strings table into memory. So the real decompressed size of every entry is counted first, never
+    // trusting the declared size, and a package over the limit is a SpreadsheetTooLargeException before
+    // OpenXml sees it. MaxCharactersInPart stays set as the backstop: if it ever trips without the
+    // pre-scan having tripped, the XmlException is an ordinary generic job failure.
+    private SpreadsheetDocument OpenDocument(Stream fileContent)
+    {
+        RejectOversizedEntries(fileContent);
+        return SpreadsheetDocument.Open(fileContent, isEditable: false, new OpenSettings { MaxCharactersInPart = _maxCharactersInPart });
+    }
+
+    private void RejectOversizedEntries(Stream fileContent)
+    {
+        using (var archive = new ZipArchive(fileContent, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var buffer = new byte[81920];
+            foreach (var entry in archive.Entries)
+            {
+                // A directory entry holds no part (the real Eve exports carry some with a stored size that
+                // .NET refuses to open); OpenXml ignores them too.
+                if (entry.FullName.EndsWith('/'))
+                {
+                    continue;
+                }
+
+                long decompressed = 0;
+                try
+                {
+                    using var entryStream = entry.Open();
+                    int read;
+                    while ((read = entryStream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        decompressed += read;
+                        if (decompressed > _maxDecompressedBytes)
+                        {
+                            throw new SpreadsheetTooLargeException(
+                                $"The package entry '{entry.FullName}' decompresses to more than {_maxDecompressedBytes} bytes.");
+                        }
+                    }
+                }
+                catch (InvalidDataException)
+                {
+                    // An entry .NET cannot inflate cannot be loaded by OpenXml either (it reads through the
+                    // same ZipArchive), so it is no bomb. The real Eve exports carry two such entries
+                    // (docProps/app.xml, core.xml) that the parser never touches. A corrupt part the parser
+                    // does need still fails in OpenXml, as it always did.
+                }
+            }
+        }
+
+        fileContent.Position = 0;
+    }
+
+    private static (WorksheetPart worksheetPart, IReadOnlyList<string>? sharedStrings) OpenWorksheetPart(
         SpreadsheetDocument document, string fileName)
     {
         var workbookPart = document.WorkbookPart ?? throw new InvalidOperationException($"'{fileName}' has no workbook part.");
@@ -186,13 +274,34 @@ public class EveHomeXlsxParser : ISmartPlugParser
             ?? throw new InvalidOperationException($"'{fileName}' has no '{Sheet}' sheet.");
         var worksheetPart = (WorksheetPart)workbookPart.GetPartById(sheetElement.Id!.Value!);
 
-        // Small — string lookups only, not the row data — loaded once up front exactly as today;
-        // only the row/data reading needs to become streaming.
-        var sharedStrings = workbookPart.SharedStringTablePart?.SharedStringTable;
-        return (worksheetPart, sharedStrings);
+        return (worksheetPart, ReadSharedStrings(workbookPart));
     }
 
-    private static SmartPlugReading? ParseDataRow(Row row, SharedStringTable? sharedStrings, string deviceName, string roomName)
+    // Built once per open, item by item with the forward-only reader (never the whole table as a DOM),
+    // so a cell's lookup is O(1): SharedStringTable.ElementAt(i) is O(i), which would make a capped
+    // 400,000-row file whose cells point into a large table a CPU bomb. Null when the package has no
+    // shared strings part, as before.
+    private static IReadOnlyList<string>? ReadSharedStrings(WorkbookPart workbookPart)
+    {
+        if (workbookPart.SharedStringTablePart is not { } tablePart)
+        {
+            return null;
+        }
+
+        var strings = new List<string>();
+        using var reader = OpenXmlReader.Create(tablePart);
+        while (reader.Read())
+        {
+            if (reader.ElementType == typeof(SharedStringItem) && reader.LoadCurrentElement() is SharedStringItem item)
+            {
+                strings.Add(item.InnerText);
+            }
+        }
+
+        return strings;
+    }
+
+    private static SmartPlugReading? ParseDataRow(Row row, IReadOnlyList<string>? sharedStrings, string deviceName, string roomName)
     {
         var cells = row.Elements<Cell>().ToList();
         if (cells.Count < 2)
@@ -227,15 +336,15 @@ public class EveHomeXlsxParser : ISmartPlugParser
         };
     }
 
-    private static string FirstCellText(Row row, SharedStringTable? sharedStrings) =>
+    private static string FirstCellText(Row row, IReadOnlyList<string>? sharedStrings) =>
         CellText(row.Elements<Cell>().First(), sharedStrings);
 
-    private static string CellText(Cell cell, SharedStringTable? sharedStrings)
+    private static string CellText(Cell cell, IReadOnlyList<string>? sharedStrings)
     {
         var text = cell.CellValue?.InnerText ?? string.Empty;
         if (cell.DataType?.Value == CellValues.SharedString && sharedStrings is not null)
         {
-            return sharedStrings.ElementAt(int.Parse(text, CultureInfo.InvariantCulture)).InnerText;
+            return sharedStrings[int.Parse(text, CultureInfo.InvariantCulture)];
         }
 
         return text;

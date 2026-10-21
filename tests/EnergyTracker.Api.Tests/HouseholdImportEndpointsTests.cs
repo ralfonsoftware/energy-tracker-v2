@@ -1,4 +1,5 @@
 using EnergyTracker.Application;
+using EnergyTracker.Application.Ports;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -7,7 +8,12 @@ using System.Text.Json.Nodes;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Shouldly;
 
 namespace EnergyTracker.Api.Tests;
@@ -355,5 +361,267 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
             .Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
         stale!.Status.ShouldBe("failed");
         stale.ErrorMessage.ShouldBe("job-interrupted");
+    }
+
+    // --- Story 11.10 (audit S4): the temp file must never outlive a request that did not end in a
+    // successful Register. The upload is streamed to disk before it is validated, so every exit needs
+    // its own proof. Direct calls to ReceiveUploadAsync reach paths a real request cannot be made to
+    // take (a failing source stream, a cancellation inside the copy). ---
+
+    private sealed class UploadDirectory : IDisposable
+    {
+        public string Path { get; } = Directory.CreateDirectory(
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"import-tests-{Guid.NewGuid()}")).FullName;
+
+        public string[] Files => Directory.GetFiles(Path);
+
+        public void Dispose() => Directory.Delete(Path, recursive: true);
+    }
+
+    private static FormFile FormFileOf(Stream stream, string fileName = "export.json") =>
+        new(stream, 0, stream.Length, "file", fileName);
+
+    private static FormFile FormFileOf(string json) => FormFileOf(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+
+    private static HouseholdImportUploadSettings SettingsFor(UploadDirectory directory, long maxFileSizeBytes = HouseholdImportEndpoints.MaxFileSizeBytes) =>
+        new(directory.Path, maxFileSizeBytes);
+
+    private static Task<IResult> ReceiveAsync(
+        IFormFile file, UploadDirectory directory, IHouseholdImportUploadRegistry? registry = null, CancellationToken cancellationToken = default,
+        long maxFileSizeBytes = HouseholdImportEndpoints.MaxFileSizeBytes) =>
+        HouseholdImportEndpoints.ReceiveUploadAsync(
+            file, Guid.NewGuid(), new ValidateHouseholdImport(), registry ?? new MemoryHouseholdImportUploadRegistry(),
+            SettingsFor(directory, maxFileSizeBytes), cancellationToken);
+
+    private const string MinimalValidDocument =
+        """
+        {"formatVersion":"v2","exportedAtUtc":"2026-09-22T10:00:00+00:00",
+         "household":{"id":"11111111-1111-1111-1111-111111111111","createdAtUtc":"2026-01-05T08:00:00+00:00","locale":"de-DE","currency":"EUR",
+           "yearlyBaselineKwh":null,"trendingThresholdKwh":100.0,"lowConfidenceGapDays":45,"tariffCheckCadenceMonths":3,
+           "aiPlausibilityEnabled":false,"aiPlausibilityBackendConfigured":false,"aiPlausibilityBackendLabel":null},
+         "householdMembers":[],"mainMeter":null,"meterReadings":[],"meterRegressionPrompts":[],"tariffs":[],"events":[],"rooms":[],
+         "powerPoints":[],"devices":[],"smartPlugReadings":[],"statusSnapshots":[],"auditCorrections":[]}
+        """;
+
+    private sealed class FailingAfterStream(byte[] bytes, int failAfter) : MemoryStream(bytes)
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (Position >= failAfter)
+            {
+                throw new IOException("disk on fire");
+            }
+
+            return await base.ReadAsync(buffer[..Math.Min(buffer.Length, failAfter)], cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task A_validation_failure_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+
+        var result = await ReceiveAsync(FormFileOf("""{ "formatVersion": "v1" }"""), directory, cancellationToken: TestContext.Current.CancellationToken);
+
+        result.ShouldBeAssignableTo<IStatusCodeHttpResult>()!.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
+        directory.Files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Malformed_JSON_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+
+        var result = await ReceiveAsync(FormFileOf("{ not valid json"), directory, cancellationToken: TestContext.Current.CancellationToken);
+
+        result.ShouldBeAssignableTo<IStatusCodeHttpResult>()!.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
+        directory.Files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task The_too_large_check_answers_400_and_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+
+        var result = await ReceiveAsync(FormFileOf(MinimalValidDocument), directory, cancellationToken: TestContext.Current.CancellationToken, maxFileSizeBytes: 10);
+
+        result.ShouldBeAssignableTo<IStatusCodeHttpResult>()!.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
+        directory.Files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_cancelled_request_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => ReceiveAsync(FormFileOf(MinimalValidDocument), directory, cancellationToken: cancelled.Token));
+
+        directory.Files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_exception_while_copying_the_upload_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+        var bytes = Encoding.UTF8.GetBytes(MinimalValidDocument);
+
+        await Should.ThrowAsync<IOException>(() => ReceiveAsync(FormFileOf(new FailingAfterStream(bytes, bytes.Length / 2)), directory));
+
+        directory.Files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_exception_from_the_registry_leaves_no_temp_file()
+    {
+        using var directory = new UploadDirectory();
+        var registry = Substitute.For<IHouseholdImportUploadRegistry>();
+        registry.When(r => r.Register(Arg.Any<Guid>(), Arg.Any<HouseholdImportUploadReference>())).Do(_ => throw new InvalidOperationException("boom"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => ReceiveAsync(FormFileOf(MinimalValidDocument), directory, registry));
+
+        directory.Files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_successful_upload_keeps_exactly_its_one_registered_temp_file()
+    {
+        using var directory = new UploadDirectory();
+
+        var result = await ReceiveAsync(FormFileOf(MinimalValidDocument), directory, cancellationToken: TestContext.Current.CancellationToken);
+
+        result.ShouldBeOfType<Ok<HouseholdImportValidationResponse>>();
+        directory.Files.Length.ShouldBe(1);
+    }
+
+    // The host-level tests below point one API host at its own upload directory, so the file count
+    // sees only this test's uploads: other classes upload to the same route in parallel.
+    private (WebApplicationFactory<Program> Host, UploadDirectory Directory) HostWithOwnUploadDirectory()
+    {
+        var directory = new UploadDirectory();
+        var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton(new HouseholdImportUploadSettings(directory.Path, HouseholdImportEndpoints.MaxFileSizeBytes))));
+        return (host, directory);
+    }
+
+    private static async Task<HttpClient> ClientWithHouseholdAsync(WebApplicationFactory<Program> host)
+    {
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Requested-With", "fetch");
+        client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.IssuerHeader, TestAuthHandler.DefaultIssuer);
+        await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        return client;
+    }
+
+    private static async Task<byte[]> ExportBytesAsync(HttpClient client) =>
+        await (await client.GetAsync("/api/household-export", TestContext.Current.CancellationToken))
+            .Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+
+    private static async Task<HouseholdImportValidationResponse> UploadValidAsync(HttpClient client, byte[] bytes)
+    {
+        using var upload = BuildUpload(bytes);
+        var response = await client.PostAsync("/api/household-import", upload, TestContext.Current.CancellationToken);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<HouseholdImportValidationResponse>(TestContext.Current.CancellationToken))!;
+    }
+
+    [Fact]
+    public async Task Over_HTTP_a_validation_failure_leaves_no_temp_file_and_a_valid_upload_leaves_exactly_one()
+    {
+        var (host, directory) = HostWithOwnUploadDirectory();
+        using var hostScope = host;
+        using var directoryScope = directory;
+        var client = await ClientWithHouseholdAsync(host);
+
+        using var invalid = BuildUpload(Encoding.UTF8.GetBytes("""{ "formatVersion": "v1" }"""));
+        (await client.PostAsync("/api/household-import", invalid, TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        directory.Files.ShouldBeEmpty();
+
+        await UploadValidAsync(client, await ExportBytesAsync(client));
+        directory.Files.Length.ShouldBe(1);
+    }
+
+    // AC #2/#9: a second validated upload by the same Household replaces the first.
+    [Fact]
+    public async Task A_second_valid_upload_by_the_same_Household_leaves_one_file_and_only_the_second_token_confirms()
+    {
+        var (host, directory) = HostWithOwnUploadDirectory();
+        using var hostScope = host;
+        using var directoryScope = directory;
+        var client = await ClientWithHouseholdAsync(host);
+        var export = await ExportBytesAsync(client);
+
+        var first = await UploadValidAsync(client, export);
+        var second = await UploadValidAsync(client, export);
+
+        directory.Files.Length.ShouldBe(1);
+        var firstConfirm = await client.PostAsync($"/api/household-import/{first.Token}/confirm", null, TestContext.Current.CancellationToken);
+        firstConfirm.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await firstConfirm.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldContain("No pending import");
+        var secondConfirm = await client.PostAsync($"/api/household-import/{second.Token}/confirm", null, TestContext.Current.CancellationToken);
+        secondConfirm.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var job = await secondConfirm.Content.ReadFromJsonAsync<HouseholdImportConfirmResponse>(TestContext.Current.CancellationToken);
+        (await PollJobToTerminalAsync(client, job!.JobId)).Status.ShouldBe("completed");
+    }
+
+    [Fact]
+    public async Task Another_Households_pending_upload_is_untouched_by_a_Households_second_upload()
+    {
+        var (host, directory) = HostWithOwnUploadDirectory();
+        using var hostScope = host;
+        using var directoryScope = directory;
+        var owner = await ClientWithHouseholdAsync(host);
+        var other = await ClientWithHouseholdAsync(host);
+        var otherUpload = await UploadValidAsync(other, await ExportBytesAsync(other));
+        var ownerExport = await ExportBytesAsync(owner);
+
+        await UploadValidAsync(owner, ownerExport);
+        await UploadValidAsync(owner, ownerExport);
+
+        directory.Files.Length.ShouldBe(2);
+        (await other.PostAsync($"/api/household-import/{otherUpload.Token}/confirm", null, TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    // AC #1: a ~33 MB export validates over HTTP and the summary counts are right. The deterministic
+    // bounded-buffer proof is the CountingStream test in ValidateHouseholdImportTests.
+    [Fact]
+    public async Task A_33_MB_upload_returns_200_with_the_right_summary_counts()
+    {
+        var (host, directory) = HostWithOwnUploadDirectory();
+        using var hostScope = host;
+        using var directoryScope = directory;
+        var client = await ClientWithHouseholdAsync(host);
+        var export = JsonNode.Parse(await ExportBytesAsync(client))!.AsObject();
+        var powerPointId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        export["rooms"] = new JsonArray(new JsonObject { ["id"] = roomId, ["name"] = "Kitchen", ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null });
+        export["powerPoints"] = new JsonArray(new JsonObject { ["id"] = powerPointId, ["roomId"] = roomId, ["name"] = "Outlet", ["createdAtUtc"] = "2026-01-05T08:16:00+00:00", ["archivedAt"] = null });
+        // Write the large array by hand: ~130,000 readings of ~270 bytes is over 33 MB.
+        const int readings = 130_000;
+        using var body = new MemoryStream();
+        var rootText = export.ToJsonString();
+        rootText.ShouldContain("\"smartPlugReadings\":[]");
+        var split = rootText.IndexOf("\"smartPlugReadings\":[]", StringComparison.Ordinal);
+        body.Write(Encoding.UTF8.GetBytes(rootText[..split] + "\"smartPlugReadings\":["));
+        for (var i = 0; i < readings; i++)
+        {
+            var reading =
+                $$"""{"id":"{{Guid.NewGuid()}}","powerPointId":"{{powerPointId}}","roomName":"Kitchen","powerPointName":"Outlet","deviceName":"Kettle","intervalStart":"2026-09-01T00:00:00+00:00","intervalEnd":"2026-09-01T00:10:00+00:00","kwhValue":0.0125}""";
+            body.Write(Encoding.UTF8.GetBytes(i == 0 ? reading : "," + reading));
+        }
+
+        body.Write(Encoding.UTF8.GetBytes("]" + rootText[(split + "\"smartPlugReadings\":[]".Length)..]));
+        body.Length.ShouldBeGreaterThan(33L * 1024 * 1024);
+
+        var result = await UploadValidAsync(client, body.ToArray());
+
+        result.Summary.SmartPlugReadings.ShouldBe(readings);
+        result.Summary.Rooms.ShouldBe(1);
+        result.Summary.PowerPoints.ShouldBe(1);
+        directory.Files.Length.ShouldBe(1);
     }
 }

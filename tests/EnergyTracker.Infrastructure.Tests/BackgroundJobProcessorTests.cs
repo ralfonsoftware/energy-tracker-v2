@@ -740,4 +740,27 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         persisted.ErrorMessage.ShouldBe("device-tag-too-long");
         persisted.CompletedAtUtc.ShouldNotBeNull();
     }
+
+    [Fact]
+    public async Task ProcessAsync_maps_SpreadsheetTooLargeException_to_the_stable_code_by_type_never_its_message_text()
+    {
+        // Story 11.10, AD-6/AD-9 (audit S4): a zip-bomb spreadsheet ends Failed with a code the client
+        // translates; the English exception text (limits, entry names) must never reach ErrorMessage.
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new SpreadsheetTooLargeException("entry 'xl/sharedStrings.xml' decompresses to more than 64000000 bytes")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.SpreadsheetTooLarge);
+        persisted.ErrorMessage.ShouldBe("spreadsheet-too-large");
+        persisted.CompletedAtUtc.ShouldNotBeNull();
+    }
 }

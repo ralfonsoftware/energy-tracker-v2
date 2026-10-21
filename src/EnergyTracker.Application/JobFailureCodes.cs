@@ -13,4 +13,7 @@ public static class JobFailureCodes
 
     // Story 11.4: a smart plug file's device tag exceeds SmartPlugReading.DeviceNameMaxLength.
     public const string DeviceTagTooLong = "device-tag-too-long";
+
+    // Story 11.10: a spreadsheet decompresses past the parser's size or row limits (audit S4).
+    public const string SpreadsheetTooLarge = "spreadsheet-too-large";
 }

@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -443,5 +445,227 @@ public class EveHomeXlsxParserTests
         }
 
         return row;
+    }
+
+    // --- Story 11.10 (audit S4): zip-bomb and row limits. The 20 MB upload cap is on the compressed
+    // size, so a small file can decompress to gigabytes; a bomb must end as a recognizable
+    // SpreadsheetTooLargeException (the job's stable code), not as a memory spike or a bare XmlException. ---
+
+    // The sample package with one entry replaced by `characters` of filler that deflates to a tiny size
+    // (an 80 million character entry is about 80 KB zipped). Built in the test, written through a
+    // streaming writer, never committed as a binary.
+    private static MemoryStream BuildPackageWithOversizedEntry(string entryName, long characters)
+    {
+        var result = new MemoryStream();
+        using (var source = ZipFile.OpenRead(SampleFilePath))
+        using (var target = new ZipArchive(result, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var created = target.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                using var to = created.Open();
+                if (entry.FullName == entryName)
+                {
+                    var head = Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"utf-8\"?><x:sst xmlns:x=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><x:si><x:t>");
+                    to.Write(head);
+                    var chunk = Encoding.UTF8.GetBytes(new string('A', 65536));
+                    for (long written = 0; written < characters; written += chunk.Length)
+                    {
+                        to.Write(chunk);
+                    }
+
+                    to.Write(Encoding.UTF8.GetBytes("</x:t></x:si></x:sst>"));
+                }
+                else if (!entry.FullName.EndsWith('/'))
+                {
+                    // Two docProps entries of the real exports cannot be inflated by .NET (and the parser never
+                    // reads them); they are left empty in the copy.
+                    try
+                    {
+                        using var from = entry.Open();
+                        from.CopyTo(to);
+                    }
+                    catch (InvalidDataException)
+                    {
+                    }
+                }
+            }
+        }
+
+        result.Position = 0;
+        return result;
+    }
+
+    private const long EightyMillionCharacters = 80_000_000;
+
+    [Theory]
+    [InlineData("xl/sharedStrings.xml")]
+    [InlineData("xl/worksheets/sheet1.xml")]
+    public void A_zip_bomb_is_rejected_by_ReadDeviceTag_and_Parse_with_SpreadsheetTooLargeException(string bombedEntry)
+    {
+        var parser = new EveHomeXlsxParser();
+        using var forHeader = BuildPackageWithOversizedEntry(bombedEntry, EightyMillionCharacters);
+        using var forParse = BuildPackageWithOversizedEntry(bombedEntry, EightyMillionCharacters);
+        forHeader.Length.ShouldBeLessThan(2 * 1024 * 1024);
+
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.ReadDeviceTag(forHeader, "bomb.xlsx", TestContext.Current.CancellationToken));
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(forParse, "bomb.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    // The rejection must happen before OpenXml loads anything: the shared strings DOM of this entry
+    // would allocate about 2.8 bytes per character, hundreds of MB on a 1 GiB container.
+    [Fact]
+    public void A_zip_bomb_is_rejected_without_allocating_anything_near_its_decompressed_size()
+    {
+        var parser = new EveHomeXlsxParser();
+        using var bomb = BuildPackageWithOversizedEntry("xl/sharedStrings.xml", EightyMillionCharacters);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(bomb, "bomb.xlsx", watermark: null, TestContext.Current.CancellationToken));
+
+        (GC.GetAllocatedBytesForCurrentThread() - before).ShouldBeLessThan(32L * 1024 * 1024);
+    }
+
+    [Fact]
+    public void A_package_that_trips_only_MaxCharactersInPart_is_an_ordinary_XmlException_not_a_SpreadsheetTooLargeException()
+    {
+        // The pre-scan limit is raised out of the way, so the OpenXml backstop is what trips. Its text is a
+        // localized resource string and the same type a corrupt file throws, which is why it is not mapped.
+        var parser = new EveHomeXlsxParser(maxDecompressedBytes: 100_000_000, maxCharactersInPart: 10_000, maxRows: 1_000_000);
+        using var stream = BuildSyntheticWorkbook("Steckdose 1", "Zimmer 1", dataRowCount: 2_000);
+
+        Should.Throw<System.Xml.XmlException>(() => parser.Parse(stream, "backstop.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void A_worksheet_over_the_row_cap_throws_SpreadsheetTooLargeException_and_one_at_the_cap_does_not()
+    {
+        // Total rows, header rows included: 4 header rows + data rows.
+        var parser = new EveHomeXlsxParser(EveHomeXlsxParser.MaxCharactersInPart, EveHomeXlsxParser.MaxCharactersInPart, maxRows: 1_000);
+
+        using (var atCap = BuildSyntheticWorkbook("Steckdose 1", "Zimmer 1", dataRowCount: 1_000 - 4))
+        {
+            parser.Parse(atCap, "at-cap.xlsx", watermark: null, TestContext.Current.CancellationToken).Readings.Count.ShouldBe(996);
+        }
+
+        using var overCap = BuildSyntheticWorkbook("Steckdose 1", "Zimmer 1", dataRowCount: 1_000 - 4 + 1);
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(overCap, "over-cap.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void The_row_cap_at_its_real_value_accepts_MaxRows_rows_and_rejects_one_more()
+    {
+        var parser = new EveHomeXlsxParser();
+
+        using (var atCap = BuildSyntheticWorkbook("Steckdose 1", "Zimmer 1", dataRowCount: EveHomeXlsxParser.MaxRows - 4))
+        {
+            parser.Parse(atCap, "at-cap.xlsx", watermark: null, TestContext.Current.CancellationToken).RawDataRowsRead.ShouldBe(EveHomeXlsxParser.MaxRows - 4);
+        }
+
+        using var overCap = BuildSyntheticWorkbook("Steckdose 1", "Zimmer 1", dataRowCount: EveHomeXlsxParser.MaxRows - 3);
+        Should.Throw<SpreadsheetTooLargeException>(() => parser.Parse(overCap, "over-cap.xlsx", watermark: null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void An_incremental_import_that_stops_at_the_watermark_never_nears_the_row_cap()
+    {
+        var parser = new EveHomeXlsxParser(EveHomeXlsxParser.MaxCharactersInPart, EveHomeXlsxParser.MaxCharactersInPart, maxRows: 100);
+        using var stream = BuildSyntheticWorkbook("Steckdose 1", "Zimmer 1", dataRowCount: 500);
+        var newest = new DateTime(2026, 6, 20, 12, 0, 0);
+
+        var result = parser.Parse(stream, "incremental.xlsx", watermark: new DateTimeOffset(newest.AddMinutes(-10 * 3), TimeSpan.Zero), TestContext.Current.CancellationToken);
+
+        result.Readings.Count.ShouldBe(4);
+    }
+
+    // The limits must never touch a legitimate file. Locally this covers every real Eve export under
+    // sample-data/eve (the biggest is 16.8 million characters and 121,644 rows); CI has the committed one.
+    [Fact]
+    public void Every_real_sample_file_still_parses_under_the_default_limits()
+    {
+        var parser = new EveHomeXlsxParser();
+        var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "sample-data", "eve"), "*.xlsx");
+        files.ShouldNotBeEmpty();
+
+        foreach (var file in files)
+        {
+            using var stream = File.OpenRead(file);
+            var result = parser.Parse(stream, Path.GetFileName(file), watermark: null, TestContext.Current.CancellationToken);
+            result.Readings.ShouldNotBeEmpty(file);
+        }
+    }
+
+    // Shared strings are resolved through a list built once, not SharedStringTable.ElementAt(i) per cell.
+    private static MemoryStream BuildWorkbookWithSharedStringCells(int dataSharedStringIndex)
+    {
+        var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook, autoSave: false))
+        {
+            var workbookPart = document.AddWorkbookPart();
+            workbookPart.Workbook = new Workbook();
+            var tablePart = workbookPart.AddNewPart<SharedStringTablePart>();
+            tablePart.SharedStringTable = new SharedStringTable(
+                new SharedStringItem(new Text("Gerät: Steckdose 1")),
+                new SharedStringItem(new Text("Raum: Zimmer 1")),
+                new SharedStringItem(new Text("2026-06-20 12:00:00")));
+
+            var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            var sheetData = new SheetData();
+            worksheetPart.Worksheet = new Worksheet(sheetData);
+            workbookPart.Workbook.AppendChild(new Sheets()).Append(new Sheet
+            {
+                Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Gesamtverbrauch",
+            });
+
+            Row SharedRow(uint index, params int[] stringIndexes)
+            {
+                var row = new Row { RowIndex = index };
+                foreach (var i in stringIndexes)
+                {
+                    row.Append(new Cell { DataType = CellValues.SharedString, CellValue = new CellValue(i.ToString()) });
+                }
+
+                return row;
+            }
+
+            sheetData.Append(SharedRow(1, 0));
+            sheetData.Append(SharedRow(2, 1));
+            sheetData.Append(BuildRow(3, "Zuhause: Test"));
+            sheetData.Append(BuildRow(4, "Datum", "Wh"));
+            var dataRow = SharedRow(5, dataSharedStringIndex);
+            dataRow.Append(new Cell { DataType = CellValues.String, CellValue = new CellValue("500") });
+            sheetData.Append(dataRow);
+
+            worksheetPart.Worksheet.Save();
+            tablePart.SharedStringTable.Save();
+            workbookPart.Workbook.Save();
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    [Fact]
+    public void Shared_string_cells_resolve_through_the_list()
+    {
+        var parser = new EveHomeXlsxParser();
+        using var stream = BuildWorkbookWithSharedStringCells(dataSharedStringIndex: 2);
+
+        var readings = parser.Parse(stream, "shared.xlsx", watermark: null, TestContext.Current.CancellationToken).Readings;
+
+        readings.ShouldHaveSingleItem();
+        readings[0].DeviceName.ShouldBe("Steckdose 1");
+        readings[0].RoomName.ShouldBe("Zimmer 1");
+        readings[0].IntervalStart.ShouldBe(new DateTimeOffset(2026, 6, 20, 12, 0, 0, TimeSpan.Zero));
+        readings[0].KwhValue.ShouldBe(0.5m);
+    }
+
+    [Fact]
+    public void An_out_of_range_shared_string_index_fails_as_it_did_before_never_with_a_wrong_value()
+    {
+        var parser = new EveHomeXlsxParser();
+        using var stream = BuildWorkbookWithSharedStringCells(dataSharedStringIndex: 99);
+
+        Should.Throw<ArgumentOutOfRangeException>(() => parser.Parse(stream, "bad-index.xlsx", watermark: null, TestContext.Current.CancellationToken));
     }
 }

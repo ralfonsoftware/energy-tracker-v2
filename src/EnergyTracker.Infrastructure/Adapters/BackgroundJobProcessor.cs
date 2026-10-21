@@ -108,12 +108,13 @@ public class BackgroundJobProcessor(
                 // (file paths, DB errors, etc.) must never be forwarded verbatim to the client that
                 // polls GET /api/jobs/{id}. A generic failure leaves ErrorMessage null: this backend has
                 // no concept of the client's locale, so the client supplies its own localized fallback
-                // (Round-4 incident fix). Stable codes (job-interrupted, upload-missing, device-tag-too-long, ...) are the
+                // (Round-4 incident fix). Stable codes (job-interrupted, upload-missing, device-tag-too-long, spreadsheet-too-large, ...) are the
                 // third kind of value: chosen from the exception's type, never from its message text.
                 failureMessage = ex switch
                 {
                     UploadMissingException => JobFailureCodes.UploadMissing,
                     DeviceTagTooLongException => JobFailureCodes.DeviceTagTooLong,
+                    SpreadsheetTooLargeException => JobFailureCodes.SpreadsheetTooLarge,
                     SmartPlugImportValidationException or HouseholdImportValidationException => ex.Message,
                     _ => null,
                 };

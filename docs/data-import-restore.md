@@ -23,11 +23,26 @@ Household's data — so it never happens as a single request. Two phases,
 two requests:
 
 1. **`POST /api/household-import`** — synchronous upload + structural
-   validation. The uploaded file is parsed and checked against the exact
-   v2 shape (every required field present, every value the right JSON
-   type, every enum string a recognized name). No database write of any
+   validation. The uploaded file is streamed to a temp file on disk and
+   checked against the exact v2 shape (every required field present, every
+   value the right JSON type, every enum string a recognized name) by
+   reading that file twice with a `Utf8JsonReader` over a `FileStream` —
+   it is never read into one string (Story 11.10, audit S4). The first
+   pass proves the file is well-formed JSON and collects the ids that
+   references point at (a reference may point at an array later in the
+   file, and `formatVersion` may be the last property); the second pass
+   validates each array element as it streams by. No database write of any
    kind happens in this phase — validation failure is structural by
    construction, not by convention (AC #2's "never partially applied").
+   Memory is bounded whatever the file holds:
+   - the reader's buffer never grows beyond **4 MiB**; a single value or
+     array element that does not fit fails validation with
+     `A single value in the file is larger than 4 MiB…` (no export has one);
+   - the `failures` list keeps the first **200** failures in the
+     validator's fixed field order, then one final entry
+     `… and N more failures not shown.` with the exact remainder;
+   - the summary retains at most **100** member display names, each cut to
+     **200** characters (the `householdMembers` count stays exact).
    - On failure: `400 ProblemDetails` with every collected failure listed
      under the `failures` extension property (not just the first one
      found) — this codebase's `errorCode`/extension-property convention
@@ -74,6 +89,20 @@ genuine choice between the two options the story allowed:
   more than one replica at a time.
 - Given that, a database row would only add migration/table ceremony for
   no correctness benefit over a process-local in-memory map.
+
+**One pending upload per Household (Story 11.10).** Registering a newly
+validated upload replaces the Household's previous, still-pending one and
+deletes its file, so a Household never has more than one waiting file. The
+replacement happens only once the new upload has validated, so an invalid
+or aborted re-upload leaves the earlier pending upload intact. Only entries
+the registry still holds are replaced: a token that was already confirmed
+belongs to its restore job, and that job's file is never touched. The swap
+is atomic (one lock), so two racing uploads end with one entry and one
+file; other Households' entries are never touched. Every path that does not
+end in a successful registration deletes its file: a validation failure, an
+exception, a cancelled request, an expired entry, and an entry presented by
+another Household. Any file left behind by a process that died between
+validate and confirm is not swept (deferred, see `deferred-work.md`).
 
 **Disclosed trade-off:** if the container restarts (redeploy, scale-to-zero
 cold start, crash) between the validate and confirm requests, the token is
@@ -123,6 +152,62 @@ composition root (`Program.cs`):
 The dev-only Vite proxy (`web/vite.config.ts`) forwards `/api` to the local
 API process with no body-size limit of its own (Node's `http-proxy`
 imposes none by default) — no change was needed there.
+
+### Why the cap no longer decides memory (Story 11.10, audit S4)
+
+Validation used to read the upload into one string, parse it into a
+`JsonDocument`, deserialize it a second time into the whole object graph and
+write the string back to disk, which the audit put at 5-10x the file size per
+upload. The cap now bounds disk and time, not memory: validation streams the
+file through a bounded buffer (see "The two-phase flow").
+
+- **What still grows with the file** is only the per-array duplicate-id set
+  and the id sets references resolve against, by item *count* (about 32 bytes
+  per id), not by file size: about 4 MB for the 121,000-reading file above,
+  and about 30 MB at the 250 MB cap (roughly 950,000 items of about 275
+  bytes). Accepted and recorded in `deferred-work.md`.
+- **The restore job still materializes the whole object graph.** It now
+  deserializes from the file stream (`JsonSerializer.DeserializeAsync`), not
+  from a string, which roughly halves its transient peak, but the restore
+  writer takes the whole `HouseholdRestoreData`, so the peak is not bounded. A
+  fully streaming restore is out of scope.
+- **One upload briefly uses twice its size on disk:** the framework spools
+  the multipart file to its own temp file before the endpoint copies it into
+  the import's temp file (deferred).
+
+**Measured, same file, same machine, same method before and after.** A
+reference-consistent export of 33,297,302 bytes (31.75 MiB; 121,000 smart plug
+readings, generated by `scripts/gen-household-export.py --readings 121000`),
+uploaded and confirmed from the signed-in Chrome tab, on 2026-10-21 on an
+Apple M2 Max (12 cores, 32 GiB, macOS) with the Release build run as
+`Production` against Postgres 17. One fresh API process per run, after one
+authenticated warm-up request; RSS is `ps -o rss=` sampled every 50 ms from
+just before the upload until the response (validate) and from `confirm` until
+`GET /api/jobs/{id}` reported completed (restore). Median of three runs, range
+in brackets:
+
+| | Before | After |
+|---|---|---|
+| Idle RSS | 216.0 MiB | 214.3 MiB |
+| Validate: peak RSS | 480.0 MiB (478.2-480.6) | 325.0 MiB (323.7-325.3) |
+| Validate: growth over idle | 264.0 MiB (about 8.3x the file) | 109.7 MiB |
+| Validate: request time | 873 ms | 936 ms |
+| Restore job: peak RSS | 2133.3 MiB (2113.9-2172.6) | 1250.2 MiB (1204.5-1296.4) |
+| Restore job: time to completed | 10.7 s | 10.0 s |
+
+The validate figures above are for the host's default **Server GC**, whose
+gen0 budget scales with core count; this 12-core Mac lets short-lived garbage
+show up as RSS. The validator allocates 128 MiB over the run, all short-lived
+(about 1 MiB live afterwards). With the container's settings emulated on the
+same machine (Server GC, one heap, a 768 MiB heap limit, as a 1 GiB / 0.5 vCPU
+container configures it) the validate growth is **54.6 MiB**, and under
+Workstation GC it is **21.6 MiB**. The restore peak stays high on purpose (the
+graph is materialized); on a 1 GiB container it is the next memory risk.
+
+The deterministic guard in CI is not a memory reading: a test validates a
+33 MB document through a stream that records every read and asserts that no
+read request exceeds the 4 MiB cap while the whole file is read and the result
+is right (`ValidateHouseholdImportTests`).
 
 ## Restore semantics
 
@@ -368,6 +453,19 @@ problem found, not just the first — a `ProblemDetails` body with a
   ]
 }
 ```
+
+A file with more than 200 failures reports the first 200, in the validator's
+fixed field order (`exportedAtUtc`, `household`, `householdMembers`,
+`mainMeter`, `meterReadings`, `meterRegressionPrompts`, `tariffs`, `events`,
+`rooms`, `powerPoints`, `devices`, `smartPlugReadings`, `statusSnapshots`,
+`auditCorrections`; never the file's own order), then one final entry
+`… and N more failures not shown.` Malformed JSON anywhere in the file, even at
+the very end, is reported **alone** as `The file is not valid JSON: …`, never
+together with the structural failures found before it. An item that passes the
+structural checks but that `System.Text.Json` still cannot deserialize is a
+reported failure too (`The file passed structural validation but could not be
+parsed: <path>: …`), so the restore job never meets a surprise. A leading UTF-8
+byte order mark is accepted.
 
 A `formatVersion` mismatch (including a missing one) is reported **alone**
 — every other field's shape is unknowable for a document that isn't even

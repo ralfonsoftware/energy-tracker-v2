@@ -369,6 +369,7 @@ builder.Services.AddScoped<ExportHouseholdData>();
 // mapping, MemoryHouseholdImportUploadRegistry's own doc comment); the writer/use case are scoped
 // like every other DbContext-backed adapter/use case in this file.
 builder.Services.AddSingleton<IHouseholdImportUploadRegistry, MemoryHouseholdImportUploadRegistry>();
+builder.Services.AddSingleton(new HouseholdImportUploadSettings(Path.GetTempPath(), HouseholdImportEndpoints.MaxFileSizeBytes));
 builder.Services.AddScoped<ValidateHouseholdImport>();
 builder.Services.AddScoped<IHouseholdRestoreWriter, HouseholdRestoreWriter>();
 builder.Services.AddScoped<RestoreHouseholdData>();
