@@ -176,6 +176,24 @@ public class RestoreHouseholdDataTests
             Arg.Is<HouseholdRestoreData>(d => d.HouseholdId == currentHouseholdId), Arg.Any<CancellationToken>());
     }
 
+    // Story 11.10: the job reads the file through a stream (no 2x-UTF-16 string). The validator accepts a
+    // leading UTF-8 BOM, so the restore read must accept the same file, or a file that validated would
+    // fail in the job.
+    [Fact]
+    public async Task Restores_a_file_with_a_leading_UTF8_BOM_through_the_stream_read()
+    {
+        var currentHouseholdId = Guid.NewGuid();
+        var tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        await File.WriteAllTextAsync(tempFilePath, ValidJson(Guid.NewGuid()), new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true), TestContext.Current.CancellationToken);
+        (await File.ReadAllBytesAsync(tempFilePath, TestContext.Current.CancellationToken)).Take(3).ShouldBe([(byte)0xEF, (byte)0xBB, (byte)0xBF]);
+
+        await Sut().ExecuteAsync(currentHouseholdId, new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
+
+        await _writer.Received(1).RestoreAsync(
+            Arg.Is<HouseholdRestoreData>(d => d.HouseholdId == currentHouseholdId), Arg.Any<CancellationToken>());
+        File.Exists(tempFilePath).ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Deletes_the_temp_file_after_a_successful_restore()
     {

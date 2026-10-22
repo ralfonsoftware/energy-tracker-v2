@@ -49,6 +49,7 @@ public static class HouseholdImportEndpoints
             ICurrentHouseholdAccessor householdAccessor,
             ValidateHouseholdImport validateHouseholdImport,
             IHouseholdImportUploadRegistry uploadRegistry,
+            HouseholdImportUploadSettings uploadSettings,
             CancellationToken cancellationToken) =>
         {
             if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
@@ -56,41 +57,8 @@ public static class HouseholdImportEndpoints
                 return forbidden;
             }
 
-            if (file.Length > MaxFileSizeBytes)
-            {
-                return Results.Problem(
-                    detail: $"File is too large ({file.Length} bytes). The maximum accepted size is {MaxFileSizeBytes} bytes.",
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-
-            string json;
-            await using (var stream = file.OpenReadStream())
-            {
-                using var reader = new StreamReader(stream);
-                json = await reader.ReadToEndAsync(cancellationToken);
-            }
-
-            // Pure read/parse — no DB write of any kind happens in this phase (AC #2's "never
-            // partially applied" structurally, not by convention).
-            var result = validateHouseholdImport.Execute(json);
-            if (!result.IsValid)
-            {
-                return Results.Problem(
-                    detail: "The uploaded file failed validation against the v2 export format.",
-                    statusCode: StatusCodes.Status400BadRequest,
-                    extensions: new Dictionary<string, object?> { ["failures"] = result.Failures });
-            }
-
-            // Short-lived temp location the confirm step below (or the async restore job, once
-            // confirmed) reads back — mirrors SmartPlugImportEndpoints' own upload path. The
-            // opaque token below is what the client holds, never this path.
-            var tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
-            await File.WriteAllTextAsync(tempFilePath, json, cancellationToken);
-
-            var token = Guid.NewGuid();
-            uploadRegistry.Register(token, new HouseholdImportUploadReference(householdId, tempFilePath, file.FileName));
-
-            return Results.Ok(new HouseholdImportValidationResponse(token, BuildSummary(result.Data!)));
+            return await ReceiveUploadAsync(
+                file, householdId, validateHouseholdImport, uploadRegistry, uploadSettings, cancellationToken);
         })
         // Same reasoning as SmartPlugImportEndpoints' own upload endpoint — Minimal APIs attach
         // antiforgery metadata to any IFormFile-binding endpoint by default; this app has no
@@ -182,31 +150,113 @@ public static class HouseholdImportEndpoints
         return api;
     }
 
+    // Story 11.10 (audit S4): the upload is streamed to its temp file first and validated from there,
+    // so it is never held whole in memory. That makes the file exist before validation, so every exit
+    // that does not end in a successful Register deletes it (a 400, any exception, a cancelled request).
+    // One try/finally owns that rule. Internal so each cleanup path has a test of its own.
+    internal static async Task<IResult> ReceiveUploadAsync(
+        IFormFile file,
+        Guid householdId,
+        ValidateHouseholdImport validateHouseholdImport,
+        IHouseholdImportUploadRegistry uploadRegistry,
+        HouseholdImportUploadSettings uploadSettings,
+        CancellationToken cancellationToken)
+    {
+        if (file.Length > uploadSettings.MaxFileSizeBytes)
+        {
+            return Results.Problem(
+                detail: $"File is too large ({file.Length} bytes). The maximum accepted size is {uploadSettings.MaxFileSizeBytes} bytes.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Short-lived temp location the confirm step (or the async restore job, once confirmed) reads
+        // back — mirrors SmartPlugImportEndpoints' own upload path. The opaque token below is what the
+        // client holds, never this path.
+        var tempFilePath = Path.Combine(uploadSettings.TempDirectory, $"{Guid.NewGuid()}.json");
+        var registered = false;
+        try
+        {
+            await using (var target = new FileStream(
+                tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 81920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var source = file.OpenReadStream())
+            {
+                await source.CopyToAsync(target, cancellationToken);
+            }
+
+            // Pure read/parse — no DB write of any kind happens in this phase (AC #2's "never
+            // partially applied" structurally, not by convention).
+            HouseholdImportValidationResult result;
+            await using (var validated = new FileStream(
+                tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.SequentialScan))
+            {
+                result = validateHouseholdImport.Execute(validated, cancellationToken);
+            }
+
+            if (!result.IsValid)
+            {
+                return Results.Problem(
+                    detail: "The uploaded file failed validation against the v2 export format.",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    extensions: new Dictionary<string, object?> { ["failures"] = result.Failures });
+            }
+
+            // A client that left while the file validated must not replace the Household's earlier, good pending upload.
+            cancellationToken.ThrowIfCancellationRequested();
+            var token = Guid.NewGuid();
+            uploadRegistry.Register(token, new HouseholdImportUploadReference(householdId, tempFilePath, file.FileName));
+            registered = true;
+
+            return Results.Ok(new HouseholdImportValidationResponse(token, BuildSummary(result.Inventory!)));
+        }
+        finally
+        {
+            if (!registered)
+            {
+                TryDeleteTempFile(tempFilePath);
+            }
+        }
+    }
+
+    // Best-effort, as the registry's own delete: a locked or already-gone file must never replace the
+    // response (or the original exception) with a cleanup failure.
+    private static void TryDeleteTempFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     // memberDisplayNames feeds the "People in this backup" panel shown after the restore (AD-25).
     // The temp file is gone by then and the job status carries no result payload, so the names ride
     // along in this validate response instead. Names are untrusted file content: trimmed, blanks
     // dropped, file order and duplicates kept; the client renders them as plain text only.
-    private static HouseholdImportSummary BuildSummary(HouseholdExportResult data) => new(
-        data.HouseholdMembers.Count,
-        data.MainMeter is not null,
-        data.MeterReadings.Count,
-        data.MeterRegressionPrompts.Count,
-        data.Tariffs.Count,
-        data.Events.Count,
-        data.Rooms.Count,
-        data.PowerPoints.Count,
-        data.Devices.Count,
-        data.SmartPlugReadings.Count,
-        data.StatusSnapshots.Count,
-        data.AuditCorrections.Count,
-        data.HouseholdMembers
-            .Select(m => m.DisplayName?.Trim())
-            .Where(name => !string.IsNullOrEmpty(name))
-            .Select(name => name!)
-            .ToList());
+    private static HouseholdImportSummary BuildSummary(HouseholdImportInventory inventory) => new(
+        inventory.HouseholdMembers,
+        inventory.HasMainMeter,
+        inventory.MeterReadings,
+        inventory.MeterRegressionPrompts,
+        inventory.Tariffs,
+        inventory.Events,
+        inventory.Rooms,
+        inventory.PowerPoints,
+        inventory.Devices,
+        inventory.SmartPlugReadings,
+        inventory.StatusSnapshots,
+        inventory.AuditCorrections,
+        inventory.MemberDisplayNames);
 }
 
 public record HouseholdImportValidationResponse(Guid Token, HouseholdImportSummary Summary);
+
+// Where uploaded import files are spooled and the largest one accepted. Production registers the OS temp
+// directory and MaxFileSizeBytes (Program.cs); an API test host replaces the registration so it can count
+// only its own files and reach the size check without a 250 MB body. Not a configuration key.
+public record HouseholdImportUploadSettings(string TempDirectory, long MaxFileSizeBytes);
 
 // MeterRegressionPrompts was missing from this record entirely (Code Review, Story 7.2 Pass 1) —
 // eleven of the twelve in-scope entity categories were shown to the user before they confirm

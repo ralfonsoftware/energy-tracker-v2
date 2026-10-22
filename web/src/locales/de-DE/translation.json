@@ -560,6 +560,7 @@
     "interrupted": "Das wurde unterbrochen, bevor es abgeschlossen war, und daher abgebrochen. Bitte versuche es erneut.",
     "retriesExhausted": "Das konnte auch nach mehreren Versuchen nicht abgeschlossen werden. Bitte versuche es erneut.",
     "uploadMissing": "Die hochgeladene Datei ist auf dem Server nicht mehr verfügbar. Bitte lade sie erneut hoch.",
-    "deviceTagTooLong": "Der Gerätename in dieser Datei ist länger als 200 Zeichen und kann deshalb nicht importiert werden. Bitte kürze ihn in der App, mit der die Datei erstellt wurde, und lade sie erneut hoch."
+    "deviceTagTooLong": "Der Gerätename in dieser Datei ist länger als 200 Zeichen und kann deshalb nicht importiert werden. Bitte kürze ihn in der App, mit der die Datei erstellt wurde, und lade sie erneut hoch.",
+    "spreadsheetTooLarge": "Diese Tabelle ist zu groß, um sie zu importieren. Bitte exportiere in der App, mit der die Datei erstellt wurde, einen kürzeren Zeitraum und lade sie erneut hoch."
   }
 }

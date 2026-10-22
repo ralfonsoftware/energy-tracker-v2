@@ -27,9 +27,17 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
                 throw new UploadMissingException($"The uploaded file '{payload.OriginalFileName}' no longer exists on the server.");
             }
 
-            var json = await File.ReadAllTextAsync(payload.TempFilePath, cancellationToken);
-            var importData = JsonSerializer.Deserialize<HouseholdExportResult>(json, SerializerOptions)
-                ?? throw new HouseholdImportValidationException($"The uploaded file '{payload.OriginalFileName}' deserialized to nothing.");
+            // Story 11.10 (audit S4): deserialized from the file stream, never from a string (which would
+            // hold the file twice as UTF-16). The object graph still materializes because the restore
+            // writer takes the whole HouseholdRestoreData, so this halves the transient peak but does
+            // not bound it. The stream overload skips a leading UTF-8 BOM, as the validator does.
+            HouseholdExportResult importData;
+            await using (var file = new FileStream(
+                payload.TempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                importData = await JsonSerializer.DeserializeAsync<HouseholdExportResult>(file, SerializerOptions, cancellationToken)
+                    ?? throw new HouseholdImportValidationException($"The uploaded file '{payload.OriginalFileName}' deserialized to nothing.");
+            }
 
             await restoreWriter.RestoreAsync(ToRestoreData(householdId, importData), cancellationToken);
         }
