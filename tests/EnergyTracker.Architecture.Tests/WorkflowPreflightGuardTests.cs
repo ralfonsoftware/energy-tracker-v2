@@ -59,6 +59,22 @@ public class WorkflowPreflightGuardTests
     }
 
     [Fact]
+    public void Acr_retention_runs_the_retention_preflight_before_the_prune_step()
+    {
+        var steps = ReadSteps(".github/workflows/acr-retention.yml", job: null);
+
+        AssertPreflight(
+            ".github/workflows/acr-retention.yml",
+            steps,
+            mode: "retention",
+            mustPrecede:
+            [
+                "Check the running image survives the purge",
+                "Prune old images (keep newest 7)",
+            ]);
+    }
+
+    [Fact]
     public void Pr_review_validate_infra_runs_the_pr_preflight_before_the_what_if()
     {
         var steps = ReadSteps(".github/workflows/pr-review.yml", job: "validate-infra");
