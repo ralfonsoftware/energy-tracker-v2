@@ -9,10 +9,18 @@ namespace EnergyTracker.Api.Tests;
 // key ring is never read), the same shape as OidcConfigurationTests.
 public class DataProtectionStartupTests
 {
+    // Story 11.11 (AC #7): a Production host must say where its database is (the connection-string check
+    // runs before the Data Protection one). Unreachable on purpose: no connection is opened here.
+    private const string UnreachableDatabase = "Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=1";
+
     [Fact]
     public void A_production_host_with_no_protector_and_no_opt_out_refuses_to_start()
     {
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("ConnectionStrings:Default", UnreachableDatabase);
+        });
 
         var exception = Should.Throw<Exception>(() => factory.CreateClient());
 
@@ -27,6 +35,7 @@ public class DataProtectionStartupTests
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Production");
+            builder.UseSetting("ConnectionStrings:Default", UnreachableDatabase);
             builder.UseSetting("DataProtection:AllowUnprotectedKeys", "true");
         });
 

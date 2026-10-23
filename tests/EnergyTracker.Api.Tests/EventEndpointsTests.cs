@@ -315,7 +315,7 @@ public class EventEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtur
     // Story 6.3 — proves EventEndpoints.ToResponse actually threads CorrelationDirection through
     // the wire response (not just the internal Event/EventDto mapping). AI Wattage Plausibility is
     // disabled by default (Household.AiPlausibilityEnabled defaults false, and this test host has
-    // no AiPlausibility:BaseUrl configured either) — CorrelateEvent's background job runs but
+    // no Ai:Endpoint configured either) — CorrelateEvent's background job runs but
     // no-ops, so the field stays null end-to-end rather than being absent from the JSON shape.
     [Fact]
     public async Task GET_events_includes_a_null_correlationDirection_when_AI_Wattage_Plausibility_is_disabled()

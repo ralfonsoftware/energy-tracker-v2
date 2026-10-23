@@ -10,16 +10,24 @@ public static class AuthEndpoints
     {
         // Issues Results.Challenge for the OIDC scheme, redirecting the browser to the
         // configured provider (AC #1). Outside /api — this is a full page navigation, not
-        // something the SPA calls via fetch. Meaningless without a real provider configured —
-        // /login is the one endpoint this story's Program.cs comment explicitly accepts as
-        // unusable until Oidc:Authority/Oidc:ClientId are set.
+        // something the SPA calls via fetch. Without Oidc:Authority/Oidc:ClientId the scheme is
+        // never registered (Program.cs), so challenging it would throw: /login is unusable until
+        // those are set, and says so with a 503 problem document instead of a 500 (Story 11.11,
+        // audit C11). The detail names the settings, never a configured value.
         // returnUrl (Story 1.8) lets the invited person's very first click — /join/{token} —
         // survive the OIDC round trip instead of always landing on "/".
-        app.MapGet("/login", (string? returnUrl) =>
-            Results.Challenge(
-                new AuthenticationProperties { RedirectUri = IsSafeLocalReturnUrl(returnUrl) ? returnUrl! : "/" },
-                [OpenIdConnectDefaults.AuthenticationScheme]))
-            // AD-27: per client IP, the one unauthenticated throttled route (audit S3).
+        app.MapGet("/login", IResult (string? returnUrl) =>
+            oidcConfigured
+                ? Results.Challenge(
+                    new AuthenticationProperties { RedirectUri = IsSafeLocalReturnUrl(returnUrl) ? returnUrl! : "/" },
+                    [OpenIdConnectDefaults.AuthenticationScheme])
+                : Results.Problem(
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "Sign-in is not configured",
+                    detail: "Sign-in is not configured on this server. The operator must set Oidc__Authority, " +
+                        "Oidc__ClientId and Oidc__ClientSecret; see docs/self-hosting.md."))
+            // AD-27: per client IP, the one unauthenticated throttled route (audit S3). On both branches,
+            // so an unconfigured instance cannot be hammered either.
             .RequireRateLimiting(RateLimitPolicies.Login);
 
         // Story 11.8 (AD-27, audit S9): a POST that needs X-Requested-With, so no other site can log a member

@@ -26,13 +26,15 @@ export Otel__OtlpEndpoint="${OTEL_OTLP_ENDPOINT:-}"
 export DataProtection__CertificateBase64="${DATA_PROTECTION_CERTIFICATE_BASE64:-}"
 export DataProtection__CertificatePassword="${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}"
 export DataProtection__AllowUnprotectedKeys="${DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS:-}"
+export Ai__Endpoint="${AI_ENDPOINT:-}"
 export Ai__ApiKey="${AI_API_KEY:-}"
+export Ai__Model="${AI_MODEL:-}"
+export Ai__BackendLabel="${AI_BACKEND_LABEL:-}"
 
-# Program.cs's fallback connection string (no ConnectionStrings:Default set) hardcodes
-# Password=change-me — only correct if .env's POSTGRES_PASSWORD was never changed from
-# .env.example. Setting this from .env here keeps `docker compose up postgres` and `dotnet run`
-# in sync regardless, and points at localhost since the API runs natively, not in the compose
-# network (docs/local-development.md, "EF Core can't connect").
+# Program.cs only falls back to a hardcoded Password=change-me connection string in Development, and that
+# is only correct if .env's POSTGRES_PASSWORD was never changed from .env.example. Setting this from .env
+# here keeps `docker compose up postgres` and `dotnet run` in sync regardless, and points at localhost since
+# the API runs natively, not in the compose network (docs/local-development.md, "EF Core can't connect").
 export ConnectionStrings__Default="Host=localhost;Database=${POSTGRES_DB:-energytracker};Username=${POSTGRES_USER:-energytracker};Password=${POSTGRES_PASSWORD:-change-me}"
 
 RUN_CMD=(dotnet run --project src/EnergyTracker.Api)

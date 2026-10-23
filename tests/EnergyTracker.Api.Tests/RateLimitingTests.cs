@@ -56,8 +56,9 @@ public class RateLimitingTests(EnergyTrackerApiFactory factory) : IClassFixture<
 
     private static async Task<HttpStatusCode> SendAsync(HttpClient client, HttpRequestMessage request)
     {
-        // /login throws inside the host when OIDC is unconfigured (every test host): that is a 500
-        // after the limiter ran, which is all these tests need.
+        // /login answers 503 when OIDC is unconfigured (every test host), after the limiter ran, which is all
+        // these tests need. The catch stays for a route whose handler throws inside the test server (the
+        // multipart ones, with a body that is not a valid upload): that is a 500 after the limiter ran too.
         try
         {
             using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);

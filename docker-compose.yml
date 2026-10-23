@@ -4,6 +4,10 @@ services:
     build: .
     ports:
       - "8080:8080"
+    # Lets the container reach a server on the Docker host (LM Studio, docs/self-hosting.md) as
+    # host.docker.internal on Docker Engine for Linux too; Docker Desktop and OrbStack resolve it on their own.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       Database__Provider: Postgres
       ConnectionStrings__Default: "Host=postgres;Database=${POSTGRES_DB:-energytracker};Username=${POSTGRES_USER:-energytracker};Password=${POSTGRES_PASSWORD}"
@@ -16,7 +20,11 @@ services:
       # certificate and store its Data Protection keys unprotected. Blank (the default) means "refuse
       # to start without a certificate". See docs/self-hosting.md.
       DataProtection__AllowUnprotectedKeys: "${DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS:-}"
+      # AI plausibility backend (AD-8): blank Ai__Endpoint means none (docs/self-hosting.md).
+      Ai__Endpoint: "${AI_ENDPOINT:-}"
       Ai__ApiKey: "${AI_API_KEY:-}"
+      Ai__Model: "${AI_MODEL:-}"
+      Ai__BackendLabel: "${AI_BACKEND_LABEL:-}"
       # AD-19 OTel extension — local dev exports to the aspire-dashboard container below via OTLP.
       Otel__Exporter: Otlp
       Otel__OtlpEndpoint: "http://aspire-dashboard:18889"
