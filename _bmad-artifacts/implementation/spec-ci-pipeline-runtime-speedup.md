@@ -63,6 +63,8 @@ context:
 - Given the PR run for this change, then `Test .NET solution` takes at most 5 minutes (baseline 9m) with no container-start or timeout flake at 8 threads. AMENDED 2026-10-23 (Ralf, added)
 - Given the app already uses system identity for the registry and port 8080, then the step issues no writes; given either differs, it applies both as before.
 
+- 2026-10-23, follow-up (Ralf, after review): the Ask First item "touching `EnergyTracker.Api.Tests` container usage" was approved and done. The fixture moved to `tests/Shared/SharedDatabaseServers.cs` (linked into both test projects, namespace `EnergyTracker.TestSupport`), the five Api.Tests container sites use `PostgresTestDatabase`, and the guard became `TestsShareDatabaseServersTests` covering both projects. Local `Api.Tests`: 52s to 30s.
+
 ## Design Notes
 
 Per-test cost remains: `CREATE DATABASE` plus 30 migrations; if the PR run shows it dominating, a follow-up can clone a pre-migrated template. The image handoff uses the Actions layer cache, not an artifact tarball: no 200 MB upload/download, and a cache miss only costs a rebuild. The `deploy` job repeats setup-dotnet and a migrations-project restore (about 20s), the price of the split.
@@ -83,19 +85,22 @@ Per-test cost remains: `CREATE DATABASE` plus 30 migrations; if the PR run shows
 **Shared test database servers (the 9-minute fix)**
 
 - Entry point: one lazily started, retried container per provider, disposed by the assembly fixture.
-  [`SharedDatabaseServers.cs:15`](../../tests/EnergyTracker.Infrastructure.Tests/SharedDatabaseServers.cs#L15)
+  [`SharedDatabaseServers.cs:16`](../../tests/Shared/SharedDatabaseServers.cs#L16)
 
 - Retry on a transient container start failure, the cost of sharing one server.
-  [`SharedDatabaseServers.cs:59`](../../tests/EnergyTracker.Infrastructure.Tests/SharedDatabaseServers.cs#L59)
+  [`SharedDatabaseServers.cs:60`](../../tests/Shared/SharedDatabaseServers.cs#L60)
 
 - Per-test Postgres database; creates serialized because they copy `template1`.
-  [`SharedDatabaseServers.cs:93`](../../tests/EnergyTracker.Infrastructure.Tests/SharedDatabaseServers.cs#L93)
+  [`SharedDatabaseServers.cs:94`](../../tests/Shared/SharedDatabaseServers.cs#L94)
 
 - SQL Server counterpart; drop uses single-user rollback.
-  [`SharedDatabaseServers.cs:160`](../../tests/EnergyTracker.Infrastructure.Tests/SharedDatabaseServers.cs#L160)
+  [`SharedDatabaseServers.cs:161`](../../tests/Shared/SharedDatabaseServers.cs#L161)
 
 - Typical one-line swap; test bodies untouched.
   [`BackgroundJobRepositoryTests.cs:15`](../../tests/EnergyTracker.Infrastructure.Tests/BackgroundJobRepositoryTests.cs#L15)
+
+- Api.Tests follow-up: the web factory fixture takes a database, not a container.
+  [`EnergyTrackerApiFactory.cs:19`](../../tests/EnergyTracker.Api.Tests/EnergyTrackerApiFactory.cs#L19)
 
 - Static helper now takes the database type, not a container.
   [`SmartPlugImportRepositoryTests.cs:16`](../../tests/EnergyTracker.Infrastructure.Tests/SmartPlugImportRepositoryTests.cs#L16)
@@ -125,8 +130,8 @@ Per-test cost remains: `CREATE DATABASE` plus 30 migrations; if the PR run shows
 - Gate jobs cannot reach Azure, secrets or the registry.
   [`AppDeployWorkflowJobsGuardTests.cs:36`](../../tests/EnergyTracker.Architecture.Tests/AppDeployWorkflowJobsGuardTests.cs#L36)
 
-- No return to a container per test class.
-  [`InfrastructureTestsShareDatabaseServersTests.cs:24`](../../tests/EnergyTracker.Architecture.Tests/InfrastructureTestsShareDatabaseServersTests.cs#L24)
+- No return to a container per test class, in Infrastructure.Tests or Api.Tests.
+  [`TestsShareDatabaseServersTests.cs:27`](../../tests/EnergyTracker.Architecture.Tests/TestsShareDatabaseServersTests.cs#L27)
 
 - Preflight guard now reads the `deploy` job.
   [`WorkflowPreflightGuardTests.cs:26`](../../tests/EnergyTracker.Architecture.Tests/WorkflowPreflightGuardTests.cs#L26)

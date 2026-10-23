@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Api.Tests;
 
@@ -13,7 +12,7 @@ public class DataProtectionKeysAreEncryptedAtRestTests : IAsyncLifetime
 {
     private const string Purpose = "EnergyTracker.Tests.EncryptedAtRest";
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync()
     {

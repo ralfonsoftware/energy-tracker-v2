@@ -4,14 +4,15 @@ using Npgsql;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
 
-[assembly: AssemblyFixture(typeof(EnergyTracker.Infrastructure.Tests.SharedDatabaseServers))]
+[assembly: AssemblyFixture(typeof(EnergyTracker.TestSupport.SharedDatabaseServers))]
 
-namespace EnergyTracker.Infrastructure.Tests;
+namespace EnergyTracker.TestSupport;
 
-// One Postgres and one SQL Server container per test run, started on first use. Every test gets its own
-// empty database on them (PostgresTestDatabase / SqlServerTestDatabase), so isolation stays per test while
-// the container start (seconds for Postgres, much longer for SQL Server) is paid once instead of once per
-// test method. The assembly fixture only exists to dispose the servers at the end of the run.
+// Linked into EnergyTracker.Infrastructure.Tests and EnergyTracker.Api.Tests: one copy of the source, one fixture
+// and one server pair per test assembly. One Postgres and one SQL Server container per test run, started on first
+// use. Every test gets its own empty database on them (PostgresTestDatabase / SqlServerTestDatabase), so isolation
+// stays per test while the container start (seconds for Postgres, much longer for SQL Server) is paid once instead
+// of once per test method. The assembly fixture only exists to dispose the servers at the end of the run.
 public sealed class SharedDatabaseServers : IAsyncLifetime
 {
     private const string PostgresImage = "postgres:18-alpine";

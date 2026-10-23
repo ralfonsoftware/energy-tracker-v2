@@ -17,8 +17,14 @@
     <Content Include="..\..\sample-data\meross\*.csv" LinkBase="sample-data\meross" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Shared by both test assemblies: one Postgres/SQL Server container per run, a database per test. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\SharedDatabaseServers.cs" Link="SharedDatabaseServers.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="EnergyTracker.TestSupport" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +32,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit.v3.mtp-v2" />
   </ItemGroup>
