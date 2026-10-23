@@ -1,0 +1,160 @@
+name: ACR Retention
+
+# Keeps the newest 7 energy-tracker images in the Basic-tier registry and deletes the rest, so
+# registry storage stops growing with every deploy. The registry's own retention policy is
+# Premium-only; `acr purge` run as an ACR Task works on Basic. Weekly, Sunday 01:00 UTC (GitHub cron
+# is UTC; the run can start a few minutes late). Manual runs can be a dry run that deletes nothing.
+# Runs on main only, as the deploy identity (its federated credential is the main branch), with the
+# same preflight as the other Azure workflows. Details: infra/README.md, "Registry image retention".
+on:
+  schedule:
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be deleted and delete nothing.'
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+# Its own group, deliberately not app-deploy.yml's `infra-app-deploy`: a group keeps one pending run,
+# so a purge queued behind a deploy there could replace a queued deploy. The purge is safe next to a
+# deploy without it: the orphan sweep skips anything younger than an hour (a push in flight), and the
+# running-image guard below refuses to purge the image the Container App runs.
+concurrency:
+  group: acr-retention
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune old images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Verify running on main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow only runs from main (got $GITHUB_REF). Re-run workflow_dispatch selecting the main branch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Azure login (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The registry name embeds uniqueString(resourceGroup().id), so resolve it at runtime like
+      # app-deploy.yml does. Exactly one ACR exists in this resource group by design.
+      - name: Resolve ACR
+        id: acr
+        run: |
+          LOGIN_SERVER=$(az acr list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].loginServer" -o tsv)
+          if [ -z "$LOGIN_SERVER" ]; then
+            echo "::error::No ACR found in resource group ${{ vars.AZURE_RESOURCE_GROUP_NAME }}"
+            exit 1
+          fi
+          echo "login_server=$LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+          echo "name=${LOGIN_SERVER%%.*}" >> "$GITHUB_OUTPUT"
+
+      - name: "Preflight: identity permissions"
+        timeout-minutes: 15
+        env:
+          AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: scripts/ci/azure-preflight.sh retention
+
+      # A failed deploy still pushes its image, so after seven failed deploys in a week the image
+      # that is actually running is no longer among the 7 newest. Purging then would delete it, and
+      # the next cold start could not pull it. Stop instead, before anything is deleted. An image
+      # from outside this registry (the bootstrap placeholder) needs no protection.
+      - name: Check the running image survives the purge
+        run: |
+          APP_NAME=$(az containerapp list --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} --query "[0].name" -o tsv)
+          RUNNING=$(az containerapp show \
+            --name "$APP_NAME" \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --query properties.template.containers[0].image -o tsv)
+          case "$RUNNING" in
+            "")
+              echo "::error::Could not read the Container App's image, so the purge cannot be checked. Nothing was deleted."
+              exit 1
+              ;;
+            "${{ steps.acr.outputs.login_server }}/energy-tracker:"*) ;;
+            "${{ steps.acr.outputs.login_server }}/energy-tracker@"*)
+              echo "::error::The Container App runs '$RUNNING', pinned by digest, which this check cannot compare with the newest tags. Nothing was deleted."
+              exit 1
+              ;;
+            *)
+              echo "Running image '$RUNNING' is not from this registry's energy-tracker repository, nothing to protect."
+              exit 0
+              ;;
+          esac
+          TAG="${RUNNING##*:}"
+          NEWEST=$(az acr repository show-tags \
+            --name ${{ steps.acr.outputs.name }} \
+            --repository energy-tracker \
+            --orderby time_desc --top 7 -o tsv)
+          if ! printf '%s\n' "$NEWEST" | grep -qxF "$TAG"; then
+            echo "::error::The running image tag '$TAG' is not among the 7 newest tags, so the purge would delete it. Nothing was deleted. Deploy a good build (app-deploy.yml), then re-run this workflow."
+            exit 1
+          fi
+          echo "Running image tag '$TAG' is among the 7 newest, safe to purge."
+
+      # One task run (one agent start-up) with four commands. The first deletes every tag but the 7
+      # newest. Deleting a tag leaves its manifest list untagged, and the manifests that list
+      # references can only be removed once the list itself is gone, so the sweeps repeat. They skip
+      # manifests younger than an hour (a push in flight). Anything still left goes next week. Each
+      # step gets its own 30 minutes: the default is 10, short for the first run's backlog.
+      - name: Prune old images (keep newest 7)
+        timeout-minutes: 50
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          DRY_RUN_FLAG=""
+          if [ "$DRY_RUN" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+            echo "Dry run: nothing will be deleted."
+          fi
+
+          TASK_FILE="${RUNNER_TEMP}/acr-retention.yaml"
+          cat > "$TASK_FILE" <<EOF
+          version: v1.1.0
+          steps:
+            - cmd: acr purge --filter 'energy-tracker:.*' --ago 0d --keep 7 ${DRY_RUN_FLAG}
+              timeout: 1800
+            - cmd: acr purge --filter 'energy-tracker:.*' --untagged-only --ago 1h ${DRY_RUN_FLAG}
+              timeout: 1800
+            - cmd: acr purge --filter 'energy-tracker:.*' --untagged-only --ago 1h ${DRY_RUN_FLAG}
+              timeout: 1800
+            - cmd: acr purge --filter 'energy-tracker:.*' --untagged-only --ago 1h ${DRY_RUN_FLAG}
+              timeout: 1800
+          EOF
+
+          az acr run \
+            --registry ${{ steps.acr.outputs.name }} \
+            --timeout 3000 \
+            -f "$TASK_FILE" \
+            /dev/null
+
+      - name: Registry usage
+        if: always() && steps.acr.outputs.name != ''
+        continue-on-error: true
+        run: |
+          {
+            echo "### Registry usage"
+            echo ""
+            echo "Tagged images in \`energy-tracker\`: $(az acr repository show-tags --name ${{ steps.acr.outputs.name }} --repository energy-tracker -o tsv | wc -l | tr -d ' ')"
+            echo ""
+            echo "Untagged manifests left: $(az acr manifest list-metadata --registry ${{ steps.acr.outputs.name }} --name energy-tracker --query 'length([?tags==null])' -o tsv 2>/dev/null || echo unknown) (14 is the floor: 2 child manifests for each of the 7 kept images)"
+            echo ""
+            echo '```'
+            az acr show-usage --name ${{ steps.acr.outputs.name }} -o table
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

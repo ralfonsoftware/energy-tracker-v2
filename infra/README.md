@@ -311,7 +311,7 @@ workflow code on a branch is attacker-controlled by construction. So the fix is 
 
 | Identity | Role | Federated credential (subject) | Repository secret | Used by | Database access |
 |---|---|---|---|---|---|
-| `energy-tracker-devops-uami` (deploy) | **Owner** on the target resource group | `repo-branch-main` (`main` push only) | `AZURE_CLIENT_ID` | `app-deploy.yml`, `infra-deploy.yml` | contained Entra user, `db_datareader`/`db_datawriter`/`db_ddladmin` (`infra/sql/grant-entra-db-users.sql`) |
+| `energy-tracker-devops-uami` (deploy) | **Owner** on the target resource group | `repo-branch-main` (`main` push only) | `AZURE_CLIENT_ID` | `app-deploy.yml`, `infra-deploy.yml`, `acr-retention.yml` | contained Entra user, `db_datareader`/`db_datawriter`/`db_ddladmin` (`infra/sql/grant-entra-db-users.sql`) |
 | `energy-tracker-pr-reader-uami` (PR) | **Reader** plus the custom role **Energy Tracker PR What-If** (`Microsoft.Resources/deployments/whatIf/action` only), both on the target resource group | `repo-pr` (`pull_request`) | `AZURE_PR_CLIENT_ID` | `pr-review.yml` job `validate-infra` | none |
 
 The deploy identity creates the Key Vault, its Data Protection key and the key-scoped role assignment
@@ -329,7 +329,7 @@ run with a message that names the right and points at this section. A denied pro
 authorization failure (`AuthorizationFailed`, 403, ...); any other error is reported as its own
 failure and never counts as a pass.
 
-### Deploy identity (`deploy-app` and `deploy-infra` modes)
+### Deploy identity (`deploy-app`, `deploy-infra` and `retention` modes)
 
 | Right | Needed by | Why | How the preflight checks it |
 |---|---|---|---|
@@ -337,6 +337,7 @@ failure and never counts as a pass.
 | Read the production database through the contained Entra user | `app-deploy.yml` migration step | `dotnet ef database update` connects as this identity (AD-21) | `dotnet ef migrations list` against the production database with the migration step's retry loop (5 x 30 s, firewall rule propagation) (`deploy-app`) |
 | Database write and DDL (`db_datawriter`, `db_ddladmin`) | `app-deploy.yml` migration step | applying migrations | **not probed**: no harmless write exists; the migration step itself fails if it is missing |
 | Push to the container registry (`AcrPush` or Owner) | `app-deploy.yml` | `docker push` of the new image | **not probed**: no harmless push; `az acr login` runs before the migration to catch the common failure early |
+| Read the container registry and the container app; run an ACR task on the registry (Owner or Contributor) | `acr-retention.yml` | the weekly purge reads the running image and runs `acr purge` as a task | `az acr list`, `az containerapp list`, and a dry-run `acr purge` through `az acr run`, which deletes nothing (`retention`) |
 | Update the container app and its registry/ingress settings | `app-deploy.yml` | deploy a new revision, ensure pull credential and port | **not probed**: no harmless probe; checked by the steps that use them |
 | Read role assignments on the resource group | `infra-deploy.yml` | the template creates role assignments (AcrPull) | `az role assignment list -g <rg>` (`deploy-infra`) |
 | Deployment and role-assignment write on the resource group | `infra-deploy.yml` | `az deployment group create` | `az deployment group what-if` at the **default** validation level, the only harmless call that checks deploy-class write rights (`deploy-infra`) |
@@ -380,6 +381,45 @@ scripts/ci/azure-preflight.sh pr
 # deploy-app also needs the firewall rule from app-deploy.yml for the database read; for a quick local
 # run without it: PREFLIGHT_DB_ATTEMPTS=1 scripts/ci/azure-preflight.sh deploy-app
 ```
+
+## Registry image retention
+
+Every `app-deploy.yml` run pushes a new, uniquely tagged image, and nothing in Azure removes old ones.
+The registry is Basic (10 GiB included), and its built-in retention policy only handles untagged
+manifests and is Premium-only, so [`acr-retention.yml`](../.github/workflows/acr-retention.yml)
+keeps the **newest 7 `energy-tracker` images** and deletes the rest. It needs no SKU change, Azure
+resource or Bicep.
+
+- **When:** every Sunday 01:00 UTC (GitHub cron is UTC: 02:00 or 03:00 in Berlin; a run can start a
+  few minutes late), and on demand (Actions, "ACR Retention", Run workflow). Tick **dry_run** to list
+  what would be deleted and delete nothing.
+- **Who:** the deploy identity (`AZURE_CLIENT_ID`), from `main` only, after the `retention`
+  preflight (it includes a dry-run purge that proves the ACR Tasks right).
+- **What:** one ACR task run with four `acr purge` commands, all scoped to `energy-tracker`. The
+  first deletes every tag except the 7 newest (by last update). A push is an OCI index plus an image
+  and an attestation manifest, so deleting a tag leaves an untagged index and its manifests are freed
+  only once the index is gone: three `--untagged-only` sweeps follow, each skipping anything younger
+  than an hour (a push in flight). What a run misses, the next one takes.
+- **Running image guard:** a failed deploy still pushes its image, so after seven failed deploys in a
+  week the running image would no longer be among the 7 newest. The run then stops **before**
+  deleting anything and names the tag; deploy a good build and re-run it.
+- **First run:** removes about 118 tags (registry at ~2.6 GB of 10 GiB when this was written). Their
+  manifests go in the same run unless deleting a tag restarts a manifest's one-hour age (not
+  verifiable by dry run); then the sweeps skip them and the next weekly run frees them. The run
+  summary shows the untagged manifests left (14 for the 7 kept images is the floor). Do a
+  **dry_run** first if you want to see the tag list.
+- **Consequences:** a rollback target must be one of the last 7 pushed images (`app-deploy.yml`'s
+  automatic rollback uses the previous one, always in range); an older tag is gone for good. The run
+  summary shows the tag count and registry usage.
+- **If it fails:** GitHub emails the failed run. The usual causes are the preflight (the message names
+  the missing right) or ACR Tasks being unavailable on the subscription (Microsoft pauses task runs
+  for free-credit subscriptions). Nothing is lost by a failed run except that the registry keeps
+  growing until the next good one.
+- **Looking by hand:** `az acr repository show-tags -n <acr> --repository energy-tracker --orderby time_desc -o tsv`
+  and `az acr show-usage -n <acr> -o table`. A manual dry run:
+  `az acr run --registry <acr> --cmd "acr purge --filter 'energy-tracker:.*' --ago 0d --keep 7 --dry-run" /dev/null`.
+- The guard test `AcrRetentionWorkflowGuardTests` fails the build if the schedule, the `--keep 7`,
+  the repository filter, the `--ago` bounds or the preflight order change.
 
 ## One-time identity bootstrap (already done — reference only)
 

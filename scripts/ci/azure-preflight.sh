@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fail-fast permission preflight for the CI Azure identities (Story 11.5, audit S11, AC #5).
 #
-# Usage: scripts/ci/azure-preflight.sh <deploy-app|deploy-infra|pr>
+# Usage: scripts/ci/azure-preflight.sh <deploy-app|deploy-infra|retention|pr>
 #
 # Run it right after the Azure login of a workflow, before any step that changes something. It
 # checks the identity's rights BY BEHAVIOUR with harmless calls: every right the workflow needs
@@ -32,7 +32,7 @@ ERR_FILE="$(mktemp)"
 trap 'rm -f "$ERR_FILE"' EXIT
 
 usage() {
-  echo "Usage: $0 <deploy-app|deploy-infra|pr>" >&2
+  echo "Usage: $0 <deploy-app|deploy-infra|retention|pr>" >&2
   echo "Requires AZURE_RESOURCE_GROUP_NAME and an active az login." >&2
   exit 2
 }
@@ -174,6 +174,20 @@ probe_database_read() {
   fail "Production database read failed after $attempts attempts. Likely firewall propagation or the identity's contained database user is missing or lacks rights (infra/sql/grant-entra-db-users.sql). Detail: $(err_tail)"
 }
 
+# retention: running an ACR task is the one right the weekly purge needs that no read proves. A
+# dry-run purge is a real task run (so it exercises the Tasks right and that Tasks are not paused
+# on the subscription) and deletes nothing.
+probe_acr_task_run() {
+  local registry
+  if ! registry="$(az acr list --resource-group "$RG" --query '[0].name' -o tsv 2>"$ERR_FILE")" || [ -z "$registry" ]; then
+    fail "Cannot resolve the registry for the ACR Tasks probe. Missing right: Microsoft.ContainerRegistry/registries/read. Detail: $(err_tail)"
+    return
+  fi
+  probe_read "Run an ACR task (dry-run purge, deletes nothing)" \
+    "Microsoft.ContainerRegistry/registries/runs/* on the registry (Owner or Contributor), and ACR Tasks must be allowed on the subscription" \
+    run_with_timeout 300 az acr run --registry "$registry" --cmd "acr purge --untagged-only --ago 1h --dry-run" /dev/null
+}
+
 # deploy-infra: the only harmless call that exercises deploy-class write rights (including
 # role-assignment write, which the template needs) is a what-if at the DEFAULT validation level.
 probe_deploy_class_what_if() {
@@ -202,7 +216,7 @@ check_az_supports_no_rbac() {
 }
 
 case "$MODE" in
-  deploy-app | deploy-infra | pr) ;;
+  deploy-app | deploy-infra | retention | pr) ;;
   *) usage ;;
 esac
 if [ -z "$RG" ]; then
@@ -239,6 +253,12 @@ case "$MODE" in
     probe_nonempty "Read the container app" "Microsoft.App/containerApps/read on the resource group" az containerapp list --resource-group "$RG" --query '[0].name' -o tsv
     probe_resource_group_scope
     probe_database_read
+    ;;
+  retention)
+    probe_nonempty "Read the container registry" "Microsoft.ContainerRegistry/registries/read on the resource group" az acr list --resource-group "$RG" --query '[0].name' -o tsv
+    probe_nonempty "Read the container app" "Microsoft.App/containerApps/read on the resource group (the running image must survive the purge)" az containerapp list --resource-group "$RG" --query '[0].name' -o tsv
+    probe_resource_group_scope
+    probe_acr_task_run
     ;;
   deploy-infra)
     probe_read "Read the resource group" "Owner on the resource group" az group show --name "$RG"
