@@ -4,6 +4,9 @@ name: App Deploy
 # and redeploys the app (AC #1), regardless of which files changed. Unlike infra-deploy.yml this
 # has no `paths:` filter: that workflow is scoped to `infra/**` to avoid redeploying infra on
 # every app-only change, a rationale that doesn't apply here.
+#
+# Four jobs: frontend-tests, backend-tests and image-build run in parallel (none of them touches Azure),
+# and deploy needs all three, so nothing is migrated, pushed or rolled out unless every test is green.
 on:
   push:
     branches: [main]
@@ -19,8 +22,8 @@ on:
       - 'scripts/ci/**'
   workflow_dispatch: {}
 
+# Least privilege at the workflow level: only the deploy job logs in to Azure and gets `id-token: write`.
 permissions:
-  id-token: write
   contents: read
 
 # Shared with infra-deploy.yml's concurrency group (not just this workflow's own runs): the two
@@ -32,8 +35,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-test-deploy:
-    name: Build, test, and deploy
+  # --- Frontend: type-check/build and unit tests --------------------------------------------
+  frontend-tests:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify running on main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow only deploys from main (got ${{ github.ref }}). Re-run workflow_dispatch selecting the main branch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # node-version must match the Dockerfile's frontend build stage (node:26-alpine) so CI tests
+      # and builds on the Node the image builds with. Change both together (Dependabot bumps the
+      # Dockerfile base image, not this value). web/package.json's @types/node devDependency is a
+      # type-checking version, not the runtime.
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Build frontend
+        run: npm --prefix web run build
+
+      - name: Test frontend
+        run: npm --prefix web run test
+
+  # --- Backend: build and the .NET test projects ---------------------------------------------
+  backend-tests:
+    name: Backend tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -84,18 +121,73 @@ jobs:
       - name: Build frontend
         run: npm --prefix web run build
 
-      - name: Test frontend
-        run: npm --prefix web run test
-
       # Runs all three test projects (Api.Tests, Infrastructure.Tests, Architecture.Tests) via the
       # Microsoft.Testing.Platform runner (global.json). Infrastructure.Tests uses Testcontainers,
       # which drives Docker directly — ubuntu-latest ships Docker pre-installed, so no extra
-      # `services:` config is needed. A non-zero exit here fails the job and blocks every later
-      # step (build/push/deploy never runs).
+      # `services:` config is needed. A non-zero exit here fails the job, so the deploy job
+      # (migrations, push, rollout) never runs.
       - name: Test .NET solution
         run: dotnet test EnergyTracker.sln --no-restore --configuration Release
 
-      # --- Build & push Docker image (AC #2, #5) ------------------------------------------------
+  # --- Image: build only, in parallel with the tests ------------------------------------------
+  # No Azure login, no secrets, no `id-token`: this job cannot reach the registry, so an image built from
+  # untested code is never pushed. It validates the Dockerfile and fills the Actions layer cache that the
+  # deploy job's "Build and push image" reads, so that push is mostly cached layers.
+  image-build:
+    name: Image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Verify running on main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow only deploys from main (got ${{ github.ref }}). Re-run workflow_dispatch selecting the main branch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          cache-to: type=gha,scope=app-image,mode=max
+
+  # --- Deploy: only after every gate is green -------------------------------------------------
+  deploy:
+    name: Deploy
+    needs: [frontend-tests, backend-tests, image-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The only job that logs in to Azure. OIDC federated credential, main branch only.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Verify running on main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow only deploys from main (got ${{ github.ref }}). Re-run workflow_dispatch selecting the main branch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # `dotnet ef` (migration step below) needs the SDK and the migrations project's packages; the test
+      # job's restore lives on another runner.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore migrations project
+        run: dotnet restore src/EnergyTracker.Infrastructure.Migrations.SqlServer
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -326,6 +418,8 @@ jobs:
           IMAGE_TAG="$(date -u +%Y%m%dT%H%M)-$(git rev-parse --short=11 HEAD)"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
+      # cache-from reads the layers the image-build job exported for this same commit, so the push is
+      # mostly cached layers. A cache miss only costs a full rebuild here, never a different image.
       - name: Build and push image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -334,6 +428,7 @@ jobs:
           push: true
           tags: ${{ steps.acr.outputs.login_server }}/energy-tracker:${{ steps.tag.outputs.image_tag }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=app-image
 
       # --- Deploy new revision and health-gate (AC #3, #4) ---------------------------------------
       # Container App name is not authored by this workflow — resolve it at runtime rather than
@@ -356,8 +451,23 @@ jobs:
       # --target-port 8080 here must be kept in sync with `containerAppTargetPort`'s default in
       # infra/main.bicep — this CLI call runs on every push and will silently overwrite the live
       # port back to 8080 even if that Bicep default is ever changed without updating this value.
+      #
+      # The two writes cost about 30 s, so they run only when the live app differs: one read of the
+      # registry identity and the ingress target port, and any mismatch or unreadable output falls
+      # through to the writes below, exactly as before.
       - name: Ensure ACR pull credential and target port
         run: |
+          APP_STATE=$(az containerapp show \
+            --name ${{ steps.app.outputs.name }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \
+            --query "{identity: properties.configuration.registries[?server=='${{ steps.acr.outputs.login_server }}'].identity | [0], port: properties.configuration.ingress.targetPort}" \
+            -o json 2>/dev/null || true)
+          LIVE_IDENTITY=$(printf '%s' "$APP_STATE" | jq -r '.identity // empty' 2>/dev/null || true)
+          LIVE_PORT=$(printf '%s' "$APP_STATE" | jq -r '.port // empty' 2>/dev/null || true)
+          if [ "$LIVE_IDENTITY" = "system" ] && [ "$LIVE_PORT" = "8080" ]; then
+            echo "Registry identity and target port already correct; skipping the writes."
+            exit 0
+          fi
           az containerapp registry set \
             --name ${{ steps.app.outputs.name }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP_NAME }} \

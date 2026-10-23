@@ -7,13 +7,12 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Testcontainers.MsSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
 public class SqlServerMigrationTests : IAsyncLifetime
 {
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly SqlServerTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 

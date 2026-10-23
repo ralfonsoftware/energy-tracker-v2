@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
-using Testcontainers.MsSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -21,7 +20,7 @@ namespace EnergyTracker.Infrastructure.Tests;
 // against the real production provider, deliberately without duplicating the full Postgres suite.
 public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
 {
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly SqlServerTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 

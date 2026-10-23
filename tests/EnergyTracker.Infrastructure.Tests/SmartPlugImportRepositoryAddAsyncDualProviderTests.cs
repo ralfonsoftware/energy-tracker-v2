@@ -8,8 +8,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
-using Testcontainers.MsSql;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -672,7 +670,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
 
 public class PostgresSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartPlugImportRepositoryAddAsyncDualProviderTestsBase, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     protected override int AwaitingMappingUpsertChunkSize => 5_000;
 
@@ -704,7 +702,7 @@ public class PostgresSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartP
 
 public class SqlServerSmartPlugImportRepositoryAddAsyncDualProviderTests : SmartPlugImportRepositoryAddAsyncDualProviderTestsBase, IAsyncLifetime
 {
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly SqlServerTestDatabase _container = new();
 
     protected override int AwaitingMappingUpsertChunkSize => 200;
 

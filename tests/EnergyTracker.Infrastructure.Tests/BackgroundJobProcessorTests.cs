@@ -8,7 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -18,7 +17,7 @@ namespace EnergyTracker.Infrastructure.Tests;
 // scope, and never resurrects or overwrites a row.
 public class BackgroundJobProcessorTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 

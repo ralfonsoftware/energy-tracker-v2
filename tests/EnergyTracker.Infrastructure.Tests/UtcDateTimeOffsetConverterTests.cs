@@ -3,8 +3,6 @@ using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
-using Testcontainers.MsSql;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -283,7 +281,7 @@ public abstract class UtcDateTimeOffsetConverterTestsBase
 
 public class PostgresUtcDateTimeOffsetConverterTests : UtcDateTimeOffsetConverterTestsBase, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
@@ -309,7 +307,7 @@ public class PostgresUtcDateTimeOffsetConverterTests : UtcDateTimeOffsetConverte
 
 public class SqlServerUtcDateTimeOffsetConverterTests : UtcDateTimeOffsetConverterTestsBase, IAsyncLifetime
 {
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly SqlServerTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
