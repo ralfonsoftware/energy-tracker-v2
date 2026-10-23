@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -18,7 +17,7 @@ namespace EnergyTracker.Infrastructure.Tests;
 // GetCurrentStatus's own calculation logic (GetCurrentStatusTests already owns that).
 public class StatusRecomputeServiceTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 

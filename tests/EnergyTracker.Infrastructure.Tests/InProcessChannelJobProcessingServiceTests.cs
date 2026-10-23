@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -15,7 +14,7 @@ namespace EnergyTracker.Infrastructure.Tests;
 // failing sweep (database unreachable or not yet migrated) must never stop the host nor the loop.
 public class InProcessChannelJobProcessingServiceTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 

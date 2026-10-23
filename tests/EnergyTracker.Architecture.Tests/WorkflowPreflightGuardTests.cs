@@ -23,10 +23,10 @@ public class WorkflowPreflightGuardTests
     [Fact]
     public void App_deploy_runs_the_deploy_app_preflight_after_the_firewall_rule_and_before_every_mutating_step()
     {
-        var steps = ReadSteps(".github/workflows/app-deploy.yml", job: null);
+        var steps = ReadSteps(".github/workflows/app-deploy.yml", job: "deploy");
 
         AssertPreflight(
-            ".github/workflows/app-deploy.yml",
+            ".github/workflows/app-deploy.yml (job deploy)",
             steps,
             mode: "deploy-app",
             mustPrecede:

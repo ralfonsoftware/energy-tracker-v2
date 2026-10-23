@@ -8,13 +8,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
 public class SmartPlugImportRepositoryTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
@@ -28,7 +27,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     }
 
     private static async Task<EnergyTrackerDbContext> OpenMigratedDbContextAsync(
-        PostgreSqlContainer container, Guid householdId, CancellationToken cancellationToken)
+        PostgresTestDatabase container, Guid householdId, CancellationToken cancellationToken)
     {
         var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
         optionsBuilder.UseNpgsql(container.GetConnectionString(),
@@ -43,7 +42,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     // OpenMigratedDbContextAsync on an already-schema'd container/database, so an interceptor
     // attached here only ever observes the repository's own commands, never MigrateAsync's DDL.
     private static EnergyTrackerDbContext OpenDbContextWithInterceptor(
-        PostgreSqlContainer container, Guid householdId, IInterceptor interceptor)
+        PostgresTestDatabase container, Guid householdId, IInterceptor interceptor)
     {
         var optionsBuilder = new DbContextOptionsBuilder<EnergyTrackerDbContext>();
         optionsBuilder.UseNpgsql(container.GetConnectionString(),

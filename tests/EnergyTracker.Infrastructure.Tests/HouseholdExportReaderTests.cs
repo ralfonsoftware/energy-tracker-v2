@@ -3,8 +3,6 @@ using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
-using Testcontainers.MsSql;
-using Testcontainers.PostgreSql;
 
 namespace EnergyTracker.Infrastructure.Tests;
 
@@ -477,7 +475,7 @@ public abstract class HouseholdExportReaderTestsBase
 
 public class PostgresHouseholdExportReaderTests : HouseholdExportReaderTestsBase, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private readonly PostgresTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
@@ -496,7 +494,7 @@ public class PostgresHouseholdExportReaderTests : HouseholdExportReaderTestsBase
 
 public class SqlServerHouseholdExportReaderTests : HouseholdExportReaderTestsBase, IAsyncLifetime
 {
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly SqlServerTestDatabase _container = new();
 
     public async ValueTask InitializeAsync() => await _container.StartAsync();
 
