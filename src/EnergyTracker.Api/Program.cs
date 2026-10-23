@@ -118,11 +118,30 @@ switch (otelExporter)
 // Database:Provider is read exactly once, here at the composition root (Consistency Conventions) —
 // nothing in Infrastructure re-reads or branches on it independently.
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "Postgres";
-// Matches docker-compose.yml's default POSTGRES_USER/POSTGRES_DB and .env.example's default
-// POSTGRES_PASSWORD, so `dotnet run` against `docker compose up postgres -d` works with no
-// extra configuration as long as .env's password wasn't changed from the example.
-var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";
+// Development only (audit S7): matches docker-compose.yml's default POSTGRES_USER/POSTGRES_DB and
+// .env.example's default POSTGRES_PASSWORD, so `dotnet run` against `docker compose up postgres -d` works
+// with no extra configuration as long as .env's password wasn't changed from the example. Outside
+// Development a missing connection string stops the host instead of quietly using these defaults.
+const string DevelopmentConnectionString = "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";
+var configuredConnectionString = builder.Configuration.GetConnectionString("Default");
+string connectionString;
+if (string.IsNullOrWhiteSpace(configuredConnectionString))
+{
+    // Blank counts as missing: Container Apps and .env express "not configured" as an empty value (D4), and
+    // `??` would not catch it. The message names the key and never contains a configured value.
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "ConnectionStrings:Default is not set. Set it (environment variable ConnectionStrings__Default) to " +
+            "the database connection string; only Development falls back to a local default. See docs/self-hosting.md.");
+    }
+
+    connectionString = DevelopmentConnectionString;
+}
+else
+{
+    connectionString = configuredConnectionString;
+}
 
 void ConfigureDbContext(DbContextOptionsBuilder options)
 {
@@ -225,8 +244,8 @@ var authenticationBuilder = builder.Services
 // callback path — and a half-configured OIDC scheme would otherwise 500 every route in the app,
 // including /health, the moment this ships without a real provider configured yet (an expected
 // self-host state — Task 6/Dev Notes). Skipping registration entirely keeps the rest of the app
-// functional; only /login (which needs a real provider to mean anything) fails until
-// Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are all set.
+// functional; only /login (which needs a real provider to mean anything) answers 503 "not configured"
+// until Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are all set.
 var oidcConfigured = !string.IsNullOrEmpty(oidcClientId) && !string.IsNullOrEmpty(oidcAuthority);
 if (oidcConfigured)
 {
@@ -386,46 +405,9 @@ builder.Services.AddScoped<RestoreHouseholdData>();
 // to run).
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = HouseholdImportEndpoints.MaxFileSizeBytes);
 
-// AD-8: AiPlausibility:BaseUrl is read exactly once, here at the composition root — same
-// switch-on-configured-value shape as Database:Provider/JobQueue:Provider. Blank/unset selects the
-// no-op adapter; CorrelateEvent is the only place downstream allowed to also check
-// Household.AiPlausibilityEnabled — nothing else branches on whether AI is configured.
-var aiPlausibilityBaseUrl = (builder.Configuration["AiPlausibility:BaseUrl"] ?? string.Empty).Trim();
-var aiPlausibilityBackendLabel = builder.Configuration["AiPlausibility:BackendLabel"];
-// "default" is a safe no-op for LMStudio's local server (it ignores the field entirely) but is
-// NOT a valid model id for real OpenAI or another cloud provider — those deployments must set
-// AiPlausibility:Model explicitly, or every classification call 400s and silently resolves to null.
-var aiPlausibilityModel = (builder.Configuration["AiPlausibility:Model"] ?? string.Empty).Trim();
-if (string.IsNullOrEmpty(aiPlausibilityModel))
-{
-    aiPlausibilityModel = "default";
-}
-
-if (string.IsNullOrEmpty(aiPlausibilityBaseUrl))
-{
-    builder.Services.AddSingleton<IAiPlausibilityClient, NoOpAiPlausibilityClient>();
-}
-else
-{
-    var aiPlausibilityApiKey = (builder.Configuration["AiPlausibility:ApiKey"] ?? string.Empty).Trim();
-    builder.Services.AddHttpClient<IAiPlausibilityClient, OpenAiCompatibleClient>(client =>
-    {
-        client.BaseAddress = new Uri(aiPlausibilityBaseUrl);
-        if (!string.IsNullOrEmpty(aiPlausibilityApiKey))
-        {
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", aiPlausibilityApiKey);
-        }
-    });
-}
-
-// AC #5's "always visible, regardless of enablement" backend info — a human-set label, not a
-// heuristic guess from the URL (Dev Notes). Registered once here rather than re-read per request.
-// Also carries Model through to OpenAiCompatibleClient (Infrastructure) — one registration instead
-// of a second deployment-wide options type.
-builder.Services.AddSingleton(new AiPlausibilityBackendOptions(
-    Configured: !string.IsNullOrEmpty(aiPlausibilityBaseUrl),
-    Label: string.IsNullOrEmpty(aiPlausibilityBackendLabel) ? null : aiPlausibilityBackendLabel,
-    Model: aiPlausibilityModel));
+// AD-8 (audit C1): the AI backend comes from the Ai:* section only, read once inside this call; see
+// AiPlausibilityBackendConfiguration. An invalid Ai:Endpoint stops startup here.
+var aiPlausibilityBackend = AiPlausibilityBackendConfiguration.Configure(builder.Services, builder.Configuration);
 
 // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
 // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
@@ -485,6 +467,14 @@ var app = builder.Build();
 // Logs the active Data Protection protector and, only when DataProtection:RevokeKeysCreatedBeforeUtc is
 // set, runs the one-time key revocation (AD-17 cutover). Must run before the first request.
 DataProtectionKeyProtection.ApplyStartupActions(app.Services, dataProtectionKeyProtection, app.Logger);
+
+// States which AI adapter the Ai:* section selected (never the API key), so a self-hoster can see in the log
+// whether their configuration took effect.
+app.Logger.LogInformation("AI plausibility backend: {Backend}", aiPlausibilityBackend.Description);
+if (aiPlausibilityBackend.Warning is { } aiPlausibilityWarning)
+{
+    app.Logger.LogWarning("AI plausibility backend: {Warning}", aiPlausibilityWarning);
+}
 
 // AD-27 (audit S3): the security headers middleware is registered FIRST so it also covers error,
 // rate-limit and static-file responses. Production only: Vite dev mode injects inline scripts.

@@ -28,7 +28,7 @@ param databaseConnectionString string
 @secure()
 param storageQueueConnectionString string
 
-@description('Placeholder secret value for the AD-8 OpenAI-compatible AI backend API key — no adapter implementation exists yet. The AI adapter story must thread a real value from main.bicep once one exists; until then this reserves the secret slot with a non-empty sentinel (ACA rejects a secrets entry with an empty value).')
+@description('Placeholder secret value for the AD-8 OpenAI-compatible AI backend API key — the adapter exists (Story 6.3) but the real backend is undecided (Epic 9). Story 9.2 must thread a real value from main.bicep together with the AI endpoint; until then this reserves the secret slot with a non-empty sentinel (ACA rejects a secrets entry with an empty value).')
 @secure()
 param aiApiKeySecretValue string = 'unset'
 
@@ -150,9 +150,9 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
       // ai-api-key and oidc-client-secret are reserved with a non-empty placeholder value:
       // Container Apps rejects a secret whose value is an empty string (it requires a
       // non-empty value or a Key Vault reference), so a genuinely-unset secret can't be
-      // declared with value: ''. Story 1.5 / the AI adapter story overwrite these placeholder
-      // values with real ones (via aiApiKeySecretValue/oidcClientSecretValue, threaded from
-      // main.bicep) once real values exist.
+      // declared with value: ''. Story 1.5 overwrites oidc-client-secret with a real value, and Story 9.2
+      // (the real AI backend, Epic 9) overwrites ai-api-key, via aiApiKeySecretValue/oidcClientSecretValue
+      // threaded from main.bicep. The AI adapter itself exists since Story 6.3; only the backend is undecided.
       secrets: [
         {
           name: 'db-connection-string'
@@ -192,8 +192,8 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
               name: 'ConnectionStrings__Default'
               secretRef: 'db-connection-string'
             }
-            // JobQueue adapter selection (AD-6) — config surface reserved for the cloud adapter;
-            // no adapter implementation exists in code yet (Deferred).
+            // JobQueue adapter selection (AD-6) — AzureStorageQueue selects the cloud adapter
+            // (AzureStorageQueueJobQueue).
             {
               name: 'JobQueue__Provider'
               value: 'AzureStorageQueue'
@@ -202,8 +202,9 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
               name: 'JobQueue__ConnectionString'
               secretRef: 'storage-queue-connection-string'
             }
-            // AD-8 AI backend — config surface reserved, left unset (no adapter implementation yet).
-            // An unset AI backend must resolve to the no-op path once that adapter exists.
+            // AD-8 AI backend — the four Ai:* keys the code reads (AiPlausibilityBackendConfiguration).
+            // Left unset: an empty Ai__Endpoint resolves to the no-op client; Story 9.2 sets the real values.
+            // Model and BackendLabel are plain, non-secret values; ApiKey is a Container App secret.
             {
               name: 'Ai__Endpoint'
               value: ''
@@ -211,6 +212,14 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
             {
               name: 'Ai__ApiKey'
               secretRef: 'ai-api-key'
+            }
+            {
+              name: 'Ai__Model'
+              value: ''
+            }
+            {
+              name: 'Ai__BackendLabel'
+              value: ''
             }
             // Story 1.5 (household provisioning via OIDC) — Authority/ClientId are plain,
             // non-secret env vars; ClientSecret is a Container App secret (see 'secrets' above).

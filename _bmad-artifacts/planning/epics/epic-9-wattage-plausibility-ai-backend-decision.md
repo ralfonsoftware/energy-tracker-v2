@@ -68,7 +68,7 @@ So that Wattage Plausibility correlation genuinely happens instead of always deg
 
 **Given** Story 9.2's Azure-hosted rollout plan,
 **When** implemented,
-**Then** `AiPlausibilityBackendOptions.BaseUrl`/API key are provisioned via Container Apps secrets (AD-19) — never committed, never baked into the image.
+**Then** `Ai:Endpoint`/`Ai:ApiKey` are provisioned via Container Apps secrets (AD-19) — never committed, never baked into the image.
 
 **Given** a Household with `AiPlausibilityEnabled` toggled on and the real backend configured,
 **When** an Event is logged near a real observed consumption deviation,

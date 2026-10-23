@@ -10,9 +10,10 @@ namespace EnergyTracker.Infrastructure.Adapters;
 
 // AD-8: the one real IAiPlausibilityClient adapter — a plain HttpClient call to the OpenAI-
 // compatible chat/completions shape LMStudio's local server and effectively every cloud LLM
-// provider expose identically. "Local vs cloud" is purely which BaseUrl/ApiKey this typed client
-// was configured with at the composition root (Program.cs); this class itself has no branch on
-// deployment target. No SDK dependency — Directory.Packages.props has zero AI/LLM package
+// provider expose identically. "Local vs cloud" is purely which Ai:Endpoint/Ai:ApiKey this typed client
+// was configured with at the composition root (AiPlausibilityBackendConfiguration in Api); this class itself
+// has no branch on deployment target. Ai:Endpoint is the server root: the relative v1/chat/completions
+// below is resolved against it, so a trailing path segment on the endpoint would be dropped. No SDK dependency — Directory.Packages.props has zero AI/LLM package
 // references by design (Dev Notes).
 public class OpenAiCompatibleClient(
     HttpClient httpClient,

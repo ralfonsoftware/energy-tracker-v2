@@ -78,8 +78,9 @@ single Docker image build (used for self-hosting) doesn't.
 > `scripts/run-api.sh` (Development, which starts with nothing configured), the container
 > refuses to start unless `.env` sets a Data Protection certificate or the explicit opt-out
 > `DATA_PROTECTION_ALLOW_UNPROTECTED_KEYS=true` (see
-> [self-hosting.md](self-hosting.md), "Data Protection keys"). The Postgres-only command
-> below is unaffected.
+> [self-hosting.md](self-hosting.md), "Data Protection keys"), and unless
+> `ConnectionStrings__Default` is set (`docker-compose.yml` sets it). Only Development falls
+> back to a local default connection string. The Postgres-only command below is unaffected.
 
 ### 1. Start Postgres only
 
@@ -297,9 +298,10 @@ per-test "Run"/"Debug" buttons if you'd rather not use the CLI for e2e tests.
   update `web/vite.config.ts` too.
 - **EF Core can't connect**: confirm `docker compose ps` shows `postgres`
   as `healthy`, and that `.env`'s `POSTGRES_PASSWORD` matches what the API
-  is using (the API falls back to `energytracker`/`change-me` — the
+  is using (in Development the API falls back to `energytracker`/`change-me` — the
   `.env.example` defaults — if `ConnectionStrings:Default` isn't set;
-  override it via environment variable if your `.env` password differs).
+  override it via environment variable if your `.env` password differs. A
+  container runs as Production and refuses to start without the setting).
 - **`relation "DataProtectionKeys" does not exist` (or `Households`,
   `HouseholdInvites`) / sign-in fails with a `CryptographicException`**:
   migrations haven't been applied to this Postgres volume yet — the API

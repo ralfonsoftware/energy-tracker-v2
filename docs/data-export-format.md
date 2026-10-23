@@ -86,7 +86,7 @@ what Story 7.1 actually shipped.
   of scope (see above); an exported foreign key pointing at nothing in this
   same document would only confuse a reader. `SmartPlugReading.PowerPointId`
   is kept, since `PowerPoint` rows are themselves in scope.
-- **`AiPlausibilityBackendOptions.Model`, `BaseUrl`, and any API key.**
+- **The AI backend's `Ai:Endpoint`, `Ai:Model`, and `Ai:ApiKey`.**
   These are deployment-wide secrets/config, never a per-Household data
   concern. Only the non-secret `Configured`/`Label` pair — the same half
   already exposed by `GET /api/households/{id}/ai-plausibility` — is

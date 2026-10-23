@@ -6,7 +6,7 @@ using Shouldly;
 namespace EnergyTracker.Api.Tests;
 
 // AC #5: the on/off toggle plus backend-configured/label must be readable and settable regardless
-// of enablement — this test host has no AiPlausibility:BaseUrl configured, so BackendConfigured is
+// of enablement — this test host has no Ai:Endpoint configured, so BackendConfigured is
 // always false and BackendLabel always null here; the toggle itself is still fully functional.
 public class AiPlausibilityEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<EnergyTrackerApiFactory>
 {

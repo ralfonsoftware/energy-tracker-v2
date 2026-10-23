@@ -52,15 +52,43 @@ provider first, with a redirect URI of `https://<your-instance-host>/signin-oidc
 (or `http://localhost:8080/signin-oidc` while testing locally), then copy
 its Authority, Client ID, and Client Secret into `.env`. Without these three
 values set, the app still starts and `/health` still works, but sign-in is
-unavailable — nobody can create the first Household.
+unavailable — nobody can create the first Household — and `/login` answers
+`503` with a short "Sign-in is not configured" message that names the three
+settings.
 
 (`/login` also accepts an optional `returnUrl` query parameter, used
 internally by the Household member-invitation flow to return an invited
 person to their `/join/{token}` link after signing in — no extra
 configuration needed, informational only.)
 
-`AI_API_KEY` in `.env` is reserved for a feature not yet built
-(AI-assisted insights) — leave it blank for now.
+#### Optional: an AI backend for wattage plausibility
+
+The "AI wattage plausibility" Household toggle in Settings needs an
+OpenAI-compatible server. It is off unless you set `AI_ENDPOINT` in `.env`;
+leave all four lines blank and the toggle has no effect (Settings says no AI
+backend is configured, and the startup log says so).
+
+- `AI_ENDPOINT` — the **server root** of the API, for example
+  `http://localhost:1234` for LM Studio or `https://api.openai.com` for OpenAI.
+  The app appends `v1/chat/completions` itself, so do not include a path.
+  Blank turns the feature off. A value that is set but is not an absolute
+  `http`/`https` URL stops the app at startup with a message naming
+  `Ai:Endpoint`. From inside Docker Compose the LM Studio on your host is
+  `http://host.docker.internal:1234`, not `localhost`.
+- `AI_API_KEY` — sent as `Authorization: Bearer <key>` when set. LM Studio
+  needs none; OpenAI does.
+- `AI_MODEL` — the model id to request. Blank means `default`, which LM Studio
+  ignores; OpenAI and other cloud providers need a real id.
+- `AI_BACKEND_LABEL` — an optional name shown in Settings, such as
+  `Local (LM Studio)`.
+
+`docker-compose.yml` passes these to the app as `Ai__Endpoint`, `Ai__ApiKey`,
+`Ai__Model` and `Ai__BackendLabel` (the `Ai` configuration section). That
+section is the only spelling: the older, never-documented `AiPlausibility__*`
+names are no longer read, so rename them if you set them by hand.
+
+The container runs as a non-root user and needs no volume permissions: it
+writes nothing outside `/tmp`.
 
 `.env` is listed in `.gitignore` and is never committed. Nothing in this
 repository or in the built container image contains real secrets; every

@@ -1,7 +1,7 @@
 namespace EnergyTracker.Application;
 
 // Deployment-wide, read once at the composition root from
-// AiPlausibility:BaseUrl/BackendLabel/Model (Program.cs) and registered as a singleton —
+// Ai:Endpoint/BackendLabel/Model (AiPlausibilityBackendConfiguration in Api) and registered as a singleton —
 // Configured/Label are the "what's always visible" half of AC #5 that isn't Household-scoped;
 // Model is consumed only by OpenAiCompatibleClient itself, never exposed in the API response.
 // Label is a plain human-set deploy-time value (e.g. "Local (LMStudio)" or "OpenAI"), never a
