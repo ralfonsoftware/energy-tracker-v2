@@ -62,8 +62,10 @@ public class InstanceHeartbeatHostTests(EnergyTrackerApiFactory factory) : IClas
         var row = await scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>().AppInstances
             .AsNoTracking()
             .SingleAsync(a => a.Id == identity.Id, TestContext.Current.CancellationToken);
-        row.StartedAtUtc.ShouldBe(identity.StartedAtUtc);
-        row.LastSeenAtUtc.ShouldBeGreaterThanOrEqualTo(identity.StartedAtUtc);
+        // Postgres stores microseconds and a Linux clock ticks in 100 ns, so the stored value can differ in
+        // the last digit; macOS clocks are microsecond-exact, which is why this passed locally first.
+        row.StartedAtUtc.ShouldBe(identity.StartedAtUtc, TimeSpan.FromMilliseconds(1));
+        row.LastSeenAtUtc.AddMilliseconds(1).ShouldBeGreaterThanOrEqualTo(identity.StartedAtUtc);
     }
 
     [Fact]
