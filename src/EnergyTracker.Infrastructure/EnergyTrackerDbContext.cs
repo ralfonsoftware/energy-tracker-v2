@@ -10,10 +10,10 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
     : DbContext(options), IDataProtectionKeyContext
 {
     // Room/PowerPoint/Device's standard AD-3 query filter (below) needs the current Household,
-    // resolved via ICurrentHouseholdAccessor. CurrentHouseholdAccessor resolves its own lookup
-    // through IDbContextFactory<EnergyTrackerDbContext> rather than this DbContext type directly,
-    // so there is no circular DI dependency here (DbContext -> accessor -> DbContextFactory, never
-    // back to this same DbContext instance) — plain constructor injection is safe.
+    // resolved via ICurrentHouseholdAccessor. The accessor only reads the membership that
+    // HouseholdMembershipMiddleware looked up for this request (through HouseholdMembershipResolver and
+    // IDbContextFactory<HouseholdMembershipDbContext>, never this DbContext type), so there is no circular DI
+    // dependency here and no database round trip inside the filter — plain constructor injection is safe.
     private Guid? CurrentHouseholdId => currentHouseholdAccessor.HouseholdId;
 
     public DbSet<Household> Households => Set<Household>();

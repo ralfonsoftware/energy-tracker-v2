@@ -180,8 +180,9 @@ void ConfigureDbContext(DbContextOptionsBuilder options)
 }
 
 builder.Services.AddDbContext<EnergyTrackerDbContext>(ConfigureDbContext);
-// Backs CurrentHouseholdAccessor's own lookup — see HouseholdMembershipDbContext's doc comment
-// for why it's a separate context type rather than reusing EnergyTrackerDbContext.
+// Backs HouseholdMembershipResolver's own lookup (the accessor only reads its cached result) — see
+// HouseholdMembershipDbContext's doc comment for why it's a separate context type rather than reusing
+// EnergyTrackerDbContext.
 builder.Services.AddDbContextFactory<HouseholdMembershipDbContext>(ConfigureDbContext);
 
 // Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are read exactly once, here at the composition
@@ -324,6 +325,8 @@ var dataProtectionKeyProtection = DataProtectionKeyProtection.Configure(
 
 builder.Services.AddScoped<IHouseholdRepository, HouseholdRepository>();
 builder.Services.AddScoped<ICurrentHouseholdAccessor, CurrentHouseholdAccessor>();
+// Singleton like the factory it depends on; the membership middleware calls it once per /api request.
+builder.Services.AddSingleton<HouseholdMembershipResolver>();
 builder.Services.AddScoped<CreateHousehold>();
 builder.Services.AddScoped<CreateHouseholdInvite>();
 builder.Services.AddScoped<AcceptHouseholdInvite>();
@@ -546,6 +549,10 @@ app.UseAuthorization();
 // the principal; after authorization so unauthenticated requests get a cheap 401 and never create
 // identity buckets. /login has no authorization metadata and still reaches the limiter.
 app.UseRateLimiter();
+// Audit C2 (Story 11.12): after authorization and the rate limiter so a 401 or 429 costs no lookup, after
+// UseExceptionHandler so a database failure answers the usual RFC 7807 500, before the endpoints that read
+// the cached Household. HouseholdMembershipIsResolvedOncePerRequestTests pins this position.
+app.UseHouseholdMembership();
 
 // Liveness only — no DB/dependency check (AD-19): a slow Postgres/Azure SQL must never fail this probe.
 // Deliberately outside the /api auth requirement below and unaffected by it (AD-19 regression guard).
