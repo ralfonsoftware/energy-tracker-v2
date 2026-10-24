@@ -220,12 +220,13 @@ inside the background job) — it never creates a new Household row, and it
 never reuses the import file's own `household.id` as a real primary key.
 
 This is a direct consequence of how Household resolution actually works in
-this codebase: `CurrentHouseholdAccessor` resolves the current Household by
-looking up the authenticated principal's `(ExternalIssuer,
-ExternalSubjectId)` against `HouseholdMembers` — never by a stored
-session/cookie Household id. Restore never rebuilds or alters that
-membership (see "Session continuity across a restore" below). On "move to
-new hosting," the very first authenticated visitor already went through
+this codebase: `HouseholdMembershipMiddleware` resolves the current Household
+once per `/api` request by looking up the authenticated principal's
+`(ExternalIssuer, ExternalSubjectId)` against `HouseholdMembers` (through
+`HouseholdMembershipResolver`), and `CurrentHouseholdAccessor` only reads that
+per-request value — never a stored session/cookie Household id. Restore never
+rebuilds or alters that membership (see "Session continuity across a restore"
+below). On "move to new hosting," the very first authenticated visitor already went through
 FR-26 and got a **freshly created** Household with a new `Id` before ever
 reaching this Settings screen; restore replaces that fresh Household's
 *contents*, it does not resurrect the old deployment's Household row under
@@ -252,8 +253,8 @@ Restore **never writes `HouseholdMember` rows** (AD-25, audit finding S1).
 The membership of the Household is exactly what it was before the restore,
 whatever the file says: the same rows with the same `Id`,
 `ExternalIssuer`, `ExternalSubjectId`, `DisplayName` and `CreatedAtUtc`.
-Because `CurrentHouseholdAccessor` resolves by issuer+subject, the person
-performing the restore therefore keeps a working session across the
+Because the membership lookup is by issuer+subject on every request, the
+person performing the restore therefore keeps a working session across the
 operation **unconditionally**. There is no caveat and no "disclosed edge
 case" any more.
 

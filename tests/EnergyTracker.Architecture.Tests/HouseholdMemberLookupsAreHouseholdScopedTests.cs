@@ -15,10 +15,10 @@ public partial class HouseholdMemberLookupsAreHouseholdScopedTests
     [
         ("EnergyTrackerDbContext.cs", "HouseholdMembers", "declares the DbSet"),
         ("EnergyTrackerDbContext.cs", "HouseholdInvites", "declares the DbSet"),
-        ("HouseholdMembershipDbContext.cs", "HouseholdMembers", "declares the DbSet for the accessor's own-row lookup"),
+        ("HouseholdMembershipDbContext.cs", "HouseholdMembers", "declares the DbSet for the resolver's own-row lookup"),
         ("HouseholdRepository.cs", "HouseholdMembers", "the one scoped by-id lookup (FindMemberInHouseholdAsync), the principal's own row, the Household's member list and count"),
         ("HouseholdRepository.cs", "HouseholdInvites", "token-addressed lookup plus the Household-scoped list, revoke and expire-all"),
-        ("CurrentHouseholdAccessor.cs", "HouseholdMembers", "resolves the principal's own row by issuer and subject"),
+        ("HouseholdMembershipResolver.cs", "HouseholdMembers", "resolves the principal's own row by issuer and subject"),
         ("HouseholdExportReader.cs", "HouseholdMembers", "explicit HouseholdId match on every export read"),
         ("BackgroundJobRepository.cs", "HouseholdMembers", "by-id batch scoped to the Household (Story 11.9)"),
     ];

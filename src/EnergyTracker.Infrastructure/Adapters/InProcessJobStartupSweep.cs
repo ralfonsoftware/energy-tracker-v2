@@ -33,8 +33,8 @@ public class InProcessJobStartupSweep(IServiceScopeFactory scopeFactory, ILogger
             try
             {
                 // A fresh scope per Household, JobHouseholdContext set before anything resolves
-                // EnergyTrackerDbContext: CurrentHouseholdAccessor caches the first resolution for
-                // the scope's life, so reusing one scope would apply the first Household's query
+                // EnergyTrackerDbContext: a scope holds one Household's JobHouseholdContext and the
+                // DbContext built on it, so reusing one scope would apply the first Household's query
                 // filter to everyone.
                 using var scope = scopeFactory.CreateScope();
                 scope.ServiceProvider.GetRequiredService<JobHouseholdContext>().HouseholdId = householdId;
