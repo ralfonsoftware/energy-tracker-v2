@@ -91,12 +91,11 @@ public static class HouseholdImportEndpoints
                     statusCode: StatusCodes.Status404NotFound);
             }
 
-            // AD-6's job queue has exactly one worker per process, but the Azure Storage Queue
-            // provider can run multiple worker processes/replicas polling the same shared queue —
-            // without this, two confirmed restores for the same Household could run as genuinely
-            // concurrent, unguarded delete+insert transactions. Checked against the DB (not an
-            // in-memory lock) so it holds across replicas, mirroring AD-12's "at most one open X
-            // per Y" precedent. Checked after consuming the token — a token can only ever be
+            // AD-24: one instance with one worker. Without this, two confirmed restores for the same
+            // Household could run as genuinely concurrent, unguarded delete+insert transactions. A DB
+            // check followed by an enqueue (mirroring AD-12's "at most one open X per Y" precedent), so
+            // it serialises through the single consumer; Story 11.14 adds a database guard for the
+            // remaining race. Checked after consuming the token — a token can only ever be
             // consumed once regardless, so this only rejects a second, genuinely different upload
             // racing an already-in-flight restore for the same Household, never a retry of the
             // same token (Code Review, Story 7.2 Pass 1).
@@ -171,7 +170,7 @@ public static class HouseholdImportEndpoints
 
         // Short-lived temp location the confirm step (or the async restore job, once confirmed) reads
         // back — mirrors SmartPlugImportEndpoints' own upload path. The opaque token below is what the
-        // client holds, never this path.
+        // client holds, never this path. Process-local temp file: AD-24 (single instance).
         var tempFilePath = Path.Combine(uploadSettings.TempDirectory, $"{Guid.NewGuid()}.json");
         var registered = false;
         try

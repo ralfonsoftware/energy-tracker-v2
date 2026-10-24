@@ -22,7 +22,9 @@ Bicep templates for the Energy Tracker Azure environment, deployed by
 - `container-app.bicep` — the Container App itself: system-assigned managed identity, `AcrPull`
   role assignment against the registry, a `Key Vault Crypto Service Encryption User` role
   assignment scoped to the Data Protection key only, and `DataProtection__KeyVaultKeyId` as a
-  plain env var, scale-to-zero (`minReplicas: 0`)
+  plain env var, scale-to-zero (`minReplicas: 0`). `maxReplicas` stays `1`: the app is correct only
+  with one active instance (AD-24), and scale-to-zero means one replica at a time, not one stable
+  disk. See "Run exactly one instance" in `docs/self-hosting.md`.
 
 Environment-specific values live in `main.bicepparam` — no secrets. Secret-shaped values
 (`databaseAdministratorPassword`) are `@secure()` parameters supplied only at deploy time from

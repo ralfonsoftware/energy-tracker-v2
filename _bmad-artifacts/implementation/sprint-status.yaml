@@ -151,7 +151,7 @@ development_status:
   11-10-upload-hardening: done
   11-11-container-config-correctness: done
   11-12-async-per-request-household-resolution: done
-  11-13-single-instance-invariant-documentation: backlog
+  11-13-single-instance-invariant-documentation: review
   11-14-restore-id-collisions-active-job-guard: backlog
   11-15-trending-threshold-scaled-to-elapsed: backlog
   11-16-offline-queue-rejected-readings-attention: backlog

@@ -391,6 +391,7 @@ builder.Services.AddScoped<ExportHouseholdData>();
 // mapping, MemoryHouseholdImportUploadRegistry's own doc comment); the writer/use case are scoped
 // like every other DbContext-backed adapter/use case in this file.
 builder.Services.AddSingleton<IHouseholdImportUploadRegistry, MemoryHouseholdImportUploadRegistry>();
+// Uploads are staged in this process's temp directory: AD-24 (single instance).
 builder.Services.AddSingleton(new HouseholdImportUploadSettings(Path.GetTempPath(), HouseholdImportEndpoints.MaxFileSizeBytes));
 builder.Services.AddScoped<ValidateHouseholdImport>();
 builder.Services.AddScoped<IHouseholdRestoreWriter, HouseholdRestoreWriter>();
@@ -464,6 +465,14 @@ switch (jobQueueProvider)
         builder.Services.AddHostedService<InProcessChannelJobProcessingService>();
         break;
 }
+
+// AD-24: the instance heartbeat observes the single-instance invariant (a warning in the log, never a
+// startup block). Outside the queue-provider switch on purpose: both providers need it.
+builder.Services.AddSingleton(sp => new AppInstanceIdentity(Guid.NewGuid(), sp.GetRequiredService<TimeProvider>().GetUtcNow()));
+builder.Services.AddSingleton(InstanceHeartbeatTimings.Default);
+builder.Services.AddScoped<IAppInstanceRepository, AppInstanceRepository>();
+builder.Services.AddScoped<RecordInstanceHeartbeat>();
+builder.Services.AddHostedService<InstanceHeartbeatService>();
 
 var app = builder.Build();
 

@@ -4,11 +4,10 @@ namespace EnergyTracker.Infrastructure.Adapters;
 
 // Singleton in-memory registry backing Task 5's opaque-token requirement. Deliberately plain
 // dictionaries behind one lock, not a new IMemoryCache package dependency — a per-entry TTL checked
-// lazily on Consume is enough for this narrow validate-then-confirm window, and this app runs
-// API+worker as one process/one container (AD-6) with no evidence of horizontal scale-out elsewhere in
-// this codebase. A container restart between validate and confirm loses the token, requiring a fresh
-// upload — a disclosed trade-off (docs/data-import-restore.md), not a silent correctness gap: see
-// IHouseholdImportUploadRegistry's own IDOR-guard contract. Process-local on purpose: AD-24 (single instance).
+// lazily on Consume is enough for this narrow validate-then-confirm window. A container restart
+// between validate and confirm loses the token, requiring a fresh upload — a disclosed trade-off
+// (docs/data-import-restore.md), not a silent correctness gap: see IHouseholdImportUploadRegistry's
+// own IDOR-guard contract. Process-local on purpose: AD-24 (single instance).
 public class MemoryHouseholdImportUploadRegistry : IHouseholdImportUploadRegistry
 {
     // Generous relative to how long a member actually takes to read the validation summary and

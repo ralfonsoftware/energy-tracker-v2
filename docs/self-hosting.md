@@ -197,6 +197,69 @@ TLS-terminating reverse proxy (Caddy, nginx, Traefik, ...) in front of the
   HTTP `429` with a `Retry-After` header. Normal household use stays far
   below them.
 
+## Run exactly one instance
+
+Energy Tracker is built to run as **one active instance per database**. That
+is a decision, not an oversight (AD-24): at household scale a second instance
+buys you nothing, and several parts of the app keep their state in the memory
+or on the disk of the one process that serves you.
+
+- **On Azure**, `maxReplicas` stays `1`. Leave it alone.
+- **Self-hosted**, run one `api` container per database. Never
+  `docker compose up --scale api=2` (or any other number), and never start a
+  second stack against the same database.
+
+"One instance" means one replica at a time, **not** one long-lived process.
+Azure Container Apps scales to zero when idle and replaces the replica on every
+deploy, so the replica's disk is not stable: a file in its temp directory can be
+gone by the next request. The app is built for that, but the parts below are why
+a second instance would break it.
+
+| Part | What it does | With a second instance |
+|---|---|---|
+| Upload registry (`MemoryHouseholdImportUploadRegistry`) | Remembers a validated restore file until you confirm it. | The confirm request can reach the other instance, which has never heard of the token and answers "no pending import found". You upload again. |
+| Recompute lock (`HouseholdRecomputeLock`) | Lets one Status recomputation per household run at a time. | Two instances can recompute the same household at once and their writes can interleave (duplicate or out-of-order status snapshots). Smart Plug writes are guarded separately by database locks and are not affected. |
+| Temp-file payloads (`SmartPlugImportEndpoints`, `HouseholdImportEndpoints`) | Uploaded files wait on local disk for the job that reads them. | The instance that picks up a job may not hold its file. The job ends as failed with "upload again" and is not retried. |
+| In-process job queue (`InProcessChannelJobQueue`) | The default queue of a self-hosted install, held in memory. | A job queued on one instance only runs there. Harmless alone, unsafe together with the startup sweep below. |
+| Startup job sweep (`InProcessJobStartupSweep`) | A starting instance fails every queued or running job left over from before it started (`job-interrupted`). | A second instance starting up fails the jobs the first one is running right now. |
+| Upload expiry sweep (inside `MemoryHouseholdImportUploadRegistry`) | Removes the temp file of an upload nobody confirmed. | Each instance only cleans up its own uploads, so an upload abandoned on one instance is never cleaned up by the other. |
+| In-process rate limiter (`HttpRateLimiting`) | Throttles sign-in, uploads, export, invites and member removal. | Limits are counted per instance, so the effective limit is the configured one times the number of instances. |
+
+**Deploys.** A deploy briefly runs the old and the new revision side by side.
+An upload, a restore confirmation or an import that is in flight at the moment
+of the swap can fail with "upload again" or `job-interrupted`. Start it again;
+your stored data is not affected.
+
+**The warning.** Every minute each instance writes a small heartbeat row
+(table `AppInstances`) and logs a warning if another instance has been alive
+next to it for more than 15 minutes. A shorter overlap, such as a deploy, logs
+nothing. The check never blocks startup and never fails `/health`. The line
+reads:
+
+```text
+Instance <id> has been running alongside instance <other id> (started <time>) for <n> minutes.
+Energy Tracker supports one active instance (AD-24); see docs/self-hosting.md, 'Run exactly one instance'.
+```
+
+Self-hosted, look for it with `docker compose logs api`. On Azure, search the
+container app's console log in Log Analytics for `supports one active
+instance`. If you see it, go back to one: stop the extra container, or set the
+replica count to `1` and deactivate the extra revision. The heartbeat does not
+keep a scaled-to-zero replica awake (Container Apps scales on HTTP requests,
+not on timers) and costs a few small database statements a minute.
+
+**The queue adapter changes nothing.** The Azure Storage Queue job adapter
+exists so a queued job survives a restart. It does not make several replicas
+supported: temp files, the upload registry, the recompute lock and the rate
+limiter are still per process.
+
+**Lifting the rule.** Running more than one instance needs shared state first:
+uploads in blob storage, the upload registry and the lock in the database, job
+leases instead of the startup sweep, and a shared rate-limit store. That list is
+the "Multi-instance shared state (lifting AD-24)" entry in the architecture's
+`deferred.md`. It is a prerequisite, not a how-to; raising `maxReplicas` is an
+architecture decision, not a config change.
+
 ## Members and access
 
 - Every member of a household has the same rights. There are no roles and no
@@ -245,8 +308,8 @@ Your data lives in a Docker-managed volume (`postgres-data`) that survives
 Stopping or restarting the stack while an import, restore or history cleanup
 is running ends that job as failed the next time the app starts, and it has
 to be started again; your stored data is not affected. Run exactly one app
-container per database: the startup recovery assumes it is the only instance
-and would fail a second instance's running jobs.
+container per database ([why](#run-exactly-one-instance)): the startup recovery
+assumes it is the only instance and would fail a second instance's running jobs.
 
 ## Running on modest hardware
 

@@ -58,7 +58,7 @@ param managedCertificateId string = ''
 @description('Scale-to-zero minimum replica count (AD-6/AD-7)')
 param minReplicas int = 0
 
-@description('Maximum replica count — kept small, this is a personal-household deployment')
+@description('Maximum replica count. Keep it at 1: the app is correct only with one active instance (AD-24), because the upload registry, recompute lock, temp-file payloads, in-process queue, startup sweep and rate limiter are process-local. See docs/self-hosting.md, "Run exactly one instance".')
 param maxReplicas int = 1
 
 @description('Port the ingress health-checks and routes traffic to — must match whatever image is currently deployed (placeholderImage listens on 80; the real app image listens on 8080 per Dockerfile ASPNETCORE_HTTP_PORTS)')

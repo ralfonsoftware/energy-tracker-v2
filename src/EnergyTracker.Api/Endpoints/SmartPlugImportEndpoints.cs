@@ -63,6 +63,7 @@ public static class SmartPlugImportEndpoints
             // plain temp-disk storage (rather than a separate blob-storage adapter) is sufficient.
             // The payload below carries only this path + metadata, never the file bytes
             // themselves — Azure Storage Queue caps a message at 64 KB.
+            // Process-local on purpose: AD-24 (single instance).
             var tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{extension}");
             await using (var tempFileStream = File.Create(tempFilePath))
             {

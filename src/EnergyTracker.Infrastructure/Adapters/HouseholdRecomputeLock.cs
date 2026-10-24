@@ -4,9 +4,8 @@ using EnergyTracker.Application.Ports;
 namespace EnergyTracker.Infrastructure.Adapters;
 
 // Singleton, in-process per-Household async lock backing StatusRecomputeService's serialization
-// (AD-7). Safe ONLY because infra/modules/container-app.bicep hardcodes maxReplicas = 1 — this
-// app never runs more than one instance. If that coupling ever changes, this lock stops being
-// sufficient and needs a Postgres/SqlServer-portable distributed lock instead.
+// (AD-7). Process-local on purpose: AD-24 (single instance). A second instance would not see
+// these locks and would need a Postgres/SqlServer-portable distributed lock instead.
 //
 // No eviction/cleanup for the dictionary below — Household count is small and bounded, so an
 // entry per Household living for the app's lifetime is an accepted tradeoff (spec's own

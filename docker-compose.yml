@@ -1,6 +1,8 @@
 # Local dev stack — this is also the self-host reference deployment (same file, same image; AD-13).
 services:
   api:
+    # One instance per database: do not scale this service (docs/self-hosting.md, "Run exactly one
+    # instance"; AD-24).
     build: .
     ports:
       - "8080:8080"
