@@ -61,7 +61,7 @@ param azureADOnlyAuthenticationEnabled bool = false
 @description('Container App scale-to-zero minimum replica count (AD-6/AD-7)')
 param containerAppMinReplicas int = 0
 
-@description('Container App maximum replica count')
+@description('Container App maximum replica count. Keep it at 1: the app is correct only with one active instance (AD-24), because the upload registry, recompute lock, temp-file payloads, in-process queue, startup sweep and rate limiter are process-local. See docs/self-hosting.md, "Run exactly one instance".')
 @minValue(1)
 param containerAppMaxReplicas int = 1
 

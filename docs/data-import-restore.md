@@ -80,13 +80,11 @@ path, HouseholdId)` mapping is held in an **in-memory registry**
 (`MemoryHouseholdImportUploadRegistry`), not a database row. This was a
 genuine choice between the two options the story allowed:
 
-- This app runs its API and background-job worker as **one process, one
-  container** (AD-6) — Story 3.x's own upload path already makes this
-  assumption for the exact same reason (a job payload only ever carries a
-  temp-file path, never the bytes). Nothing else in this codebase's
-  deployment story (Container Apps scale-**to-zero** when idle, not
-  scale-**out** to many concurrent replicas) suggests the API tier runs as
-  more than one replica at a time.
+- The app runs as **one active instance** (AD-24; see "Run exactly one
+  instance" in [self-hosting.md](self-hosting.md)), with its API and
+  background-job worker in one process (AD-6) — Story 3.x's own upload path
+  already makes this assumption for the exact same reason (a job payload only
+  ever carries a temp-file path, never the bytes).
 - Given that, a database row would only add migration/table ceremony for
   no correctness benefit over a process-local in-memory map.
 
@@ -111,10 +109,10 @@ re-validate. This is judged acceptable: the window between the two
 requests is normally seconds (a human reading a confirmation dialog), and
 losing a not-yet-confirmed upload is far less bad than a restore silently
 targeting the wrong data. Entries also expire after 30 minutes regardless,
-bounding how long an abandoned upload's temp file can linger. If this
-deployment's operational model ever changes to multiple concurrent API
-replicas, this registry would need to move to a shared store (a DB row, or
-a distributed cache) — a disclosed future concern, not a silent gap.
+bounding how long an abandoned upload's temp file can linger. Running more
+than one instance is outside the supported setup (AD-24, "Run exactly one
+instance" in [self-hosting.md](self-hosting.md)); moving this registry to a
+shared store is part of the work that would lift that rule.
 
 ## Upload size limit
 

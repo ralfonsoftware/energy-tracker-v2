@@ -8,7 +8,7 @@ namespace EnergyTracker.Infrastructure.Adapters;
 
 // Default adapter (AD-6) — self-host and local dev, zero extra containers. Registered as a
 // singleton so the same Channel instance backs both scoped API requests calling EnqueueAsync and
-// the paired hosted BackgroundService reading it back off.
+// the paired hosted BackgroundService reading it back off. Process-local by design: AD-24 (single instance).
 public class InProcessChannelJobQueue(BackgroundJobEnqueueRecorder enqueueRecorder) : IBackgroundJobQueue
 {
     private readonly Channel<JobMessage> _channel = Channel.CreateUnbounded<JobMessage>();

@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace EnergyTracker.Infrastructure.Adapters;
 
 // Shared dequeue-side processing loop body for both queue adapters' hosted BackgroundServices.
-// The BackgroundJob row is DB-persisted (not in-memory: Container Apps can scale to zero/multiple
-// replicas between enqueue and a client's next poll) and inserted as Queued at enqueue time; every
+// The BackgroundJob row is DB-persisted (not in-memory: Container Apps can scale to zero between
+// enqueue and a client's next poll) and inserted as Queued at enqueue time; every
 // status change after that goes through IBackgroundJobLifecycle (AD-6, amended 2026-10-10): one
 // conditional update per transition, guarded by the StartedAtUtc ownership token. This class
 // resolves the job's use case by JobType, keeps HeartbeatAtUtc fresh while it runs, and ends the

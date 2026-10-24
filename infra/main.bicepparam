@@ -73,6 +73,7 @@ param postgresStorageSizeGB = 32
 param logAnalyticsRetentionInDays = 30
 param databaseAdministratorLogin = 'etadmin'
 param containerAppMinReplicas = 0
+// AD-24: one active instance only. Keep at 1 (docs/self-hosting.md, "Run exactly one instance").
 param containerAppMaxReplicas = 1
 
 // AD-19 OTel extension (epic-1 retro action items 4-6). Application Insights itself deploys

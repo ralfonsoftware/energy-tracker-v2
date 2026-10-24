@@ -54,6 +54,10 @@ public class EnergyTrackerDbContext(DbContextOptions<EnergyTrackerDbContext> opt
     // start instead of being regenerated in memory (AD-17).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    // AD-24 instance heartbeat. Not Household data: no HouseholdId and, by design, no query filter
+    // (an AD-3 exemption like DataProtectionKeys).
+    public DbSet<AppInstance> AppInstances => Set<AppInstance>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // AD-2: normalizes every DateTimeOffset write to UTC, in this one shared context, for both
