@@ -225,10 +225,13 @@ a second instance would break it.
 | Upload expiry sweep (inside `MemoryHouseholdImportUploadRegistry`) | Removes the temp file of an upload nobody confirmed. | Each instance only cleans up its own uploads, so an upload abandoned on one instance is never cleaned up by the other. |
 | In-process rate limiter (`HttpRateLimiting`) | Throttles sign-in, uploads, export, invites and member removal. | Limits are counted per instance, so the effective limit is the configured one times the number of instances. |
 
-**Deploys.** A deploy briefly runs the old and the new revision side by side.
-An upload, a restore confirmation or an import that is in flight at the moment
-of the swap can fail with "upload again" or `job-interrupted`. Start it again;
-your stored data is not affected.
+**Deploys.** A deploy replaces the running instance. On Azure with scale to
+zero (`minReplicas = 0`) the old instance is stopped within about a second of
+the new revision being created, usually before the new one has started; with a
+higher minimum, or on another platform, the two can run side by side for a short
+while. Either way, an upload, a restore confirmation or an import that is in
+flight at the moment of the replacement can fail with "upload again" or
+`job-interrupted`. Start it again; your stored data is not affected.
 
 **The warning.** Every minute each instance writes a small heartbeat row
 (table `AppInstances`) and logs a warning if another instance has been alive
