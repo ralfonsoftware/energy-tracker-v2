@@ -153,7 +153,7 @@ development_status:
   11-12-async-per-request-household-resolution: done
   11-13-single-instance-invariant-documentation: done
   11-14-restore-id-collisions-active-job-guard: done
-  11-15-trending-threshold-scaled-to-elapsed: review
+  11-15-trending-threshold-scaled-to-elapsed: done
   11-16-offline-queue-rejected-readings-attention: backlog
   11-17-timeprovider-recompute-lock-eviction: backlog
   11-18-backend-analyzer-format-gate: backlog
