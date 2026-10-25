@@ -10,10 +10,12 @@ public sealed class HouseholdRestoreRekey
     private readonly Dictionary<Guid, Guid> _devices = [];
     private readonly Dictionary<Guid, Guid> _meterReadings = [];
     private readonly Dictionary<Guid, Guid> _tariffs = [];
+    private readonly Dictionary<Guid, Guid> _smartPlugReadings = [];
 
     // The old-to-new maps are built once, from the ids the file already holds, and grow by item count
-    // only: the DTO lists are mapped one category at a time by the caller, never copied here (the
-    // SmartPlugReading list can hold hundreds of thousands of rows and needs no map at all).
+    // only: the DTO lists are mapped one category at a time by the caller, never copied here. The
+    // SmartPlugReading list can hold hundreds of thousands of rows, so its map holds only the readings an
+    // audit correction points at (the smart plug import's boundary correction writes one per import).
     public HouseholdRestoreRekey(HouseholdExportResult source, Func<Guid>? newId = null)
     {
         _newId = newId ?? Guid.NewGuid;
@@ -45,6 +47,18 @@ public sealed class HouseholdRestoreRekey
         foreach (var tariff in source.Tariffs)
         {
             Assign(_tariffs, tariff.Id);
+        }
+
+        var smartPlugAuditTargets = source.AuditCorrections
+            .Where(correction => IsSmartPlugReading(correction.EntityType))
+            .Select(correction => correction.EntityId)
+            .ToHashSet();
+        if (smartPlugAuditTargets.Count > 0)
+        {
+            foreach (var reading in source.SmartPlugReadings.Where(reading => smartPlugAuditTargets.Contains(reading.Id)))
+            {
+                Assign(_smartPlugReadings, reading.Id);
+            }
         }
     }
 
@@ -86,14 +100,14 @@ public sealed class HouseholdRestoreRekey
 
     public SmartPlugReadingExportDto Rekey(SmartPlugReadingExportDto dto) => dto with
     {
-        Id = _newId(),
+        Id = _smartPlugReadings.TryGetValue(dto.Id, out var auditedId) ? auditedId : _newId(),
         PowerPointId = dto.PowerPointId is { } powerPointId ? Follow(_powerPoints, powerPointId) : null,
     };
 
     public StatusSnapshotExportDto Rekey(StatusSnapshotExportDto dto) => dto with { Id = _newId() };
 
-    // EntityId has no foreign key either; EntityType "MeterReading" and "Tariff" are the two written
-    // today, "Room", "PowerPoint" and "Device" are mapped too if a file carries them.
+    // EntityId has no foreign key either; EntityType "MeterReading", "Tariff" and "SmartPlugReading" are
+    // the three written today, "Room", "PowerPoint" and "Device" are mapped too if a file carries them.
     public AuditCorrectionExportDto Rekey(AuditCorrectionExportDto dto) =>
         dto with { Id = _newId(), EntityId = FollowAuditTarget(dto.EntityType, dto.EntityId) };
 
@@ -136,8 +150,12 @@ public sealed class HouseholdRestoreRekey
             "room" => _rooms,
             "powerpoint" => _powerPoints,
             "device" => _devices,
+            "smartplugreading" => _smartPlugReadings,
             _ => null,
         };
         return map is null ? oldId : Follow(map, oldId);
     }
+
+    private static bool IsSmartPlugReading(string entityType) =>
+        string.Equals(entityType, "SmartPlugReading", StringComparison.OrdinalIgnoreCase);
 }

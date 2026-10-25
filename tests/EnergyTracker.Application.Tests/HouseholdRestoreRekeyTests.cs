@@ -35,7 +35,9 @@ public class HouseholdRestoreRekeyTests
         AuditCorrectionExportDto TariffCorrection,
         AuditCorrectionExportDto DeviceCorrection,
         AuditCorrectionExportDto OrphanCorrection,
-        AuditCorrectionExportDto UnknownTypeCorrection)
+        AuditCorrectionExportDto UnknownTypeCorrection,
+        AuditCorrectionExportDto PlugCorrection,
+        AuditCorrectionExportDto OrphanPlugCorrection)
     {
         public HouseholdExportResult ToFile() => new(
             "v2", T0,
@@ -51,7 +53,7 @@ public class HouseholdRestoreRekeyTests
             [Device],
             [PlugReading, UnmappedPlugReading],
             [Snapshot],
-            [ReadingCorrection, TariffCorrection, DeviceCorrection, OrphanCorrection, UnknownTypeCorrection]);
+            [ReadingCorrection, TariffCorrection, DeviceCorrection, OrphanCorrection, UnknownTypeCorrection, PlugCorrection, OrphanPlugCorrection]);
     }
 
     private static Fixture NewFixture()
@@ -69,15 +71,18 @@ public class HouseholdRestoreRekeyTests
         AuditCorrectionExportDto Audit(string type, Guid id) =>
             new(Guid.NewGuid(), type, id, "Field", "1", "2", T0);
 
+        var plugReading = new SmartPlugReadingExportDto(Guid.NewGuid(), powerPoint.Id, "Kitchen", "Outlet", "Kettle", T0, T0.AddMinutes(15), 0.5m);
         return new Fixture(
             mainMeter, room, powerPoint, device, reading, previous, prompt, tariff,
             Event("Room", room.Id), Event("PowerPoint", powerPoint.Id), Event("Device", device.Id), Event(null, null),
-            new SmartPlugReadingExportDto(Guid.NewGuid(), powerPoint.Id, "Kitchen", "Outlet", "Kettle", T0, T0.AddMinutes(15), 0.5m),
+            plugReading,
             new SmartPlugReadingExportDto(Guid.NewGuid(), null, "Kitchen", "Gone", "Kettle", T0, T0.AddMinutes(15), 0.5m),
             new StatusSnapshotExportDto(Guid.NewGuid(), "withinrange", 10m, 12m, false, T0),
             Audit("MeterReading", reading.Id), Audit("Tariff", tariff.Id), Audit("Device", device.Id),
             Audit("MeterReading", Guid.NewGuid()),
-            Audit("Gadget", Guid.NewGuid()));
+            Audit("Gadget", Guid.NewGuid()),
+            Audit("SmartPlugReading", plugReading.Id),
+            Audit("SmartPlugReading", Guid.NewGuid()));
     }
 
     private static HouseholdRestoreRekey Sut(Fixture f, Func<Guid>? idSource = null) => new(f.ToFile(), idSource);
@@ -208,6 +213,24 @@ public class HouseholdRestoreRekeyTests
         sut.Rekey(f.ReadingCorrection).EntityId.ShouldBe(reading.Id);
         sut.Rekey(f.TariffCorrection).EntityId.ShouldBe(tariff.Id);
         sut.Rekey(f.DeviceCorrection).EntityId.ShouldBe(device.Id);
+    }
+
+    // Found by Story 11.14 Part R: the smart plug import's boundary correction writes EntityType
+    // "SmartPlugReading", and a restore left its EntityId pointing at nothing.
+    [Fact]
+    public void An_audit_correction_follows_the_smart_plug_reading_it_points_at_and_only_that_one_is_mapped()
+    {
+        var f = NewFixture();
+        var sut = Sut(f, Counter());
+
+        var reading = sut.Rekey(f.PlugReading);
+        var correction = sut.Rekey(f.PlugCorrection);
+
+        correction.EntityId.ShouldBe(reading.Id);
+        correction.EntityId.ShouldNotBe(f.PlugCorrection.EntityId);
+        // A reading nobody points at is still re-keyed, and the audit lookalike with no target stays as it was.
+        sut.Rekey(f.UnmappedPlugReading).Id.ShouldNotBe(f.UnmappedPlugReading.Id);
+        sut.Rekey(f.OrphanPlugCorrection).EntityId.ShouldBe(f.OrphanPlugCorrection.EntityId);
     }
 
     [Fact]
