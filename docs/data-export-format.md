@@ -127,6 +127,8 @@ enum fields in this export:
 
 ## Field-by-field reference
 
+Every `id` below, every reference to one (`roomId`, `powerPointId`, `mainMeterId`, `meterReadingId`, `taggedEntityId`, `entityId`, …) and every `idempotencyKey` identifies rows **within this file**: a restore assigns new ids and keys to everything it writes and rewrites the references to match (see [`data-import-restore.md`](./data-import-restore.md), "Ids and meter-reading idempotency keys are reassigned on every restore").
+
 ### `household`
 
 | Field | Type | Notes |

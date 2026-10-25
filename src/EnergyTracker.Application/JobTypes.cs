@@ -22,4 +22,8 @@ public static class JobTypes
     // CleanUpSmartPlugImportJobs above (Epic 6 Retro Action Item #3: this is the same
     // "large bulk write" incident shape, just across all 12 entity categories).
     public const string RestoreHouseholdData = "RestoreHouseholdData";
+
+    // Story 11.14 (audit C10, AD-6): at most one Queued/Processing row of each of these per Household,
+    // enforced by a filtered unique index that exists only in the provider migrations (AddActiveJobGuard).
+    public static readonly IReadOnlyList<string> ExclusivePerHousehold = [RestoreHouseholdData, CleanUpSmartPlugImportJobs];
 }

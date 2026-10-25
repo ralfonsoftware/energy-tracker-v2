@@ -7,6 +7,7 @@ using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Application;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -683,6 +684,56 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         var jobsAfter = await client.GetFromJsonAsync<List<SmartPlugImportJobHistoryResponse>>(
             "/api/smart-plug-import-jobs", TestContext.Current.CancellationToken);
         jobsAfter.ShouldBeEmpty();
+    }
+
+    // Story 11.14 (audit C10, AC #7b/#8b): two cleanup requests that BOTH get past the early check (made
+    // blind, as in the real race) reach the enqueue together. The index lets one insert win; the other
+    // answers 202 with the existing active job's id, the same idempotent contract as the early check, so
+    // both carry one job id and exactly one active row exists.
+    [Fact]
+    public async Task Two_parallel_cleanups_past_a_blind_early_check_both_answer_202_with_the_same_job_id_and_leave_one_active_row()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var gate = new ParallelEnqueueGate(JobTypes.CleanUpSmartPlugImportJobs, callers: 2);
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(gate.Install));
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Requested-With", "fetch");
+        client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.IssuerHeader, TestAuthHandler.DefaultIssuer);
+        var created = await (await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, ct))
+            .Content.ReadFromJsonAsync<HouseholdResponse>(ct);
+
+        try
+        {
+            var responses = await Task.WhenAll(
+                client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", ct),
+                client.DeleteAsync("/api/smart-plug-import-jobs?deleteAll=true", ct));
+
+            responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.Accepted);
+            var bodies = new List<SmartPlugImportJobCleanupResponse?>();
+            foreach (var response in responses)
+            {
+                bodies.Add(await response.Content.ReadFromJsonAsync<SmartPlugImportJobCleanupResponse>(ct));
+            }
+
+            bodies.Select(b => b!.JobId).Distinct().Count().ShouldBe(1);
+            using (var scope = host.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+                var active = await dbContext.BackgroundJobs.IgnoreQueryFilters().AsNoTracking()
+                    .Where(j => j.HouseholdId == created!.Id && j.JobType == JobTypes.CleanUpSmartPlugImportJobs
+                        && (j.Status == BackgroundJobStatus.Queued || j.Status == BackgroundJobStatus.Processing))
+                    .ToListAsync(ct);
+                active.ShouldHaveSingleItem().Id.ShouldBe(bodies[0]!.JobId);
+            }
+
+            gate.ReleaseJobs();
+            (await PollJobToTerminalAsync(client, bodies[0]!.JobId)).Status.ShouldBe("completed");
+        }
+        finally
+        {
+            gate.ReleaseJobs();
+        }
     }
 
     [Fact]

@@ -65,7 +65,13 @@ two requests:
    + a `jobId`; the client polls the existing generic `GET /api/jobs/{id}`
    endpoint to completion, exactly like every other async job in this
    codebase (Smart Plug import, cleanup, AI correlation). No backend
-   change was needed to `GET /api/jobs/{id}` itself.
+   change was needed to `GET /api/jobs/{id}` itself. **At most one restore is
+   active per Household** (queued or running): confirm answers `409` while one
+   is, and the rule is a database constraint, not only a check. A filtered
+   unique index on `BackgroundJobs` (Story 11.14, AD-6) allows one active
+   restore job and one active history-cleanup job per Household, so two
+   confirms that race past the check cannot both start: the loser gets the
+   same `409` and its uploaded file is deleted.
 
 **Every restore requires the confirmation step, even for a Household with
 zero existing rows.** A single code path is simpler and safer than
@@ -234,16 +240,19 @@ everyone else is re-invited (see "Backups and access").
 Because `data-export-format.md`'s own format deliberately **excludes**
 `HouseholdId` from every child entity in the file (the whole document is
 implicitly scoped to one Household), there is nothing to remap on the way
-in: every reconstructed entity simply gets `HouseholdId = <current
-Household's id>` set directly. Every entity's *internal* cross-reference
-(`PowerPoint.RoomId`, `Device.PowerPointId`, `MeterReading.MainMeterId`,
-`MeterRegressionPrompt.MeterReadingId`/`PreviousMeterReadingId`,
-`SmartPlugReading.PowerPointId`) is reused byte-for-byte from the file,
-since those references were never Household-qualified in the first place
-and the file's internal graph is already self-consistent — confirmed
-against this codebase's real `*Configuration.cs` Fluent API files (every
-FK between these entity types is `DeleteBehavior.Restrict`, never
-`Cascade`, so nothing here ever depended on an implicit cascade either).
+in for the Household itself: every reconstructed entity simply gets
+`HouseholdId = <current Household's id>` set directly. The entities' own ids
+and their internal cross-references are a different matter: since Story 11.14
+a restore gives every entity a **new id** and makes every internal
+cross-reference follow its target to the new id (`PowerPoint.RoomId`,
+`Device.PowerPointId`, `MeterReading.MainMeterId`,
+`MeterRegressionPrompt.MainMeterId`/`MeterReadingId`/`PreviousMeterReadingId`,
+`SmartPlugReading.PowerPointId`, and the two references that have no foreign
+key, `Event.TaggedEntityId` and `AuditCorrection.EntityId`). See "Ids and
+meter-reading idempotency keys are reassigned on every restore" below. Every
+FK between these entity types is `DeleteBehavior.Restrict`, never `Cascade`
+(confirmed against this codebase's real `*Configuration.cs` Fluent API files),
+so nothing here ever depended on an implicit cascade either.
 
 ### Session continuity across a restore
 
@@ -267,16 +276,17 @@ resolves `HouseholdId` from the job envelope (`JobHouseholdContext`), never
 from a live HTTP principal, so the destructive write never depends on a
 `HouseholdMember` lookup mid-flight either.
 
-Residual file-controlled data is data, not access: the AI-consent flag,
-audit rows and entity ids come from the file, but none of them lets anyone
-into the Household.
+Residual file-controlled data is data, not access: the AI-consent flag and
+the audit rows come from the file (entity ids are assigned new on every
+restore), but none of them lets anyone into the Household.
 
 ### What gets replaced, and how
 
 Every in-scope entity **except Household itself and its members** is fully
 deleted for the current Household, then every row from the file is
-inserted verbatim, reusing each row's original `Id` from the file.
-`HouseholdMember` is never touched (see above):
+inserted with its field values unchanged but under a **new `Id`** (and, for a
+meter reading, a new `IdempotencyKey`), with its references following the new
+ids. `HouseholdMember` is never touched (see above):
 
 ```
 delete order (children first):
@@ -309,6 +319,56 @@ scope, unchanged from the export's own decision).
 `IAuditCorrectionRecorder` (AD-11's own explicit carve-out for exactly this
 mechanism) — a restore does not produce audit-correction rows the way an
 in-app Meter Reading/Tariff edit does.
+
+### Ids and meter-reading idempotency keys are reassigned on every restore
+
+Story 11.14 (audit finding C10). Before it, a restore kept every id from the
+file, and `MeterReading.IdempotencyKey` has a **global** unique index, so
+restoring Household A's export into Household B on the same instance failed
+with a primary-key or unique violation after the delete phase had run (the
+transaction rolled back, and the member saw a generic "restore failed"). It
+now works, because nothing in a restore can collide with any row of any
+Household. This is what makes duplicating or migrating a household on one
+instance work: export Household A, restore the file into Household B, and A
+stays as it was.
+
+- **What is regenerated:** the `Id` of every restored entity (main meter,
+  rooms, power points, devices, meter readings, meter regression prompts,
+  tariffs, events, smart plug readings, status snapshots, audit corrections)
+  and the `IdempotencyKey` of every meter reading. They are new random
+  `Guid`s, so no detection and no cross-Household lookup is needed.
+- **Which references follow:** every reference listed under "Write target"
+  follows its target to the new id. A `SmartPlugReading.PowerPointId` that is
+  `null` stays `null`.
+- **The two references without a foreign key** are resolved by their type
+  text: `Event.TaggedEntityId` by `TaggedEntityType` (`Room`, `PowerPoint` or
+  `Device`) and `AuditCorrection.EntityId` by `EntityType` (`MeterReading` and
+  `Tariff` are the two the app writes; `Room`, `PowerPoint` and `Device` are
+  followed too if a file carries them). A polymorphic reference that resolves
+  to nothing in the file (an unknown type, or an id the file does not contain)
+  is **kept as it is**, never dropped and never an error: it is a history
+  pointer, not a foreign key.
+- **Unchanged:** `Household.Id`, the Household settings patch and
+  `HouseholdMember` (AD-25), and every field value other than ids and
+  references. The export file format and the validator are not changed.
+- **A household can restore its own backup** (it ends with the same data under
+  new ids), and restoring the same file twice is safe: each run gives the same
+  data under different ids.
+
+What this means for a reader of a backup: **ids in a backup are file-local
+names, not stable identifiers.** They tie the rows of that one file together
+and say nothing about the rows a restore produces. A bookmarked link that
+contains an entity id from before a restore stops resolving afterwards, and a
+screen that was open before the restore still holds the old ids until it
+reloads its data.
+
+The same holds for idempotency keys, with one visible cost. The key is what
+lets the app recognise a meter reading it has already stored, so a reading
+that was saved under its old key and is sent again after a restore (for
+example from the offline queue, when the first attempt's answer was lost) is
+stored as a new reading, because the old key no longer exists. The window is
+narrow (a restore has to land between the first attempt and its retry), and
+the duplicate shows up as a second reading with the same value.
 
 ### Bulk-write safety (chunking, timeouts, one transaction)
 
@@ -387,7 +447,8 @@ message that it was interrupted before the restore finished.
   interrupted. Retrying gives the same result.
 - **Retrying is safe.** The member uploads the file again and confirms
   again. A restore replaces everything wholesale, so running it a second
-  time gives the same result as running it once.
+  time gives the same data as running it once (under new ids each time, see
+  "Ids and meter-reading idempotency keys are reassigned on every restore").
 - **Recovery is automatic.** With the default in-process job queue, jobs
   left over from before a restart are marked failed when the app starts
   (a single attempt at startup: if the database is unreachable at that
@@ -397,11 +458,12 @@ message that it was interrupted before the restore finished.
   failed the next time its status is read, or when a new restore or
   history cleanup is started. A restore that is still running and
   heartbeating is not failed, and it keeps blocking a second restore for
-  the whole time. A job that is still waiting after 12 hours, for example
-  because its queue message was lost, is marked failed the same way, so it
-  can no longer block a restore or a history cleanup for longer than that.
-  A job that is still waiting after less than 12 hours is never failed for
-  its age.
+  the whole time; that block is the database constraint described under
+  "The two-phase flow", so it holds even when two confirms arrive at once.
+  A job that is still waiting after 12 hours, for example because its queue
+  message was lost, is marked failed the same way, so it can no longer block
+  a restore or a history cleanup for longer than that. A job that is still
+  waiting after less than 12 hours is never failed for its age.
 
 ## Backups and access
 

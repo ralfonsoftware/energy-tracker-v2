@@ -148,10 +148,17 @@ public class RestoreHouseholdDataTests
         captured.SmartPlugReadings.Single().HouseholdId.ShouldBe(currentHouseholdId);
         captured.StatusSnapshots.Single().HouseholdId.ShouldBe(currentHouseholdId);
         captured.AuditCorrections.Single().HouseholdId.ShouldBe(currentHouseholdId);
-        // Internal cross-references reused byte-for-byte from the file — never remapped.
-        captured.PowerPoints.Single().RoomId.ShouldBe(roomId);
-        captured.Devices.Single().PowerPointId.ShouldBe(powerPointId);
-        captured.SmartPlugReadings.Single().PowerPointId.ShouldBe(powerPointId);
+        // Story 11.14: every entity gets a new id and the internal references follow the new ids (audit C10).
+        captured.Rooms.Single().Id.ShouldNotBe(roomId);
+        captured.PowerPoints.Single().Id.ShouldNotBe(powerPointId);
+        captured.Devices.Single().Id.ShouldNotBe(deviceId);
+        captured.MeterReadings.Single().Id.ShouldNotBe(mainMeterReadingId);
+        captured.MainMeter!.Id.ShouldNotBe(mainMeterId);
+        captured.PowerPoints.Single().RoomId.ShouldBe(captured.Rooms.Single().Id);
+        captured.Devices.Single().PowerPointId.ShouldBe(captured.PowerPoints.Single().Id);
+        captured.SmartPlugReadings.Single().PowerPointId.ShouldBe(captured.PowerPoints.Single().Id);
+        captured.MeterReadings.Single().MainMeterId.ShouldBe(captured.MainMeter.Id);
+        captured.AuditCorrections.Single().EntityId.ShouldBe(captured.MeterReadings.Single().Id);
         // SmartPlugImportId is always null on insert — the field isn't in the export at all.
         captured.SmartPlugReadings.Single().SmartPlugImportId.ShouldBeNull();
     }

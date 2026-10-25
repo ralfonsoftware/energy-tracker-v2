@@ -41,7 +41,7 @@ function withSummary(overrides: Record<string, unknown>) {
 
 // Drives the panel through upload -> confirm -> restoring -> completed, so a test can assert on
 // the success state. `validation` is the body the validate endpoint returns.
-async function restoreToSuccess(validation: object) {
+async function restoreToSuccess(validation: object, onRestored?: () => void) {
   const fetchMock = vi.fn((input: string | URL | Request) => {
     const url = String(input)
     if (url === '/api/household-import') {
@@ -57,7 +57,7 @@ async function restoreToSuccess(validation: object) {
   })
   vi.stubGlobal('fetch', fetchMock)
 
-  render(<DataImportPanel />)
+  render(<DataImportPanel onRestored={onRestored} />)
   await selectFile(makeFile())
   await screen.findByText(/replace all data with this file/i)
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -183,6 +183,44 @@ describe('DataImportPanel', () => {
     await vi.advanceTimersByTimeAsync(2000)
 
     expect(await screen.findByText(/restore complete/i)).toBeInTheDocument()
+  })
+
+  // Story 11.14 (audit C10): a restore gives every row a new id, so whatever screen holds restored
+  // ids (Settings' rooms, power points and devices, the dashboard's open regression prompt) has to
+  // reload. The panel only signals; the owners of that state decide what to refetch.
+  it('tells its owner once when the restore job completes', async () => {
+    const onRestored = vi.fn()
+
+    await restoreToSuccess(validationResponseBody, onRestored)
+
+    expect(onRestored).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not tell its owner when the restore job fails', async () => {
+    const onRestored = vi.fn()
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/household-import') {
+        return Promise.resolve(jsonResponse(validationResponseBody))
+      }
+      if (url.endsWith('/confirm')) {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(jsonResponse({ id: 'job-1', status: 'failed', importStatus: null, errorMessage: 'job-interrupted' }))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<DataImportPanel onRestored={onRestored} />)
+    await selectFile(makeFile())
+    await screen.findByText(/replace all data with this file/i)
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(screen.getByRole('button', { name: 'Replace all data' }))
+    await vi.advanceTimersByTimeAsync(2000)
+    await screen.findByText(/This was interrupted before it finished/)
+
+    expect(onRestored).not.toHaveBeenCalled()
   })
 
   // The polled job itself can fail (a real DB error, a missing temp file race) — must render as

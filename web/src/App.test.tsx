@@ -273,6 +273,61 @@ describe('App', () => {
     })
   })
 
+  // Story 11.14 (audit C10): a restore gives every meter regression prompt a new id. App holds the open
+  // prompt above every page and resolves it by that id, so a completed restore has to reload it.
+  describe('after a completed restore (Story 11.14)', () => {
+    it('loads the open regression prompt again, because restored rows have new ids', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      try {
+        const householdId = '11111111-1111-1111-1111-111111111111'
+        const token = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+        const routes = [
+          { method: 'GET', url: '/api/session', respond: () => jsonResponse({ hasHousehold: true, householdId, locale: 'en-US', currency: 'USD' }) },
+          { method: 'GET', url: '/api/status', respond: () => jsonResponse(null) },
+          { method: 'GET', url: '/api/tariff-check', respond: () => jsonResponse(null) },
+          { method: 'GET', url: '/api/meter-regression-prompts/open', respond: () => jsonResponse(null) },
+          { method: 'GET', url: '/api/rooms', respond: () => jsonResponse([]) },
+          { method: 'GET', url: '/api/power-points', respond: () => jsonResponse([]) },
+          { method: 'GET', url: '/api/devices', respond: () => jsonResponse([]) },
+          { method: 'GET', url: `/api/households/${householdId}`, respond: () => jsonResponse({ id: householdId, locale: 'en-US', currency: 'USD', yearlyBaselineKwh: null, version: 0 }) },
+          { method: 'GET', url: `/api/households/${householdId}/ai-plausibility`, respond: () => jsonResponse({ enabled: false, backendConfigured: false, backendLabel: null, version: 0 }) },
+          {
+            method: 'POST',
+            url: '/api/household-import',
+            respond: () => jsonResponse({
+              token,
+              summary: {
+                householdMembers: 0, hasMainMeter: false, meterReadings: 0, meterRegressionPrompts: 1, tariffs: 0, events: 0, rooms: 0,
+                powerPoints: 0, devices: 0, smartPlugReadings: 0, statusSnapshots: 0, auditCorrections: 0, memberDisplayNames: [],
+              },
+            }),
+          },
+          { method: 'POST', url: `/api/household-import/${token}/confirm`, respond: () => jsonResponse({ jobId: 'job-1' }, 202) },
+          { method: 'GET', url: '/api/jobs/job-1', respond: () => jsonResponse({ id: 'job-1', status: 'completed', importStatus: null, errorMessage: null }) },
+        ]
+        mockFetchRoutes(routes)
+        const fetchMock = vi.mocked(fetch)
+        const promptLoads = () => fetchMock.mock.calls.filter(([input]) => String(input) === '/api/meter-regression-prompts/open').length
+        render(<App />)
+        await user.click((await screen.findAllByRole('button', { name: 'Settings' }))[0])
+        await screen.findByRole('heading', { name: 'Settings' })
+        const loadsBeforeRestore = promptLoads()
+        expect(loadsBeforeRestore).toBeGreaterThan(0)
+
+        const fileInput = document.querySelector('input[type="file"][accept="application/json"]') as HTMLInputElement
+        await user.upload(fileInput, new File(['{"formatVersion":"v2"}'], 'export.json', { type: 'application/json' }))
+        await user.click(await screen.findByRole('button', { name: 'Replace all data' }))
+        await vi.advanceTimersByTimeAsync(2000)
+        await screen.findByText(/restore complete/i)
+
+        await vi.waitFor(() => expect(promptLoads()).toBe(loadsBeforeRestore + 1))
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
   describe('Trend History navigation (Story 4.1 — absorbs Story 2.8s standalone Meter Reading History)', () => {
     it('switches to the Trend History surface (rendering the chart and the Meter Readings card) and back via local view state, not a URL route', async () => {
       const user = userEvent.setup()

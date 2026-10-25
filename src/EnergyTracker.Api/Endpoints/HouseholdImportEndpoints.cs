@@ -94,10 +94,12 @@ public static class HouseholdImportEndpoints
             // AD-24: one instance with one worker. Without this, two confirmed restores for the same
             // Household could run as genuinely concurrent, unguarded delete+insert transactions. A DB
             // check followed by an enqueue (mirroring AD-12's "at most one open X per Y" precedent), so
-            // it serialises through the single consumer; Story 11.14 adds a database guard for the
-            // remaining race. Checked after consuming the token — a token can only ever be
-            // consumed once regardless, so this only rejects a second, genuinely different upload
-            // racing an already-in-flight restore for the same Household, never a retry of the
+            // it serialises through the single consumer. This check is the friendly fast path (no failed
+            // insert, stale rows failed first); the filtered unique index on BackgroundJobs closes the
+            // remaining race between check and enqueue (Story 11.14, AD-6): the loser's insert is rejected
+            // and answered below exactly like this check. Checked after consuming the token — a token can
+            // only ever be consumed once regardless, so this only rejects a second, genuinely different
+            // upload racing an already-in-flight restore for the same Household, never a retry of the
             // same token (Code Review, Story 7.2 Pass 1).
             //
             // Story 11.2: a restore orphaned by a restart/crash used to hold this 409 forever. Rows
@@ -107,14 +109,8 @@ public static class HouseholdImportEndpoints
             var restoreJobs = await backgroundJobRepository.ListByJobTypeAsync(householdId, JobTypes.RestoreHouseholdData, cancellationToken);
             if (restoreJobs.Any(j => j.Status is BackgroundJobStatus.Queued or BackgroundJobStatus.Processing))
             {
-                if (File.Exists(reference.TempFilePath))
-                {
-                    File.Delete(reference.TempFilePath);
-                }
-
-                return Results.Problem(
-                    detail: "A restore is already in progress for this Household — wait for it to finish before starting another.",
-                    statusCode: StatusCodes.Status409Conflict);
+                DeleteTempFile(reference.TempFilePath);
+                return RestoreAlreadyInProgress();
             }
 
             var jobId = Guid.NewGuid();
@@ -128,15 +124,19 @@ public static class HouseholdImportEndpoints
                         OriginalFileName: reference.OriginalFileName),
                     cancellationToken);
             }
+            catch (ActiveJobAlreadyExistsException)
+            {
+                // Lost the race the early check cannot see (Story 11.14): the database index rejected the
+                // row before anything was sent, so the consumed upload's file is deleted like on the
+                // early-check path and the answer is the same 409.
+                DeleteTempFile(reference.TempFilePath);
+                return RestoreAlreadyInProgress();
+            }
             catch
             {
                 // Same enqueue-failure cleanup shape as SmartPlugImportEndpoints' upload path —
                 // the token is already consumed above, so a retry means uploading again.
-                if (File.Exists(reference.TempFilePath))
-                {
-                    File.Delete(reference.TempFilePath);
-                }
-
+                DeleteTempFile(reference.TempFilePath);
                 throw;
             }
 
@@ -147,6 +147,21 @@ public static class HouseholdImportEndpoints
         }).RequireRateLimiting(RateLimitPolicies.Upload);
 
         return api;
+    }
+
+    // The one 409 for "a restore is already active", shared by the early check and the lost-race catch so
+    // the two answers cannot drift.
+    private static IResult RestoreAlreadyInProgress() => Results.Problem(
+        detail: "A restore is already in progress for this Household — wait for it to finish before starting another.",
+        statusCode: StatusCodes.Status409Conflict);
+
+    // Every confirm path that does not end in an enqueued job deletes the consumed upload's file (Story 11.10).
+    private static void DeleteTempFile(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
     }
 
     // Story 11.10 (audit S4): the upload is streamed to its temp file first and validated from there,

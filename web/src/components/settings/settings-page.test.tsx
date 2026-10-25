@@ -73,6 +73,107 @@ describe('SettingsPage', () => {
     vi.unstubAllGlobals()
   })
 
+  // Story 11.14 (audit C10): a restore gives every room, power point and device a new id. The scaffold
+  // manager loads them once on mount and then renames, moves and archives by id, so without a reload
+  // every one of those requests would target an id that no longer exists.
+  it('loads the rooms, power points and devices again once a restore completes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const fetchMock = stubFetch()
+      const defaultImplementation = fetchMock.getMockImplementation()!
+      let restoreCompleted = false
+      fetchMock.mockImplementation((input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input)
+        if (url === '/api/rooms') {
+          return Promise.resolve(jsonResponse([{ id: restoreCompleted ? 'room-new' : 'room-old', name: 'Kitchen', archivedAt: null }]))
+        }
+        if (url === '/api/household-import') {
+          return Promise.resolve(jsonResponse({
+            token: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            summary: {
+              householdMembers: 0, hasMainMeter: false, meterReadings: 0, meterRegressionPrompts: 0, tariffs: 0, events: 0, rooms: 1,
+              powerPoints: 0, devices: 0, smartPlugReadings: 0, statusSnapshots: 0, auditCorrections: 0, memberDisplayNames: [],
+            },
+          }))
+        }
+        if (url.endsWith('/confirm')) {
+          return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+        }
+        if (url === '/api/jobs/job-1') {
+          restoreCompleted = true
+          return Promise.resolve(jsonResponse({ id: 'job-1', status: 'completed', importStatus: null, errorMessage: null }))
+        }
+        return defaultImplementation(input, init)
+      })
+      const roomLoads = () => fetchMock.mock.calls.filter(([input]) => String(input) === '/api/rooms').length
+      renderSettingsPage(true)
+      await screen.findByText('Kitchen')
+      expect(roomLoads()).toBe(1)
+
+      const fileInput = document.querySelector('input[type="file"][accept="application/json"]') as HTMLInputElement
+      await userEvent.upload(fileInput, new File(['{"formatVersion":"v2"}'], 'export.json', { type: 'application/json' }))
+      await screen.findByText(/replace all data with this file/i)
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByRole('button', { name: 'Replace all data' }))
+      await vi.advanceTimersByTimeAsync(2000)
+      await screen.findByText(/restore complete/i)
+
+      await waitFor(() => expect(roomLoads()).toBe(2))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('tells its owner when a restore completes so it can reload what it holds', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const fetchMock = stubFetch()
+      const defaultImplementation = fetchMock.getMockImplementation()!
+      fetchMock.mockImplementation((input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input)
+        if (url === '/api/household-import') {
+          return Promise.resolve(jsonResponse({
+            token: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            summary: {
+              householdMembers: 0, hasMainMeter: false, meterReadings: 0, meterRegressionPrompts: 0, tariffs: 0, events: 0, rooms: 0,
+              powerPoints: 0, devices: 0, smartPlugReadings: 0, statusSnapshots: 0, auditCorrections: 0, memberDisplayNames: [],
+            },
+          }))
+        }
+        if (url.endsWith('/confirm')) {
+          return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+        }
+        if (url === '/api/jobs/job-1') {
+          return Promise.resolve(jsonResponse({ id: 'job-1', status: 'completed', importStatus: null, errorMessage: null }))
+        }
+        return defaultImplementation(input, init)
+      })
+      const onDataRestored = vi.fn()
+      render(
+        <SettingsPage
+          householdId={householdId}
+          supportsFederatedLogout={true}
+          email={null}
+          onBack={() => {}}
+          onTrendHistoryClick={() => {}}
+          onTariffRadarClick={() => {}}
+          onDataRestored={onDataRestored}
+        />,
+      )
+      const fileInput = document.querySelector('input[type="file"][accept="application/json"]') as HTMLInputElement
+      await userEvent.upload(fileInput, new File(['{"formatVersion":"v2"}'], 'export.json', { type: 'application/json' }))
+      await screen.findByText(/replace all data with this file/i)
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByRole('button', { name: 'Replace all data' }))
+      await vi.advanceTimersByTimeAsync(2000)
+      await screen.findByText(/restore complete/i)
+
+      expect(onDataRestored).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('mounts the top nav first and the bottom nav last in <main> (Story 10.3)', async () => {
     stubFetch()
     renderSettingsPage(true)

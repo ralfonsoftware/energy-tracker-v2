@@ -27,7 +27,9 @@ import { ApiError } from '@/lib/api-client'
 // completion -> success/failure state.
 type ImportStep = 'idle' | 'validating' | 'validationFailed' | 'confirmDialog' | 'confirming' | 'restoring' | 'success' | 'error'
 
-export function DataImportPanel() {
+// Story 11.14 (audit C10): a restore gives every row a new id, so `onRestored` tells the owner when the
+// job completed; whatever screen holds restored ids reloads them. Only a completed restore calls it.
+export function DataImportPanel({ onRestored }: { onRestored?: () => void } = {}) {
   const { t } = useTranslation()
   const [step, setStep] = useState<ImportStep>('idle')
   const [failures, setFailures] = useState<string[]>([])
@@ -54,11 +56,12 @@ export function DataImportPanel() {
 
     if (restoreJob.state === 'completed') {
       setStep('success')
+      onRestored?.()
     } else if (restoreJob.state === 'failed') {
       setErrorMessage(restoreJob.errorMessage)
       setStep('error')
     }
-  }, [step, restoreJob.state, restoreJob.errorMessage])
+  }, [step, restoreJob.state, restoreJob.errorMessage, onRestored])
 
   const resetToIdle = () => {
     setStep('idle')
