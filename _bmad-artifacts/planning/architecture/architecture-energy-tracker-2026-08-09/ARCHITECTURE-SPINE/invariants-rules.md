@@ -32,6 +32,7 @@
 - **Binds:** Pattern Detective (pace threshold), Tariff Savings Radar (FR-12–FR-14)
 - **Prevents:** the two features' savings/threshold math diverging over time (FR-14's explicit requirement).
 - **Rule:** Bonus-Decay Normalization lives in exactly one place — `Domain.Calculations.BonusDecayNormalizer`, a pure function of (rate, bonus terms, elapsed time) — called by both features. Neither feature may reimplement or locally adjust the formula.
+  - **[IMPLEMENTED 2026-10-25, Story 11.15, audit C12]** Pattern Detective's trending threshold goes through the normalizer too: `ResolveStatus` scales the annual `TrendingThresholdKwh` with `NormalizeToDate` over the pace window's elapsed span, the same call `WindowedDeviationCalculator` makes for its window, so Status and Event correlation share one meaning of the threshold. Both go through `TrendingThreshold.ScaleToDate`, which adds a floor of one meter step (1 kWh, never above the annual figure; review decision 1c).
 
 ## AD-6 — Async job processing shape
 

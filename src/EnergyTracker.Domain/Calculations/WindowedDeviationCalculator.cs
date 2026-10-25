@@ -107,7 +107,7 @@ public static class WindowedDeviationCalculator
         }
 
         var expectedKwh = BonusDecayNormalizer.NormalizeToDate(yearlyBaselineKwh, bonusTermsKwh: 0m, elapsed);
-        var thresholdForWindow = BonusDecayNormalizer.NormalizeToDate(trendingThresholdKwh, bonusTermsKwh: 0m, elapsed);
+        var thresholdForWindow = TrendingThreshold.ScaleToDate(trendingThresholdKwh, elapsed);
 
         var difference = actualConsumedKwh - expectedKwh;
 

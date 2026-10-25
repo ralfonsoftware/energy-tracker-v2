@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StatusDetailDialog } from './status-detail-dialog'
 import { type StatusDetailDto } from '@/lib/status-api'
@@ -13,6 +14,7 @@ function detailDto(overrides: Partial<StatusDetailDto> = {}): StatusDetailDto {
     baselineToDateKwh: 1300,
     elapsedDays: 182.5,
     trendingThresholdKwh: 100,
+    trendingThresholdToDateKwh: 50,
     isLowConfidence: false,
     daysSinceLastReading: 1.2,
     lowConfidenceGapDaysThreshold: 45,
@@ -26,21 +28,22 @@ function jsonResponse(body: object | null, status = 200) {
 
 // Mirrors the controlled-open shape DashboardPage drives in real usage — `open` is owned by the
 // caller, not the dialog itself.
-function Harness() {
+function Harness({ locale = 'en-US' }: { locale?: string }) {
   const [open, setOpen] = useState(false)
   return (
     <StatusDetailDialog
       open={open}
       onOpenChange={setOpen}
-      locale="en-US"
+      locale={locale}
       trigger={<button>How was this calculated?</button>}
     />
   )
 }
 
 describe('StatusDetailDialog', () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals()
+    await i18next.changeLanguage('en-US')
   })
 
   it('opening the trigger fetches and renders the figure rows with locale-aware formatting', async () => {
@@ -55,6 +58,126 @@ describe('StatusDetailDialog', () => {
     expect(screen.getByText(/over 182 days/)).toBeInTheDocument()
     expect(screen.getByText('240 kWh under pace.')).toBeInTheDocument()
     expect(screen.getByText('100 kWh')).toBeInTheDocument()
+  })
+
+  // Story 11.15 (audit C12, FR-6): the configured threshold is per year, the dialog also shows the
+  // threshold scaled to the period the readings cover. Rows are looked up by their label so a
+  // swapped value fails.
+  function valueOfRow(label: string) {
+    const row = screen.getByText(label).parentElement
+    expect(row).not.toBeNull()
+    return row as HTMLElement
+  }
+
+  it('shows the configured per-year threshold and the scaled threshold as two labelled rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(detailDto({ trendingThresholdKwh: 100, trendingThresholdToDateKwh: 50 })))))
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    await screen.findByText('1,060 kWh')
+    expect(valueOfRow('Trending threshold (per year)')).toHaveTextContent('100 kWh')
+    expect(valueOfRow('Threshold for this period')).toHaveTextContent('50 kWh')
+  })
+
+  it('formats the scaled threshold with up to one decimal and no trailing .0', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(detailDto({ trendingThresholdToDateKwh: 16.4 })))))
+    const user = userEvent.setup()
+    const { unmount } = render(<Harness />)
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+    await screen.findByText('1,060 kWh')
+    expect(valueOfRow('Threshold for this period')).toHaveTextContent(/^Threshold for this period16\.4 kWh$/)
+    unmount()
+
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(detailDto({ trendingThresholdToDateKwh: 20 })))))
+    render(<Harness />)
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+    await screen.findByText('1,060 kWh')
+    expect(valueOfRow('Threshold for this period')).toHaveTextContent(/^Threshold for this period20 kWh$/)
+  })
+
+  it('shows a sub-kWh scaled threshold instead of rounding it to 0 kWh', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(detailDto({ trendingThresholdToDateKwh: 0.3 })))))
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    await screen.findByText('1,060 kWh')
+    expect(valueOfRow('Threshold for this period')).toHaveTextContent('0.3 kWh')
+  })
+
+  it('keeps two significant digits for a scaled threshold under 0.05 kWh (a span of a few hours)', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(detailDto({ trendingThresholdToDateKwh: 0.0114 })))))
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    await screen.findByText('1,060 kWh')
+    expect(valueOfRow('Threshold for this period')).toHaveTextContent('0.011 kWh')
+  })
+
+  it('shows the difference with decimals when the scaled threshold is under 10 kWh, so it never reads 0 kWh beside Trending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(detailDto({ paceToDateKwh: 1000.4, baselineToDateKwh: 1000, trendingThresholdToDateKwh: 0.3, status: 'trending' })),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    expect(await screen.findByText('0.4 kWh over pace.')).toBeInTheDocument()
+  })
+
+  it('keeps the difference in whole kWh once the scaled threshold is 10 kWh or more', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(jsonResponse(detailDto({ paceToDateKwh: 1020.4, baselineToDateKwh: 1000, trendingThresholdToDateKwh: 20, status: 'trending' }))),
+      ),
+    )
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    expect(await screen.findByText('20 kWh over pace.')).toBeInTheDocument()
+  })
+
+  it('renders the German labels and a comma decimal in de-DE', async () => {
+    await i18next.changeLanguage('de-DE')
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(detailDto({ trendingThresholdToDateKwh: 16.4 })))))
+    const user = userEvent.setup()
+    render(<Harness locale="de-DE" />)
+
+    // The harness trigger is a fixed English button; only the dialog's own copy is translated.
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    expect(await screen.findByText('Schwellenwert für Anstieg (pro Jahr)')).toBeInTheDocument()
+    expect(valueOfRow('Schwellenwert für Anstieg (pro Jahr)')).toHaveTextContent('100 kWh')
+    expect(valueOfRow('Schwellenwert für diesen Zeitraum')).toHaveTextContent('16,4 kWh')
+  })
+
+  it('omits the scaled row instead of printing NaN when the response lacks the field (a rolled-back API)', async () => {
+    const withoutScaled = { ...detailDto() } as Partial<StatusDetailDto>
+    delete withoutScaled.trendingThresholdToDateKwh
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(withoutScaled as object))))
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'How was this calculated?' }))
+
+    await screen.findByText('1,060 kWh')
+    expect(valueOfRow('Trending threshold (per year)')).toHaveTextContent('100 kWh')
+    expect(screen.queryByText('Threshold for this period')).not.toBeInTheDocument()
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument()
   })
 
   it('shows a loading skeleton before the fetch resolves', async () => {

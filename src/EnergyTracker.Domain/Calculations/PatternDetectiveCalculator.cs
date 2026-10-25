@@ -115,13 +115,19 @@ public static class PatternDetectiveCalculator
         return new PaceToDateResult(totalConsumedKwh, totalElapsed);
     }
 
-    // AC #4, #5: strictly-greater-than the threshold resolves to Trending; an exact tie (pace -
-    // baseline == threshold) resolves to WithinRange, not Trending — the calmer state. Anything
-    // below baseline-to-date (pace - baseline < 0) is BelowBaseline.
-    public static Status ResolveStatus(decimal paceToDateKwh, decimal baselineToDateKwh, decimal trendingThresholdKwh)
+    // AC #4, #5: strictly-greater-than the scaled threshold resolves to Trending; an exact tie (pace -
+    // baseline == scaled threshold) resolves to WithinRange, not Trending — the calmer state. Anything
+    // below baseline-to-date (pace - baseline < 0) is BelowBaseline, with no threshold band.
+    //
+    // The threshold is an annual overshoot (FR-6, audit C12), so it is scaled to the same elapsed
+    // span as the baseline-to-date it is compared against, the way WindowedDeviationCalculator
+    // scales it for its window. Taking `elapsed` here keeps a call site from forgetting to scale.
+    public static Status ResolveStatus(decimal paceToDateKwh, decimal baselineToDateKwh, decimal annualTrendingThresholdKwh, TimeSpan elapsed)
     {
+        var thresholdToDateKwh = TrendingThreshold.ScaleToDate(annualTrendingThresholdKwh, elapsed);
+
         var difference = paceToDateKwh - baselineToDateKwh;
-        if (difference > trendingThresholdKwh)
+        if (difference > thresholdToDateKwh)
         {
             return Status.Trending;
         }

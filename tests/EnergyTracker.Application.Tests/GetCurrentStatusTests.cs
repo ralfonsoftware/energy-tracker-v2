@@ -117,6 +117,7 @@ public class GetCurrentStatusTests
         result.PaceToDateKwh.ShouldBe(1825m);
         result.ElapsedDays.ShouldBe(182.5, tolerance: 0.01);
         result.TrendingThresholdKwh.ShouldBe(100m);
+        result.TrendingThresholdToDateKwh.ShouldBe(50m, 0.01m);
     }
 
     [Fact]
@@ -140,6 +141,120 @@ public class GetCurrentStatusTests
 
         result.ShouldNotBeNull();
         result.Status.ShouldBe(Status.Trending);
+    }
+
+    // Story 11.15 (audit C12, FR-6). Fixed dates, not UtcNow arithmetic, so an exact tie is exact.
+    // A yearly baseline of 3650 kWh is 10 kWh a day, so the baseline-to-date over N whole days is 10 x N.
+    private async Task<CurrentStatusResult> StatusAfterAsync(
+        decimal paceToDateKwh, TimeSpan elapsed, decimal annualThresholdKwh = 100m)
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, trendingThresholdKwh: annualThresholdKwh));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
+        [
+            NewReading(householdId, mainMeter.Id, 0m, start),
+            NewReading(householdId, mainMeter.Id, paceToDateKwh, start + elapsed),
+        ]);
+
+        var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        return result;
+    }
+
+    [Fact]
+    public async Task A_first_year_household_reaches_Trending_at_the_same_relative_overshoot_as_after_a_full_year()
+    {
+        // 73 days: baseline-to-date 730, pace 790, difference 60 against a scaled threshold of
+        // 100 x 73/365 = 20. The pre-11.15 rule compared 60 with the unscaled 100 and said WithinRange.
+        var result = await StatusAfterAsync(paceToDateKwh: 790m, TimeSpan.FromDays(73));
+
+        result.Status.ShouldBe(Status.Trending);
+        result.BaselineToDateKwh.ShouldBe(730m);
+        result.TrendingThresholdKwh.ShouldBe(100m);
+        result.TrendingThresholdToDateKwh.ShouldBe(20m);
+    }
+
+    // Review decision 1c (2026-10-25): the bar is never below one meter step (1 kWh). An annual 2 kWh
+    // over 73 days prorates to 0.4; the shown and the deciding figure is the 1 kWh floor. (73 days keeps
+    // the baseline-to-date, 730, exact in decimal so the tie is a real tie; 1/365 is a repeating decimal.)
+    [Theory]
+    [InlineData(731, Status.WithinRange)] // difference exactly 1 = the floor: the calmer state
+    [InlineData(731.01, Status.Trending)]
+    [InlineData(730.5, Status.WithinRange)] // under the floor, though over the prorated 0.4
+    public async Task A_short_prorated_bar_is_floored_at_one_kWh_and_the_floored_figure_is_reported(decimal paceToDateKwh, Status expected)
+    {
+        var result = await StatusAfterAsync(paceToDateKwh, TimeSpan.FromDays(73), annualThresholdKwh: 2m);
+
+        result.Status.ShouldBe(expected);
+        result.TrendingThresholdKwh.ShouldBe(2m);
+        result.TrendingThresholdToDateKwh.ShouldBe(1m);
+    }
+
+    [Theory]
+    [InlineData(750, Status.WithinRange)] // difference exactly 20 = the scaled threshold: the calmer state
+    [InlineData(750.01, Status.Trending)]
+    public async Task The_scaled_threshold_is_strict_at_73_days(decimal paceToDateKwh, Status expected)
+    {
+        var result = await StatusAfterAsync(paceToDateKwh, TimeSpan.FromDays(73));
+
+        result.Status.ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData(3750, Status.WithinRange)]
+    [InlineData(3750.01, Status.Trending)]
+    public async Task A_full_year_span_keeps_the_boundary_at_the_annual_threshold(decimal paceToDateKwh, Status expected)
+    {
+        var result = await StatusAfterAsync(paceToDateKwh, TimeSpan.FromDays(365));
+
+        result.Status.ShouldBe(expected);
+        result.BaselineToDateKwh.ShouldBe(3650m);
+        result.TrendingThresholdToDateKwh.ShouldBe(100m);
+    }
+
+    [Theory]
+    [InlineData(73, 729.99)]
+    [InlineData(365, 3649.99)]
+    public async Task Any_shortfall_below_the_baseline_to_date_is_BelowBaseline_at_every_span(double elapsedDays, decimal paceToDateKwh)
+    {
+        var result = await StatusAfterAsync(paceToDateKwh, TimeSpan.FromDays(elapsedDays));
+
+        result.Status.ShouldBe(Status.BelowBaseline);
+    }
+
+    [Fact]
+    public async Task The_scaled_threshold_shown_is_the_one_that_decides_the_Status()
+    {
+        // 100.5 days is not a clean fraction of 365, so the scaled threshold has many decimals. The
+        // pace is built from the figures the result itself reports (AC #5): a difference equal to
+        // the shown threshold is WithinRange, a hundredth above it is Trending.
+        var span = TimeSpan.FromDays(100.5);
+        var probe = await StatusAfterAsync(paceToDateKwh: 1m, span);
+        var baselineToDateKwh = probe.BaselineToDateKwh;
+        var shownThresholdKwh = probe.TrendingThresholdToDateKwh;
+
+        var atThreshold = await StatusAfterAsync(baselineToDateKwh + shownThresholdKwh, span);
+        var aboveThreshold = await StatusAfterAsync(baselineToDateKwh + shownThresholdKwh + 0.01m, span);
+        var belowThreshold = await StatusAfterAsync(baselineToDateKwh + shownThresholdKwh - 0.01m, span);
+
+        atThreshold.TrendingThresholdToDateKwh.ShouldBe(shownThresholdKwh);
+        atThreshold.Status.ShouldBe(Status.WithinRange);
+        aboveThreshold.Status.ShouldBe(Status.Trending);
+        belowThreshold.Status.ShouldBe(Status.WithinRange);
+    }
+
+    [Fact]
+    public async Task A_non_default_threshold_is_reported_per_year_and_scaled_to_the_span()
+    {
+        var result = await StatusAfterAsync(paceToDateKwh: 730m, TimeSpan.FromDays(73), annualThresholdKwh: 250m);
+
+        result.TrendingThresholdKwh.ShouldBe(250m);
+        result.TrendingThresholdToDateKwh.ShouldBe(50m); // 250 x 73/365
     }
 
     [Fact]

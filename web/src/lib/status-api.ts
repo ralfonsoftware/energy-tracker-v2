@@ -15,6 +15,7 @@ export interface StatusDetailDto {
   baselineToDateKwh: number
   elapsedDays: number
   trendingThresholdKwh: number
+  trendingThresholdToDateKwh: number
   isLowConfidence: boolean
   daysSinceLastReading: number
   lowConfidenceGapDaysThreshold: number

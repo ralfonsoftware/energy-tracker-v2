@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
@@ -155,9 +156,45 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         body.BaselineToDateKwh.ShouldBe(1825m);
         body.ElapsedDays.ShouldBe(182.5, tolerance: 0.1);
         body.TrendingThresholdKwh.ShouldBe(100m);
+        body.TrendingThresholdToDateKwh.ShouldBe(50m, 0.1m);
         body.IsLowConfidence.ShouldBeFalse();
         body.DaysSinceLastReading.ShouldBeLessThan(1);
         body.LowConfidenceGapDaysThreshold.ShouldBe(45);
+    }
+
+    [Fact]
+    public async Task GET_status_returns_trending_for_a_first_year_household_that_the_unscaled_threshold_called_within_range()
+    {
+        // Story 11.15 (audit C12): 73 days, baseline-to-date 730 kWh, pace about 790 kWh, so about
+        // 60 kWh over against a scaled threshold of about 20 (100 x 73/365). The unscaled rule
+        // compared 60 with 100 and said within range. No exact-tie assertions through the API:
+        // Postgres keeps microseconds, so the elapsed span can differ by a tick.
+        var (client, householdId, version) = await CreateHouseholdAsync();
+        await SetYearlyBaselineAsync(client, householdId, 3650m, version);
+        var latest = DateTimeOffset.UtcNow;
+        await PostReadingAsync(client, 1000m, latest.AddDays(-73));
+        await PostReadingAsync(client, 1790m, latest);
+
+        var statusResponse = await client.GetAsync("/api/status", TestContext.Current.CancellationToken);
+        var detailResponse = await client.GetAsync("/api/status/detail", TestContext.Current.CancellationToken);
+
+        statusResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var status = await statusResponse.Content.ReadFromJsonAsync<StatusResponse>(TestContext.Current.CancellationToken);
+        status.ShouldNotBeNull();
+        status.Status.ShouldBe("trending");
+
+        detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var detail = await detailResponse.Content.ReadFromJsonAsync<StatusDetailResponse>(TestContext.Current.CancellationToken);
+        detail.ShouldNotBeNull();
+        detail.Status.ShouldBe("trending");
+        detail.TrendingThresholdKwh.ShouldBe(100m);
+        detail.TrendingThresholdToDateKwh.ShouldBe(20m, 0.1m);
+
+        // The wire name is part of the contract the browser reads (AC #5).
+        var raw = await detailResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        raw.ShouldContain("\"trendingThresholdToDateKwh\":");
+        using var json = JsonDocument.Parse(raw);
+        json.RootElement.GetProperty("trendingThresholdKwh").GetDecimal().ShouldBe(100m);
     }
 
     [Fact]
@@ -216,10 +253,12 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
 
         // Second reading makes Status definite — AC #8: the recompute writes an immutable snapshot.
         // 100 days elapsed -> baseline-to-date = 3650 * 100/365 = 1000 kWh exactly; pace = 1050 kWh,
-        // 50 kWh over baseline and comfortably clear of both the WithinRange/BelowBaseline (0) and
-        // WithinRange/Trending (100) boundaries — this test only needs a clean WithinRange result to
-        // verify AC #8's persistence, not to pin the exact-tie boundary (that's PatternDetectiveCalculatorTests'
-        // job, in-memory and free of the JSON/Postgres timestamp round-trip's microsecond precision limits).
+        // 50 kWh over baseline. Since Story 11.15 (audit C12) the annual 100 kWh threshold is scaled
+        // to the 100 days (about 27.4 kWh), so 50 kWh over is Trending (it was WithinRange against the
+        // unscaled 100). Clear of the scaled boundary above (27.4) and of the baseline below; this test only needs a
+        // definite result to verify AC #8's persistence, not to pin the exact-tie boundary (that's
+        // PatternDetectiveCalculatorTests' job, in-memory and free of the JSON/Postgres timestamp
+        // round-trip's microsecond precision limits).
         await PostReadingAsync(client, 2050m, latest);
 
         using var scope = factory.Services.CreateScope();
@@ -227,7 +266,7 @@ public class StatusEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtu
         var snapshot = await dbContext.StatusSnapshots.IgnoreQueryFilters()
             .SingleAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
 
-        snapshot.Status.ShouldBe(Status.WithinRange);
+        snapshot.Status.ShouldBe(Status.Trending);
         snapshot.PaceToDateKwh.ShouldBe(1050m);
         snapshot.BaselineToDateKwh.ShouldBe(1000m);
     }

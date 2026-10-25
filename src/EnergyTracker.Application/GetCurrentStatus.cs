@@ -11,6 +11,7 @@ public record CurrentStatusResult(
     bool IsLowConfidence,
     double ElapsedDays,
     decimal TrendingThresholdKwh,
+    decimal TrendingThresholdToDateKwh,
     double DaysSinceLastReading,
     int LowConfidenceGapDaysThreshold);
 
@@ -79,7 +80,11 @@ public class GetCurrentStatus(
         }
 
         var baselineToDateKwh = BonusDecayNormalizer.NormalizeToDate(yearlyBaselineKwh, bonusTermsKwh: 0m, paceResult.Value.Elapsed);
-        var status = PatternDetectiveCalculator.ResolveStatus(paceResult.Value.PaceToDateKwh, baselineToDateKwh, household.TrendingThresholdKwh);
+        // The same call ResolveStatus makes with the same arguments; computed here only so the detail
+        // view can show the figure that decided the Status (Story 11.15, audit C12).
+        var trendingThresholdToDateKwh = TrendingThreshold.ScaleToDate(household.TrendingThresholdKwh, paceResult.Value.Elapsed);
+        var status = PatternDetectiveCalculator.ResolveStatus(
+            paceResult.Value.PaceToDateKwh, baselineToDateKwh, household.TrendingThresholdKwh, paceResult.Value.Elapsed);
 
         // AC #3: "unusually long gap since the last reading" — measured from the most recent
         // *included* reading to now, not a gap between two readings within the walked sequence.
@@ -109,6 +114,7 @@ public class GetCurrentStatus(
             IsLowConfidence: isLowConfidence,
             ElapsedDays: paceResult.Value.Elapsed.TotalDays,
             TrendingThresholdKwh: household.TrendingThresholdKwh,
+            TrendingThresholdToDateKwh: trendingThresholdToDateKwh,
             DaysSinceLastReading: daysSinceLastReading,
             LowConfidenceGapDaysThreshold: household.LowConfidenceGapDays);
     }

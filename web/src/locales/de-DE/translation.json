@@ -326,7 +326,8 @@
       "baselineLabel": "Basiswert bis heute",
       "elapsedDays": "über {{days}} Tage",
       "differenceLabel": "Differenz",
-      "thresholdLabel": "Schwellenwert für Anstieg",
+      "thresholdLabel": "Schwellenwert für Anstieg (pro Jahr)",
+      "thresholdScaledLabel": "Schwellenwert für diesen Zeitraum",
       "lowConfidenceExplanation": "Dein letzter Zählerstand liegt {{days}} Tage zurück — mehr als der Schwellenwert des Haushalts von {{threshold}} Tagen, und keine Smart-Plug-Daten decken die Lücke ab.",
       "loadError": "Die Berechnungsdetails konnten nicht geladen werden — bitte versuche es erneut.",
       "close": "Schließen"

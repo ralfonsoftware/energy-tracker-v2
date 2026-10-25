@@ -184,14 +184,70 @@ public class PatternDetectiveCalculatorTests
         Should.Throw<InvalidOperationException>(() => PatternDetectiveCalculator.ExcludeFromOpenPrompt(readings, Guid.NewGuid()));
     }
 
+    // Story 11.15 (audit C12, FR-6): the threshold is annual, so it is scaled to the elapsed span
+    // like the baseline. Whole-day spans (and 182.5 days) keep the proration exact in decimal, so
+    // the tie cases are real ties. Baseline is 0, so `paceToDateKwh` is the difference.
     [Theory]
-    [InlineData(100, 0, 100, Status.WithinRange)] // exact tie at the threshold — the calmer state (AC #5)
-    [InlineData(100.01, 0, 100, Status.Trending)] // one cent over the threshold (AC #4)
-    [InlineData(0, 0, 100, Status.WithinRange)] // pace exactly equal to baseline
-    [InlineData(-0.01, 0, 100, Status.BelowBaseline)]
-    public void ResolveStatus_applies_the_strictly_greater_than_threshold_rule(
-        decimal paceToDateKwh, decimal baselineToDateKwh, decimal trendingThresholdKwh, Status expected)
+    [InlineData(100, 0, 100, 365, Status.WithinRange)] // full year, factor 1: tie at the threshold is the calmer state
+    [InlineData(100.01, 0, 100, 365, Status.Trending)] // full year: one hundredth over (the pre-11.15 behaviour)
+    [InlineData(20, 0, 100, 73, Status.WithinRange)] // 73 days, factor 0.2: scaled threshold 20, tie
+    [InlineData(20.01, 0, 100, 73, Status.Trending)]
+    [InlineData(50, 0, 100, 73, Status.Trending)] // the unscaled rule called this within range
+    [InlineData(50, 0, 100, 182.5, Status.WithinRange)] // factor 0.5: scaled 50, tie
+    [InlineData(50.01, 0, 100, 182.5, Status.Trending)]
+    [InlineData(-0.01, 0, 100, 73, Status.BelowBaseline)] // any shortfall, no threshold band on this side
+    [InlineData(-500, 0, 100, 73, Status.BelowBaseline)]
+    [InlineData(-0.01, 0, 100, 365, Status.BelowBaseline)]
+    [InlineData(-500, 0, 100, 365, Status.BelowBaseline)]
+    [InlineData(1, 0, 100, 1, Status.WithinRange)] // 1 day: scaled 0.27, floored to 1 kWh, a 1 kWh tie is the calmer state
+    [InlineData(1.01, 0, 100, 1, Status.Trending)] // just over the floor (review decision 1c)
+    [InlineData(0.5, 0, 100, 1, Status.WithinRange)] // rounding noise under one meter step is not a trend
+    [InlineData(0.51, 0, 0.5, 1, Status.Trending)] // annual 0.5: the floor does not exceed the annual figure
+    [InlineData(0, 0, 100, 73, Status.WithinRange)] // pace exactly equal to baseline
+    [InlineData(0, 0, 100, 365, Status.WithinRange)]
+    [InlineData(0, 0, 0, 73, Status.WithinRange)] // zero threshold: no band at all
+    [InlineData(0.01, 0, 0, 73, Status.Trending)]
+    public void ResolveStatus_scales_the_annual_threshold_to_the_elapsed_span(
+        decimal paceToDateKwh, decimal baselineToDateKwh, decimal annualTrendingThresholdKwh, double elapsedDays, Status expected)
     {
-        PatternDetectiveCalculator.ResolveStatus(paceToDateKwh, baselineToDateKwh, trendingThresholdKwh).ShouldBe(expected);
+        PatternDetectiveCalculator.ResolveStatus(
+            paceToDateKwh, baselineToDateKwh, annualTrendingThresholdKwh, TimeSpan.FromDays(elapsedDays)).ShouldBe(expected);
+    }
+
+    // AC #1 "matches WindowedDeviationCalculator": the same readings, baseline, annual threshold and
+    // elapsed span give a Bump exactly when Status is Trending and no deviation exactly when it is
+    // within range. 73 days keeps the tie exact; 14 days (the production Event window) is checked
+    // a hundredth either side, where decimal rounding of 14/365 cannot matter.
+    [Theory]
+    [InlineData(73, 0.01, true)]
+    [InlineData(73, 0, false)]
+    [InlineData(73, -0.01, false)]
+    [InlineData(14, 0.01, true)]
+    [InlineData(14, -0.01, false)]
+    public void ResolveStatus_agrees_with_WindowedDeviationCalculator_about_where_the_threshold_sits(
+        double elapsedDays, decimal offsetFromThresholdKwh, bool expectedDeviation)
+    {
+        const decimal yearlyBaselineKwh = 1000m;
+        const decimal annualThresholdKwh = 100m;
+        var elapsed = TimeSpan.FromDays(elapsedDays);
+        var expectedKwh = BonusDecayNormalizer.NormalizeToDate(yearlyBaselineKwh, bonusTermsKwh: 0m, elapsed);
+        var scaledThresholdKwh = BonusDecayNormalizer.NormalizeToDate(annualThresholdKwh, bonusTermsKwh: 0m, elapsed);
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var readings = new[]
+        {
+            NewReading(1000m, start),
+            NewReading(1000m + expectedKwh + scaledThresholdKwh + offsetFromThresholdKwh, start + elapsed),
+        };
+
+        var pace = PatternDetectiveCalculator.ComputePaceToDate(readings);
+        pace.ShouldNotBeNull();
+        var baselineToDateKwh = BonusDecayNormalizer.NormalizeToDate(yearlyBaselineKwh, bonusTermsKwh: 0m, pace.Value.Elapsed);
+
+        var status = PatternDetectiveCalculator.ResolveStatus(
+            pace.Value.PaceToDateKwh, baselineToDateKwh, annualThresholdKwh, pace.Value.Elapsed);
+        var deviation = WindowedDeviationCalculator.ComputeDeviation(readings, yearlyBaselineKwh, annualThresholdKwh);
+
+        status.ShouldBe(expectedDeviation ? Status.Trending : Status.WithinRange);
+        deviation.ShouldBe(expectedDeviation ? AiPlausibilityDirection.Bump : null);
     }
 }
