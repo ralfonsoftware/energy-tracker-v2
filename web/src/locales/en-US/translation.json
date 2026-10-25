@@ -326,7 +326,8 @@
       "baselineLabel": "Baseline to date",
       "elapsedDays": "over {{days}} days",
       "differenceLabel": "Difference",
-      "thresholdLabel": "Trending threshold",
+      "thresholdLabel": "Trending threshold (per year)",
+      "thresholdScaledLabel": "Threshold for this period",
       "lowConfidenceExplanation": "It's been {{days}} days since your last reading — more than the household's {{threshold}}-day threshold, and no Smart Plug data covers the gap.",
       "loadError": "Couldn't load the calculation detail — try again.",
       "close": "Close"

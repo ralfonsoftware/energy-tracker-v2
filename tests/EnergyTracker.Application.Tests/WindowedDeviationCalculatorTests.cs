@@ -55,6 +55,27 @@ public class WindowedDeviationCalculatorTests
         result.ShouldBe(AiPlausibilityDirection.Dip);
     }
 
+    // Story 11.15 review (decision 1c): a window that covers only a day or two has a prorated
+    // threshold of a fraction of a kWh; the shared floor (TrendingThreshold) keeps rounding noise
+    // from being a Bump or Dip, exactly as it does for Status.
+    [Theory]
+    [InlineData(1.0, null)] // expected 2.74 kWh for one day at 1000/year; +1.0 is at the 1 kWh floor: no deviation
+    [InlineData(1.01, AiPlausibilityDirection.Bump)]
+    [InlineData(-1.0, null)]
+    [InlineData(-1.01, AiPlausibilityDirection.Dip)]
+    public void A_one_day_window_uses_the_one_kWh_floor_not_the_prorated_fraction(double offsetKwh, AiPlausibilityDirection? expected)
+    {
+        var elapsed = TimeSpan.FromDays(1);
+        var expectedKwh = BonusDecayNormalizer.NormalizeToDate(YearlyBaselineKwh, bonusTermsKwh: 0m, elapsed);
+        var readings = new[]
+        {
+            Reading(1000m, WindowStart),
+            Reading(1000m + expectedKwh + (decimal)offsetKwh, WindowStart + elapsed),
+        };
+
+        WindowedDeviationCalculator.ComputeDeviation(readings, YearlyBaselineKwh, TrendingThresholdKwh).ShouldBe(expected);
+    }
+
     [Fact]
     public void Consumption_matching_the_expected_rate_resolves_to_no_deviation()
     {

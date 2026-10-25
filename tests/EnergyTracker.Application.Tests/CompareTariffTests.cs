@@ -37,6 +37,7 @@ public class CompareTariffTests
         IsLowConfidence: false,
         ElapsedDays: elapsedDays,
         TrendingThresholdKwh: 500m,
+        TrendingThresholdToDateKwh: 500m * (decimal)elapsedDays / 365m,
         DaysSinceLastReading: 0,
         LowConfidenceGapDaysThreshold: 60);
 

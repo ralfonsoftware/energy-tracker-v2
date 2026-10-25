@@ -70,16 +70,29 @@ export function StatusDetailDialog({ trigger, open, onOpenChange, locale }: Stat
   }, [open])
 
   const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
+  // The scaled threshold for a short period is a few kWh (or less), so a whole-number format would
+  // show "0 kWh": one decimal from 1 kWh up, two significant digits below it. Display rounding only,
+  // nothing is compared here.
+  const smallKwhFormat = (kwh: number) =>
+    new Intl.NumberFormat(locale, kwh > 0 && kwh < 1 ? { maximumSignificantDigits: 2 } : { maximumFractionDigits: 1 }).format(kwh)
+
+  // Under this scaled threshold a whole-kWh difference can read "0 kWh over pace" beside Trending,
+  // so the sentence uses the same finer format (Story 11.15 review). The card has no threshold and
+  // keeps whole kWh.
+  const FINE_DIFFERENCE_BELOW_KWH = 10
+  const fineDifference =
+    typeof detail?.trendingThresholdToDateKwh === 'number' && detail.trendingThresholdToDateKwh < FINE_DIFFERENCE_BELOW_KWH
 
   let differenceSentence: string | null = null
   if (detail) {
-    const { sign, roundedMagnitude } = computeStatusDifference(detail.paceToDateKwh, detail.baselineToDateKwh)
+    const { sign, roundedMagnitude, rawDifference } = computeStatusDifference(detail.paceToDateKwh, detail.baselineToDateKwh)
+    const kwh = fineDifference ? smallKwhFormat(Math.abs(rawDifference)) : numberFormat.format(roundedMagnitude)
     if (sign === 'on') {
       differenceSentence = t('dashboard.status.body.onPace')
     } else if (sign === 'under') {
-      differenceSentence = t('dashboard.status.body.underPace', { kwh: numberFormat.format(roundedMagnitude) })
+      differenceSentence = t('dashboard.status.body.underPace', { kwh })
     } else {
-      differenceSentence = t('dashboard.status.body.overPace', { kwh: numberFormat.format(roundedMagnitude) })
+      differenceSentence = t('dashboard.status.body.overPace', { kwh })
     }
   }
 
@@ -133,6 +146,15 @@ export function StatusDetailDialog({ trigger, open, onOpenChange, locale }: Stat
                 <span className="text-muted-foreground text-sm">{t('dashboard.statusDetail.thresholdLabel')}</span>
                 <span className="text-sm font-semibold tabular-nums">{numberFormat.format(detail.trendingThresholdKwh)} kWh</span>
               </div>
+              {/* typeof guard: a response from a rolled-back previous revision lacks this field. */}
+              {typeof detail.trendingThresholdToDateKwh === 'number' && (
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-muted-foreground text-sm">{t('dashboard.statusDetail.thresholdScaledLabel')}</span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {smallKwhFormat(detail.trendingThresholdToDateKwh)} kWh
+                  </span>
+                </div>
+              )}
 
               {detail.isLowConfidence && (
                 <p className="text-muted-foreground/80 mt-1 text-xs">

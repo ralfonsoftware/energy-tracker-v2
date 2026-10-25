@@ -138,7 +138,7 @@ Every `id` below, every reference to one (`roomId`, `powerPointId`, `mainMeterId
 | `locale` | string | e.g. `"de-DE"`. |
 | `currency` | string | ISO 4217 code, e.g. `"EUR"`. |
 | `yearlyBaselineKwh` | decimal or null | Unset until the Household configures one. |
-| `trendingThresholdKwh` | decimal | |
+| `trendingThresholdKwh` | decimal | Annual overshoot in kWh per year. Status compares the to-date difference against this value scaled to the elapsed period, and never below 1 kWh (FR-6). |
 | `lowConfidenceGapDays` | int | |
 | `tariffCheckCadenceMonths` | int | |
 | `aiPlausibilityEnabled` | bool | The Household's own on/off toggle. |

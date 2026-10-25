@@ -100,6 +100,7 @@ public static class StatusEndpoints
         BaselineToDateKwh: result.BaselineToDateKwh,
         ElapsedDays: result.ElapsedDays,
         TrendingThresholdKwh: result.TrendingThresholdKwh,
+        TrendingThresholdToDateKwh: result.TrendingThresholdToDateKwh,
         IsLowConfidence: result.IsLowConfidence,
         DaysSinceLastReading: result.DaysSinceLastReading,
         LowConfidenceGapDaysThreshold: result.LowConfidenceGapDaysThreshold);
@@ -129,6 +130,7 @@ public record StatusDetailResponse(
     decimal BaselineToDateKwh,
     double ElapsedDays,
     decimal TrendingThresholdKwh,
+    decimal TrendingThresholdToDateKwh,
     bool IsLowConfidence,
     double DaysSinceLastReading,
     int LowConfidenceGapDaysThreshold);

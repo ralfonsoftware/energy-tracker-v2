@@ -20,6 +20,10 @@ public class Household
     // Story 2.4 AC #4/#5 — unlike YearlyBaselineKwh above, this default IS silently applied at
     // creation (AD-15: household-scoped config, never a code literal, but the PRD's own FR-6
     // wording gives it a real default value up front, unlike the Yearly Baseline preset).
+    //
+    // An annual overshoot, in kWh per year (FR-6, Story 11.15, audit C12): Status compares the
+    // difference to date against this value scaled to the elapsed period (at least 1 kWh,
+    // see TrendingThreshold), not the raw number.
     public decimal TrendingThresholdKwh { get; set; } = 100m;
 
     // Story 2.4 AC #3 — "unusually long gap since the last reading" has no numeric default
