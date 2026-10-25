@@ -342,9 +342,11 @@ stays as it was.
   `null` stays `null`.
 - **The two references without a foreign key** are resolved by their type
   text: `Event.TaggedEntityId` by `TaggedEntityType` (`Room`, `PowerPoint` or
-  `Device`) and `AuditCorrection.EntityId` by `EntityType` (`MeterReading` and
-  `Tariff` are the two the app writes; `Room`, `PowerPoint` and `Device` are
-  followed too if a file carries them). A polymorphic reference that resolves
+  `Device`) and `AuditCorrection.EntityId` by `EntityType` (`MeterReading`,
+  `Tariff` and `SmartPlugReading` are the three the app writes; `Room`,
+  `PowerPoint` and `Device` are followed too if a file carries them). Only the
+  smart plug readings an audit correction points at are tracked, so the
+  re-key never holds a map of the whole reading list. A polymorphic reference that resolves
   to nothing in the file (an unknown type, or an id the file does not contain)
   is **kept as it is**, never dropped and never an error: it is a history
   pointer, not a foreign key.

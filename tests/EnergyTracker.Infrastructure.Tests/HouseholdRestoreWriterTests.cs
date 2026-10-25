@@ -352,7 +352,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         HashSet<Guid> AllIds,
         Guid MainMeterId, Guid RoomId, Guid PowerPointId, Guid DeviceId, Guid[] ReadingIds, Guid[] IdempotencyKeys,
         Guid PowerPointRoomId, Guid DevicePowerPointId, Guid ReadingMainMeterId,
-        Guid PromptReadingId, Guid PromptPreviousReadingId, Guid SmartPlugPowerPointId,
+        Guid PromptReadingId, Guid PromptPreviousReadingId, Guid SmartPlugPowerPointId, Guid SmartPlugReadingId,
         Guid TariffId, Dictionary<string, Guid> TaggedEventTargets, Dictionary<string, Guid> AuditTargets,
         string[] Values,
         int Rooms, int PowerPoints, int Devices, int Readings, int Prompts, int Tariffs, int Events, int SmartPlugReadings, int Snapshots, int Audits);
@@ -389,7 +389,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         return new Graph(
             allIds, mainMeter.Id, room.Id, powerPoint.Id, device.Id, readings.Select(r => r.Id).ToArray(),
             readings.Select(r => r.IdempotencyKey).ToArray(), powerPoint.RoomId, device.PowerPointId, readings[0].MainMeterId,
-            prompt.MeterReadingId, prompt.PreviousMeterReadingId, plug.PowerPointId!.Value, tariff.Id,
+            prompt.MeterReadingId, prompt.PreviousMeterReadingId, plug.PowerPointId!.Value, plug.Id, tariff.Id,
             events.Where(e => e.TaggedEntityId is not null).ToDictionary(e => e.TaggedEntityType!, e => e.TaggedEntityId!.Value),
             audits.ToDictionary(a => a.EntityType, a => a.EntityId), values,
             1, 1, 1, readings.Count, 1, 1, events.Count, 1, 1, audits.Count);
@@ -403,7 +403,8 @@ public abstract class HouseholdRestoreWriterTestsBase
         var powerPoint = data.PowerPoints.Single();
         return data with
         {
-            // The two audit rows cover both polymorphic targets written today (MeterReading and Tariff); the
+            // The three audit rows cover every polymorphic target written today (MeterReading, Tariff and the
+            // smart plug import's SmartPlugReading, which Part R found a restore had left dangling); the
             // three tagged events cover every taggable type (Device, Room, PowerPoint).
             AuditCorrections =
             [
@@ -412,6 +413,11 @@ public abstract class HouseholdRestoreWriterTestsBase
                 {
                     Id = Guid.NewGuid(), HouseholdId = householdId, EntityType = "Tariff", EntityId = data.Tariffs.Single().Id,
                     FieldName = "PricePerKwh", OldValue = "0.30", NewValue = "0.32", CorrectedAtUtc = DateTimeOffset.UtcNow,
+                },
+                new AuditCorrection
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, EntityType = "SmartPlugReading", EntityId = data.SmartPlugReadings.Single().Id,
+                    FieldName = "KwhValue", OldValue = "0.40", NewValue = "0.50", CorrectedAtUtc = DateTimeOffset.UtcNow,
                 },
             ],
             Events =
@@ -453,6 +459,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         g.TaggedEventTargets["PowerPoint"].ShouldBe(g.PowerPointId);
         g.ReadingIds.ShouldContain(g.AuditTargets["MeterReading"]);
         g.AuditTargets["Tariff"].ShouldBe(g.TariffId);
+        g.AuditTargets["SmartPlugReading"].ShouldBe(g.SmartPlugReadingId);
     }
 
     // The C10 case, the one that failed before: household A's export restored into household B on
@@ -483,7 +490,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         graphB.IdempotencyKeys.Intersect(graphABefore.IdempotencyKeys).ShouldBeEmpty();
         (graphB.Rooms, graphB.PowerPoints, graphB.Devices, graphB.Readings, graphB.Prompts, graphB.Tariffs, graphB.Events,
             graphB.SmartPlugReadings, graphB.Snapshots, graphB.Audits)
-            .ShouldBe((1, 1, 1, 2, 1, 1, 4, 1, 1, 2));
+            .ShouldBe((1, 1, 1, 2, 1, 1, 4, 1, 1, 3));
         // Same data, only the ids differ.
         graphB.Values.ShouldBe(graphABefore.Values);
         // A is exactly what it was.
