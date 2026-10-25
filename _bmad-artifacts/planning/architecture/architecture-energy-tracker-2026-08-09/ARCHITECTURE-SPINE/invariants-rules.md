@@ -49,6 +49,7 @@
   - **Cancellation that is not shutdown is a failure.** Only `OperationCanceledException` with `stoppingToken.IsCancellationRequested` may bypass the `Failed` transition.
   - **Missing payload file is a terminal failure, not a retry** (C3 under AD-24).
   - **Failure reasons are stable error codes, not English text** (`job-interrupted`, `job-retries-exhausted`, `upload-missing`), translated by the frontend's i18n catalogs (AD-18) like every other job error.
+  - **[IMPLEMENTED 2026-10-25, Story 11.14, audit C10]** At most one active restore and one active cleanup per Household is a database constraint, not only a check: the filtered unique index `UX_BackgroundJobs_ActiveExclusive` on `BackgroundJobs (HouseholdId, JobType)` for the `JobTypes.ExclusivePerHousehold` types (`RestoreHouseholdData`, `CleanUpSmartPlugImportJobs`) while `Status` is `Queued` or `Processing`, created as raw SQL in each provider's migration (AD-2: a filter is dialect SQL) and absent from the model. `BackgroundJobEnqueueRecorder` turns a rejected insert of a guarded type into `ActiveJobAlreadyExistsException` (found by probing for the active row, never by provider error codes), which restore-confirm answers as `409` and cleanup as `202` with the existing job's id, exactly as their early checks do. The early check (`FailStaleAsync` plus the list) stays as the fast path. `ActiveJobGuardIsDeclaredTests` guards the declaration.
 
 ## AD-7 — Current Status/Reminder are computed at request time; history is persisted at computation time
 
@@ -225,7 +226,7 @@
   - **Export member shape:** each `householdMembers[]` entry is exactly `{ "id", "displayName" }`. The restore validator requires `id`, accepts `displayName` as optional, and accepts and ignores `externalIssuer`/`externalSubjectId`, so pre-change export files still restore.
   - **Versioning (Ralf's decision, 2026-10-10):** `formatVersion` stays `"v2"`. The restore target must run the **same or a newer release** than the source; an older release rejects a newer export through its own validator (an explicit validation failure, never a partial restore). Both docs state this.
   - **Move-to-new-hosting:** after a restore completes, the UI lists the backup's member display names ("people in this backup") next to the existing invite flow. It does not compare them with current members: display names are nullable, editable and not identities. Re-invitation is the only path to access; nothing about access is reconstructed from the file.
-  - **Residual file-controlled data is data, not access:** the AI-consent flag, audit rows and entity ids still come from the file, and none of them grants or removes access.
+  - **Residual file-controlled data is data, not access:** the AI-consent flag, audit rows and entity ids still come from the file, and none of them grants or removes access. **[AMENDED 2026-10-25, Story 11.14]** Entity ids no longer come from the file: a restore assigns every entity a new id and rewrites every reference to match (`HouseholdRestoreRekey`), so a file can never collide with another Household's rows.
   - Test: restoring a file whose member list omits the caller, or lists foreign identities, leaves the Household's membership unchanged.
 
 ## AD-26 — Member trust model: all members fully trusted; removal exists; invites are revocable

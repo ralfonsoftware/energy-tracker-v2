@@ -184,7 +184,10 @@ public static class SmartPlugImportEndpoints
             // retry (see the poll-tolerance fix above) would enqueue a second concurrent cleanup —
             // reintroducing exactly the DB contention this three-round incident has been chasing.
             // Reusing the still-active job is idempotent from the caller's point of view: it's the
-            // same 202+jobId contract either way, and the client polls the same endpoint.
+            // same 202+jobId contract either way, and the client polls the same endpoint. This check is
+            // the shortcut; the filtered unique index on BackgroundJobs is the guarantee (Story 11.14,
+            // AD-6): two requests that both pass it cannot both insert, and the loser answers with the
+            // winner's job id below.
             //
             // Story 11.2: a cleanup row orphaned by a restart is failed first (stale heartbeat), so
             // it no longer pins this endpoint to a job that will never finish.
@@ -199,11 +202,20 @@ public static class SmartPlugImportEndpoints
             }
 
             var jobId = Guid.NewGuid();
-            await jobQueue.EnqueueAsync(
-                new JobEnvelope<CleanUpSmartPlugImportJobsPayload>(
-                    jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, new CleanUpSmartPlugImportJobsPayload(deleteAll),
-                    QueuedByHouseholdMemberId: householdAccessor.HouseholdMemberId),
-                cancellationToken);
+            try
+            {
+                await jobQueue.EnqueueAsync(
+                    new JobEnvelope<CleanUpSmartPlugImportJobsPayload>(
+                        jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, new CleanUpSmartPlugImportJobsPayload(deleteAll),
+                        QueuedByHouseholdMemberId: householdAccessor.HouseholdMemberId),
+                    cancellationToken);
+            }
+            catch (ActiveJobAlreadyExistsException ex)
+            {
+                // Lost the race the early check cannot see: the same idempotent answer, with the id of the
+                // cleanup that won.
+                return Results.Accepted($"/api/jobs/{ex.ActiveJobId}", new SmartPlugImportJobCleanupResponse(ex.ActiveJobId));
+            }
 
             return Results.Accepted($"/api/jobs/{jobId}", new SmartPlugImportJobCleanupResponse(jobId));
         });

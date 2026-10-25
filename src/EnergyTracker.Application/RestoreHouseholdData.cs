@@ -8,7 +8,7 @@ namespace EnergyTracker.Application;
 // never the file bytes (Azure Storage Queue caps a message at 64 KB).
 public record RestoreHouseholdDataPayload(string TempFilePath, string OriginalFileName);
 
-/// <summary>Wholesale-replaces the current Household's data with a previously-validated v2 export file (AC #1, #4, #5, #6) — a restore/migration, never a partial-merge edit; never calls IAuditCorrectionRecorder (AD-11's explicit carve-out); never writes HouseholdMember rows, so a file can neither grant nor revoke access (AD-25).</summary>
+/// <summary>Wholesale-replaces the current Household's data with a previously-validated v2 export file (AC #1, #4, #5, #6) — a restore/migration, never a partial-merge edit; assigns new ids and remaps references so a file can never collide with another Household (audit C10); never calls IAuditCorrectionRecorder (AD-11's explicit carve-out); never writes HouseholdMember rows, so a file can neither grant nor revoke access (AD-25).</summary>
 public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -50,27 +50,34 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
         }
     }
 
-    private static HouseholdRestoreData ToRestoreData(Guid householdId, HouseholdExportResult importData) => new(
-        householdId,
-        new HouseholdSettingsPatch(
-            importData.Household.Locale,
-            importData.Household.Currency,
-            importData.Household.YearlyBaselineKwh,
-            importData.Household.TrendingThresholdKwh,
-            importData.Household.LowConfidenceGapDays,
-            importData.Household.TariffCheckCadenceMonths,
-            importData.Household.AiPlausibilityEnabled),
-        importData.MainMeter is { } mainMeter ? ToEntity(mainMeter, householdId) : null,
-        importData.Rooms.Select(r => ToEntity(r, householdId)).ToList(),
-        importData.PowerPoints.Select(p => ToEntity(p, householdId)).ToList(),
-        importData.Devices.Select(d => ToEntity(d, householdId)).ToList(),
-        importData.MeterReadings.Select(r => ToEntity(r, householdId)).ToList(),
-        importData.MeterRegressionPrompts.Select(p => ToEntity(p, householdId)).ToList(),
-        importData.Tariffs.Select(t => ToEntity(t, householdId)).ToList(),
-        importData.Events.Select(e => ToEntity(e, householdId)).ToList(),
-        importData.SmartPlugReadings.Select(r => ToEntity(r, householdId)).ToList(),
-        importData.StatusSnapshots.Select(s => ToEntity(s, householdId)).ToList(),
-        importData.AuditCorrections.Select(c => ToEntity(c, householdId)).ToList());
+    // Story 11.14 (audit C10): every entity gets a new id and every reference follows its target before an
+    // entity is built, so ToEntity below only copies (it never decides an id). One category at a time:
+    // the DTO lists are materialized already, so no second copy of any list is made.
+    private static HouseholdRestoreData ToRestoreData(Guid householdId, HouseholdExportResult importData)
+    {
+        var rekey = new HouseholdRestoreRekey(importData);
+        return new(
+            householdId,
+            new HouseholdSettingsPatch(
+                importData.Household.Locale,
+                importData.Household.Currency,
+                importData.Household.YearlyBaselineKwh,
+                importData.Household.TrendingThresholdKwh,
+                importData.Household.LowConfidenceGapDays,
+                importData.Household.TariffCheckCadenceMonths,
+                importData.Household.AiPlausibilityEnabled),
+            importData.MainMeter is { } mainMeter ? ToEntity(rekey.Rekey(mainMeter), householdId) : null,
+            importData.Rooms.Select(r => ToEntity(rekey.Rekey(r), householdId)).ToList(),
+            importData.PowerPoints.Select(p => ToEntity(rekey.Rekey(p), householdId)).ToList(),
+            importData.Devices.Select(d => ToEntity(rekey.Rekey(d), householdId)).ToList(),
+            importData.MeterReadings.Select(r => ToEntity(rekey.Rekey(r), householdId)).ToList(),
+            importData.MeterRegressionPrompts.Select(p => ToEntity(rekey.Rekey(p), householdId)).ToList(),
+            importData.Tariffs.Select(t => ToEntity(rekey.Rekey(t), householdId)).ToList(),
+            importData.Events.Select(e => ToEntity(rekey.Rekey(e), householdId)).ToList(),
+            importData.SmartPlugReadings.Select(r => ToEntity(rekey.Rekey(r), householdId)).ToList(),
+            importData.StatusSnapshots.Select(s => ToEntity(rekey.Rekey(s), householdId)).ToList(),
+            importData.AuditCorrections.Select(c => ToEntity(rekey.Rekey(c), householdId)).ToList());
+    }
 
     private static MainMeter ToEntity(MainMeterExportDto dto, Guid householdId) => new()
     {
@@ -89,8 +96,8 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
         ArchivedAt = dto.ArchivedAt,
     };
 
-    // RoomId is reused byte-for-byte from the file (Dev Notes "Restore write-target design") — the
-    // file's internal FK graph is already self-consistent; only HouseholdId is ever remapped.
+    // The dto handed in here is already re-keyed (HouseholdRestoreRekey): Id and RoomId are the new
+    // values, HouseholdId is the current Household's.
     private static PowerPoint ToEntity(PowerPointExportDto dto, Guid householdId) => new()
     {
         Id = dto.Id,

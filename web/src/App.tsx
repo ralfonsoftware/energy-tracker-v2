@@ -115,7 +115,10 @@ function App() {
   // Single source of truth for "what's currently open" (AC #7): re-polling after every save/
   // resolve, rather than trusting the create-reading response, mirrors the "drill-down data is
   // always a separate endpoint" convention already used for Status.
-  const refreshOpenRegressionPrompt = useCallback(async () => {
+  // clearOnError is for a caller that knows the prompt held here is stale (Story 11.14: a restore gave
+  // every prompt a new id), where keeping it on a failed refetch would leave a prompt that cannot be
+  // resolved on screen.
+  const refreshOpenRegressionPrompt = useCallback(async (options?: { clearOnError?: boolean }) => {
     try {
       const prompt = await fetchOpenMeterRegressionPrompt()
       setOpenRegressionPrompt(prompt)
@@ -128,6 +131,9 @@ function App() {
     } catch {
       // Best-effort — a transient failure here just means the prompt (if any) surfaces on the
       // next poll/mount instead of immediately; it must not block the rest of the dashboard.
+      if (options?.clearOnError) {
+        setOpenRegressionPrompt(null)
+      }
     }
   }, [])
 
@@ -311,6 +317,9 @@ function App() {
           onBack={() => setView('dashboard')}
           onTrendHistoryClick={() => setView('trendHistory')}
           onTariffRadarClick={() => setView('tariffRadar')}
+          // Story 11.14: a restore gives every meter regression prompt a new id, and the open one is held
+          // here, above the page, so it is reloaded rather than resolved by an id that no longer exists.
+          onDataRestored={() => void refreshOpenRegressionPrompt({ clearOnError: true })}
         />
       )
     }

@@ -7,11 +7,13 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Domain;
+using EnergyTracker.Infrastructure;
 using EnergyTracker.Infrastructure.Adapters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Shouldly;
@@ -361,6 +363,68 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
             .Content.ReadFromJsonAsync<JobStatusResponse>(TestContext.Current.CancellationToken);
         stale!.Status.ShouldBe("failed");
         stale.ErrorMessage.ShouldBe("job-interrupted");
+    }
+
+    // Story 11.14 (audit C10, AC #2/#8b): two confirms with different tokens that BOTH get past the early
+    // check (it is made blind, as it is in the real race) reach the enqueue together. The database index is
+    // the arbiter: exactly one answers 202, the other the same 409 the early check gives, exactly one active
+    // row exists, and the loser's temp file is gone (the winner's stays for its job).
+    [Fact]
+    public async Task Two_confirms_with_different_tokens_past_a_blind_early_check_answer_one_202_and_one_409_and_leave_one_active_row_and_one_file()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var gate = new ParallelEnqueueGate(JobTypes.RestoreHouseholdData, callers: 2);
+        using var directory = new UploadDirectory();
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton(new HouseholdImportUploadSettings(directory.Path, HouseholdImportEndpoints.MaxFileSizeBytes));
+            gate.Install(services);
+        }));
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Requested-With", "fetch");
+        client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.IssuerHeader, TestAuthHandler.DefaultIssuer);
+        var created = await (await client.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, ct))
+            .Content.ReadFromJsonAsync<HouseholdResponse>(ct);
+        var export = await ExportBytesAsync(client);
+
+        try
+        {
+            var first = await UploadValidAsync(client, export);
+            var firstConfirm = client.PostAsync($"/api/household-import/{first.Token}/confirm", null, ct);
+            // The first token is consumed and its request is parked at the blind check, so the registry
+            // takes a second pending upload for the same Household.
+            await gate.WaitForArrivalsAsync(1, ct);
+            var second = await UploadValidAsync(client, export);
+            var secondConfirm = client.PostAsync($"/api/household-import/{second.Token}/confirm", null, ct);
+
+            var responses = await Task.WhenAll(firstConfirm, secondConfirm);
+
+            responses.Select(r => (int)r.StatusCode).Order().ShouldBe([(int)HttpStatusCode.Accepted, (int)HttpStatusCode.Conflict]);
+            var loser = responses.Single(r => r.StatusCode == HttpStatusCode.Conflict);
+            (await loser.Content.ReadAsStringAsync(ct)).ShouldContain("A restore is already in progress for this Household");
+            var winner = await responses.Single(r => r.StatusCode == HttpStatusCode.Accepted)
+                .Content.ReadFromJsonAsync<HouseholdImportConfirmResponse>(ct);
+            using (var scope = host.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
+                var active = await dbContext.BackgroundJobs.IgnoreQueryFilters().AsNoTracking()
+                    .Where(j => j.HouseholdId == created!.Id && j.JobType == JobTypes.RestoreHouseholdData
+                        && (j.Status == BackgroundJobStatus.Queued || j.Status == BackgroundJobStatus.Processing))
+                    .ToListAsync(ct);
+                active.ShouldHaveSingleItem().Id.ShouldBe(winner!.JobId);
+            }
+
+            // The winner's file waits for its held job; the loser's file was deleted by the confirm path.
+            directory.Files.Length.ShouldBe(1);
+
+            gate.ReleaseJobs();
+            (await PollJobToTerminalAsync(client, winner.JobId)).Status.ShouldBe("completed");
+        }
+        finally
+        {
+            gate.ReleaseJobs();
+        }
     }
 
     // --- Story 11.10 (audit S4): the temp file must never outlive a request that did not end in a

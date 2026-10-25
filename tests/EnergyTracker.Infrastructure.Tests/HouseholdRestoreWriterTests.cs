@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
@@ -316,6 +317,236 @@ public abstract class HouseholdRestoreWriterTestsBase
         await writer.RestoreAsync(data, TestContext.Current.CancellationToken);
 
         (await dbContext.AuditCorrections.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    // Story 11.14 (audit C10): the export is read through the real reader and written to a file the
+    // way a member's download would be, so the test covers the whole path and not a hand-built graph.
+    private static async Task<string> ExportToFileAsync(EnergyTrackerDbContext dbContext, Guid householdId, CancellationToken cancellationToken)
+    {
+        var stream = await new ExportHouseholdData(new HouseholdExportReader(dbContext), new AiPlausibilityBackendOptions(false, null, "")).ExecuteAsync(householdId, cancellationToken);
+
+        async Task<List<T>> Drain<T>(IAsyncEnumerable<T> source)
+        {
+            var list = new List<T>();
+            await foreach (var item in source.WithCancellation(cancellationToken))
+            {
+                list.Add(item);
+            }
+
+            return list;
+        }
+
+        var result = new HouseholdExportResult(
+            stream.FormatVersion, stream.ExportedAtUtc, stream.Household, await Drain(stream.HouseholdMembers), stream.MainMeter,
+            await Drain(stream.MeterReadings), await Drain(stream.MeterRegressionPrompts), await Drain(stream.Tariffs),
+            await Drain(stream.Events), await Drain(stream.Rooms), await Drain(stream.PowerPoints), await Drain(stream.Devices),
+            await Drain(stream.SmartPlugReadings), await Drain(stream.StatusSnapshots), await Drain(stream.AuditCorrections));
+
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)), cancellationToken);
+        return path;
+    }
+
+    // Everything a Household holds, reduced to ids and references so two Households can be compared.
+    private sealed record Graph(
+        HashSet<Guid> AllIds,
+        Guid MainMeterId, Guid RoomId, Guid PowerPointId, Guid DeviceId, Guid[] ReadingIds, Guid[] IdempotencyKeys,
+        Guid PowerPointRoomId, Guid DevicePowerPointId, Guid ReadingMainMeterId,
+        Guid PromptReadingId, Guid PromptPreviousReadingId, Guid SmartPlugPowerPointId,
+        Guid TariffId, Dictionary<string, Guid> TaggedEventTargets, Dictionary<string, Guid> AuditTargets,
+        string[] Values,
+        int Rooms, int PowerPoints, int Devices, int Readings, int Prompts, int Tariffs, int Events, int SmartPlugReadings, int Snapshots, int Audits);
+
+    private static async Task<Graph> ReadGraphAsync(EnergyTrackerDbContext dbContext, CancellationToken ct)
+    {
+        var mainMeter = await dbContext.MainMeters.AsNoTracking().SingleAsync(ct);
+        var room = await dbContext.Rooms.AsNoTracking().SingleAsync(ct);
+        var powerPoint = await dbContext.PowerPoints.AsNoTracking().SingleAsync(ct);
+        var device = await dbContext.Devices.AsNoTracking().SingleAsync(ct);
+        var readings = await dbContext.MeterReadings.AsNoTracking().OrderBy(r => r.KwhValue).ToListAsync(ct);
+        var prompt = await dbContext.MeterRegressionPrompts.AsNoTracking().SingleAsync(ct);
+        var tariff = await dbContext.Tariffs.AsNoTracking().SingleAsync(ct);
+        var events = await dbContext.Events.AsNoTracking().ToListAsync(ct);
+        var plug = await dbContext.SmartPlugReadings.AsNoTracking().SingleAsync(ct);
+        var snapshot = await dbContext.StatusSnapshots.AsNoTracking().SingleAsync(ct);
+        var audits = await dbContext.AuditCorrections.AsNoTracking().ToListAsync(ct);
+
+        var allIds = new HashSet<Guid>(
+            new[] { mainMeter.Id, room.Id, powerPoint.Id, device.Id, tariff.Id, plug.Id, snapshot.Id, prompt.Id }
+                .Concat(readings.Select(r => r.Id)).Concat(events.Select(e => e.Id)).Concat(audits.Select(a => a.Id)));
+
+        // Every field that is not an id or a reference, so a restore into another Household can be compared
+        // with its source row by row (AC #4: same field values, only the ids differ).
+        var values = new[] { $"room:{room.Name}", $"powerPoint:{powerPoint.Name}", $"device:{device.Name}" }
+            .Concat(readings.Select(r => $"reading:{r.KwhValue}:{r.ReadingTimestamp.UtcTicks}"))
+            .Append($"tariff:{tariff.MonthlyBaseFee}:{tariff.PricePerKwh}:{tariff.Currency}:{tariff.ContractPeriodMonths}:{tariff.ContractStartDate.UtcTicks}")
+            .Append($"plug:{plug.RoomName}:{plug.PowerPointName}:{plug.DeviceName}:{plug.KwhValue}:{plug.IntervalStart.UtcTicks}:{plug.IntervalEnd.UtcTicks}")
+            .Append($"snapshot:{snapshot.Status}:{snapshot.PaceToDateKwh}:{snapshot.BaselineToDateKwh}:{snapshot.IsLowConfidence}")
+            .Concat(events.Select(e => $"event:{e.Description}:{e.TaggedEntityType}:{e.TaggedEntityName}:{e.OccurredAt.UtcTicks}"))
+            .Concat(audits.Select(a => $"audit:{a.EntityType}:{a.FieldName}:{a.OldValue}:{a.NewValue}"))
+            .OrderBy(v => v, StringComparer.Ordinal)
+            .ToArray();
+        return new Graph(
+            allIds, mainMeter.Id, room.Id, powerPoint.Id, device.Id, readings.Select(r => r.Id).ToArray(),
+            readings.Select(r => r.IdempotencyKey).ToArray(), powerPoint.RoomId, device.PowerPointId, readings[0].MainMeterId,
+            prompt.MeterReadingId, prompt.PreviousMeterReadingId, plug.PowerPointId!.Value, tariff.Id,
+            events.Where(e => e.TaggedEntityId is not null).ToDictionary(e => e.TaggedEntityType!, e => e.TaggedEntityId!.Value),
+            audits.ToDictionary(a => a.EntityType, a => a.EntityId), values,
+            1, 1, 1, readings.Count, 1, 1, events.Count, 1, 1, audits.Count);
+    }
+
+    private static HouseholdRestoreData BuildRichRestoreData(Guid householdId)
+    {
+        var data = BuildRestoreData(householdId);
+        var device = data.Devices.Single();
+        var room = data.Rooms.Single();
+        var powerPoint = data.PowerPoints.Single();
+        return data with
+        {
+            // The two audit rows cover both polymorphic targets written today (MeterReading and Tariff); the
+            // three tagged events cover every taggable type (Device, Room, PowerPoint).
+            AuditCorrections =
+            [
+                data.AuditCorrections.Single(),
+                new AuditCorrection
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, EntityType = "Tariff", EntityId = data.Tariffs.Single().Id,
+                    FieldName = "PricePerKwh", OldValue = "0.30", NewValue = "0.32", CorrectedAtUtc = DateTimeOffset.UtcNow,
+                },
+            ],
+            Events =
+            [
+                new Event
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, Description = "room event", OccurredAt = DateTimeOffset.UtcNow,
+                    CreatedAtUtc = DateTimeOffset.UtcNow, TaggedEntityType = "Room", TaggedEntityId = room.Id, TaggedEntityName = room.Name,
+                },
+                new Event
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, Description = "power point event", OccurredAt = DateTimeOffset.UtcNow,
+                    CreatedAtUtc = DateTimeOffset.UtcNow, TaggedEntityType = "PowerPoint", TaggedEntityId = powerPoint.Id, TaggedEntityName = powerPoint.Name,
+                },
+                new Event
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, Description = "kettle event", OccurredAt = DateTimeOffset.UtcNow,
+                    CreatedAtUtc = DateTimeOffset.UtcNow, TaggedEntityType = "Device", TaggedEntityId = device.Id, TaggedEntityName = device.Name,
+                },
+                new Event
+                {
+                    Id = Guid.NewGuid(), HouseholdId = householdId, Description = "untagged", OccurredAt = DateTimeOffset.UtcNow,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                },
+            ],
+        };
+    }
+
+    private static void ShouldBeInternallyConsistent(Graph g)
+    {
+        g.PowerPointRoomId.ShouldBe(g.RoomId);
+        g.DevicePowerPointId.ShouldBe(g.PowerPointId);
+        g.ReadingMainMeterId.ShouldBe(g.MainMeterId);
+        g.ReadingIds.ShouldContain(g.PromptReadingId);
+        g.ReadingIds.ShouldContain(g.PromptPreviousReadingId);
+        g.SmartPlugPowerPointId.ShouldBe(g.PowerPointId);
+        g.TaggedEventTargets["Device"].ShouldBe(g.DeviceId);
+        g.TaggedEventTargets["Room"].ShouldBe(g.RoomId);
+        g.TaggedEventTargets["PowerPoint"].ShouldBe(g.PowerPointId);
+        g.ReadingIds.ShouldContain(g.AuditTargets["MeterReading"]);
+        g.AuditTargets["Tariff"].ShouldBe(g.TariffId);
+    }
+
+    // The C10 case, the one that failed before: household A's export restored into household B on
+    // the same database while A still exists. Every id and every idempotency key of the file is
+    // already taken by A, so a restore that kept them died on the first insert chunk.
+    [Fact]
+    public async Task Restoring_Household_As_export_into_Household_B_while_A_still_exists_succeeds_under_new_ids_and_leaves_A_untouched()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdA = Guid.NewGuid();
+        var householdB = Guid.NewGuid();
+        await using var contextA = await OpenMigratedDbContextAsync(householdA, ct);
+        await using var contextB = await OpenMigratedDbContextAsync(householdB, ct);
+        contextA.Households.Add(NewHousehold(householdA));
+        contextB.Households.Add(NewHousehold(householdB));
+        await contextA.SaveChangesAsync(ct);
+        await contextB.SaveChangesAsync(ct);
+        await new HouseholdRestoreWriter(contextA).RestoreAsync(BuildRichRestoreData(householdA), ct);
+        var graphABefore = await ReadGraphAsync(contextA, ct);
+        var file = await ExportToFileAsync(contextA, householdA, ct);
+
+        await new RestoreHouseholdData(new HouseholdRestoreWriter(contextB))
+            .ExecuteAsync(householdB, new RestoreHouseholdDataPayload(file, "export.json"), ct);
+
+        var graphB = await ReadGraphAsync(contextB, ct);
+        ShouldBeInternallyConsistent(graphB);
+        graphB.AllIds.Overlaps(graphABefore.AllIds).ShouldBeFalse();
+        graphB.IdempotencyKeys.Intersect(graphABefore.IdempotencyKeys).ShouldBeEmpty();
+        (graphB.Rooms, graphB.PowerPoints, graphB.Devices, graphB.Readings, graphB.Prompts, graphB.Tariffs, graphB.Events,
+            graphB.SmartPlugReadings, graphB.Snapshots, graphB.Audits)
+            .ShouldBe((1, 1, 1, 2, 1, 1, 4, 1, 1, 2));
+        // Same data, only the ids differ.
+        graphB.Values.ShouldBe(graphABefore.Values);
+        // A is exactly what it was.
+        var graphAAfter = await ReadGraphAsync(contextA, ct);
+        graphAAfter.ShouldBeEquivalentTo(graphABefore);
+        (await contextA.Households.AsNoTracking().SingleAsync(h => h.Id == householdA, ct)).Locale.ShouldBe("de-DE");
+    }
+
+    // A second restore of the same file gives the same result with different ids again — retry stays
+    // safe (docs/data-import-restore.md "Retrying is safe").
+    [Fact]
+    public async Task Restoring_the_same_file_twice_into_Household_B_succeeds_both_times_under_different_ids()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdA = Guid.NewGuid();
+        var householdB = Guid.NewGuid();
+        await using var contextA = await OpenMigratedDbContextAsync(householdA, ct);
+        await using var contextB = await OpenMigratedDbContextAsync(householdB, ct);
+        contextA.Households.Add(NewHousehold(householdA));
+        contextB.Households.Add(NewHousehold(householdB));
+        await contextA.SaveChangesAsync(ct);
+        await contextB.SaveChangesAsync(ct);
+        await new HouseholdRestoreWriter(contextA).RestoreAsync(BuildRichRestoreData(householdA), ct);
+        var file = await ExportToFileAsync(contextA, householdA, ct);
+        var copy = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+        File.Copy(file, copy);
+        var restore = new RestoreHouseholdData(new HouseholdRestoreWriter(contextB));
+
+        await restore.ExecuteAsync(householdB, new RestoreHouseholdDataPayload(file, "export.json"), ct);
+        var first = await ReadGraphAsync(contextB, ct);
+        await restore.ExecuteAsync(householdB, new RestoreHouseholdDataPayload(copy, "export.json"), ct);
+        var second = await ReadGraphAsync(contextB, ct);
+
+        ShouldBeInternallyConsistent(first);
+        ShouldBeInternallyConsistent(second);
+        first.AllIds.Overlaps(second.AllIds).ShouldBeFalse();
+        second.Values.ShouldBe(first.Values);
+    }
+
+    // Household B restoring its own export keeps working too (the "own backup" case), now under new ids.
+    [Fact]
+    public async Task A_Household_restoring_its_own_export_ends_with_the_same_data_under_new_ids()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, ct);
+        dbContext.Households.Add(NewHousehold(householdId));
+        await dbContext.SaveChangesAsync(ct);
+        await new HouseholdRestoreWriter(dbContext).RestoreAsync(BuildRichRestoreData(householdId), ct);
+        var before = await ReadGraphAsync(dbContext, ct);
+        var file = await ExportToFileAsync(dbContext, householdId, ct);
+
+        await new RestoreHouseholdData(new HouseholdRestoreWriter(dbContext))
+            .ExecuteAsync(householdId, new RestoreHouseholdDataPayload(file, "export.json"), ct);
+
+        var after = await ReadGraphAsync(dbContext, ct);
+        ShouldBeInternallyConsistent(after);
+        after.AllIds.Overlaps(before.AllIds).ShouldBeFalse();
+        after.Values.ShouldBe(before.Values);
+        (after.Rooms, after.PowerPoints, after.Devices, after.Readings, after.Prompts, after.Tariffs, after.Events,
+            after.SmartPlugReadings, after.Snapshots, after.Audits)
+            .ShouldBe((before.Rooms, before.PowerPoints, before.Devices, before.Readings, before.Prompts, before.Tariffs, before.Events,
+                before.SmartPlugReadings, before.Snapshots, before.Audits));
     }
 }
 

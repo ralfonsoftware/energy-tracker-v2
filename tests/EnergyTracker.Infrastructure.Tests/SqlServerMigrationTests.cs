@@ -550,4 +550,125 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.HouseholdInvites.Add(new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, Token = "legacytoken000000000000000001", CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) });
         await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
     }
+
+    // --- Story 11.14 (AD-6, audit C10): AddActiveJobGuard fails the surplus active restore/cleanup rows of a
+    // Household (keeping the newest by CreatedAtUtc, then Id) and then creates the filtered unique index. ---
+
+    private const string ActiveJobGuardMigrationSuffix = "_AddActiveJobGuard";
+
+    private static (string Previous, string Guard) ResolveActiveJobGuardMigration(EnergyTrackerDbContext dbContext)
+    {
+        var migrations = dbContext.Database.GetMigrations().ToList();
+        var guard = migrations.Single(m => m.EndsWith(ActiveJobGuardMigrationSuffix, StringComparison.Ordinal));
+        return (migrations[migrations.IndexOf(guard) - 1], guard);
+    }
+
+    private static BackgroundJob Job(
+        Guid id, Guid householdId, string jobType, BackgroundJobStatus status, DateTimeOffset createdAt, DateTimeOffset? completedAt = null) => new()
+    {
+        Id = id, HouseholdId = householdId, JobType = jobType, Status = status, CreatedAtUtc = createdAt, CompletedAtUtc = completedAt,
+    };
+
+    private static Guid Id(int n) => new($"00000000-0000-0000-0000-{n:D12}");
+
+    private static async Task SeedHouseholdsAsync(EnergyTrackerDbContext dbContext, CancellationToken cancellationToken, params Guid[] householdIds)
+    {
+        foreach (var householdId in householdIds)
+        {
+            dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    [Fact]
+    public async Task AddActiveJobGuard_migration_fails_only_the_surplus_active_rows_keeps_the_newest_and_then_creates_the_index()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var h1 = Guid.NewGuid();
+        var h2 = Guid.NewGuid();
+        var t0 = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+        await using var dbContext = NewDeviceNameKeyDbContext(h1);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var (previous, guard) = ResolveActiveJobGuardMigration(dbContext);
+        await migrator.MigrateAsync(previous, ct);
+        await SeedHouseholdsAsync(dbContext, ct, h1, h2);
+        dbContext.BackgroundJobs.AddRange(
+            // H1 restore: three active rows, the Processing one is the newest and survives.
+            Job(Id(1), h1, "RestoreHouseholdData", BackgroundJobStatus.Queued, t0),
+            Job(Id(2), h1, "RestoreHouseholdData", BackgroundJobStatus.Queued, t0.AddMinutes(1)),
+            Job(Id(3), h1, "RestoreHouseholdData", BackgroundJobStatus.Processing, t0.AddMinutes(2)),
+            // H1 cleanup: same CreatedAtUtc, so the greater Id survives.
+            Job(Id(4), h1, "CleanUpSmartPlugImportJobs", BackgroundJobStatus.Queued, t0),
+            Job(Id(5), h1, "CleanUpSmartPlugImportJobs", BackgroundJobStatus.Queued, t0),
+            // H2: one active restore, nothing to fail.
+            Job(Id(6), h2, "RestoreHouseholdData", BackgroundJobStatus.Queued, t0),
+            // Terminal rows of a guarded type and several active rows of unguarded types: never touched.
+            Job(Id(7), h1, "RestoreHouseholdData", BackgroundJobStatus.Completed, t0.AddMinutes(-30), t0.AddMinutes(-29)),
+            Job(Id(8), h1, "RestoreHouseholdData", BackgroundJobStatus.Failed, t0.AddMinutes(-20), t0.AddMinutes(-19)),
+            Job(Id(9), h1, "ProcessSmartPlugImport", BackgroundJobStatus.Queued, t0),
+            Job(Id(10), h1, "ProcessSmartPlugImport", BackgroundJobStatus.Processing, t0.AddMinutes(1)));
+        await dbContext.SaveChangesAsync(ct);
+        dbContext.ChangeTracker.Clear();
+
+        await migrator.MigrateAsync(guard, ct);
+
+        var rows = await dbContext.BackgroundJobs.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(j => j.Id, ct);
+        foreach (var failed in new[] { Id(1), Id(2), Id(4) })
+        {
+            rows[failed].Status.ShouldBe(BackgroundJobStatus.Failed);
+            rows[failed].ErrorMessage.ShouldBe("job-interrupted");
+            rows[failed].CompletedAtUtc.ShouldNotBeNull();
+        }
+
+        foreach (var kept in new[] { Id(3), Id(5), Id(6), Id(9), Id(10) })
+        {
+            rows[kept].Status.ShouldNotBe(BackgroundJobStatus.Failed);
+            rows[kept].ErrorMessage.ShouldBeNull();
+            rows[kept].CompletedAtUtc.ShouldBeNull();
+        }
+
+        rows[Id(3)].Status.ShouldBe(BackgroundJobStatus.Processing);
+        rows[Id(7)].Status.ShouldBe(BackgroundJobStatus.Completed);
+        rows[Id(7)].CompletedAtUtc.ShouldBe(t0.AddMinutes(-29));
+        rows[Id(8)].Status.ShouldBe(BackgroundJobStatus.Failed);
+        rows[Id(8)].ErrorMessage.ShouldBeNull();
+        rows.Count.ShouldBe(10);
+        (await CountActiveJobGuardIndexAsync(dbContext, ct)).ShouldBe(1);
+
+        // The index is live: a second active restore for H1 is now rejected by the database itself.
+        dbContext.BackgroundJobs.Add(Job(Id(11), h1, "RestoreHouseholdData", BackgroundJobStatus.Queued, t0.AddMinutes(5)));
+        await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(ct));
+    }
+
+    [Fact]
+    public async Task AddActiveJobGuard_migration_updates_nothing_on_a_database_without_duplicates()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var h1 = Guid.NewGuid();
+        var t0 = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+        await using var dbContext = NewDeviceNameKeyDbContext(h1);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var (previous, guard) = ResolveActiveJobGuardMigration(dbContext);
+        await migrator.MigrateAsync(previous, ct);
+        await SeedHouseholdsAsync(dbContext, ct, h1);
+        dbContext.BackgroundJobs.AddRange(
+            Job(Id(1), h1, "RestoreHouseholdData", BackgroundJobStatus.Processing, t0),
+            Job(Id(2), h1, "CleanUpSmartPlugImportJobs", BackgroundJobStatus.Queued, t0),
+            Job(Id(3), h1, "RestoreHouseholdData", BackgroundJobStatus.Completed, t0.AddMinutes(-5), t0.AddMinutes(-4)));
+        await dbContext.SaveChangesAsync(ct);
+        dbContext.ChangeTracker.Clear();
+
+        await migrator.MigrateAsync(guard, ct);
+
+        var rows = await dbContext.BackgroundJobs.IgnoreQueryFilters().AsNoTracking().OrderBy(j => j.CreatedAtUtc).ThenBy(j => j.Id).ToListAsync(ct);
+        rows.Select(j => j.Status).OrderBy(s => s).ShouldBe([BackgroundJobStatus.Processing, BackgroundJobStatus.Completed, BackgroundJobStatus.Queued]);
+        rows.ShouldAllBe(j => j.ErrorMessage == null);
+        (await CountActiveJobGuardIndexAsync(dbContext, ct)).ShouldBe(1);
+    }
+
+    private static Task<int> CountActiveJobGuardIndexAsync(EnergyTrackerDbContext dbContext, CancellationToken cancellationToken) =>
+        dbContext.Database.SqlQueryRaw<int>(
+            "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE name = 'UX_BackgroundJobs_ActiveExclusive' AND is_unique = 1 AND has_filter = 1")
+            .SingleAsync(cancellationToken);
 }

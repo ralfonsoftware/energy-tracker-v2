@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,8 @@ interface SettingsPageProps {
   onBack: () => void
   onTrendHistoryClick: () => void
   onTariffRadarClick: () => void
+  // Story 11.14: called once when a restore completed, for state the app holds above this page.
+  onDataRestored?: () => void
 }
 
 // Not yet the full Settings page EXPERIENCE.md's Information Architecture eventually describes
@@ -44,8 +47,16 @@ interface SettingsPageProps {
 // those controls at >=660px doesn't exist on phones.
 // Smart Plug Import moved OFF this page by Story 3.5 (FR-4 amendment, UX-DR20) — it's now a
 // dedicated Dashboard-launched screen, not a Settings-embedded panel.
-export function SettingsPage({ householdId, supportsFederatedLogout, email, onBack, onTrendHistoryClick, onTariffRadarClick }: SettingsPageProps) {
+export function SettingsPage({ householdId, supportsFederatedLogout, email, onBack, onTrendHistoryClick, onTariffRadarClick, onDataRestored }: SettingsPageProps) {
   const { t } = useTranslation()
+  // Story 11.14 (audit C10): a restore gives every room, power point and device a new id, and the scaffold
+  // manager renames, moves and archives by the ids it loaded on mount. Remounting it after a completed
+  // restore (a new key) loads the new ones.
+  const [restoreCount, setRestoreCount] = useState(0)
+  const handleRestored = () => {
+    setRestoreCount((count) => count + 1)
+    onDataRestored?.()
+  }
   const wide = useWideBreakpoint()
   const {
     logoffStep,
@@ -100,12 +111,12 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
           </div>
           <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-4">
             <SectionLabel>{t('taggingScaffold.heading')}</SectionLabel>
-            <TaggingScaffoldManager />
+            <TaggingScaffoldManager key={restoreCount} />
           </div>
           <div className="flex flex-col gap-[var(--spacing-card-gap)] wide:order-5">
             <SectionLabel>{t('settings.sections.data')}</SectionLabel>
             <DataExportPanel />
-            <DataImportPanel />
+            <DataImportPanel onRestored={handleRestored} />
           </div>
 
           {/* Story 8.12: Account group below 660px — Preferences card (JS-gated so it's truly not
