@@ -111,6 +111,7 @@
 - **Binds:** FR-1 (offline capture NFR)
 - **Prevents:** a double-inserted reading when a flaky-signal sync retries after losing its acknowledgment, and — the opposite failure — naive dedup logic that incorrectly collapses a legitimate second same-day reading with a different timestamp (FR-1 explicitly requires both to be possible).
 - **Rule:** Meter Reading creation carries a client-generated idempotency key (GUID) set at the moment of entry, before any network attempt. The frontend queues unsent readings locally (IndexedDB) while offline and flushes on reconnect. The API upserts by idempotency key: a retried request with the same key is a no-op against an already-recorded reading; a new key is always a new reading, even at an identical or near-identical timestamp.
+  - **[IMPLEMENTED 2026-10-28, Story 11.16, audit C4]** A queued reading the server permanently refuses (a 4xx except 401, 403, 408, 429) is no longer deleted by the flush: the entry stays in the same store under the same `idempotencyKey`, marked with `rejection` (status, the server's `detail`, time), and is shown on the Dashboard to correct and resend or discard. A resend keeps the key (it is the entry's identity; kWh and timestamp are payload, so no correction changes identity), clears the mark and posts through the same path as the flush. The flush skips marked entries; logoff and leave still count and delete every entry on the device.
 
 ## AD-17 — Session persistence via server-side cookie, not client-stored tokens
 

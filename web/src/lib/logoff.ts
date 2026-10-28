@@ -1,8 +1,11 @@
-import { listPending } from '@/lib/offline-queue'
+import { isNeedsAttention, listPending } from '@/lib/offline-queue'
 import { flushQueue } from '@/lib/meter-reading-sync'
 
 export interface PreLogoffQueueCheck {
+  // Everything still on this device for the Household, readings the server rejected included.
   pendingCount: number
+  // How many of those the server rejected (Story 11.16): they wait on the dashboard for a correction.
+  attentionCount: number
 }
 
 // AC #4: best-effort flush before logoff, then re-check what's actually still queued — a Meter
@@ -18,6 +21,6 @@ export async function checkPendingReadingsBeforeLogoff(householdId: string): Pro
   // Only count entries belonging to the Household logging off — a stale entry left by a
   // different account on this device isn't this member's to be warned about (AC #4); it stays
   // queued, untouched, until that other Household's own session flushes it.
-  const remaining = await listPending()
-  return { pendingCount: remaining.filter((reading) => reading.householdId === householdId).length }
+  const remaining = (await listPending()).filter((reading) => reading.householdId === householdId)
+  return { pendingCount: remaining.length, attentionCount: remaining.filter(isNeedsAttention).length }
 }

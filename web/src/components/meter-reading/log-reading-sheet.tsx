@@ -13,15 +13,9 @@ import {
 } from '@/components/ui/sheet'
 import { UnitInput } from '@/components/ui/unit-input'
 import { GLASS_SHEET_CLASSNAME } from '@/lib/glass-classnames'
+import { toDateTimeLocalValue } from '@/lib/datetime-local'
 import { attemptSend } from '@/lib/meter-reading-sync'
 import { ApiError } from '@/lib/api-client'
-
-// datetime-local's value format is local time with no offset (YYYY-MM-DDTHH:mm) — this is what
-// both the <input> itself and `new Date(value)` (which interprets it as local time) expect.
-function toDateTimeLocalValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
 
 interface LogReadingSheetProps {
   // Tagged onto the reading if it needs to be queued offline (AC #4, Story 1.12) — lets a later

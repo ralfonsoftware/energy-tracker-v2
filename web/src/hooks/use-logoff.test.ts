@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
-import { enqueue } from '@/lib/offline-queue'
+import { enqueue, markRejected } from '@/lib/offline-queue'
 import { useLogoff } from './use-logoff'
 
 function jsonResponse(body: object | null, status = 200) {
@@ -142,6 +142,38 @@ describe('useLogoff', () => {
     await act(() => result.current.proceedPastQueueCheck())
     await waitFor(() => expect(window.location.href).toBe('/'))
     expect(logoutCalls(fetchMock)).toHaveLength(1)
+  })
+
+  // Story 11.16 (AC #11): rejected readings are still on the device, so they count, and the dialog is told how many.
+  it('counts a server-rejected reading in pendingReadingCount and attentionReadingCount', async () => {
+    stubFetch(
+      () => Promise.resolve(jsonResponse({ redirectUrl: '/' })),
+      () => jsonResponse({ detail: 'unreachable' }, 503),
+    )
+    await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'rejected' })
+    await markRejected('rejected', { status: 400, detail: 'too far in the future' })
+    await enqueue({ householdId, kwhValue: 4830, readingTimestamp: '2026-08-16T14:32:00Z', idempotencyKey: 'pending' })
+    const { result } = renderHook(() => useLogoff(householdId, true))
+
+    await act(() => result.current.handleConfirmLogoff())
+
+    expect(result.current.logoffStep).toBe('queue-warning')
+    expect(result.current.pendingReadingCount).toBe(2)
+    expect(result.current.attentionReadingCount).toBe(1)
+  })
+
+  it('reports no attention readings when everything queued is merely pending', async () => {
+    stubFetch(
+      () => Promise.resolve(jsonResponse({ redirectUrl: '/' })),
+      () => jsonResponse({ detail: 'unreachable' }, 503),
+    )
+    await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
+    const { result } = renderHook(() => useLogoff(householdId, true))
+
+    await act(() => result.current.handleConfirmLogoff())
+
+    expect(result.current.pendingReadingCount).toBe(1)
+    expect(result.current.attentionReadingCount).toBe(0)
   })
 
   it('keeps the member on the confirm step with an error when the POST is rejected (AC #10)', async () => {

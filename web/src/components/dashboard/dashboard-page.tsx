@@ -8,6 +8,7 @@ import { MeterRegressionPromptDialog } from '@/components/meter-reading/meter-re
 import type { MeterRegressionPromptDto } from '@/lib/meter-regression-api'
 import type { StatusDto } from '@/lib/status-api'
 import type { TariffCheckReminderDto } from '@/lib/tariff-check-api'
+import { RejectedReadingsCard } from '@/components/meter-reading/rejected-readings-card'
 import { TariffCheckCard } from '@/components/tariff/tariff-check-card'
 import { StatusCard } from './status-card'
 import { StatusDetailDialog } from './status-detail-dialog'
@@ -40,7 +41,8 @@ interface DashboardPageProps {
 }
 
 // The composed real Dashboard (mockups/key-dashboard.html): Status card as the first,
-// highest-visual-weight element (AC #1, #10), then the quiet Tariff Check prompt card (FR-15,
+// highest-visual-weight element (AC #1, #10), then the quiet card of queued readings the server
+// rejected (Story 11.16, absent when there are none), the quiet Tariff Check prompt card (FR-15,
 // Story 5.4), the primary Log Reading action, and the bottom nav chrome. InviteGeneratePanel
 // (Story 1.8) is intentionally NOT rendered here either — it lived on this surface only because
 // it predated a real Settings page; a code review of this story relocated it to SettingsPage so
@@ -193,6 +195,8 @@ export function DashboardPage({
           emptyStateAction={showEmptyState ? logReadingSheet : undefined}
           detailTrigger={detailTrigger}
         />
+
+        <RejectedReadingsCard householdId={household.id} locale={household.locale} onResent={onReadingSaved} />
 
         <TariffCheckCard reminder={tariffCheck} locale={household.locale} onClick={onTariffRadarClick} />
 

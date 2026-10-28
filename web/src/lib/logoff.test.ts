@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
-import { enqueue, listPending } from './offline-queue'
+import { enqueue, listPending, markRejected } from './offline-queue'
 import { checkPendingReadingsBeforeLogoff } from './logoff'
 
 const householdId = '11111111-1111-1111-1111-111111111111'
@@ -87,3 +87,53 @@ describe('checkPendingReadingsBeforeLogoff', () => {
     expect(await listPending()).toEqual([otherHouseholdReading])
   })
 })
+
+// Story 11.16 (AC #11): rejected entries are still on the device, so they are counted; attentionCount says how many.
+describe('checkPendingReadingsBeforeLogoff: readings the server rejected (Story 11.16)', () => {
+  it('counts a rejected entry in pendingCount and in attentionCount, a pending one only in pendingCount', async () => {
+    await enqueue({ ...reading, idempotencyKey: 'rejected' })
+    await markRejected('rejected', { status: 400, detail: 'too far in the future' })
+    await enqueue({ ...reading, idempotencyKey: 'pending' })
+    stubOnline(false)
+    vi.stubGlobal('fetch', vi.fn())
+
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
+
+    expect(result).toEqual({ pendingCount: 2, attentionCount: 1 })
+  })
+
+  it("counts another Household's rejected entry in neither", async () => {
+    await enqueue({ ...reading, householdId: otherHouseholdId, idempotencyKey: 'theirs' })
+    await markRejected('theirs', { status: 400, detail: null })
+    stubOnline(false)
+    vi.stubGlobal('fetch', vi.fn())
+
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
+
+    expect(result).toEqual({ pendingCount: 0, attentionCount: 0 })
+  })
+
+  it('counts an entry the online flush newly rejects', async () => {
+    await enqueue(reading)
+    stubOnline(true)
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ detail: 'too far in the future' }, 400))))
+
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
+
+    expect(result).toEqual({ pendingCount: 1, attentionCount: 1 })
+  })
+
+  it('does not re-post an already rejected entry during the online flush', async () => {
+    await enqueue(reading)
+    await markRejected(reading.idempotencyKey, { status: 400, detail: null })
+    stubOnline(true)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await checkPendingReadingsBeforeLogoff(householdId)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result).toEqual({ pendingCount: 1, attentionCount: 1 })
+  })
+})
+

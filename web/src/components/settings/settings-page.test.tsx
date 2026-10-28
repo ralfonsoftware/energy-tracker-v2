@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { SettingsPage } from './settings-page'
-import { enqueue } from '@/lib/offline-queue'
+import { enqueue, markRejected } from '@/lib/offline-queue'
 import { HouseholdLocaleContext } from '@/lib/household-locale-context'
 
 function jsonResponse(body: object | null, status = 200) {
@@ -412,6 +412,35 @@ describe('SettingsPage', () => {
       await user.click(screen.getByRole('button', { name: 'Log off anyway' }))
       await waitFor(() => expect(window.location.href).toBe('/'))
       restoreLocation()
+    })
+
+    // Story 11.16 (AC #11): the queue-warning step says how many of the unsynced readings the server rejected.
+    it('mentions the readings the server rejected in the unsynced-readings step', async () => {
+      const user = userEvent.setup()
+      stubFetch(() => jsonResponse({ detail: 'unreachable' }, 503))
+      await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
+      await markRejected('key-1', { status: 400, detail: 'too far in the future' })
+      renderSettingsPage(true)
+
+      await user.click(await screen.findByRole('button', { name: 'Log off' }))
+      await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+      expect(await screen.findByRole('heading', { name: 'Unsynced readings' })).toBeInTheDocument()
+      expect(screen.getByText(/1 Meter Reading is still waiting to sync/)).toBeInTheDocument()
+      expect(screen.getByText(/1 of them was rejected by the server and is waiting for you on the dashboard/)).toBeInTheDocument()
+    })
+
+    it('does not mention rejected readings when the queued ones are only pending', async () => {
+      const user = userEvent.setup()
+      stubFetch(() => jsonResponse({ detail: 'unreachable' }, 503))
+      await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
+      renderSettingsPage(true)
+
+      await user.click(await screen.findByRole('button', { name: 'Log off' }))
+      await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+      expect(await screen.findByRole('heading', { name: 'Unsynced readings' })).toBeInTheDocument()
+      expect(screen.queryByText(/rejected by the server/)).not.toBeInTheDocument()
     })
 
     it('shows an inline error and keeps the dialog open when the POST fails (AC #10)', async () => {

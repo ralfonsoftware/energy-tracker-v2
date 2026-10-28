@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { HouseholdMembersSection } from './household-members-section'
-import { enqueue, listPending } from '@/lib/offline-queue'
+import { enqueue, listPending, markRejected } from '@/lib/offline-queue'
 import { checkPendingReadingsBeforeLogoff } from '@/lib/logoff'
 import { REQUESTED_WITH_HEADER, REQUESTED_WITH_VALUE } from '@/lib/api-client'
 import type { HouseholdMember, OpenInvite } from '@/lib/household-members-api'
@@ -93,7 +93,7 @@ async function renderLoaded() {
 describe('HouseholdMembersSection', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory()
-    vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 0 })
+    vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 0, attentionCount: 0 })
   })
 
   afterEach(() => {
@@ -323,7 +323,7 @@ describe('HouseholdMembersSection', () => {
 
     it('the confirm button reads "Checking…" and is disabled until the pending-readings check returns', async () => {
       const user = userEvent.setup()
-      let resolveCheck!: (v: { pendingCount: number }) => void
+      let resolveCheck!: (v: { pendingCount: number; attentionCount: number }) => void
       vi.mocked(checkPendingReadingsBeforeLogoff).mockReturnValue(new Promise((resolve) => (resolveCheck = resolve)))
       stubBackend({ members: [ME, MIRA], invites: [] })
 
@@ -332,13 +332,13 @@ describe('HouseholdMembersSection', () => {
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByRole('button', { name: 'Checking…' })).toBeDisabled()
-      resolveCheck({ pendingCount: 0 })
+      resolveCheck({ pendingCount: 0, attentionCount: 0 })
       expect(await within(dialog).findByRole('button', { name: 'Leave' })).toBeEnabled()
     })
 
     it('unsynced variant: warns the readings will be deleted from this device and the confirm says so (plural and singular)', async () => {
       const user = userEvent.setup()
-      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 3 })
+      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 3, attentionCount: 0 })
       stubBackend({ members: [ME, MIRA], invites: [] })
 
       await renderLoaded()
@@ -352,7 +352,7 @@ describe('HouseholdMembersSection', () => {
 
     it('unsynced variant: singular copy for exactly one reading', async () => {
       const user = userEvent.setup()
-      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 1 })
+      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 1, attentionCount: 0 })
       stubBackend({ members: [ME, MIRA], invites: [] })
 
       await renderLoaded()
@@ -366,7 +366,7 @@ describe('HouseholdMembersSection', () => {
     it('confirm sends DELETE with the caller\'s own member id, then removes only this household\'s queued readings and navigates to /', async () => {
       const user = userEvent.setup()
       const loc = stubLocation()
-      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 2 })
+      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 2, attentionCount: 0 })
       await enqueue({ householdId, kwhValue: 1, readingTimestamp: '2026-10-01T00:00:00Z', idempotencyKey: 'mine-1' })
       await enqueue({ householdId, kwhValue: 2, readingTimestamp: '2026-10-02T00:00:00Z', idempotencyKey: 'mine-2' })
       await enqueue({ householdId: 'other-household', kwhValue: 3, readingTimestamp: '2026-10-03T00:00:00Z', idempotencyKey: 'theirs-1' })
@@ -387,10 +387,35 @@ describe('HouseholdMembersSection', () => {
       }
     })
 
+    // Story 11.16 (AC #11): a reading the server rejected is still on the device, so leaving warns about it and deletes it too.
+    it('warns about, and after a successful leave removes, a reading the server rejected', async () => {
+      const user = userEvent.setup()
+      const loc = stubLocation()
+      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 1, attentionCount: 1 })
+      await enqueue({ householdId, kwhValue: 1, readingTimestamp: '2026-10-01T00:00:00Z', idempotencyKey: 'mine-rejected' })
+      await markRejected('mine-rejected', { status: 400, detail: 'too far in the future' })
+      stubBackend({ members: [ME, MIRA], invites: [] })
+
+      try {
+        await renderLoaded()
+        await user.click(screen.getByRole('button', { name: 'Leave household' }))
+
+        expect(
+          await screen.findByText("1 Meter Reading couldn't be synced. If you leave, it will be deleted from this device."),
+        ).toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: 'Leave and delete readings' }))
+
+        await waitFor(() => expect(loc.assign).toHaveBeenCalledWith('/'))
+        expect(await listPending()).toEqual([])
+      } finally {
+        loc.restore()
+      }
+    })
+
     it('a failed leave deletes nothing, shows an alert and does not navigate', async () => {
       const user = userEvent.setup()
       const loc = stubLocation()
-      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 1 })
+      vi.mocked(checkPendingReadingsBeforeLogoff).mockResolvedValue({ pendingCount: 1, attentionCount: 0 })
       await enqueue({ householdId, kwhValue: 1, readingTimestamp: '2026-10-01T00:00:00Z', idempotencyKey: 'mine-1' })
       stubBackend({ members: [ME, MIRA], invites: [], onDeleteMember: () => json({ detail: 'x' }, 500) })
 

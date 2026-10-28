@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { setThemePreference } from '@/lib/color-scheme'
 import { HouseholdLocaleContext } from '@/lib/household-locale-context'
+import { enqueue, markRejected } from '@/lib/offline-queue'
 import { ProfileMenu } from './profile-menu'
 
 const householdId = '11111111-1111-1111-1111-111111111111'
@@ -101,6 +102,40 @@ describe('ProfileMenu', () => {
     expect(init.method).toBe('POST')
     expect(new Headers(init.headers).get('X-Requested-With')).toBe('fetch')
     restoreLocation()
+  })
+
+  // Story 11.16 (AC #11): the queue-warning step says how many of the unsynced readings the server rejected.
+  it('mentions the readings the server rejected in the unsynced-readings step, and not when none was', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ detail: 'unreachable' }, 503))))
+    await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
+    await enqueue({ householdId, kwhValue: 4830, readingTimestamp: '2026-08-16T14:32:00Z', idempotencyKey: 'key-2' })
+    render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+
+    await user.click(screen.getByRole('button', { name: 'Account menu' }))
+    await user.click(await screen.findByText('Log off'))
+    await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+    expect(await screen.findByRole('heading', { name: 'Unsynced readings' })).toBeInTheDocument()
+    expect(screen.getByText(/2 Meter Readings are still waiting to sync/)).toBeInTheDocument()
+    expect(screen.queryByText(/rejected by the server/)).not.toBeInTheDocument()
+  })
+
+  it('counts rejected readings in the unsynced-readings step', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ detail: 'unreachable' }, 503))))
+    await enqueue({ householdId, kwhValue: 4821.5, readingTimestamp: '2026-08-15T14:32:00Z', idempotencyKey: 'key-1' })
+    await enqueue({ householdId, kwhValue: 4830, readingTimestamp: '2026-08-16T14:32:00Z', idempotencyKey: 'key-2' })
+    await markRejected('key-1', { status: 400, detail: 'too far in the future' })
+    await markRejected('key-2', { status: 400, detail: null })
+    render(<ProfileMenu email="ralf@example.com" householdId={householdId} supportsFederatedLogout={true} />)
+
+    await user.click(screen.getByRole('button', { name: 'Account menu' }))
+    await user.click(await screen.findByText('Log off'))
+    await user.click(await screen.findByRole('button', { name: 'Yes, log off' }))
+
+    expect(await screen.findByRole('heading', { name: 'Unsynced readings' })).toBeInTheDocument()
+    expect(screen.getByText(/2 of them were rejected by the server and are waiting for you on the dashboard/)).toBeInTheDocument()
   })
 
   it('shows an inline error and keeps the dialog open when the logout POST fails (AC #10)', async () => {
