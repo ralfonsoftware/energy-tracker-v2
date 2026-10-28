@@ -47,8 +47,11 @@ resource overQuotaAlert 'Microsoft.Insights/scheduledQueryRules@2026-03-01' = {
     scopes: [
       logAnalyticsWorkspaceId
     ]
-    evaluationFrequency: 'PT5M'
-    windowSize: 'PT5M'
+    // Each evaluation is billed per rule per month, scaling with frequency; 15 minutes is the floor
+    // we accept (the cap alert only needs to be noticed the same day). Window matches frequency so
+    // no ingestion gap goes unchecked between runs.
+    evaluationFrequency: 'PT15M'
+    windowSize: 'PT15M'
     criteria: {
       allOf: [
         {
