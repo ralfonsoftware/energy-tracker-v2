@@ -63,6 +63,7 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
     logoffChecking,
     logoffError,
     pendingReadingCount,
+    attentionReadingCount,
     openLogoffDialog,
     closeLogoffDialog,
     handleConfirmLogoff,
@@ -164,6 +165,12 @@ export function SettingsPage({ householdId, supportsFederatedLogout, email, onBa
                 <DialogTitle>{t('settings.logoff.queueWarningTitle')}</DialogTitle>
                 <DialogDescription>
                   {t('settings.logoff.queueWarningDescription', { count: pendingReadingCount })}
+                  {attentionReadingCount > 0 && (
+                    <>
+                      {' '}
+                      {t('settings.logoff.queueWarningRejected', { count: attentionReadingCount })}
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               {logoffError && (

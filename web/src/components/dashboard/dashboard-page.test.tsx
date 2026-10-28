@@ -1,6 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import 'fake-indexeddb/auto'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IDBFactory } from 'fake-indexeddb'
+import { enqueue, listNeedsAttention, markRejected } from '@/lib/offline-queue'
 import { DashboardPage } from './dashboard-page'
 import type { StatusDto } from '@/lib/status-api'
 import type { MeterRegressionPromptDto } from '@/lib/meter-regression-api'
@@ -23,6 +26,10 @@ function regressionPrompt(): MeterRegressionPromptDto {
 }
 
 describe('DashboardPage', () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory()
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -630,5 +637,79 @@ describe('DashboardPage', () => {
     )
 
     expect(screen.queryByText(/worth a look/i)).not.toBeInTheDocument()
+  })
+
+  // Story 11.16 (AC #6, #10): readings the server rejected surface under the Status card.
+  describe('rejected readings card (Story 11.16)', () => {
+    const status: StatusDto = { status: 'withinRange', paceToDateKwh: 1060, baselineToDateKwh: 1300, isLowConfidence: false }
+
+    function renderDashboard(onReadingSaved: () => void = noop) {
+      return render(
+        <DashboardPage
+          household={household}
+          supportsFederatedLogout={true}
+          email={null}
+          status={status}
+          statusLoading={false}
+          tariffCheck={{ isDue: true, gateOpensAtUtc: '2026-06-01T00:00:00+00:00' }}
+          playStatusEntranceAnimation={true}
+          logSheetOpen={false}
+          onLogSheetOpenChange={noop}
+          logEventOpen={false}
+          onLogEventOpenChange={noop}
+          onReadingSaved={onReadingSaved}
+          openRegressionPrompt={null}
+          onRegressionResolved={noop}
+          onSettingsClick={noop}
+          onTrendHistoryClick={noop}
+          onTariffRadarClick={noop}
+          onSmartPlugImportClick={noop}
+        />,
+      )
+    }
+
+    async function seedRejected() {
+      await enqueue({ householdId: household.id, kwhValue: 4830.25, readingTimestamp: '2026-11-02T10:00:00Z', idempotencyKey: 'rejected-1' })
+      await markRejected('rejected-1', { status: 400, detail: 'Reading timestamp is too far in the future.' })
+    }
+
+    it('is absent when the queue holds no rejected entry', async () => {
+      await enqueue({ householdId: household.id, kwhValue: 1, readingTimestamp: '2026-11-02T10:00:00Z', idempotencyKey: 'pending-1' })
+      renderDashboard()
+
+      await screen.findByText('Quiet week.')
+      // two reads after the card's own mount read, so its answer has landed before absence is asserted
+      await act(async () => {
+        await listNeedsAttention(household.id)
+        await listNeedsAttention(household.id)
+      })
+
+      expect(screen.queryByText(/needs? your attention/)).not.toBeInTheDocument()
+    })
+
+    it('renders after the Status card and before the Tariff Check card, so reading order is Tab order', async () => {
+      await seedRejected()
+      renderDashboard()
+
+      const statusHeadline = await screen.findByText('Quiet week.')
+      const card = await screen.findByRole('heading', { name: '1 reading needs your attention' })
+      const tariffCheck = screen.getByText(/worth a look/i)
+
+      expect(statusHeadline.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(card.compareDocumentPosition(tariffCheck) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('a successful resend calls onReadingSaved, the callback a foreground save uses', async () => {
+      const user = userEvent.setup()
+      await seedRejected()
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ id: 'r1', kwhValue: 4830.25, readingTimestamp: '2026-11-02T10:00:00Z' }), { status: 200 }))))
+      const onReadingSaved = vi.fn()
+      renderDashboard(onReadingSaved)
+
+      await user.click(await screen.findByRole('button', { name: /^Correct and resend the reading/ }))
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Resend' }))
+
+      await waitFor(() => expect(onReadingSaved).toHaveBeenCalledOnce())
+    })
   })
 })

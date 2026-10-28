@@ -60,6 +60,7 @@ export function ProfileMenu({ email, householdId, supportsFederatedLogout }: Pro
     logoffChecking,
     logoffError,
     pendingReadingCount,
+    attentionReadingCount,
     openLogoffDialog,
     closeLogoffDialog,
     handleConfirmLogoff,
@@ -147,6 +148,12 @@ export function ProfileMenu({ email, householdId, supportsFederatedLogout }: Pro
                 <DialogTitle>{t('settings.logoff.queueWarningTitle')}</DialogTitle>
                 <DialogDescription>
                   {t('settings.logoff.queueWarningDescription', { count: pendingReadingCount })}
+                  {attentionReadingCount > 0 && (
+                    <>
+                      {' '}
+                      {t('settings.logoff.queueWarningRejected', { count: attentionReadingCount })}
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               {logoffError && (

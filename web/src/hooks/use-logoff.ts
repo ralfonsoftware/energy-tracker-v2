@@ -17,6 +17,8 @@ export interface UseLogoffResult {
   // The last POST /logout failed (offline, 5xx, unreadable answer); the dialog stays open for a retry (AC #10).
   logoffError: boolean
   pendingReadingCount: number
+  // How many of the pending readings the server rejected (Story 11.16).
+  attentionReadingCount: number
   openLogoffDialog: () => void
   closeLogoffDialog: () => void
   handleConfirmLogoff: () => Promise<void>
@@ -57,6 +59,7 @@ export function useLogoff(householdId: string, supportsFederatedLogout: boolean)
   const [navigating, setNavigating] = useState(false)
   const [logoffError, setLogoffError] = useState(false)
   const [pendingReadingCount, setPendingReadingCount] = useState(0)
+  const [attentionReadingCount, setAttentionReadingCount] = useState(0)
 
   const logoffChecking = checking || navigating
 
@@ -122,10 +125,11 @@ export function useLogoff(householdId: string, supportsFederatedLogout: boolean)
   const handleConfirmLogoff = async () => {
     setChecking(true)
     try {
-      const { pendingCount } = await checkPendingReadingsBeforeLogoff(householdId)
+      const { pendingCount, attentionCount } = await checkPendingReadingsBeforeLogoff(householdId)
 
       if (pendingCount > 0) {
         setPendingReadingCount(pendingCount)
+        setAttentionReadingCount(attentionCount)
         setLogoffStep('queue-warning')
         return
       }
@@ -145,6 +149,7 @@ export function useLogoff(householdId: string, supportsFederatedLogout: boolean)
     logoffChecking,
     logoffError,
     pendingReadingCount,
+    attentionReadingCount,
     openLogoffDialog,
     closeLogoffDialog,
     handleConfirmLogoff,
