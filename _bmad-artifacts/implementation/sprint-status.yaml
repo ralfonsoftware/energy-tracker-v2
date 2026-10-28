@@ -154,7 +154,7 @@ development_status:
   11-13-single-instance-invariant-documentation: done
   11-14-restore-id-collisions-active-job-guard: done
   11-15-trending-threshold-scaled-to-elapsed: done
-  11-16-offline-queue-rejected-readings-attention: review
+  11-16-offline-queue-rejected-readings-attention: done
   11-17-timeprovider-recompute-lock-eviction: backlog
   11-18-backend-analyzer-format-gate: backlog
   11-19-structural-cleanup: backlog
