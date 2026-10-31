@@ -176,8 +176,9 @@ public class HouseholdRecomputeLockTests
             sut.TrackedHouseholdCount.ShouldBe(1);
         }, TestContext.Current.CancellationToken);
 
-        // Sanity-only: lets the waiter reach WaitAsync; the order assertion below does not depend on it.
-        await Task.Delay(50, TestContext.Current.CancellationToken);
+        // Deterministic, no real-time wait: the waiter holds its reference before the holder releases,
+        // so a lock that evicts on release (ignoring waiters) would hand it a fresh entry.
+        SpinWait.SpinUntil(() => sut.ReferencesFor(householdId) == 2, TimeSpan.FromSeconds(10)).ShouldBeTrue();
         lock (order)
         {
             order.Add("holder-released");

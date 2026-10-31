@@ -78,6 +78,20 @@ public class NoDirectClockReadsTests
             .ShouldBe(["DateTimeOffset.Now", "DateTime.UtcNow", "DateTime.Today"]);
     }
 
+    // String and char forms that a naive quote tracker desyncs on must not hide a later clock read.
+    [Theory]
+    [InlineData("var p = @\"C:\\dir\\\"; var x = DateTime.UtcNow;", "DateTime.UtcNow")]
+    [InlineData("var p = $@\"C:\\{d}\\\"; var x = DateTime.UtcNow;", "DateTime.UtcNow")]
+    [InlineData("var q = '\"'; var x = DateTime.Now;", "DateTime.Now")]
+    [InlineData("var q = '\\''; var s = \"a\"; var x = DateTime.Now;", "DateTime.Now")]
+    [InlineData("var s = \"\"\"\n say \"hi\" // not a comment\n \"\"\"; var x = DateTimeOffset.UtcNow;", "DateTimeOffset.UtcNow")]
+    [InlineData("var s = $\"\"\"\"\n \"\"\" inside \n \"\"\"\"; var x = DateTime.Today;", "DateTime.Today")]
+    [InlineData("var s = \"a // b\"; var x = TimeProvider.System;", "TimeProvider.System")]
+    public void The_scan_is_not_fooled_by_verbatim_raw_or_char_literals(string code, string expected)
+    {
+        HitsIn(StripComments(code)).ShouldBe([expected]);
+    }
+
     private static List<string> HitsIn(string code) =>
         Forbidden.Where(token => code.Contains(token, StringComparison.Ordinal)).ToList();
 
@@ -90,8 +104,10 @@ public class NoDirectClockReadsTests
     private static bool IsBuildOrMigrationPath(string relativePath) =>
         relativePath.Split('/').Any(segment => segment is "Migrations" or "obj" or "bin");
 
-    // Removes // and /* */ comments but keeps the contents of "regular" string literals (a `//` inside
-    // a string is not a comment).
+    // Removes // and /* */ comments but keeps the contents of string and char literals (a `//` inside
+    // a string is not a comment). Knows regular "...", verbatim @"..." (no escapes, "" is a quote),
+    // raw """...""" (closed by the same quote run) and char literals ('"', '\''), so none of them
+    // desyncs the quote state and hides a later clock read.
     private static string StripComments(string source)
     {
         var result = new StringBuilder(source.Length);
@@ -101,11 +117,40 @@ public class NoDirectClockReadsTests
             var c = source[i];
             if (c == '"')
             {
+                var quoteRun = 0;
+                while (i + quoteRun < source.Length && source[i + quoteRun] == '"')
+                {
+                    quoteRun++;
+                }
+
+                if (quoteRun >= 3)
+                {
+                    // Raw string: copy through the next run of at least quoteRun quotes.
+                    var close = source.IndexOf(new string('"', quoteRun), i + quoteRun, StringComparison.Ordinal);
+                    var end = close < 0 ? source.Length : close + quoteRun;
+                    result.Append(source, i, end - i);
+                    i = end;
+                    continue;
+                }
+
+                var verbatim = (i > 0 && source[i - 1] == '@') || (i > 1 && source[i - 1] == '$' && source[i - 2] == '@');
                 result.Append(c);
                 i++;
-                while (i < source.Length && source[i] != '"')
+                while (i < source.Length)
                 {
-                    if (source[i] == '\\' && i + 1 < source.Length)
+                    if (source[i] == '"')
+                    {
+                        if (verbatim && i + 1 < source.Length && source[i + 1] == '"')
+                        {
+                            result.Append("\"\"");
+                            i += 2;
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    if (!verbatim && source[i] == '\\' && i + 1 < source.Length)
                     {
                         result.Append(source[i++]);
                     }
@@ -114,6 +159,26 @@ public class NoDirectClockReadsTests
                 }
 
                 if (i < source.Length)
+                {
+                    result.Append(source[i++]);
+                }
+            }
+            else if (c == '\'')
+            {
+                // Char literal: one char or one escape, then the closing quote.
+                result.Append(c);
+                i++;
+                if (i < source.Length && source[i] == '\\' && i + 1 < source.Length)
+                {
+                    result.Append(source[i++]);
+                }
+
+                if (i < source.Length)
+                {
+                    result.Append(source[i++]);
+                }
+
+                if (i < source.Length && source[i] == '\'')
                 {
                     result.Append(source[i++]);
                 }

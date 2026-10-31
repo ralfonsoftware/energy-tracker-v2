@@ -5,7 +5,7 @@ baseline_commit: 10fbd9ae41995449e592e6891a440d19c0269f0d
 
 # Story 11.17: TimeProvider and Recompute-Lock Eviction
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier Later. Origin: codebase audit 2026-10-10 (docs/codebase-audit-2026-10-10.md) findings C6 (direct `DateTimeOffset.UtcNow`, no `TimeProvider`) and C5 (`HouseholdRecomputeLock` never evicts). -->
@@ -72,6 +72,19 @@ Write each test red first and record the red run in Debug Log References (Story 
   - [x] 8.2 `git grep -nE "DateTimeOffset\.(UtcNow|Now)|DateTime\.(UtcNow|Now|Today)" -- src ':!src/**/Migrations/**'` prints nothing (comment at `HouseholdExportEndpoints.cs` reworded).
   - [x] 8.3 Playwright once (`npm --prefix web run build`, then the suite) as a smoke check of invite accept/revoke, readings and status, since they all read the clock now through DI.
   - [x] 8.4 Both providers: the Infrastructure and Api suites already run Postgres and SQL Server via Testcontainers; both must be green (the lifecycle and repository clock reads feed `ExecuteUpdateAsync`/inserts on each).
+
+### Review Findings
+
+- [x] [Review][Decision] (Resolved: keep in this PR, per Ralf 2026-10-31) Commit `34914f7` is out of story scope — It rewrites all of `_bmad-artifacts/project-context.md` in compressed ("caveman") style, where AC7 asked for one rule plus the "Last Updated" bump; AGENTS.md says persisted docs are written normal. It also drops the blank line after the frontmatter and adds `model: claude-sonnet-5-5` to `.claude/skills/bmad-dev-story/SKILL.md`. No rule, AD id, negation or code span was lost (auditor count check). Options: keep in this PR, revert the style rewrite and keep only the 11.17 rule, or split into its own commit/PR.
+- [x] [Review][Patch] Waiter test does not prove the reference-count handoff and uses `Task.Delay` (Task 6.6) — `A_waiting_caller_keeps_the_entry_alive_across_the_holders_release` passes against a naive evict-on-release lock too, because nothing guarantees the waiter is registered before the holder disposes. Replace the delay with a deterministic wait on an internal reference-count seam (wait until 2 references) [tests/EnergyTracker.Infrastructure.Tests/HouseholdRecomputeLockTests.cs:180]
+- [x] [Review][Patch] Lock reference can leak outside the `try` — `References++` runs before `CreateLinkedTokenSource`/`CancelAfter`, which sit outside the `try`, so a throw there never calls `Return`; also wrap `Semaphore.Release()` in `Releaser.DisposeAsync` with `try/finally` so `Return` always runs (AC5) [src/EnergyTracker.Infrastructure/Adapters/HouseholdRecomputeLock.cs:48]
+- [x] [Review][Patch] Guard `StripComments` is not string-aware enough — verbatim `@"..."`, raw `"""..."""` and char literal `'"'` desync quote tracking, so a later clock read can be hidden or a `//` inside a string misread; `src` already has raw strings (`SmartPlugImportRepository.cs:347,377`) and a verbatim string (`MerossCsvParser.cs:112`). Handle these forms and add them to the non-vacuous self-test (AC3) [tests/EnergyTracker.Architecture.Tests/NoDirectClockReadsTests.cs]
+- [x] [Review][Patch] Deferred-work double-dispose item deleted instead of closed with a pointer (AC7) — restore it as closed with a pointer to Story 11.17 [_bmad-artifacts/implementation/deferred-work.md:193]
+- [x] [Review][Defer] Several operations read the clock more than once (`ProcessSmartPlugImport` CreatedAtUtc/CompletedAtUtc, `CreateMeterReading` x3, `BackgroundJobLifecycle.TryStartAsync` staleBefore vs `NewToken`, upload registry sweep vs lookup, invite endpoint vs use case) [src/EnergyTracker.Application/ProcessSmartPlugImport.cs:130] — deferred, pre-existing (read counts kept identical on purpose per AC2)
+- [x] [Review][Defer] `ManualTimeProvider` overrides only `GetUtcNow` (not `GetTimestamp`/`CreateTimer`) and its 16-byte field is not tear-safe across threads [tests/Shared/ManualTimeProvider.cs:4] — deferred, pre-existing scope limit (timers out of scope per Dev Notes)
+- [x] [Review][Defer] Lock tests still use real 50/100 ms acquisition timeouts and a 60 s churn timeout; no test covers timeout racing release [tests/EnergyTracker.Infrastructure.Tests/HouseholdRecomputeLockTests.cs] — deferred, pre-existing (`CancelAfter` timeout stays real-time per Dev Notes)
+- [x] [Review][Defer] Clock guard does not cover `Stopwatch`, `Environment.TickCount`, `using static System.DateTime` or alias forms [tests/EnergyTracker.Architecture.Tests/NoDirectClockReadsTests.cs] — deferred, pre-existing (outside AC3 token list)
+- [x] [Review][Defer] Job ownership token is clock-derived only, so a frozen test clock gives two owners the same token [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobLifecycle.cs] — deferred, pre-existing (same truncated-ms token before the change)
 
 ## Dev Notes
 

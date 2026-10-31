@@ -31,6 +31,15 @@ public class HouseholdRecomputeLock(TimeSpan? acquisitionTimeout = null) : IHous
         }
     }
 
+    // Test seam: holders plus waiters for one Household (0 when it has no entry).
+    internal int ReferencesFor(Guid householdId)
+    {
+        lock (_gate)
+        {
+            return _entries.TryGetValue(householdId, out var entry) ? entry.References : 0;
+        }
+    }
+
     public async Task<IAsyncDisposable> AcquireAsync(Guid householdId, CancellationToken cancellationToken)
     {
         Entry entry;
@@ -45,11 +54,12 @@ public class HouseholdRecomputeLock(TimeSpan? acquisitionTimeout = null) : IHous
             entry.References++;
         }
 
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(_acquisitionTimeout);
-
+        // Everything after References++ sits inside the try, so any throw (including the token setup)
+        // returns the reference and the entry can still be evicted.
         try
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(_acquisitionTimeout);
             await entry.Semaphore.WaitAsync(timeoutCts.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -98,8 +108,14 @@ public class HouseholdRecomputeLock(TimeSpan? acquisitionTimeout = null) : IHous
             // exactly once (`await using`), but this costs nothing to guard.
             if (Interlocked.Exchange(ref _released, 1) == 0)
             {
-                entry.Semaphore.Release();
-                owner.Return(householdId, entry);
+                try
+                {
+                    entry.Semaphore.Release();
+                }
+                finally
+                {
+                    owner.Return(householdId, entry);
+                }
             }
 
             return ValueTask.CompletedTask;
