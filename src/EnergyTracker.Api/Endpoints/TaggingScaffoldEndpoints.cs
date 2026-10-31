@@ -6,29 +6,12 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class TaggingScaffoldEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Shared by all 12 route handlers below — every one of them needs the caller's HouseholdId
-    // before doing anything else, and 403s the same way when the principal doesn't have one.
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapTaggingScaffoldEndpoints(this RouteGroupBuilder api)
     {
-        MapRoomEndpoints(api);
-        MapPowerPointEndpoints(api);
-        MapDeviceEndpoints(api);
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        MapRoomEndpoints(household);
+        MapPowerPointEndpoints(household);
+        MapDeviceEndpoints(household);
 
         return api;
     }
@@ -41,10 +24,7 @@ public static class TaggingScaffoldEndpoints
             CreateRoom createRoom,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -58,15 +38,9 @@ public static class TaggingScaffoldEndpoints
         });
 
         api.MapGet("/rooms", async (
-            ICurrentHouseholdAccessor householdAccessor,
             ITaggingScaffoldRepository repository,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             var rooms = await repository.ListRoomsAsync(cancellationToken);
             return Results.Ok(rooms.Select(ToResponse));
         });
@@ -74,15 +48,9 @@ public static class TaggingScaffoldEndpoints
         api.MapPut("/rooms/{id}", async (
             Guid id,
             RenameRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             RenameRoom renameRoom,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var room = await renameRoom.ExecuteAsync(id, request.Name, cancellationToken);
@@ -100,15 +68,9 @@ public static class TaggingScaffoldEndpoints
 
         api.MapDelete("/rooms/{id}", async (
             Guid id,
-            ICurrentHouseholdAccessor householdAccessor,
             ArchiveRoom archiveRoom,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var room = await archiveRoom.ExecuteAsync(id, cancellationToken);
@@ -129,10 +91,7 @@ public static class TaggingScaffoldEndpoints
             CreatePowerPoint createPowerPoint,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -154,15 +113,9 @@ public static class TaggingScaffoldEndpoints
         });
 
         api.MapGet("/power-points", async (
-            ICurrentHouseholdAccessor householdAccessor,
             ITaggingScaffoldRepository repository,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             var powerPoints = await repository.ListPowerPointsAsync(cancellationToken);
             return Results.Ok(powerPoints.Select(ToResponse));
         });
@@ -170,15 +123,9 @@ public static class TaggingScaffoldEndpoints
         api.MapPut("/power-points/{id}", async (
             Guid id,
             RenameRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             RenamePowerPoint renamePowerPoint,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var powerPoint = await renamePowerPoint.ExecuteAsync(id, request.Name, cancellationToken);
@@ -196,15 +143,9 @@ public static class TaggingScaffoldEndpoints
 
         api.MapDelete("/power-points/{id}", async (
             Guid id,
-            ICurrentHouseholdAccessor householdAccessor,
             ArchivePowerPoint archivePowerPoint,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var powerPoint = await archivePowerPoint.ExecuteAsync(id, cancellationToken);
@@ -219,15 +160,9 @@ public static class TaggingScaffoldEndpoints
         api.MapPut("/power-points/{id}/room", async (
             Guid id,
             MovePowerPointRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             MovePowerPoint movePowerPoint,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var powerPoint = await movePowerPoint.ExecuteAsync(id, request.RoomId, cancellationToken);
@@ -256,10 +191,7 @@ public static class TaggingScaffoldEndpoints
             CreateDevice createDevice,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -281,15 +213,9 @@ public static class TaggingScaffoldEndpoints
         });
 
         api.MapGet("/devices", async (
-            ICurrentHouseholdAccessor householdAccessor,
             ITaggingScaffoldRepository repository,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             var devices = await repository.ListDevicesAsync(cancellationToken);
             return Results.Ok(devices.Select(ToResponse));
         });
@@ -297,15 +223,9 @@ public static class TaggingScaffoldEndpoints
         api.MapPut("/devices/{id}", async (
             Guid id,
             RenameRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             RenameDevice renameDevice,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var device = await renameDevice.ExecuteAsync(id, request.Name, cancellationToken);
@@ -323,15 +243,9 @@ public static class TaggingScaffoldEndpoints
 
         api.MapDelete("/devices/{id}", async (
             Guid id,
-            ICurrentHouseholdAccessor householdAccessor,
             ArchiveDevice archiveDevice,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var device = await archiveDevice.ExecuteAsync(id, cancellationToken);
@@ -346,15 +260,9 @@ public static class TaggingScaffoldEndpoints
         api.MapPut("/devices/{id}/power-point", async (
             Guid id,
             MoveDeviceRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             MoveDevice moveDevice,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var device = await moveDevice.ExecuteAsync(id, request.PowerPointId, cancellationToken);
