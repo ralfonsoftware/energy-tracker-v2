@@ -39,8 +39,14 @@ public class SingleInstanceInvariantIsDocumentedTests
         "src/EnergyTracker.Infrastructure/Adapters/InProcessChannelJobQueue.cs",
         "src/EnergyTracker.Api/HttpRateLimiting.cs",
         "src/EnergyTracker.Api/Endpoints/SmartPlugImportEndpoints.cs",
-        "src/EnergyTracker.Api/Program.cs",
+        "src/EnergyTracker.Api/Composition/ApplicationServicesRegistration.cs",
     ];
+
+    // The composition root is Program.cs plus the Composition folder (Story 11.19). The AD-24 comments of its
+    // four mechanisms (rate limiter, upload temp path, startup sweep, heartbeat) are counted over the union.
+    private const string CompositionFolder = "src/EnergyTracker.Api/Composition";
+    private const string ProgramFile = "src/EnergyTracker.Api/Program.cs";
+    private const int MinimumCompositionAd24Comments = 4;
 
     // Files that carry one AD-24 comment at a mechanism: the ones above plus the mechanisms whose code
     // does not match a pattern (the upload registry keeps plain dictionaries behind one lock, the startup
@@ -56,10 +62,9 @@ public class SingleInstanceInvariantIsDocumentedTests
     ];
 
     // A file that holds several mechanisms needs one AD-24 comment per mechanism, not one for the file
-    // (Program.cs: rate limiter, upload temp path, startup sweep and the heartbeat). Other files need one.
+    // (the composition root, counted over its files below). Other files need one.
     private static readonly Dictionary<string, int> MinimumAd24Comments = new()
     {
-        ["src/EnergyTracker.Api/Program.cs"] = 4,
         ["src/EnergyTracker.Infrastructure/Adapters/InProcessChannelJobQueue.cs"] = 2,
         ["src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs"] = 2,
     };
@@ -127,6 +132,24 @@ public class SingleInstanceInvariantIsDocumentedTests
             var expected = MinimumAd24Comments.GetValueOrDefault(file, 1);
             CountAd24Comments(CommentsOf(file)).ShouldBeGreaterThanOrEqualTo(expected, $"{file} needs {expected} one-line AD-24 comment(s), one at each process-local mechanism it holds. {FailureHint}");
         }
+
+        var composition = CompositionRootFiles();
+        composition.ShouldContain(ProgramFile);
+        composition.Count.ShouldBeGreaterThan(1, $"No files found in {CompositionFolder}: was the folder renamed? Update this guard with it.");
+        composition.Sum(file => CountAd24Comments(CommentsOf(file)))
+            .ShouldBeGreaterThanOrEqualTo(MinimumCompositionAd24Comments, $"The composition root (Program.cs and {CompositionFolder}) needs {MinimumCompositionAd24Comments} one-line AD-24 comments in total, one at each process-local mechanism it registers. {FailureHint}");
+    }
+
+    private static List<string> CompositionRootFiles()
+    {
+        var root = FindRepoRoot();
+        return
+        [
+            ProgramFile,
+            .. Directory.EnumerateFiles(Path.Combine(root, CompositionFolder), "*.cs", SearchOption.TopDirectoryOnly)
+                .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+                .Order(StringComparer.Ordinal),
+        ];
     }
 
     [Fact]
@@ -179,21 +202,26 @@ public class SingleInstanceInvariantIsDocumentedTests
     }
 
     // Both queue providers need the heartbeat (an Azure deployment is where a second replica is plausible,
-    // a self-host where a second container is), so it is registered at the top level of Program.cs, not
+    // a self-host where a second container is), so it is registered at the top level of AddJobQueue, not
     // inside a branch of the queue-provider switch.
     [Fact]
     public void The_heartbeat_is_registered_outside_the_queue_provider_switch()
     {
-        const string program = "src/EnergyTracker.Api/Program.cs";
-        var code = CodeOf(program);
+        const string registrationFile = "src/EnergyTracker.Api/Composition/JobQueueRegistration.cs";
+        var code = CodeOf(registrationFile);
         var switchStart = code.IndexOf("switch (jobQueueProvider)", StringComparison.Ordinal);
         var registration = code.IndexOf("AddHostedService<InstanceHeartbeatService>()", StringComparison.Ordinal);
-        var build = code.IndexOf("builder.Build()", StringComparison.Ordinal);
+        var methodEnd = code.IndexOf("return services;", StringComparison.Ordinal);
 
-        switchStart.ShouldBeGreaterThan(-1, $"{program} no longer has the queue-provider switch: update this guard with it.");
-        registration.ShouldBeGreaterThan(switchStart, $"{program}: register InstanceHeartbeatService after the queue-provider switch, for both providers (AD-24).");
-        build.ShouldBeGreaterThan(registration);
-        BraceDepthAt(code, registration).ShouldBe(BraceDepthAt(code, build), $"{program}: InstanceHeartbeatService is registered inside a block (a switch branch?); both queue providers need it (AD-24).");
+        switchStart.ShouldBeGreaterThan(-1, $"{registrationFile} no longer has the queue-provider switch: update this guard with it.");
+        registration.ShouldBeGreaterThan(switchStart, $"{registrationFile}: register InstanceHeartbeatService after the queue-provider switch, for both providers (AD-24).");
+        methodEnd.ShouldBeGreaterThan(registration);
+        BraceDepthAt(code, registration).ShouldBe(BraceDepthAt(code, methodEnd), $"{registrationFile}: InstanceHeartbeatService is registered inside a block (a switch branch?); both queue providers need it (AD-24).");
+
+        var program = CodeOf(ProgramFile);
+        var call = program.IndexOf("AddJobQueue(", StringComparison.Ordinal);
+        call.ShouldBeGreaterThan(-1, $"{ProgramFile} no longer calls AddJobQueue: the heartbeat would not be registered (AD-24).");
+        program.IndexOf("builder.Build()", StringComparison.Ordinal).ShouldBeGreaterThan(call);
     }
 
     private static int BraceDepthAt(string code, int index) =>

@@ -1,120 +1,16 @@
-using System.Globalization;
-using System.Net.Http.Headers;
-using System.Security.Claims;
-using Azure.Monitor.OpenTelemetry.AspNetCore;
-using Azure.Storage.Queues;
 using EnergyTracker.Api;
+using EnergyTracker.Api.Composition;
 using EnergyTracker.Api.Endpoints;
-using EnergyTracker.Application;
-using EnergyTracker.Application.Ports;
 using EnergyTracker.Infrastructure;
-using EnergyTracker.Infrastructure.Adapters;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using OpenTelemetry;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// WebApplicationBuilder registers a default Console/Debug/EventSource/EventLog provider set that
-// UseSerilog's writeToProviders:false (its default) leaves inert but registered — replacing
-// ILoggerFactory means nothing ever routes events to them. The Otlp path below sets
-// writeToProviders:true so Serilog also reaches the OTel logging provider, but that flag forwards
-// to EVERY registered ILoggerProvider indiscriminately; without clearing these defaults first, it
-// would also wake the dormant default Console provider and double every console log line
-// (confirmed by a docker-compose smoke test during AD-19 OTel extension work). Clearing here,
-// unconditionally, keeps Serilog's WriteTo.Console() as the sole console sink on every path.
-builder.Logging.ClearProviders();
-
-// AD-19 OTel extension — Otel:Exporter is read exactly once, here at the composition root
-// (Consistency Conventions), same as Database:Provider/Oidc:* below. Read before UseSerilog:
-// its writeToProviders argument depends on this value. Normalized to lower-invariant immediately
-// (mirrors databaseProvider.ToLowerInvariant() below) so every comparison against it — including
-// the writeToProviders check right below — agrees on case; a prior version compared writeToProviders
-// case-insensitively but switched on the raw value case-sensitively, so "otlp"/"OTLP" silently
-// disabled all telemetry with no error (caught in code review, AD-19 OTel extension work).
-var otelExporter = (builder.Configuration["Otel:Exporter"] ?? string.Empty).Trim().ToLowerInvariant();
-
-builder.Host.UseSerilog((context, services, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services)
-    .Enrich.FromLogContext()
-    .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture),
-    // Otlp path forwards Serilog's events into OTel's log pipeline too (Aspire Dashboard,
-    // trace-correlated). AzureMonitor path must NOT do this: Application Insights is
-    // workspace-based on the same Log Analytics workspace Container Apps already streams stdout
-    // into, so forwarding Serilog through OTel there as well would double-ingest every log line
-    // against the shared dailyQuotaGb cap (ARCHITECTURE-SPINE.md AD-19 extension). This same flag
-    // also governs whether Azure Monitor's own bundled logging provider (registered below via
-    // UseAzureMonitor) ever receives events — Serilog owns ILoggerFactory outright once
-    // UseSerilog runs, so nothing else in the provider list gets called unless this is true.
-    writeToProviders: otelExporter == "otlp");
-
-switch (otelExporter)
-{
-    case "azuremonitor":
-        var azureMonitorConnectionString = (builder.Configuration["Otel:AzureMonitorConnectionString"] ?? string.Empty).Trim();
-        // A blank/missing connection string is not a "do nothing" no-op here — UseAzureMonitor
-        // throws InvalidOperationException at startup ("Connection string starts with separator
-        // ';'"), confirmed empirically in code review. Guard it the same way the Otlp branch
-        // below guards a blank/invalid endpoint: skip registration entirely rather than crash.
-        if (!string.IsNullOrEmpty(azureMonitorConnectionString))
-        {
-            // Traces + metrics only (see writeToProviders comment above for why logs stay off
-            // this path). UseAzureMonitor already bundles ASP.NET Core/HttpClient instrumentation;
-            // EF Core and runtime metrics are added explicitly since the Distro doesn't cover
-            // them, and this app runs against both Postgres and SQL Server depending on
-            // Database:Provider.
-            builder.Services.AddOpenTelemetry()
-                .ConfigureResource(r => r.AddService("EnergyTracker.Api"))
-                .UseAzureMonitor(o => o.ConnectionString = azureMonitorConnectionString)
-                .WithTracing(t => t.AddEntityFrameworkCoreInstrumentation())
-                .WithMetrics(m => m.AddRuntimeInstrumentation());
-        }
-        break;
-
-    case "otlp":
-        var otlpEndpoint = (builder.Configuration["Otel:OtlpEndpoint"] ?? string.Empty).Trim();
-        // A blank/malformed/scheme-less endpoint (e.g. new Uri("aspire-dashboard:18889") parses
-        // "aspire-dashboard" as the scheme instead of throwing) must not crash the app — confirmed
-        // empirically that an unguarded `new Uri(...)` here throws UriFormatException on the
-        // appsettings.json default (blank). Require an absolute http/https URI; anything else
-        // skips OTel registration entirely, same graceful-degrade shape as the AzureMonitor guard
-        // above and the unset/unrecognized default case below.
-        if (Uri.TryCreate(otlpEndpoint, UriKind.Absolute, out var otlpEndpointUri) &&
-            (otlpEndpointUri.Scheme == Uri.UriSchemeHttp || otlpEndpointUri.Scheme == Uri.UriSchemeHttps))
-        {
-            builder.Services.AddOpenTelemetry()
-                .ConfigureResource(r => r.AddService("EnergyTracker.Api"))
-                .WithTracing(t => t
-                    .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddEntityFrameworkCoreInstrumentation()
-                    .AddOtlpExporter(o => o.Endpoint = otlpEndpointUri))
-                .WithMetrics(m => m
-                    .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation()
-                    .AddOtlpExporter(o => o.Endpoint = otlpEndpointUri));
-            builder.Logging.AddOpenTelemetry(o => o.AddOtlpExporter(exporter => exporter.Endpoint = otlpEndpointUri));
-        }
-        break;
-
-    default:
-        // Unset/unrecognized: OTel stays fully off — same graceful-degrade shape as unconfigured
-        // OIDC below. Must not throw or affect any other route.
-        break;
-}
+builder.AddObservability();
 
 // Database:Provider is read exactly once, here at the composition root (Consistency Conventions) —
 // nothing in Infrastructure re-reads or branches on it independently.
@@ -186,126 +82,12 @@ builder.Services.AddDbContext<EnergyTrackerDbContext>(ConfigureDbContext);
 // EnergyTrackerDbContext.
 builder.Services.AddDbContextFactory<HouseholdMembershipDbContext>(ConfigureDbContext);
 
-// Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are read exactly once, here at the composition
-// root (Consistency Conventions, NFR3/AC #6) — nothing downstream re-reads or branches on them.
-var oidcAuthority = builder.Configuration["Oidc:Authority"] ?? string.Empty;
-var oidcClientId = builder.Configuration["Oidc:ClientId"] ?? string.Empty;
-var oidcClientSecret = builder.Configuration["Oidc:ClientSecret"] ?? string.Empty;
-
 builder.Services.AddHttpContextAccessor();
 // Story 11.8: the clock comes from DI so the session cap can be tested; tests may substitute it.
 builder.Services.TryAddSingleton(TimeProvider.System);
 
-var authenticationBuilder = builder.Services
-    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        // AC #3: server-side httpOnly session cookie — the SPA must never be able to read this
-        // (or an equivalent token) via JS.
-        options.Cookie.HttpOnly = true;
-        // Self-host is expected to sit behind a TLS-terminating reverse proxy or direct HTTPS —
-        // never weaken this for convenience.
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        // Lax so the cookie survives the OIDC redirect round-trip.
-        options.Cookie.SameSite = SameSiteMode.Lax;
-        // Matches the actual /login endpoint this story adds (AuthEndpoints.cs) — otherwise this
-        // dangles at the framework default (/Account/Login, a route that doesn't exist here) for
-        // any future non-/api route that ends up needing RequireAuthorization().
-        options.LoginPath = "/login";
-        // Story 11.8 (AD-17, audit S13): the 14-day sliding window is written down (it is also the framework
-        // default) and a 90-day absolute cap is enforced from the issued-at stamp (SessionLifetime).
-        options.ExpireTimeSpan = SessionLifetime.SlidingWindow;
-        options.SlidingExpiration = true;
-        options.Events.OnSigningIn = context =>
-        {
-            SessionLifetime.StampIssuedAt(context);
-            return Task.CompletedTask;
-        };
-        options.Events.OnValidatePrincipal = SessionLifetime.ValidateAsync;
-        // The cookie handler's default challenge behavior is a 302 to LoginPath — fine for a
-        // full-page navigation, but AC #5 requires unauthenticated /api/** calls to 401 so the
-        // SPA can detect them via fetch and navigate to /login itself, not follow a redirect.
-        options.Events.OnRedirectToLogin = context =>
-        {
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return Task.CompletedTask;
-            }
+var oidcConfigured = builder.AddAuth();
 
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        };
-    });
-
-// Only register the OIDC scheme when BOTH ClientId and Authority are actually configured (not
-// just ClientId — OpenIdConnectOptions.Validate() also throws on a blank Authority/MetadataAddress,
-// the same failure mode below, just from the other half of this config pair). ASP.NET Core's
-// AuthenticationMiddleware initializes every IAuthenticationRequestHandler scheme on EVERY
-// request (not just OIDC ones) so it can check whether the request matches that scheme's
-// callback path — and a half-configured OIDC scheme would otherwise 500 every route in the app,
-// including /health, the moment this ships without a real provider configured yet (an expected
-// self-host state — Task 6/Dev Notes). Skipping registration entirely keeps the rest of the app
-// functional; only /login (which needs a real provider to mean anything) answers 503 "not configured"
-// until Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are all set.
-var oidcConfigured = !string.IsNullOrEmpty(oidcClientId) && !string.IsNullOrEmpty(oidcAuthority);
-if (oidcConfigured)
-{
-    authenticationBuilder.AddOpenIdConnect(options =>
-    {
-        options.Authority = oidcAuthority;
-        options.ClientId = oidcClientId;
-        options.ClientSecret = oidcClientSecret;
-        options.ResponseType = "code";
-        // Story 8.1/AC #3, found via live Auth0 verification: the handler's default Scope
-        // (openid, profile) never included "email" — HouseholdClaimTypes.ResolveEmail's raw-
-        // claim-first/ClaimTypes.Email-fallback logic is correct, but Auth0 (per the OIDC spec)
-        // omits the email claim entirely from both the ID token and the userinfo response unless
-        // this scope is explicitly requested, so /api/session's Email came back null regardless
-        // of claim-key handling. Distinct root cause from Story 3.6's ClaimTypes.Name mapping gap.
-        options.Scope.Add("email");
-        options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        // Identity lives in the server-side cookie only — never persist provider tokens where
-        // anything client-readable could reach them (AC #3).
-        options.SaveTokens = false;
-        options.GetClaimsFromUserInfoEndpoint = true;
-        options.Events = new OpenIdConnectEvents
-        {
-            // Capture the ID token's validated issuer as an explicit, dedicated claim right
-            // after token validation — before GetClaimsFromUserInfoEndpoint's claim-merge step
-            // runs below, which is not guaranteed to preserve the original validated
-            // Claim.Issuer on every claim. Issuer+subject is the entire basis for this app's
-            // tenant isolation (ICurrentHouseholdAccessor, HouseholdEndpoints), so it must not
-            // depend on that ambient propagation behavior.
-            OnTokenValidated = context =>
-            {
-                var validatedIssuer = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Issuer;
-                if (!string.IsNullOrEmpty(validatedIssuer) && context.Principal?.Identity is ClaimsIdentity identity)
-                {
-                    identity.AddClaim(new Claim(HouseholdClaimTypes.ValidatedIssuer, validatedIssuer));
-                }
-
-                return Task.CompletedTask;
-            },
-            // Auth0 (and other OIDC providers) validate post_logout_redirect_uri against the
-            // calling application's registered Allowed Logout URLs — but need either
-            // id_token_hint or client_id to know WHICH application that is. SaveTokens=false
-            // above means there's never an id_token to offer as id_token_hint, and the handler
-            // doesn't populate ClientId on the end-session request by default, so without this,
-            // sign-out fails provider-side with "post_logout_redirect_uri is not defined as a
-            // valid URL" even when it genuinely is registered.
-            OnRedirectToIdentityProviderForSignOut = context =>
-            {
-                context.ProtocolMessage.ClientId = oidcClientId;
-                // Story 11.8: hand the end-session URL to POST /logout instead of writing a 302.
-                FederatedLogout.Handle(context);
-                return Task.CompletedTask;
-            },
-        };
-    });
-}
-
-builder.Services.AddAuthorization();
 builder.Services.AddProblemDetails();
 // AD-27 (audit S3): per-route rate-limit policies, applied with RequireRateLimiting on the routes in
 // the Story 11.7 rate-limit table. In-process, so correct for one instance (AD-24).
@@ -324,79 +106,7 @@ var dataProtectionBuilder = builder.Services.AddDataProtection()
 var dataProtectionKeyProtection = DataProtectionKeyProtection.Configure(
     dataProtectionBuilder, builder.Configuration, builder.Environment);
 
-builder.Services.AddScoped<IHouseholdRepository, HouseholdRepository>();
-builder.Services.AddScoped<ICurrentHouseholdAccessor, CurrentHouseholdAccessor>();
-// Singleton like the factory it depends on; the membership middleware calls it once per /api request.
-builder.Services.AddSingleton<HouseholdMembershipResolver>();
-builder.Services.AddScoped<CreateHousehold>();
-builder.Services.AddScoped<CreateHouseholdInvite>();
-builder.Services.AddScoped<AcceptHouseholdInvite>();
-builder.Services.AddScoped<RemoveHouseholdMember>();
-builder.Services.AddScoped<ListHouseholdMembers>();
-builder.Services.AddScoped<ListOpenHouseholdInvites>();
-builder.Services.AddScoped<RevokeHouseholdInvite>();
-builder.Services.AddScoped<SetYearlyBaseline>();
-builder.Services.AddScoped<SetHouseholdLocale>();
-
-builder.Services.AddScoped<ITaggingScaffoldRepository, TaggingScaffoldRepository>();
-builder.Services.AddScoped<CreateRoom>();
-builder.Services.AddScoped<RenameRoom>();
-builder.Services.AddScoped<ArchiveRoom>();
-builder.Services.AddScoped<CreatePowerPoint>();
-builder.Services.AddScoped<RenamePowerPoint>();
-builder.Services.AddScoped<ArchivePowerPoint>();
-builder.Services.AddScoped<MovePowerPoint>();
-builder.Services.AddScoped<CreateDevice>();
-builder.Services.AddScoped<RenameDevice>();
-builder.Services.AddScoped<ArchiveDevice>();
-builder.Services.AddScoped<MoveDevice>();
-
-builder.Services.AddScoped<IMeterReadingRepository, MeterReadingRepository>();
-builder.Services.AddScoped<IMeterRegressionPromptRepository, MeterRegressionPromptRepository>();
-// Singleton: the per-Household lock dictionary must survive across scoped requests to actually
-// serialize concurrent recomputes for the same Household (AD-7).
-builder.Services.AddSingleton<IHouseholdRecomputeLock, HouseholdRecomputeLock>();
-builder.Services.AddScoped<IStatusRecomputeService, StatusRecomputeService>();
-builder.Services.AddScoped<ISmartPlugCoverageSignal, SmartPlugCoverageSignal>();
-builder.Services.AddScoped<IAuditCorrectionRecorder, AuditCorrectionRecorder>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<CreateMeterReading>();
-builder.Services.AddScoped<ResolveMeterRegressionPrompt>();
-builder.Services.AddScoped<GetOpenMeterRegressionPrompt>();
-builder.Services.AddScoped<GetCurrentStatus>();
-builder.Services.AddScoped<GetMeterReadingHistory>();
-builder.Services.AddScoped<EditMeterReading>();
-builder.Services.AddScoped<IStatusSnapshotRepository, StatusSnapshotRepository>();
-builder.Services.AddScoped<GetStatusHistory>();
-builder.Services.AddScoped<ISmartPlugReadingRepository, SmartPlugReadingRepository>();
-builder.Services.AddScoped<GetPerPlugMeasuredData>();
-
-builder.Services.AddScoped<ITariffRepository, TariffRepository>();
-builder.Services.AddScoped<CreateTariff>();
-builder.Services.AddScoped<GetTariffHistory>();
-builder.Services.AddScoped<EditTariff>();
-builder.Services.AddScoped<CompareTariff>();
-builder.Services.AddScoped<GetTariffCheckReminder>();
-
-builder.Services.AddScoped<IEventRepository, EventRepository>();
-builder.Services.AddScoped<CreateEvent>();
-builder.Services.AddScoped<GetEventHistory>();
-builder.Services.AddScoped<SetAiPlausibilityEnabled>();
-builder.Services.AddScoped<CorrelateEvent>();
-builder.Services.AddScoped<RequeueEventCorrelations>();
-
-builder.Services.AddScoped<IHouseholdExportReader, HouseholdExportReader>();
-builder.Services.AddScoped<ExportHouseholdData>();
-
-// Story 7.2 — restore/migration import. Registry is a singleton (in-memory token→temp-file
-// mapping, MemoryHouseholdImportUploadRegistry's own doc comment); the writer/use case are scoped
-// like every other DbContext-backed adapter/use case in this file.
-builder.Services.AddSingleton<IHouseholdImportUploadRegistry, MemoryHouseholdImportUploadRegistry>();
-// Uploads are staged in this process's temp directory: AD-24 (single instance).
-builder.Services.AddSingleton(new HouseholdImportUploadSettings(Path.GetTempPath(), HouseholdImportEndpoints.MaxFileSizeBytes));
-builder.Services.AddScoped<ValidateHouseholdImport>();
-builder.Services.AddScoped<IHouseholdRestoreWriter, HouseholdRestoreWriter>();
-builder.Services.AddScoped<RestoreHouseholdData>();
+builder.Services.AddApplicationServices();
 
 // Task 1's decided upload cap (HouseholdImportEndpoints.MaxFileSizeBytes) exceeds FormOptions'
 // default MultipartBodyLengthLimit (128 MB) — raised once, here at the composition root.
@@ -414,66 +124,7 @@ builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = Househ
 // AiPlausibilityBackendConfiguration. An invalid Ai:Endpoint stops startup here.
 var aiPlausibilityBackend = AiPlausibilityBackendConfiguration.Configure(builder.Services, builder.Configuration);
 
-// AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
-// switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
-builder.Services.AddScoped<JobHouseholdContext>();
-builder.Services.AddSingleton<BackgroundJobProcessor>();
-// Singleton — both queue adapters below (InProcessChannelJobQueue/AzureStorageQueueJobQueue) are
-// themselves singletons and inject this directly (Story 3.6/AD-6 extension).
-builder.Services.AddSingleton<BackgroundJobEnqueueRecorder>();
-builder.Services.AddScoped<IBackgroundJobRepository, BackgroundJobRepository>();
-// AD-6 (amended 2026-10-10): the one writer of BackgroundJob.Status. Timings are operational
-// constants (1 min heartbeat, 5 min stale), not Household configuration.
-builder.Services.AddSingleton(JobLifecycleTimings.Default);
-builder.Services.AddScoped<IBackgroundJobLifecycle, BackgroundJobLifecycle>();
-builder.Services.AddScoped<GetBackgroundJobStatus>();
-builder.Services.AddScoped<ListSmartPlugImportJobs>();
-builder.Services.AddScoped<CleanUpSmartPlugImportJobs>();
-builder.Services.AddScoped<ISmartPlugParser, EveHomeXlsxParser>();
-builder.Services.AddScoped<ISmartPlugParser, MerossCsvParser>();
-builder.Services.AddScoped<ISmartPlugImportRepository, SmartPlugImportRepository>();
-builder.Services.AddScoped<CompleteSmartPlugImportProcessing>();
-builder.Services.AddScoped<ProcessSmartPlugImport>();
-builder.Services.AddScoped<MapSmartPlugImportToPowerPoint>();
-
-var jobQueueProvider = (builder.Configuration["JobQueue:Provider"] ?? string.Empty).Trim().ToLowerInvariant();
-switch (jobQueueProvider)
-{
-    case "azurestoragequeue":
-        var jobQueueConnectionString = builder.Configuration["JobQueue:ConnectionString"] ?? string.Empty;
-        // Base64 message encoding so a JSON payload survives the queue message's XML envelope
-        // untouched (the SDK's raw/"None" default is not XML-safe for arbitrary JSON text).
-        builder.Services.AddSingleton(sp =>
-        {
-            var queueOptions = new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 };
-            // A body that fails Base64 decoding would otherwise make ReceiveMessagesAsync throw forever (audit C7).
-            var decodingLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<AzureStorageQueueJobProcessingService>();
-            queueOptions.MessageDecodingFailed += args => QueueMessageDecodingFailureHandler.HandleAsync(args, decodingLogger);
-            return new QueueClient(jobQueueConnectionString, "jobs", queueOptions);
-        });
-        builder.Services.AddSingleton(QueueConsumerTimings.Default);
-        builder.Services.AddSingleton<IBackgroundJobQueue, AzureStorageQueueJobQueue>();
-        builder.Services.AddHostedService<AzureStorageQueueJobProcessingService>();
-        break;
-    default:
-        // Unset/unrecognized: same "unset stays off"-shaped default as Otel:Exporter, not
-        // Database:Provider's hard-required default — the in-process adapter needs no external
-        // config to function.
-        builder.Services.AddSingleton<InProcessChannelJobQueue>();
-        // AD-24: process-local startup recovery; the Azure adapter never runs it.
-        builder.Services.AddSingleton<InProcessJobStartupSweep>();
-        builder.Services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<InProcessChannelJobQueue>());
-        builder.Services.AddHostedService<InProcessChannelJobProcessingService>();
-        break;
-}
-
-// AD-24: the instance heartbeat observes the single-instance invariant (a warning in the log, never a
-// startup block). Outside the queue-provider switch on purpose: both providers need it.
-builder.Services.AddSingleton(sp => new AppInstanceIdentity(Guid.NewGuid(), sp.GetRequiredService<TimeProvider>().GetUtcNow()));
-builder.Services.AddSingleton(InstanceHeartbeatTimings.Default);
-builder.Services.AddScoped<IAppInstanceRepository, AppInstanceRepository>();
-builder.Services.AddScoped<RecordInstanceHeartbeat>();
-builder.Services.AddHostedService<InstanceHeartbeatService>();
+builder.Services.AddJobQueue(builder.Configuration);
 
 var app = builder.Build();
 

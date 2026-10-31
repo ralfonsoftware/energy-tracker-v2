@@ -18,6 +18,7 @@ public partial class HouseholdMembershipIsResolvedOncePerRequestTests
     private const string Middleware = "src/EnergyTracker.Api/HouseholdMembershipMiddleware.cs";
     private const string MembershipContext = "src/EnergyTracker.Infrastructure/HouseholdMembershipDbContext.cs";
     private const string ProgramFile = "src/EnergyTracker.Api/Program.cs";
+    private const string AuthRegistrationFile = "src/EnergyTracker.Api/Composition/AuthRegistration.cs";
 
     // The accessor reads a value; it never looks one up, waits for one or remembers one beyond the request.
     private static readonly string[] ForbiddenInAccessor =
@@ -157,8 +158,8 @@ public partial class HouseholdMembershipIsResolvedOncePerRequestTests
         }
 
         offenders.ShouldBeEmpty("A claim other than the validated issuer was added in src: the Household and member id are resolved per request, never carried in the cookie or the principal (AD-17, Story 11.12).");
-        validatedIssuerClaims.ShouldBe(1, "The OIDC OnTokenValidated handler in Program.cs adds exactly one claim, the validated issuer; update this guard if that changed on purpose.");
-        CodeOf(ProgramFile).ShouldContain("new Claim(HouseholdClaimTypes.ValidatedIssuer", Case.Sensitive);
+        validatedIssuerClaims.ShouldBe(1, "The OIDC OnTokenValidated handler in Composition/AuthRegistration.cs adds exactly one claim, the validated issuer; update this guard if that changed on purpose.");
+        CodeOf(AuthRegistrationFile).ShouldContain("new Claim(HouseholdClaimTypes.ValidatedIssuer", Case.Sensitive);
     }
 
     [Fact]
