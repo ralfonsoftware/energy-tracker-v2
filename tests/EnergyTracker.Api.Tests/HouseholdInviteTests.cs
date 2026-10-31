@@ -4,6 +4,7 @@ using EnergyTracker.Api.Endpoints;
 using EnergyTracker.Application;
 using EnergyTracker.Domain;
 using EnergyTracker.Infrastructure;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -198,5 +199,29 @@ public class HouseholdInviteTests(EnergyTrackerApiFactory factory) : IClassFixtu
 
         sessionD!.HasHousehold.ShouldBeFalse();
         sessionD.HouseholdId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task An_invite_is_valid_just_before_ExpiresAtUtc_and_answers_409_just_after_it_on_the_injected_clock()
+    {
+        var clientA = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+        await clientA.PostAsJsonAsync("/api/households", new { locale = "de-DE", currency = "EUR" }, TestContext.Current.CancellationToken);
+        var inviteResponse = await clientA.PostAsync("/api/household-invites", null, TestContext.Current.CancellationToken);
+        var invite = await inviteResponse.Content.ReadFromJsonAsync<HouseholdInviteResponse>(TestContext.Current.CancellationToken);
+        // One millisecond either side: Postgres keeps microseconds, so the exact tick is the unit tests' job (AcceptHouseholdInviteTests).
+        var clock = new ManualTimeProvider(invite!.ExpiresAtUtc.AddMilliseconds(-1));
+        await using var clockedFactory = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(clock)));
+        var clientB = clockedFactory.CreateClient();
+        clientB.DefaultRequestHeaders.Add("X-Requested-With", "fetch");
+        clientB.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, Guid.NewGuid().ToString());
+        clientB.DefaultRequestHeaders.Add(TestAuthHandler.IssuerHeader, TestAuthHandler.DefaultIssuer);
+
+        var beforeExpiry = await clientB.GetAsync($"/api/household-invites/{invite.Token}", TestContext.Current.CancellationToken);
+        clock.Set(invite.ExpiresAtUtc.AddMilliseconds(1));
+        var atExpiry = await clientB.GetAsync($"/api/household-invites/{invite.Token}", TestContext.Current.CancellationToken);
+
+        beforeExpiry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        atExpiry.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 }

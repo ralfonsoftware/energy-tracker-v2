@@ -29,8 +29,8 @@ public class MapSmartPlugImportToPowerPointTests
 
     private MapSmartPlugImportToPowerPoint Sut() => new(
         _smartPlugImportRepository, _taggingScaffoldRepository,
-        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
-        _unitOfWork);
+        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance, TimeProvider.System),
+        _unitOfWork, TimeProvider.System);
 
     private SmartPlugImport MakeImport(SmartPlugImportStatus status = SmartPlugImportStatus.AwaitingPowerPointMapping) => new()
     {

@@ -24,7 +24,8 @@ public class CorrelateEvent(
     IMeterRegressionPromptRepository regressionPromptRepository,
     IEventRepository eventRepository,
     IAiPlausibilityClient aiPlausibilityClient,
-    ILogger<CorrelateEvent> logger)
+    ILogger<CorrelateEvent> logger,
+    TimeProvider timeProvider)
 {
     public async Task ExecuteAsync(Guid householdId, CorrelateEventPayload payload, CancellationToken cancellationToken)
     {
@@ -118,7 +119,7 @@ public class CorrelateEvent(
             return;
         }
 
-        await eventRepository.SetCorrelationAsync(payload.EventId, direction.Value.ToString(), DateTimeOffset.UtcNow, cancellationToken);
+        await eventRepository.SetCorrelationAsync(payload.EventId, direction.Value.ToString(), timeProvider.GetUtcNow(), cancellationToken);
     }
 
     private async Task ClearIfPersistedAsync(Event @event, CancellationToken cancellationToken)

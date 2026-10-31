@@ -9,7 +9,8 @@ public class CreateEvent(
     IEventRepository repository,
     ITaggingScaffoldRepository taggingScaffoldRepository,
     IBackgroundJobQueue jobQueue,
-    ILogger<CreateEvent> logger)
+    ILogger<CreateEvent> logger,
+    TimeProvider timeProvider)
 {
     private const int MaxDescriptionLength = 500;
 
@@ -45,7 +46,7 @@ public class CreateEvent(
                 $"Description must be at most {MaxDescriptionLength} characters.", "event.description_too_long");
         }
 
-        var latestAllowedTimestamp = DateTimeOffset.UtcNow.Add(MaxFutureClockSkew);
+        var latestAllowedTimestamp = timeProvider.GetUtcNow().Add(MaxFutureClockSkew);
         if (occurredAt > latestAllowedTimestamp)
         {
             throw new EventValidationException(
@@ -76,7 +77,7 @@ public class CreateEvent(
             HouseholdId = householdId,
             Description = trimmedDescription,
             OccurredAt = occurredAt,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
             TaggedEntityType = taggedEntityType,
             TaggedEntityId = taggedEntityId,
             TaggedEntityName = taggedEntityName,

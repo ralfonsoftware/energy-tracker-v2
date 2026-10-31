@@ -68,7 +68,7 @@ public abstract class ActiveJobGuardTestsBase
         services.AddSingleton(Options);
         services.AddScoped<EnergyTrackerDbContext>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
-        return (new BackgroundJobEnqueueRecorder(onCreateScope is null ? scopeFactory : new HookedScopeFactory(scopeFactory, onCreateScope)), id);
+        return (new BackgroundJobEnqueueRecorder(onCreateScope is null ? scopeFactory : new HookedScopeFactory(scopeFactory, onCreateScope), TimeProvider.System), id);
     }
 
     // Calls the hook with the 1-based number of the scope being created, before the scope is handed out:
@@ -213,7 +213,7 @@ public abstract class ActiveJobGuardTestsBase
         await recorder.RecordAsync(first, ct);
         await using (var dbContext = NewDbContext(householdId))
         {
-            (await new BackgroundJobLifecycle(dbContext, JobLifecycleTimings.Default).TryFailNonTerminalAsync(first.JobId, JobFailureCodes.Interrupted, ct)).ShouldBeTrue();
+            (await new BackgroundJobLifecycle(dbContext, JobLifecycleTimings.Default, TimeProvider.System).TryFailNonTerminalAsync(first.JobId, JobFailureCodes.Interrupted, ct)).ShouldBeTrue();
         }
 
         await recorder.RecordAsync(Envelope(householdId, JobTypes.CleanUpSmartPlugImportJobs), ct);
@@ -233,7 +233,7 @@ public abstract class ActiveJobGuardTestsBase
                 .SetProperty(j => j.Status, BackgroundJobStatus.Processing)
                 .SetProperty(j => j.StartedAtUtc, longAgo)
                 .SetProperty(j => j.HeartbeatAtUtc, longAgo), ct);
-            (await new BackgroundJobLifecycle(dbContext, JobLifecycleTimings.Default).FailStaleAsync(householdId, ct)).ShouldBe(1);
+            (await new BackgroundJobLifecycle(dbContext, JobLifecycleTimings.Default, TimeProvider.System).FailStaleAsync(householdId, ct)).ShouldBe(1);
         }
 
         await recorder.RecordAsync(Envelope(householdId, JobTypes.RestoreHouseholdData), ct);
@@ -247,7 +247,7 @@ public abstract class ActiveJobGuardTestsBase
         await recorder.RecordAsync(Envelope(householdId, JobTypes.RestoreHouseholdData), ct);
         await using (var dbContext = NewDbContext(householdId))
         {
-            (await new BackgroundJobLifecycle(dbContext, JobLifecycleTimings.Default)
+            (await new BackgroundJobLifecycle(dbContext, JobLifecycleTimings.Default, TimeProvider.System)
                 .FailInterruptedBeforeAsync(householdId, DateTimeOffset.UtcNow.AddMinutes(1), ct)).ShouldBe(1);
         }
 

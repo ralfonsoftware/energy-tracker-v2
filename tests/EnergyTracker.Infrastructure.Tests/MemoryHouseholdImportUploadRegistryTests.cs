@@ -24,7 +24,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void Consume_returns_the_reference_for_the_owner_and_a_second_Consume_is_null()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var upload = NewUpload(household);
         var token = Guid.NewGuid();
@@ -37,7 +37,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void A_consumed_uploads_file_is_left_alone_it_now_belongs_to_the_restore_job()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var upload = NewUpload(household);
         var token = Guid.NewGuid();
@@ -51,7 +51,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void Consume_for_another_Household_returns_null_and_deletes_the_file()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var upload = NewUpload(Guid.NewGuid());
         var token = Guid.NewGuid();
         registry.Register(token, upload);
@@ -64,7 +64,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public async Task Consume_of_an_expired_entry_returns_null_and_deletes_the_file()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry(TimeSpan.FromMilliseconds(50));
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeSpan.FromMilliseconds(50), TimeProvider.System);
         var household = Guid.NewGuid();
         var upload = NewUpload(household);
         var token = Guid.NewGuid();
@@ -79,7 +79,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void Consume_of_an_unknown_token_returns_null_and_touches_no_file()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var upload = NewUpload(household);
         registry.Register(Guid.NewGuid(), upload);
@@ -92,7 +92,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void Register_for_a_Household_with_a_pending_upload_replaces_it_and_deletes_the_old_file()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var first = NewUpload(household);
         var second = NewUpload(household);
@@ -111,7 +111,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void Two_Households_each_keep_their_own_pending_upload_and_file()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var householdA = Guid.NewGuid();
         var householdB = Guid.NewGuid();
         var uploadA = NewUpload(householdA);
@@ -130,7 +130,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void A_second_upload_by_one_Household_never_touches_another_Households_entry()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var other = NewUpload(Guid.NewGuid());
         registry.Register(Guid.NewGuid(), other);
         var household = Guid.NewGuid();
@@ -146,7 +146,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void Registering_again_never_deletes_the_file_of_an_already_consumed_upload()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var running = NewUpload(household);
         var runningToken = Guid.NewGuid();
@@ -161,7 +161,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public async Task Register_still_sweeps_other_expired_entries_and_deletes_their_files()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry(TimeSpan.FromMilliseconds(100));
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeSpan.FromMilliseconds(100), TimeProvider.System);
         var abandoned = NewUpload(Guid.NewGuid());
         registry.Register(Guid.NewGuid(), abandoned);
         await Task.Delay(400, TestContext.Current.CancellationToken);
@@ -178,7 +178,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     {
         for (var round = 0; round < 5; round++)
         {
-            var registry = new MemoryHouseholdImportUploadRegistry();
+            var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
             var household = Guid.NewGuid();
             var uploads = Enumerable.Range(0, 50).Select(_ => (Token: Guid.NewGuid(), Reference: NewUpload(household))).ToList();
             using var gate = new ManualResetEventSlim(false);
@@ -202,7 +202,7 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
     [Fact]
     public void A_file_that_is_already_gone_never_throws_out_of_Register_or_Consume()
     {
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var first = NewUpload(household);
         var firstToken = Guid.NewGuid();
@@ -216,5 +216,49 @@ public sealed class MemoryHouseholdImportUploadRegistryTests : IDisposable
         registry.Register(foreignToken, foreign);
         File.Delete(foreign.TempFilePath);
         Should.NotThrow(() => registry.Consume(foreignToken, Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void An_entry_is_valid_up_to_the_ttl_and_gone_one_tick_after_it_without_any_real_waiting()
+    {
+        var ttl = TimeSpan.FromMinutes(10);
+        var clock = new ManualTimeProvider();
+        var registry = new MemoryHouseholdImportUploadRegistry(ttl, clock);
+        var household = Guid.NewGuid();
+        var validAtTtl = NewUpload(household);
+        var expiredAfterTtl = NewUpload(household);
+        var validToken = Guid.NewGuid();
+        var expiredToken = Guid.NewGuid();
+
+        registry.Register(validToken, validAtTtl);
+        clock.Advance(ttl);
+        registry.Consume(validToken, household).ShouldBe(validAtTtl);
+
+        registry.Register(expiredToken, expiredAfterTtl);
+        clock.Advance(ttl + TimeSpan.FromTicks(1));
+        registry.Consume(expiredToken, household).ShouldBeNull();
+        File.Exists(expiredAfterTtl.TempFilePath).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Register_sweeps_entries_expired_by_the_injected_clock_and_deletes_their_files()
+    {
+        var ttl = TimeSpan.FromMinutes(10);
+        var clock = new ManualTimeProvider();
+        var registry = new MemoryHouseholdImportUploadRegistry(ttl, clock);
+        var staleHousehold = Guid.NewGuid();
+        var stale = NewUpload(staleHousehold);
+        registry.Register(Guid.NewGuid(), stale);
+
+        clock.Advance(ttl);
+        registry.Register(Guid.NewGuid(), NewUpload(Guid.NewGuid()));
+        File.Exists(stale.TempFilePath).ShouldBeTrue("an entry exactly at its ttl is not expired yet");
+
+        clock.Advance(TimeSpan.FromTicks(1));
+        var fresh = NewUpload(Guid.NewGuid());
+        registry.Register(Guid.NewGuid(), fresh);
+
+        File.Exists(stale.TempFilePath).ShouldBeFalse();
+        File.Exists(fresh.TempFilePath).ShouldBeTrue();
     }
 }

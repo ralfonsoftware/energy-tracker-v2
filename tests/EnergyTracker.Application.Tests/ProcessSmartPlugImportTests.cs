@@ -40,13 +40,13 @@ public class ProcessSmartPlugImportTests
 
     private ProcessSmartPlugImport Sut() => new(
         [_parser], _taggingScaffoldRepository, _smartPlugImportRepository,
-        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
-        NullLogger<ProcessSmartPlugImport>.Instance);
+        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance, TimeProvider.System),
+        NullLogger<ProcessSmartPlugImport>.Instance, TimeProvider.System);
 
     private ProcessSmartPlugImport SutWith(ILogger<ProcessSmartPlugImport> logger) => new(
         [_parser], _taggingScaffoldRepository, _smartPlugImportRepository,
-        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance),
-        logger);
+        new CompleteSmartPlugImportProcessing(_smartPlugImportRepository, _statusRecomputeService, NullLogger<CompleteSmartPlugImportProcessing>.Instance, TimeProvider.System),
+        logger, TimeProvider.System);
 
     private ProcessSmartPlugImportPayload MakePayload(string deviceTag) =>
         new(Guid.NewGuid(), _tempFilePath, $"{deviceTag}.xlsx");

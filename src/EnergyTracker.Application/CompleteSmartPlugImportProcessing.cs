@@ -18,7 +18,8 @@ namespace EnergyTracker.Application;
 public class CompleteSmartPlugImportProcessing(
     ISmartPlugImportRepository smartPlugImportRepository,
     IStatusRecomputeService statusRecomputeService,
-    ILogger<CompleteSmartPlugImportProcessing> logger)
+    ILogger<CompleteSmartPlugImportProcessing> logger,
+    TimeProvider timeProvider)
 {
     public async Task ExecuteAsync(SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
     {
@@ -70,7 +71,7 @@ public class CompleteSmartPlugImportProcessing(
             var sinceDate = rangeStart.AddDays(-SmartPlugGapDetector.TrailingAverageWindowDays);
             var priorReadings = await smartPlugImportRepository.ListPriorReadingsByPowerPointAsync(powerPointId, import.Id, sinceDate, cancellationToken);
             var firstEverReadingDate = await smartPlugImportRepository.FindFirstReadingDateByPowerPointAsync(powerPointId, cancellationToken);
-            var gaps = SmartPlugGapDetector.DetectGaps(import.HouseholdId, import.Id, powerPointId, mappedReadings, priorReadings, firstEverReadingDate, DateTimeOffset.UtcNow);
+            var gaps = SmartPlugGapDetector.DetectGaps(import.HouseholdId, import.Id, powerPointId, mappedReadings, priorReadings, firstEverReadingDate, timeProvider.GetUtcNow());
             if (gaps.Count > 0)
             {
                 await smartPlugImportRepository.AddGapsAsync(gaps, cancellationToken);

@@ -28,7 +28,7 @@ public abstract class BackgroundJobLifecycleTestsBase
 
     private sealed class BackgroundLifecycleFixture(EnergyTrackerDbContext dbContext)
     {
-        public BackgroundJobLifecycle Sut { get; } = new(dbContext, Timings);
+        public BackgroundJobLifecycle Sut { get; } = new(dbContext, Timings, TimeProvider.System);
 
         public EnergyTrackerDbContext DbContext { get; } = dbContext;
     }
@@ -172,8 +172,8 @@ public abstract class BackgroundJobLifecycleTestsBase
         await using var second = await OpenMigratedDbContextAsync(householdId, ct);
 
         var results = await Task.WhenAll(
-            new BackgroundJobLifecycle(dbContext, Timings).TryStartAsync(job.Id, ct),
-            new BackgroundJobLifecycle(second, Timings).TryStartAsync(job.Id, ct));
+            new BackgroundJobLifecycle(dbContext, Timings, TimeProvider.System).TryStartAsync(job.Id, ct),
+            new BackgroundJobLifecycle(second, Timings, TimeProvider.System).TryStartAsync(job.Id, ct));
 
         results.Count(t => t is not null).ShouldBe(1);
     }
@@ -414,7 +414,7 @@ public abstract class BackgroundJobLifecycleTestsBase
         var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
         await using var disposableContext = dbContext;
         var job = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, createdAt: DateTimeOffset.UtcNow.AddHours(-2), cancellationToken: ct);
-        var sut = new BackgroundJobLifecycle(dbContext, Timings with { QueuedExpiresAfter = TimeSpan.FromHours(1) });
+        var sut = new BackgroundJobLifecycle(dbContext, Timings with { QueuedExpiresAfter = TimeSpan.FromHours(1) }, TimeProvider.System);
 
         (await sut.FailStaleAsync(householdId, ct)).ShouldBe(1);
 
@@ -529,6 +529,51 @@ public abstract class BackgroundJobLifecycleTestsBase
         (await ReloadAsync(dbContext, queuedA.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Failed);
         (await ReloadAsync(contextB, queuedB.Id, ct)).Status.ShouldBe(BackgroundJobStatus.Queued);
     }
+
+    // ---- Clock-driven windows (Story 11.17, audit C6) ----
+
+    // One millisecond is the smallest step both providers keep (Postgres timestamptz is microseconds).
+    private static readonly TimeSpan Millisecond = TimeSpan.FromMilliseconds(1);
+
+    [Theory]
+    [InlineData(-1, false)]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public async Task TryStart_restarts_a_Processing_row_exactly_when_its_heartbeat_is_older_than_StaleAfter(int millisecondsPastTheLimit, bool restartable)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero));
+        var heartbeat = clock.GetUtcNow();
+        var job = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Processing,
+            createdAt: heartbeat.AddHours(-1), startedAt: heartbeat, heartbeatAt: heartbeat, cancellationToken: ct);
+        clock.Set(heartbeat + Timings.StaleAfter + (Millisecond * millisecondsPastTheLimit));
+        var sut = new BackgroundJobLifecycle(dbContext, Timings, clock);
+
+        var token = await sut.TryStartAsync(job.Id, ct);
+
+        (token is not null).ShouldBe(restartable);
+        var reloaded = await ReloadAsync(dbContext, job.Id, ct);
+        reloaded.StartedAtUtc.ShouldBe(restartable ? token : heartbeat);
+    }
+
+    [Fact]
+    public async Task The_ownership_token_is_the_injected_now_truncated_to_whole_milliseconds()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (dbContext, householdId) = await OpenWithHouseholdAsync(ct);
+        await using var disposableContext = dbContext;
+        var job = await SeedJobAsync(dbContext, householdId, BackgroundJobStatus.Queued, cancellationToken: ct);
+        var wholeMilliseconds = new DateTimeOffset(2026, 5, 1, 12, 0, 0, 123, TimeSpan.Zero);
+        var clock = new ManualTimeProvider(wholeMilliseconds.AddTicks(4567));
+        var sut = new BackgroundJobLifecycle(dbContext, Timings, clock);
+
+        var token = await sut.TryStartAsync(job.Id, ct);
+
+        token.ShouldBe(wholeMilliseconds);
+        (await ReloadAsync(dbContext, job.Id, ct)).StartedAtUtc.ShouldBe(wholeMilliseconds);
+    }
 }
 
 public class PostgresBackgroundJobLifecycleTests : BackgroundJobLifecycleTestsBase, IAsyncLifetime
@@ -568,3 +613,4 @@ public class SqlServerBackgroundJobLifecycleTests : BackgroundJobLifecycleTestsB
         return dbContext;
     }
 }
+

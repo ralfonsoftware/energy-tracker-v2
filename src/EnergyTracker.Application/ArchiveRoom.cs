@@ -9,7 +9,7 @@ namespace EnergyTracker.Application;
 /// applies one level down too) — an archived Room's Power Points simply drop out of the
 /// create-Power-Point picker (AC #4) while staying fully visible and editable themselves.
 /// </summary>
-public class ArchiveRoom(ITaggingScaffoldRepository repository)
+public class ArchiveRoom(ITaggingScaffoldRepository repository, TimeProvider timeProvider)
 {
     public async Task<Room> ExecuteAsync(Guid roomId, CancellationToken cancellationToken)
     {
@@ -26,7 +26,7 @@ public class ArchiveRoom(ITaggingScaffoldRepository repository)
         // returned from this call matches exactly what a later re-read from the DB
         // produces — otherwise a second archive call's guard-return would carry a
         // sub-microsecond-different ArchivedAt than the first call's response.
-        var archivedAt = DateTimeOffset.UtcNow;
+        var archivedAt = timeProvider.GetUtcNow();
         room.ArchivedAt = archivedAt.AddTicks(-(archivedAt.Ticks % TimeSpan.TicksPerMicrosecond));
         await repository.UpdateRoomAsync(room, cancellationToken);
 

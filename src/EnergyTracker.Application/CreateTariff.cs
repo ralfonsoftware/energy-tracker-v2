@@ -4,7 +4,7 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>Creates a new Tariff entry for the caller's own Household, appending to history rather than replacing any prior entry (AC #1, #2, #4, #5).</summary>
-public class CreateTariff(ITariffRepository repository)
+public class CreateTariff(ITariffRepository repository, TimeProvider timeProvider)
 {
     public async Task<Tariff> ExecuteAsync(
         Guid householdId,
@@ -40,7 +40,7 @@ public class CreateTariff(ITariffRepository repository)
             Currency = currency,
             ContractStartDate = contractStartDate,
             ContractPeriodMonths = contractPeriodMonths,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
         };
 
         return await repository.AddAsync(tariff, cancellationToken);

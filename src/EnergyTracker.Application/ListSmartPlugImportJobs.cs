@@ -28,7 +28,8 @@ public record SmartPlugImportJobResult(
 
 /// <summary>Lists every Smart Plug import job queued by any member of the caller's Household, deriving each row's six-state value and sweeping expired terminal-state records first (AC #1, #2, #5, #6, #7, #8).</summary>
 public class ListSmartPlugImportJobs(
-    IBackgroundJobRepository backgroundJobRepository, ISmartPlugImportRepository smartPlugImportRepository, IBackgroundJobLifecycle lifecycle)
+    IBackgroundJobRepository backgroundJobRepository, ISmartPlugImportRepository smartPlugImportRepository, IBackgroundJobLifecycle lifecycle,
+    TimeProvider timeProvider)
 {
     // FR-32/AD-6 extension: Success/Error/Flagged for Review records fade out 30 days after
     // completion; Waiting/Processing/Needs Mapping never auto-clear (AC #6, #7). Internal (not
@@ -43,7 +44,7 @@ public class ListSmartPlugImportJobs(
 
         // Lazy, read-triggered sweep (AD-7) — runs first so a swept row never appears in the same
         // response that triggered its own sweep.
-        var cutoffUtc = DateTimeOffset.UtcNow - RetentionWindow;
+        var cutoffUtc = timeProvider.GetUtcNow() - RetentionWindow;
         await smartPlugImportRepository.SweepExpiredAsync(householdId, cutoffUtc, cancellationToken);
 
         // Story 11.2 (AC #7): terminal CorrelateEvent rows are never member-visible but would

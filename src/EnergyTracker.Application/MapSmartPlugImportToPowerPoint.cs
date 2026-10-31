@@ -8,7 +8,8 @@ public class MapSmartPlugImportToPowerPoint(
     ISmartPlugImportRepository smartPlugImportRepository,
     ITaggingScaffoldRepository taggingScaffoldRepository,
     CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider)
 {
     public async Task ExecuteAsync(Guid smartPlugImportId, Guid powerPointId, CancellationToken cancellationToken)
     {
@@ -48,7 +49,7 @@ public class MapSmartPlugImportToPowerPoint(
         await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
             import.Status = SmartPlugImportStatus.Completed;
-            import.CompletedAtUtc = DateTimeOffset.UtcNow;
+            import.CompletedAtUtc = timeProvider.GetUtcNow();
 
             // AD-10: this mapping call is "write time" for these previously-unattributed readings —
             // snapshot the Power Point/Room identity by value now, never a live join later. A

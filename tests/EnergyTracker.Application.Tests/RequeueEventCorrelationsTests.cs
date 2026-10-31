@@ -17,7 +17,7 @@ public class RequeueEventCorrelationsTests
     private static readonly DateTimeOffset From = new(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset To = From.AddDays(14);
 
-    private RequeueEventCorrelations Sut() => new(_householdRepository, _eventRepository, _readingRepository, _jobQueue, _logger);
+    private RequeueEventCorrelations Sut() => new(_householdRepository, _eventRepository, _readingRepository, _jobQueue, _logger, TimeProvider.System);
 
     // ILogger.Log<TState> is generic over an internal state type, so match the recorded calls by level and exception.
     private bool LoggedWarning(string exceptionMessage) => _logger.ReceivedCalls().Any(c =>
@@ -228,5 +228,21 @@ public class RequeueEventCorrelationsTests
             .Returns(Task.FromException<MeterReading?>(new OperationCanceledException()));
         await Should.ThrowAsync<OperationCanceledException>(() =>
             Sut().ExecuteFromReadingAsync(householdId, Guid.NewGuid(), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ExecuteFromAsync_ends_the_range_at_the_injected_now_plus_the_future_clock_skew()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero));
+        var householdId = Guid.NewGuid();
+        SeedHousehold(householdId, aiPlausibilityEnabled: true);
+        var sut = new RequeueEventCorrelations(_householdRepository, _eventRepository, _readingRepository, _jobQueue, _logger, clock);
+
+        await sut.ExecuteFromAsync(householdId, From, TestContext.Current.CancellationToken);
+
+        await _eventRepository.Received(1).GetByOccurredAtRangeAsync(
+            From - Domain.Calculations.WindowedDeviationCalculator.WindowRadius,
+            clock.GetUtcNow() + TimeSpan.FromMinutes(5),
+            Arg.Any<CancellationToken>());
     }
 }

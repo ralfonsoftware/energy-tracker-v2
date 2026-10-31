@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
-public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffRepository
+public class TariffRepository(EnergyTrackerDbContext dbContext, TimeProvider timeProvider) : ITariffRepository
 {
     public async Task<Tariff> AddAsync(Tariff tariff, CancellationToken cancellationToken)
     {
@@ -39,7 +39,7 @@ public class TariffRepository(EnergyTrackerDbContext dbContext) : ITariffReposit
 
     public Task<Tariff?> FindCurrentForHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         return dbContext.Tariffs
             .Where(t => t.HouseholdId == householdId && t.ContractStartDate <= now)
             .OrderByDescending(t => t.ContractStartDate)

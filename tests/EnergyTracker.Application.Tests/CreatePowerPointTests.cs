@@ -28,7 +28,7 @@ public class CreatePowerPointTests
     {
         var room = MakeRoom();
         _repository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new CreatePowerPoint(_repository);
+        var sut = new CreatePowerPoint(_repository, TimeProvider.System);
 
         var powerPoint = await sut.ExecuteAsync(room.HouseholdId, room.Id, "Counter outlet", TestContext.Current.CancellationToken);
 
@@ -44,7 +44,7 @@ public class CreatePowerPointTests
     {
         var roomId = Guid.NewGuid();
         _repository.FindRoomAsync(roomId, Arg.Any<CancellationToken>()).Returns((Room?)null);
-        var sut = new CreatePowerPoint(_repository);
+        var sut = new CreatePowerPoint(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldNotFoundException>(
             () => sut.ExecuteAsync(Guid.NewGuid(), roomId, "Counter outlet", TestContext.Current.CancellationToken));
@@ -55,7 +55,7 @@ public class CreatePowerPointTests
     {
         var room = MakeRoom();
         _repository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new CreatePowerPoint(_repository);
+        var sut = new CreatePowerPoint(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
             () => sut.ExecuteAsync(room.HouseholdId, room.Id, "   ", TestContext.Current.CancellationToken));
@@ -66,7 +66,7 @@ public class CreatePowerPointTests
     {
         var room = MakeRoom(archivedAt: DateTimeOffset.UtcNow);
         _repository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new CreatePowerPoint(_repository);
+        var sut = new CreatePowerPoint(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldParentArchivedException>(
             () => sut.ExecuteAsync(room.HouseholdId, room.Id, "Counter outlet", TestContext.Current.CancellationToken));
@@ -81,7 +81,7 @@ public class CreatePowerPointTests
         {
             new() { Id = Guid.NewGuid(), HouseholdId = room.HouseholdId, RoomId = room.Id, Name = "Counter outlet", CreatedAtUtc = DateTimeOffset.UtcNow, ArchivedAt = null },
         });
-        var sut = new CreatePowerPoint(_repository);
+        var sut = new CreatePowerPoint(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
             () => sut.ExecuteAsync(room.HouseholdId, room.Id, "Counter outlet", TestContext.Current.CancellationToken));

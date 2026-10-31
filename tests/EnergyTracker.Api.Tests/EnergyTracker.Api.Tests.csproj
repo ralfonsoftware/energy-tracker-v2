@@ -20,6 +20,7 @@
   <!-- Shared by both test assemblies: one Postgres/SQL Server container per run, a database per test. -->
   <ItemGroup>
     <Compile Include="..\Shared\SharedDatabaseServers.cs" Link="SharedDatabaseServers.cs" />
+    <Compile Include="..\Shared\ManualTimeProvider.cs" Link="ManualTimeProvider.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -16,7 +16,7 @@ public class CreateMeterReadingTests
 
     private RequeueEventCorrelations Requeue() => new(
         _householdRepository, _eventRepository, _repository, _jobQueue,
-        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>());
+        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>(), TimeProvider.System);
 
     private static MainMeter NewMainMeter(Guid householdId) => new()
     {
@@ -25,7 +25,7 @@ public class CreateMeterReadingTests
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    private CreateMeterReading Sut() => new(_repository, _regressionPromptRepository, _statusRecomputeService, Requeue());
+    private CreateMeterReading Sut() => new(_repository, _regressionPromptRepository, _statusRecomputeService, Requeue(), TimeProvider.System);
 
     public CreateMeterReadingTests()
     {
@@ -435,5 +435,24 @@ public class CreateMeterReadingTests
             backfilledTimestamp.AddDays(-7),
             Arg.Is<DateTimeOffset>(to => to > DateTimeOffset.UtcNow && to <= DateTimeOffset.UtcNow.AddMinutes(10)),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_reading_exactly_at_the_future_clock_skew_limit_is_accepted_and_one_tick_past_it_is_rejected()
+    {
+        var clock = new ManualTimeProvider();
+        var householdId = Guid.NewGuid();
+        _repository.FindByIdempotencyKeyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((MeterReading?)null);
+        _repository.GetOrCreateMainMeterAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewMainMeter(householdId));
+        _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
+        var sut = new CreateMeterReading(_repository, _regressionPromptRepository, _statusRecomputeService, Requeue(), clock);
+        var limit = clock.GetUtcNow() + TimeSpan.FromMinutes(5);
+
+        var accepted = await sut.ExecuteAsync(householdId, 100m, limit, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        accepted.ReadingTimestamp.ShouldBe(limit);
+        accepted.CreatedAtUtc.ShouldBe(clock.GetUtcNow());
+        await Should.ThrowAsync<MeterReadingValidationException>(() =>
+            sut.ExecuteAsync(householdId, 100m, limit.AddTicks(1), Guid.NewGuid(), TestContext.Current.CancellationToken));
     }
 }

@@ -10,7 +10,7 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // InProcessChannelJobQueue and AzureStorageQueueJobQueue are registered AddSingleton, so DB
 // access needs a fresh scope per call, same IServiceScopeFactory pattern BackgroundJobProcessor
 // already uses. Factored into one class rather than duplicated in each adapter's EnqueueAsync.
-public class BackgroundJobEnqueueRecorder(IServiceScopeFactory scopeFactory)
+public class BackgroundJobEnqueueRecorder(IServiceScopeFactory scopeFactory, TimeProvider timeProvider)
 {
     public Task RecordAsync<TPayload>(JobEnvelope<TPayload> envelope, CancellationToken cancellationToken) =>
         RecordAsync(envelope, retryWhenSlotIsFree: true, cancellationToken);
@@ -29,7 +29,7 @@ public class BackgroundJobEnqueueRecorder(IServiceScopeFactory scopeFactory)
             Status = BackgroundJobStatus.Queued,
             OriginalFileName = envelope.OriginalFileName,
             QueuedByHouseholdMemberId = envelope.QueuedByHouseholdMemberId,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
         });
 
         try

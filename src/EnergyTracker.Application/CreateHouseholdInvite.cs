@@ -8,7 +8,7 @@ namespace EnergyTracker.Application;
 /// plaintext token once; only the token's hash is stored (AC #1, Story 11.9 AC #5).
 /// Plain class with a constructor-injected repository port, matching CreateHousehold's shape.
 /// </summary>
-public class CreateHouseholdInvite(IHouseholdRepository repository)
+public class CreateHouseholdInvite(IHouseholdRepository repository, TimeProvider timeProvider)
 {
     // Fixed operational/security default (not an AD-15 household-scoped product value) — bounds
     // how long a leaked/forwarded invite link stays dangerous.
@@ -16,7 +16,7 @@ public class CreateHouseholdInvite(IHouseholdRepository repository)
 
     public async Task<CreatedHouseholdInvite> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var token = InviteToken.Generate();
         var invite = new HouseholdInvite
         {

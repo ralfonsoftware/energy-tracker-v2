@@ -5,7 +5,7 @@ namespace EnergyTracker.Application;
 public record TariffCheckReminderResult(bool IsDue, DateTimeOffset GateOpensAtUtc);
 
 /// <summary>Computes whether the caller's Household is due for a Tariff Check live, synchronously, at request time — undefined (null) with no current Tariff configured (AC #3; AD-7, FR-15).</summary>
-public class GetTariffCheckReminder(ITariffRepository tariffRepository)
+public class GetTariffCheckReminder(ITariffRepository tariffRepository, TimeProvider timeProvider)
 {
     public async Task<TariffCheckReminderResult?> ExecuteAsync(Guid householdId, CancellationToken cancellationToken)
     {
@@ -30,7 +30,7 @@ public class GetTariffCheckReminder(ITariffRepository tariffRepository)
         // on the current Tariff can move gateOpensAtUtc forward and flip IsDue back to false —
         // that's AC #5's "recompute against the new dates going forward", not a violation of
         // monotonicity: time alone never closes the gate once it has opened for a fixed Tariff.
-        var isDue = DateTimeOffset.UtcNow >= gateOpensAtUtc;
+        var isDue = timeProvider.GetUtcNow() >= gateOpensAtUtc;
 
         return new TariffCheckReminderResult(IsDue: isDue, GateOpensAtUtc: gateOpensAtUtc);
     }

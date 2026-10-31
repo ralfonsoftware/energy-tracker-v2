@@ -16,6 +16,7 @@ public class MemoryHouseholdImportUploadRegistry : IHouseholdImportUploadRegistr
     private static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(30);
 
     private readonly TimeSpan _ttl;
+    private readonly TimeProvider _timeProvider;
 
     // Story 11.10 (audit S4): "at most one pending upload per Household" is a rule over two
     // indexes, so a plain ConcurrentDictionary cannot hold it atomically. One lock guards both;
@@ -24,11 +25,15 @@ public class MemoryHouseholdImportUploadRegistry : IHouseholdImportUploadRegistr
     private readonly Dictionary<Guid, Entry> _entries = [];
     private readonly Dictionary<Guid, Guid> _tokenByHousehold = [];
 
-    public MemoryHouseholdImportUploadRegistry() : this(DefaultTtl)
+    public MemoryHouseholdImportUploadRegistry(TimeProvider timeProvider) : this(DefaultTtl, timeProvider)
     {
     }
 
-    internal MemoryHouseholdImportUploadRegistry(TimeSpan ttl) => _ttl = ttl;
+    internal MemoryHouseholdImportUploadRegistry(TimeSpan ttl, TimeProvider timeProvider)
+    {
+        _ttl = ttl;
+        _timeProvider = timeProvider;
+    }
 
     private readonly record struct Entry(HouseholdImportUploadReference Reference, DateTimeOffset ExpiresAtUtc);
 
@@ -44,7 +49,7 @@ public class MemoryHouseholdImportUploadRegistry : IHouseholdImportUploadRegistr
             // Review, Story 7.2 Pass 1). No IHostedService/Timer: this app's scale-to-zero Container
             // Apps hosting doesn't reliably run one (same reasoning as AD-7's compute-at-read-time
             // convention).
-            var now = DateTimeOffset.UtcNow;
+            var now = _timeProvider.GetUtcNow();
             foreach (var (expiredToken, expired) in _entries.Where(e => e.Value.ExpiresAtUtc < now).ToList())
             {
                 Remove(expiredToken, expired, droppedFiles);
@@ -117,7 +122,7 @@ public class MemoryHouseholdImportUploadRegistry : IHouseholdImportUploadRegistr
             Remove(token, entry, []);
         }
 
-        if (entry.ExpiresAtUtc >= DateTimeOffset.UtcNow && entry.Reference.HouseholdId == householdId)
+        if (entry.ExpiresAtUtc >= _timeProvider.GetUtcNow() && entry.Reference.HouseholdId == householdId)
         {
             return entry.Reference;
         }

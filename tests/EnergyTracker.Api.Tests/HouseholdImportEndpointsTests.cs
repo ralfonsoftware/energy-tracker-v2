@@ -454,7 +454,7 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         IFormFile file, UploadDirectory directory, IHouseholdImportUploadRegistry? registry = null, CancellationToken? cancellationToken = null,
         long maxFileSizeBytes = HouseholdImportEndpoints.MaxFileSizeBytes, Guid? householdId = null) =>
         HouseholdImportEndpoints.ReceiveUploadAsync(
-            file, householdId ?? Guid.NewGuid(), new ValidateHouseholdImport(), registry ?? new MemoryHouseholdImportUploadRegistry(),
+            file, householdId ?? Guid.NewGuid(), new ValidateHouseholdImport(), registry ?? new MemoryHouseholdImportUploadRegistry(TimeProvider.System),
             SettingsFor(directory, maxFileSizeBytes), cancellationToken ?? TestContext.Current.CancellationToken);
 
     private const string MinimalValidDocument =
@@ -584,7 +584,7 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
     public async Task A_request_cancelled_after_the_copy_leaves_no_temp_file_and_keeps_the_earlier_pending_upload()
     {
         using var directory = new UploadDirectory();
-        var registry = new MemoryHouseholdImportUploadRegistry();
+        var registry = new MemoryHouseholdImportUploadRegistry(TimeProvider.System);
         var household = Guid.NewGuid();
         var first = await ReceiveAsync(FormFileOf(MinimalValidDocument), directory, registry, householdId: household);
         var firstToken = first.ShouldBeOfType<Ok<HouseholdImportValidationResponse>>().Value!.Token;

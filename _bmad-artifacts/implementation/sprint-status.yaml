@@ -155,7 +155,7 @@ development_status:
   11-14-restore-id-collisions-active-job-guard: done
   11-15-trending-threshold-scaled-to-elapsed: done
   11-16-offline-queue-rejected-readings-attention: done
-  11-17-timeprovider-recompute-lock-eviction: ready-for-dev
+  11-17-timeprovider-recompute-lock-eviction: review
   11-18-backend-analyzer-format-gate: backlog
   11-19-structural-cleanup: backlog
   epic-11-retrospective: optional

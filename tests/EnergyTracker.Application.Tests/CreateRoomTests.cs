@@ -18,7 +18,7 @@ public class CreateRoomTests
     public async Task Creates_and_persists_an_active_room_scoped_to_the_household()
     {
         var householdId = Guid.NewGuid();
-        var sut = new CreateRoom(_repository);
+        var sut = new CreateRoom(_repository, TimeProvider.System);
 
         var before = DateTimeOffset.UtcNow;
         var room = await sut.ExecuteAsync(householdId, "Kitchen", TestContext.Current.CancellationToken);
@@ -37,7 +37,7 @@ public class CreateRoomTests
     [Fact]
     public async Task Trims_the_name()
     {
-        var sut = new CreateRoom(_repository);
+        var sut = new CreateRoom(_repository, TimeProvider.System);
 
         var room = await sut.ExecuteAsync(Guid.NewGuid(), "  Kitchen  ", TestContext.Current.CancellationToken);
 
@@ -49,7 +49,7 @@ public class CreateRoomTests
     [InlineData("   ")]
     public async Task Rejects_a_blank_name(string name)
     {
-        var sut = new CreateRoom(_repository);
+        var sut = new CreateRoom(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
             () => sut.ExecuteAsync(Guid.NewGuid(), name, TestContext.Current.CancellationToken));
@@ -58,7 +58,7 @@ public class CreateRoomTests
     [Fact]
     public async Task Rejects_a_name_over_200_characters()
     {
-        var sut = new CreateRoom(_repository);
+        var sut = new CreateRoom(_repository, TimeProvider.System);
         var name = new string('a', 201);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
@@ -73,7 +73,7 @@ public class CreateRoomTests
         {
             new() { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = DateTimeOffset.UtcNow, ArchivedAt = null },
         });
-        var sut = new CreateRoom(_repository);
+        var sut = new CreateRoom(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
             () => sut.ExecuteAsync(householdId, "Kitchen", TestContext.Current.CancellationToken));

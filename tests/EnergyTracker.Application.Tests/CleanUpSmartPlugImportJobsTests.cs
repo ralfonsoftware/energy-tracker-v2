@@ -11,7 +11,7 @@ public class CleanUpSmartPlugImportJobsTests
     private readonly IBackgroundJobRepository _backgroundJobRepository = Substitute.For<IBackgroundJobRepository>();
     private readonly Guid _householdId = Guid.NewGuid();
 
-    private CleanUpSmartPlugImportJobs Sut() => new(_smartPlugImportRepository, _backgroundJobRepository);
+    private CleanUpSmartPlugImportJobs Sut() => new(_smartPlugImportRepository, _backgroundJobRepository, TimeProvider.System);
 
     [Fact]
     public async Task ExecuteAsync_with_deleteAll_true_calls_the_repository_with_no_cutoff()

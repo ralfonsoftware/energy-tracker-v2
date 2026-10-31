@@ -24,7 +24,7 @@ public class ArchiveDeviceTests
     {
         var device = MakeDevice();
         _repository.FindDeviceAsync(device.Id, Arg.Any<CancellationToken>()).Returns(device);
-        var sut = new ArchiveDevice(_repository);
+        var sut = new ArchiveDevice(_repository, TimeProvider.System);
 
         var result = await sut.ExecuteAsync(device.Id, TestContext.Current.CancellationToken);
 
@@ -38,7 +38,7 @@ public class ArchiveDeviceTests
         var archivedAt = DateTimeOffset.UtcNow.AddDays(-1);
         var device = MakeDevice(archivedAt);
         _repository.FindDeviceAsync(device.Id, Arg.Any<CancellationToken>()).Returns(device);
-        var sut = new ArchiveDevice(_repository);
+        var sut = new ArchiveDevice(_repository, TimeProvider.System);
 
         var result = await sut.ExecuteAsync(device.Id, TestContext.Current.CancellationToken);
 
@@ -51,7 +51,7 @@ public class ArchiveDeviceTests
     {
         var deviceId = Guid.NewGuid();
         _repository.FindDeviceAsync(deviceId, Arg.Any<CancellationToken>()).Returns((Device?)null);
-        var sut = new ArchiveDevice(_repository);
+        var sut = new ArchiveDevice(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldNotFoundException>(
             () => sut.ExecuteAsync(deviceId, TestContext.Current.CancellationToken));

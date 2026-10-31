@@ -24,7 +24,7 @@ public class ArchivePowerPointTests
     {
         var powerPoint = MakePowerPoint();
         _repository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new ArchivePowerPoint(_repository);
+        var sut = new ArchivePowerPoint(_repository, TimeProvider.System);
 
         var result = await sut.ExecuteAsync(powerPoint.Id, TestContext.Current.CancellationToken);
 
@@ -38,7 +38,7 @@ public class ArchivePowerPointTests
         var archivedAt = DateTimeOffset.UtcNow.AddDays(-1);
         var powerPoint = MakePowerPoint(archivedAt);
         _repository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new ArchivePowerPoint(_repository);
+        var sut = new ArchivePowerPoint(_repository, TimeProvider.System);
 
         var result = await sut.ExecuteAsync(powerPoint.Id, TestContext.Current.CancellationToken);
 
@@ -51,7 +51,7 @@ public class ArchivePowerPointTests
     {
         var powerPointId = Guid.NewGuid();
         _repository.FindPowerPointAsync(powerPointId, Arg.Any<CancellationToken>()).Returns((PowerPoint?)null);
-        var sut = new ArchivePowerPoint(_repository);
+        var sut = new ArchivePowerPoint(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldNotFoundException>(
             () => sut.ExecuteAsync(powerPointId, TestContext.Current.CancellationToken));
@@ -62,7 +62,7 @@ public class ArchivePowerPointTests
     {
         var powerPoint = MakePowerPoint();
         _repository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new ArchivePowerPoint(_repository);
+        var sut = new ArchivePowerPoint(_repository, TimeProvider.System);
 
         await sut.ExecuteAsync(powerPoint.Id, TestContext.Current.CancellationToken);
 

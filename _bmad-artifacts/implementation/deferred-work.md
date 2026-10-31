@@ -190,10 +190,6 @@ Conventions: append new sections at the end, chronological (see `project-context
   summary: `HouseholdRecomputeLock`'s in-process locking correctness rests entirely on `infra/modules/container-app.bicep`'s `maxReplicas = 1`, documented only in a source comment — no test or startup assertion fails loudly if that value is ever changed to allow horizontal scaling, which would silently reintroduce the exact race this story fixes.
   evidence: Same "documented but not guarded" pattern already accepted for other infra/code couplings in this codebase (e.g. the OTel/Application-Insights dual-logging constraint in project-context.md). A guard would most naturally live as an integration/smoke check against the deployed Bicep output rather than unit-testable C#, which is why round 4 didn't add one inline. Raised by adversarial review, round 4.
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
-  summary: `HouseholdRecomputeLock`'s internal `Releaser.DisposeAsync` double-dispose guard (`Interlocked.Exchange`) has no test calling `DisposeAsync` twice to prove it actually prevents a double-release.
-  evidence: Low-risk — the guard is a standard, well-understood idiom, and `await using` in every real call site only ever disposes once. Worth a quick test if this type is ever reused outside its current single call site. Raised by adversarial review, round 4.
-
 
 ## Deferred from: code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 

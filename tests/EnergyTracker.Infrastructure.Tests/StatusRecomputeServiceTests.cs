@@ -127,8 +127,8 @@ public class StatusRecomputeServiceTests : IAsyncLifetime
         householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(RecordAndReturnHouseholdAsync);
 
         var recomputeLock = new HouseholdRecomputeLock();
-        var getCurrentStatus = new GetCurrentStatus(householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal);
-        var sut = new StatusRecomputeService(getCurrentStatus, dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance);
+        var getCurrentStatus = new GetCurrentStatus(householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal, TimeProvider.System);
+        var sut = new StatusRecomputeService(getCurrentStatus, dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance, TimeProvider.System);
 
         var firstTask = sut.RecomputeAsync(householdId, TestContext.Current.CancellationToken);
         await firstEntered.Task;
@@ -182,11 +182,11 @@ public class StatusRecomputeServiceTests : IAsyncLifetime
 
         var recomputeLock = new HouseholdRecomputeLock();
         var sutA = new StatusRecomputeService(
-            new GetCurrentStatus(householdRepositoryA, readingRepositoryA, regressionPromptRepositoryA, smartPlugCoverageSignalA),
-            dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance);
+            new GetCurrentStatus(householdRepositoryA, readingRepositoryA, regressionPromptRepositoryA, smartPlugCoverageSignalA, TimeProvider.System),
+            dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance, TimeProvider.System);
         var sutB = new StatusRecomputeService(
-            new GetCurrentStatus(householdRepositoryB, readingRepositoryB, regressionPromptRepositoryB, smartPlugCoverageSignalB),
-            dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance);
+            new GetCurrentStatus(householdRepositoryB, readingRepositoryB, regressionPromptRepositoryB, smartPlugCoverageSignalB, TimeProvider.System),
+            dbContext, recomputeLock, NullLogger<StatusRecomputeService>.Instance, TimeProvider.System);
 
         var taskA = sutA.RecomputeAsync(householdA, TestContext.Current.CancellationToken);
         await householdAEntered.Task;
@@ -208,5 +208,24 @@ public class StatusRecomputeServiceTests : IAsyncLifetime
             .ToListAsync(TestContext.Current.CancellationToken);
         snapshotHouseholdIds.ShouldContain(householdA);
         snapshotHouseholdIds.ShouldContain(householdB);
+    }
+
+    [Fact]
+    public async Task RecomputeAsync_stamps_the_snapshot_with_the_injected_clock()
+    {
+        var householdId = Guid.NewGuid();
+        await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
+        await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
+        var (householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal) = NewMockedPorts(householdId, Guid.NewGuid());
+        householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>())
+            .Returns(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, YearlyBaselineKwh = 3650m });
+        var clock = new ManualTimeProvider(new DateTimeOffset(2031, 7, 8, 9, 10, 11, TimeSpan.Zero));
+        var getCurrentStatus = new GetCurrentStatus(householdRepository, readingRepository, regressionPromptRepository, smartPlugCoverageSignal, clock);
+        var sut = new StatusRecomputeService(getCurrentStatus, dbContext, new HouseholdRecomputeLock(), NullLogger<StatusRecomputeService>.Instance, clock);
+
+        await sut.RecomputeAsync(householdId, TestContext.Current.CancellationToken);
+
+        var snapshot = await dbContext.StatusSnapshots.SingleAsync(s => s.HouseholdId == householdId, TestContext.Current.CancellationToken);
+        snapshot.ComputedAtUtc.ShouldBe(clock.GetUtcNow());
     }
 }

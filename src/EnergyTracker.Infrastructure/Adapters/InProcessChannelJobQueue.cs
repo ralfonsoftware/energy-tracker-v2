@@ -31,12 +31,12 @@ public class InProcessChannelJobQueue(BackgroundJobEnqueueRecorder enqueueRecord
 // hands each to the shared BackgroundJobProcessor dispatch loop.
 public class InProcessChannelJobProcessingService(
     InProcessChannelJobQueue queue, BackgroundJobProcessor processor, InProcessJobStartupSweep startupSweep,
-    ILogger<InProcessChannelJobProcessingService> logger)
+    ILogger<InProcessChannelJobProcessingService> logger, TimeProvider timeProvider)
     : BackgroundService
 {
     // Captured at construction, before the host serves a request: a row enqueued by this process
     // has CreatedAtUtc >= this and is never swept.
-    private readonly DateTimeOffset _processStartedAtUtc = DateTimeOffset.UtcNow;
+    private readonly DateTimeOffset _processStartedAtUtc = timeProvider.GetUtcNow();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

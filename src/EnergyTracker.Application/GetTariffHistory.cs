@@ -11,7 +11,7 @@ public record TariffHistoryPage(IReadOnlyList<TariffHistoryEntry> Items, int Tot
 public record TariffHistoryEntry(Tariff Tariff, bool IsCurrent, DateTimeOffset? EffectiveUntil, IReadOnlyDictionary<string, AuditCorrection> Corrections);
 
 /// <summary>Reads a paginated, timestamp-ordered page of the caller's own Household's Tariff history, enriched with current/effective-until and per-field correction data (AC #1, #2, #6).</summary>
-public class GetTariffHistory(ITariffRepository tariffRepository, IAuditCorrectionRecorder auditCorrectionRecorder)
+public class GetTariffHistory(ITariffRepository tariffRepository, IAuditCorrectionRecorder auditCorrectionRecorder, TimeProvider timeProvider)
 {
     private const int MaxPageSize = 100;
 
@@ -48,7 +48,7 @@ public class GetTariffHistory(ITariffRepository tariffRepository, IAuditCorrecti
             : (await tariffRepository.GetHistoryForHouseholdAsync(householdId, 1, totalCount, cancellationToken)).Items;
         var orderedAscending = fullHistory.OrderBy(t => t.ContractStartDate).ThenBy(t => t.CreatedAtUtc).ThenBy(t => t.Id).ToList();
 
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var currentId = orderedAscending.LastOrDefault(t => t.ContractStartDate <= now)?.Id;
 
         var effectiveUntilById = new Dictionary<Guid, DateTimeOffset?>();

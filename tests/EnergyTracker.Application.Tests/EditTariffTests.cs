@@ -18,7 +18,7 @@ public class EditTariffTests
         _unitOfWork
             .ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<Tariff>>>(), Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<Func<CancellationToken, Task<Tariff>>>()(callInfo.Arg<CancellationToken>()));
-        return new(_tariffRepository, _auditCorrectionRecorder, _unitOfWork);
+        return new(_tariffRepository, _auditCorrectionRecorder, _unitOfWork, TimeProvider.System);
     }
 
     private static Tariff NewTariff(

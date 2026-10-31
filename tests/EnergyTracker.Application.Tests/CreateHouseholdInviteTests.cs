@@ -14,7 +14,7 @@ public class CreateHouseholdInviteTests
     public async Task Creates_a_single_use_invite_expiring_seven_days_out_and_persists_only_the_hash()
     {
         var householdId = Guid.NewGuid();
-        var sut = new CreateHouseholdInvite(_repository);
+        var sut = new CreateHouseholdInvite(_repository, TimeProvider.System);
         HouseholdInvite? stored = null;
         await _repository.AddInviteAsync(Arg.Do<HouseholdInvite>(i => stored = i), Arg.Any<CancellationToken>());
 
@@ -37,11 +37,27 @@ public class CreateHouseholdInviteTests
     [Fact]
     public async Task Each_invite_gets_a_distinct_high_entropy_token()
     {
-        var sut = new CreateHouseholdInvite(_repository);
+        var sut = new CreateHouseholdInvite(_repository, TimeProvider.System);
 
         var first = await sut.ExecuteAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
         var second = await sut.ExecuteAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         first.Token.ShouldNotBe(second.Token);
+    }
+
+    [Fact]
+    public async Task The_invite_expires_exactly_one_lifetime_after_the_injected_clock()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero));
+        var sut = new CreateHouseholdInvite(_repository, clock);
+        HouseholdInvite? stored = null;
+        await _repository.AddInviteAsync(Arg.Do<HouseholdInvite>(i => stored = i), Arg.Any<CancellationToken>());
+
+        var created = await sut.ExecuteAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        stored.ShouldNotBeNull();
+        stored.CreatedAtUtc.ShouldBe(clock.GetUtcNow());
+        stored.ExpiresAtUtc.ShouldBe(clock.GetUtcNow() + CreateHouseholdInvite.InviteLifetime);
+        created.ExpiresAtUtc.ShouldBe(stored.ExpiresAtUtc);
     }
 }

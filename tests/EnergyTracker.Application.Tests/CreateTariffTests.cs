@@ -9,7 +9,7 @@ public class CreateTariffTests
 {
     private readonly ITariffRepository _repository = Substitute.For<ITariffRepository>();
 
-    private CreateTariff Sut() => new(_repository);
+    private CreateTariff Sut() => new(_repository, TimeProvider.System);
 
     [Fact]
     public async Task A_valid_Tariff_is_added_via_the_repository()

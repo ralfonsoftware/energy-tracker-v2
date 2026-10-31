@@ -78,7 +78,7 @@ public abstract class UtcDateTimeOffsetConverterTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
         var submitted = new DateTimeOffset(2026, 8, 1, 9, 15, 0, TimeSpan.FromHours(2));
 
         var returned = await repository.AddAsync(new MeterReading
@@ -107,7 +107,7 @@ public abstract class UtcDateTimeOffsetConverterTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
         var sharedIdempotencyKey = Guid.NewGuid();
         var submitted = new DateTimeOffset(2026, 8, 1, 9, 15, 0, TimeSpan.FromHours(2));
 
@@ -149,7 +149,7 @@ public abstract class UtcDateTimeOffsetConverterTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
         var submitted = new DateTimeOffset(2026, 8, 1, 9, 15, 0, TimeSpan.FromHours(2));
 
         var returned = await repository.AddAsync(new Tariff
@@ -174,7 +174,7 @@ public abstract class UtcDateTimeOffsetConverterTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
         var original = await repository.AddAsync(new Tariff
         {
             Id = Guid.NewGuid(),

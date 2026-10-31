@@ -14,12 +14,12 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // still be alive for it (AD-6, amended 2026-10-11).
 // Callers must run FailStaleAsync before reading the same rows in a scope: ExecuteUpdateAsync
 // bypasses the change tracker.
-public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecycleTimings timings) : IBackgroundJobLifecycle
+public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecycleTimings timings, TimeProvider timeProvider) : IBackgroundJobLifecycle
 {
     public async Task<DateTimeOffset?> TryStartAsync(Guid jobId, CancellationToken cancellationToken)
     {
         var token = NewToken();
-        var staleBefore = DateTimeOffset.UtcNow - timings.StaleAfter;
+        var staleBefore = timeProvider.GetUtcNow() - timings.StaleAfter;
 
         // A Processing row written by the previous image has no heartbeat or start time; falling
         // back to CreatedAtUtc makes it restartable (or failable) after 5 minutes instead of never.
@@ -37,7 +37,7 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
 
     public async Task<bool> TryHeartbeatAsync(Guid jobId, DateTimeOffset token, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var affected = await dbContext.BackgroundJobs
             .Where(j => j.Id == jobId && j.Status == BackgroundJobStatus.Processing && j.StartedAtUtc == token)
             .ExecuteUpdateAsync(s => s.SetProperty(j => j.HeartbeatAtUtc, now), cancellationToken);
@@ -46,7 +46,7 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
 
     public async Task<bool> TryCompleteAsync(Guid jobId, DateTimeOffset token, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var affected = await dbContext.BackgroundJobs
             .Where(j => j.Id == jobId && j.Status == BackgroundJobStatus.Processing && j.StartedAtUtc == token)
             .ExecuteUpdateAsync(s => s
@@ -57,7 +57,7 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
 
     public async Task<bool> TryFailAsync(Guid jobId, DateTimeOffset token, string? errorMessage, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var affected = await dbContext.BackgroundJobs
             .Where(j => j.Id == jobId && j.Status == BackgroundJobStatus.Processing && j.StartedAtUtc == token)
             .ExecuteUpdateAsync(s => s
@@ -69,7 +69,7 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
 
     public async Task<bool> TryFailNonTerminalAsync(Guid jobId, string errorMessage, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var affected = await dbContext.BackgroundJobs
             .Where(j => j.Id == jobId && (j.Status == BackgroundJobStatus.Queued || j.Status == BackgroundJobStatus.Processing))
             .ExecuteUpdateAsync(s => s
@@ -81,7 +81,7 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
 
     public async Task<int> FailStaleAsync(Guid householdId, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var staleBefore = now - timings.StaleAfter;
         var queuedExpiredBefore = now - timings.QueuedExpiresAfter;
         // One statement for both rules: a Processing row whose owner went silent, and a Queued row that
@@ -99,7 +99,7 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
 
     public async Task<int> FailInterruptedBeforeAsync(Guid householdId, DateTimeOffset processStartedAtUtc, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         return await dbContext.BackgroundJobs
             .Where(j => j.HouseholdId == householdId
                 && (j.Status == BackgroundJobStatus.Queued || j.Status == BackgroundJobStatus.Processing)
@@ -114,9 +114,9 @@ public class BackgroundJobLifecycle(EnergyTrackerDbContext dbContext, JobLifecyc
     // 100 ns, Postgres timestamptz keeps microseconds and would silently truncate, so an untruncated
     // token would never match on the later UPDATE ... WHERE StartedAtUtc = @token. Whole
     // milliseconds survive both providers (SQL Server datetimeoffset(7) keeps ticks).
-    private static DateTimeOffset NewToken()
+    private DateTimeOffset NewToken()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         return new DateTimeOffset(now.Ticks - now.Ticks % TimeSpan.TicksPerMillisecond, TimeSpan.Zero);
     }
 }

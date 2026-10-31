@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
-public class AuditCorrectionRecorder(EnergyTrackerDbContext dbContext) : IAuditCorrectionRecorder
+public class AuditCorrectionRecorder(EnergyTrackerDbContext dbContext, TimeProvider timeProvider) : IAuditCorrectionRecorder
 {
     public async Task RecordAsync(Guid householdId, string entityType, Guid entityId, string fieldName, string oldValue, string newValue, CancellationToken cancellationToken)
     {
@@ -18,7 +18,7 @@ public class AuditCorrectionRecorder(EnergyTrackerDbContext dbContext) : IAuditC
                 FieldName = fieldName,
                 OldValue = oldValue,
                 NewValue = newValue,
-                CorrectedAtUtc = DateTimeOffset.UtcNow,
+                CorrectedAtUtc = timeProvider.GetUtcNow(),
             },
             cancellationToken);
 

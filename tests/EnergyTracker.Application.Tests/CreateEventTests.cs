@@ -12,7 +12,7 @@ public class CreateEventTests
     private readonly ITaggingScaffoldRepository _taggingScaffoldRepository = Substitute.For<ITaggingScaffoldRepository>();
     private readonly IBackgroundJobQueue _jobQueue = Substitute.For<IBackgroundJobQueue>();
 
-    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository, _jobQueue, NullLogger<CreateEvent>.Instance);
+    private CreateEvent Sut() => new(_repository, _taggingScaffoldRepository, _jobQueue, NullLogger<CreateEvent>.Instance, TimeProvider.System);
 
     public CreateEventTests()
     {
@@ -328,5 +328,20 @@ public class CreateEventTests
             Guid.NewGuid(), "cooked 2h", DateTimeOffset.UtcNow, null, null, TestContext.Current.CancellationToken);
 
         result.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task An_event_exactly_at_the_future_clock_skew_limit_is_accepted_and_one_tick_past_it_is_rejected()
+    {
+        var clock = new ManualTimeProvider();
+        var sut = new CreateEvent(_repository, _taggingScaffoldRepository, _jobQueue, NullLogger<CreateEvent>.Instance, clock);
+        var limit = clock.GetUtcNow() + TimeSpan.FromMinutes(5);
+
+        var accepted = await sut.ExecuteAsync(Guid.NewGuid(), "cooked 2h", limit, null, null, TestContext.Current.CancellationToken);
+
+        accepted.OccurredAt.ShouldBe(limit);
+        accepted.CreatedAtUtc.ShouldBe(clock.GetUtcNow());
+        await Should.ThrowAsync<EventValidationException>(() =>
+            sut.ExecuteAsync(Guid.NewGuid(), "cooked 2h", limit.AddTicks(1), null, null, TestContext.Current.CancellationToken));
     }
 }

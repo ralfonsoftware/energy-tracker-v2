@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
-public class HouseholdRepository(EnergyTrackerDbContext dbContext) : IHouseholdRepository
+public class HouseholdRepository(EnergyTrackerDbContext dbContext, TimeProvider timeProvider) : IHouseholdRepository
 {
     public Task<HouseholdMember?> FindMemberAsync(string externalIssuer, string externalSubjectId, CancellationToken cancellationToken) =>
         dbContext.HouseholdMembers.SingleOrDefaultAsync(
@@ -151,7 +151,7 @@ public class HouseholdRepository(EnergyTrackerDbContext dbContext) : IHouseholdR
 
     public async Task<Household> AcceptInviteAsync(HouseholdInvite invite, HouseholdMember newMember, CancellationToken cancellationToken)
     {
-        invite.ConsumedAtUtc = DateTimeOffset.UtcNow;
+        invite.ConsumedAtUtc = timeProvider.GetUtcNow();
         // AD-4 requires the concurrency token to change on every update — EF only detects a
         // conflict when the stored value has moved since it was read, so a plain int token that
         // is never bumped never actually guards anything.

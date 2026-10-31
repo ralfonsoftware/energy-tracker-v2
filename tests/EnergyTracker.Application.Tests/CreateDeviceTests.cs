@@ -29,7 +29,7 @@ public class CreateDeviceTests
     {
         var powerPoint = MakePowerPoint();
         _repository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new CreateDevice(_repository);
+        var sut = new CreateDevice(_repository, TimeProvider.System);
 
         var device = await sut.ExecuteAsync(powerPoint.HouseholdId, powerPoint.Id, "Kettle", TestContext.Current.CancellationToken);
 
@@ -45,7 +45,7 @@ public class CreateDeviceTests
     {
         var powerPointId = Guid.NewGuid();
         _repository.FindPowerPointAsync(powerPointId, Arg.Any<CancellationToken>()).Returns((PowerPoint?)null);
-        var sut = new CreateDevice(_repository);
+        var sut = new CreateDevice(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldNotFoundException>(
             () => sut.ExecuteAsync(Guid.NewGuid(), powerPointId, "Kettle", TestContext.Current.CancellationToken));
@@ -56,7 +56,7 @@ public class CreateDeviceTests
     {
         var powerPoint = MakePowerPoint();
         _repository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new CreateDevice(_repository);
+        var sut = new CreateDevice(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
             () => sut.ExecuteAsync(powerPoint.HouseholdId, powerPoint.Id, "   ", TestContext.Current.CancellationToken));
@@ -67,7 +67,7 @@ public class CreateDeviceTests
     {
         var powerPoint = MakePowerPoint(archivedAt: DateTimeOffset.UtcNow);
         _repository.FindPowerPointAsync(powerPoint.Id, Arg.Any<CancellationToken>()).Returns(powerPoint);
-        var sut = new CreateDevice(_repository);
+        var sut = new CreateDevice(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldParentArchivedException>(
             () => sut.ExecuteAsync(powerPoint.HouseholdId, powerPoint.Id, "Kettle", TestContext.Current.CancellationToken));
@@ -82,7 +82,7 @@ public class CreateDeviceTests
         {
             new() { Id = Guid.NewGuid(), HouseholdId = powerPoint.HouseholdId, PowerPointId = powerPoint.Id, Name = "Kettle", CreatedAtUtc = DateTimeOffset.UtcNow, ArchivedAt = null },
         });
-        var sut = new CreateDevice(_repository);
+        var sut = new CreateDevice(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldValidationException>(
             () => sut.ExecuteAsync(powerPoint.HouseholdId, powerPoint.Id, "Kettle", TestContext.Current.CancellationToken));
