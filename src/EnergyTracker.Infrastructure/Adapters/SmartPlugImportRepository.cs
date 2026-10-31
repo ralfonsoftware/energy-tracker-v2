@@ -9,16 +9,14 @@ using Microsoft.Extensions.Logging;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
+// Partial on purpose: one class per file is bent here because the port is one interface and the tests construct
+// this class directly. Import, Mapping and Cleanup hold the parts by responsibility.
 public partial class SmartPlugImportRepository(
     EnergyTrackerDbContext dbContext, IAuditCorrectionRecorder auditCorrectionRecorder,
     ILogger<SmartPlugImportRepository> logger) : ISmartPlugImportRepository
 {
-    // Ties UpsertAwaitingMappingReadingsAsync's chunk size to BuildAwaitingMappingValuesClause's
-    // own column count and each provider's per-statement parameter ceiling (Story 3.9 review fix)
-    // — previously two independent magic numbers (9 columns, 5000/200-row chunk sizes) with
-    // nothing tying them together, so a future column added to BuildAwaitingMappingValuesClause
-    // could silently reintroduce the exact "blew past the provider's parameter limit" bug this
-    // chunking exists to fix. Postgres's hard per-statement limit; SQL Server's practical ceiling.
+    // The upsert's chunk size must stay under each provider's per-statement parameter limit for the column count of
+    // BuildAwaitingMappingValuesClause: Postgres's hard limit, SQL Server's practical ceiling. ADR 0005.
     private const int PostgresMaxStatementParameters = 65_535;
     private const int SqlServerPracticalMaxStatementParameters = 2_100;
     private const int AwaitingMappingColumnsPerRow = 9;
