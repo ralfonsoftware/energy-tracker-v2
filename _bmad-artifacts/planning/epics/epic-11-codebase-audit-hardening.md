@@ -7,7 +7,7 @@ Fixes the findings of the 2026-10-10 codebase audit (`docs/codebase-audit-2026-1
 **FRs covered:** none new. FR-6/FR-30 clarified (C12). Hardens FR-4, FR-22, FR-23, FR-26–FR-28 and FR-33.
 **Architecture:** AD-6, AD-17, AD-20 (amended 2026-10-10); AD-24, AD-25, AD-26, AD-27 (new); AD-3, AD-4, AD-5, AD-7 and AD-18 constrain the implementation.
 
-**Tiers:** Now (11.1–11.6) → Soon (11.7–11.11) → Later (11.12–11.19).
+**Tiers:** Now (11.1–11.6) → Soon (11.7–11.11) → Later (11.12–11.19) → Triage follow-ups (11.20–11.23, promoted from `deferred-work.md` on 2026-10-31).
 **Dependencies:**
 - 11.3 needs 11.2.
 - 11.6 needs 11.5.
@@ -491,3 +491,67 @@ So that changes stay local and reviews stay readable (audit A3, R1, R2 api side)
 **Given** comments that narrate story and review history,
 **When** files are touched by this story,
 **Then** each comment is trimmed to one to three lines of *why*, and any longer reasoning moves to `docs/adr/`.
+
+## Story 11.20: Drop the Plaintext Invite Token Column
+
+As a maintainer,
+I want the legacy `HouseholdInvites.Token` column and its lookup branch removed,
+So that no plaintext invite token is stored once every legacy invite has expired (promoted from `deferred-work.md`, Story 11.9 dev-story entry).
+
+**Acceptance Criteria:**
+
+**Given** Story 11.9 shipped on 2026-10-21 and invites live 7 days,
+**When** this story starts,
+**Then** it confirms no row has a non-null `Token` and an unexpired `ExpiresAt` before the contract migration runs, and follows the expand/contract rule in `project-context.md`.
+
+**Given** the contract migration,
+**When** this story is done,
+**Then** the `Token` column and its unique index are dropped, `HouseholdInvite.Token` and the legacy branch of `FindInviteByTokenAsync` are deleted, and `HouseholdMembershipRepositoryTests`, `HouseholdInviteTests` and the migration tests are updated.
+
+## Story 11.21: Self-Host Migration Path
+
+As a self-hoster,
+I want a documented, working way to apply EF Core migrations,
+So that a fresh install reaches a usable database (promoted from `deferred-work.md`, Story 10.1 create-story entry).
+
+**Acceptance Criteria:**
+
+**Given** a fresh self-host install from `docker-compose.yml`,
+**When** this story is done,
+**Then** `docs/self-hosting.md` states how migrations are applied, and the path is verified end to end on a clean volume.
+
+**Given** the chosen path (documented script, one-shot compose service, or startup migration),
+**When** it fails or the schema is behind,
+**Then** the operator sees a clear message, and the decision is recorded as an Ask First before development.
+
+## Story 11.22: Keep the Invite Token Out of Logs
+
+As a household owner,
+I want invite tokens kept out of request-path logs and telemetry,
+So that a log reader cannot join my household (promoted from `deferred-work.md`, Story 11.9 dev-story entry, AC #11d).
+
+**Acceptance Criteria:**
+
+**Given** the effective logging configuration (no `Serilog` section, Information-level hosting diagnostics, `url.path` in Azure Monitor traces),
+**When** this story is done,
+**Then** the invite segment of `/api/household-invites/<token>`, `/api/household-invites/<token>/accept` and `/join/<token>` no longer appears in stdout logs or traces, or the token no longer travels in the path.
+
+**Given** the chosen option (logging override plus span redaction, or fragment/POST body),
+**When** it ships,
+**Then** a test proves the redaction and the choice is recorded as an Ask First before development.
+
+## Story 11.23: Failed Startup Must Exit
+
+As an operator,
+I want a host that throws at startup to exit non-zero,
+So that restart policies and Container Apps crash-loop detection see the failure (promoted from `deferred-work.md`, Story 11.11 dev-story entry).
+
+**Acceptance Criteria:**
+
+**Given** any `throw` out of `Program.cs` (connection-string check, `Ai:Endpoint` check, Data Protection fail-closed check),
+**When** the host starts,
+**Then** the process exits non-zero instead of staying `running` at 100% CPU.
+
+**Given** the cause is not yet known (Serilog/OTel flush on a half-built host, or a host-specific createdump spin),
+**When** this story starts,
+**Then** it first reproduces on the OrbStack/arm64 host and on a Linux amd64 host or Azure, and records the finding before changing code.

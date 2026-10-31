@@ -19,17 +19,17 @@ _File hold critical rules, patterns AI agents must follow when implement code in
 **Frontend:** React 19.2, Vite 8.2, TypeScript ~6.0, Tailwind CSS v4, shadcn/ui + Radix.
 
 **Key dependencies:**
-- Persistence: Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (Postgres 17 self-host) / Microsoft.EntityFrameworkCore.SqlServer 10.0.12 (Azure SQL Basic DTU) — dual-provider, config-selected.
-- Auth: Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.12 + cookie auth, Microsoft.AspNetCore.DataProtection.EntityFrameworkCore 10.0.12, Azure.Extensions.AspNetCore.DataProtection.Keys 1.6.4 + Azure.Identity 1.21.0 (both pinned explicitly in `Directory.Packages.props`, referenced by Api project; Key Vault protector for Data Protection key ring, AD-17; `Azure.Identity` also arrives transitively via `Microsoft.Data.SqlClient`).
+- Persistence: Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (Postgres 17 self-host) / Microsoft.EntityFrameworkCore.SqlServer 10.0.13 (Azure SQL Basic DTU) — dual-provider, config-selected.
+- Auth: Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.13 + cookie auth, Microsoft.AspNetCore.DataProtection.EntityFrameworkCore 10.0.13, Azure.Extensions.AspNetCore.DataProtection.Keys 1.6.4 + Azure.Identity 1.21.0 (both pinned explicitly in `Directory.Packages.props`, referenced by Api project; Key Vault protector for Data Protection key ring, AD-17; `Azure.Identity` also arrives transitively via `Microsoft.Data.SqlClient`).
 - Observability: Serilog.AspNetCore 10.0.0, OpenTelemetry.* 1.19.x (`OpenTelemetry.Instrumentation.EntityFrameworkCore` pinned to `1.19.1-beta.1` deliberately — no stable release upstream).
-- .NET testing: xunit.v3.mtp-v2 3.2.2, Shouldly 4.3.0, NSubstitute 6.2.0, Testcontainers.PostgreSql/MsSql 4.15.0, Microsoft.AspNetCore.Mvc.Testing 10.0.12.
+- .NET testing: xunit.v3.mtp-v2 3.2.2, Shouldly 4.3.0, NSubstitute 6.2.0, Testcontainers.PostgreSql/MsSql 4.15.0, Microsoft.AspNetCore.Mvc.Testing 10.0.13.
 - Frontend: i18next 26.x + react-i18next 17.x, class-variance-authority, tailwind-merge, lucide-react.
 - Frontend testing: Vitest 4.1, @testing-library/react 16.3, @playwright/test 1.62, oxlint 1.75 (not ESLint).
 
 **Version constraints:**
 - SDK pinned via `global.json` to `10.0.100`, `rollForward: latestFeature`.
 - All NuGet versions centrally managed in `Directory.Packages.props` (`ManagePackageVersionsCentrally=true`) — never add `Version=` to `<PackageReference>` in `.csproj`; bump version in `Directory.Packages.props` instead.
-- EF Core packages (EFCore, EFCore.Design, EFCore.Relational, EFCore.SqlServer) pinned to identical `10.0.12` line to avoid transitive version conflicts — bump together, never individually (`dotnet-ef` tool in `.config/dotnet-tools.json`, `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore`, `OpenIdConnect`, `Mvc.Testing`, `Microsoft.Extensions.Logging.Abstractions` ride same patch). OpenTelemetry packages move together on one 1.x line too.
+- EF Core packages (EFCore, EFCore.Design, EFCore.Relational, EFCore.SqlServer) pinned to identical `10.0.13` line to avoid transitive version conflicts — bump together, never individually (`dotnet-ef` tool in `.config/dotnet-tools.json`, `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore`, `OpenIdConnect`, `Mvc.Testing`, `Microsoft.Extensions.Logging.Abstractions` ride same patch). OpenTelemetry packages move together on one 1.x line too.
 - `xunit.v3.mtp-v2` runs on Microsoft.Testing.Platform (`global.json` `test.runner`), not classic VSTest runner — test invocation differs from xUnit v2 projects.
 
 ## Critical Implementation Rules

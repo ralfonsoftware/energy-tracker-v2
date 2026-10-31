@@ -406,3 +406,115 @@ Archived 2026-10-02 from `deferred-work.md` (Epic 8 retro action #6, `spec-defer
 ## Deferred from: dev-story of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
 
 - [accepted: dev tooling only, never in the shipped bundle or the image; `npm audit --omit=dev` is clean and CI gates on it; npm's own fix is a major downgrade of `shadcn` (to 1.0.0), refused. Revisit when a `shadcn` release updates `fast-glob`, or if any of these moves into `--omit=dev`] Seven high `npm audit` advisories remain after `npm audit fix` (no `--force`), all reached through the `shadcn` CLI devDependency: `shadcn` -> `@shadcn/registry` and `fast-glob` -> `micromatch` -> `braces` (GHSA-vfj7-8cjw-p6xm), and `shadcn` -> `ts-morph` -> `@ts-morph/common` -> `fast-glob`. Measured 2026-10-11 on a clean `npm ci`. [web/package.json devDependencies `shadcn`]
+
+
+## Archived at the 2026-10-31 triage (Epic 10 retro action #4, `spec-deferred-work-triage-2.md`)
+
+Each entry keeps its original section in its title line; the `[accepted: ...]` marker holds the reason or the revisit trigger.
+
+### Deferred from: story 10-2-event-correlation-forward-window-recompute (2026-10-02)
+
+- [accepted: typically a handful; by design (10.2)] After a regression-prompt resolve, the re-evaluated set is "Events since the trigger", uncapped; typically a handful. [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs]
+
+- [accepted: by design, latest evaluation wins (10.2)] A correlation can flip or disappear as readings arrive (latest evaluation wins); by design, but not announced in the UI.
+
+- [accepted: documented AD-8 exception, Ask First #3, Ralf 2026-10-02] The requeue trigger skips AI-off Households (documented AD-8 exception, Ask First #3, Ralf 2026-10-02), so enabling the Settings toggle does not re-evaluate existing Events until a Meter Reading in their window next changes. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+
+
+### Deferred from: code review of story-10-2 (2026-10-02)
+
+- [accepted: edge case, only identical ReadingTimestamp at the open-prompt boundary] Same-timestamp tiebreak in `WindowedDeviationCalculator.ExcludeAtOrAfter` (and the in-memory ordering in `CorrelateEvent`) uses .NET `Guid.CompareTo`, which can differ from the database `uuid` ordering; only matters for readings with an identical `ReadingTimestamp` at the open-prompt boundary. [src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
+
+- [accepted: Ralf accepts last-write-wins 2026-10-02; terminal CorrelateEvent rows swept by 11.2] Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
+
+- [accepted: Ralf accepts last-write-wins 2026-10-02; needs migration; revisit with Epic 9] Per-Event dedup of requeued `CorrelateEvent` jobs (review decision 2c) needs an Event reference on `BackgroundJob` (new column/migration); not possible inside story 10.2 (AC #10: no migration). Concurrent jobs for one Event remain last-write-wins. [src/EnergyTracker.Application/RequeueEventCorrelations.cs] Reason: Ralf accepts last-write-wins (2026-10-02).
+
+
+### Deferred from: code review of story-11-3-azure-queue-consumer-resilience (2026-10-11)
+
+- [accepted: known and accepted in story 11.3 (3b.4); revisit with a temp-file sweep or the C3 blob move] A job failed without running (`job-retries-exhausted`, or a `Queued` row failed by the 12-hour backstop whose message is later skipped) leaves its temp upload file on the instance's disk; only a run's own `finally` deletes it. Known and accepted in the story (3b.4); a temp-file sweep or the C3 blob move would close it. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs]
+
+- [accepted: add a D7 if the difference ever surprises an operator] `docs/local-vs-azure-deltas.md` has no row for the queue adapters' difference (Azure consumer survives storage errors and fails a job after 5 dequeues with `job-retries-exhausted`; the in-process adapter has no dequeue limit). Skipped in 11.3 because the file's D1–D6 structure is deployment-gotcha sections, not behaviour rows; add a D7 if that difference ever surprises an operator. [docs/local-vs-azure-deltas.md]
+
+
+### Deferred from: code review of story-11-4-unmapped-smart-plug-readings-keyed-by-device (2026-10-11)
+
+- [accepted: needs 101+ emoji in a plug name; negligible] The Postgres pre-check in `NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice` counts code points (`length()`), while the parsers and the restore validator count UTF-16 units. A stored `DeviceName` of 101–200 astral characters (emoji) passes the migration, but the household's own export would then fail restore validation and a re-upload of that file would be rejected. SQL Server's `DATALENGTH / 2` already counts UTF-16 units. Needs 101+ emoji in a plug name, so negligible; a fix is a UTF-16-aware length in the Postgres `DO` block. [src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20261011115653_NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice.cs]
+
+
+### Deferred from: dev-story of story-11-6-data-protection-key-encryption (2026-10-14)
+
+- [accepted: left out on purpose (shared daily cap, AD-19); revisit if an audit trail of key use is wanted] Key Vault diagnostic settings to Log Analytics (audit trail of wrap/unwrap) were left out on purpose: a second ingestion path against the shared daily cap (AD-19 OTel note). Revisit if an audit trail of key use is wanted. [infra/modules/key-vault.bicep]
+
+- [accepted: re-check the pin on a later SqlClient major] `Azure.Identity` is now an explicit 1.21.0 pin while `Microsoft.Data.SqlClient` 6.1.6 asks for 1.17.1; a later SqlClient major may need the pin re-checked (AD-21/AD-23 Entra `Active Directory Default` migration path). [Directory.Packages.props]
+
+
+### Deferred from: dev-story of story-11-7-security-headers-csp-rate-limiting (2026-10-17)
+
+- [accepted: accepted at household scale; group by prefix if it ever matters] Per-IP `/login` limit keys on the full IPv6 address; a client with a whole `/64` can rotate addresses inside it. Accepted at household scale; group by prefix if it ever matters.
+
+- [accepted: AD-24; lift together with maxReplicas] The limiter is in-process (AD-24). A distributed limiter store is part of the multi-instance work already listed in `ARCHITECTURE-SPINE/deferred.md`; do it together with lifting `maxReplicas`.
+
+
+### Deferred from: dev-story of story-11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
+
+- [accepted: AD-17 accepts this] No server-side revocation of a stolen cookie before the cap (AD-17 accepts this). Member removal now exists (Story 11.9) and cuts a removed identity off on its next request, because membership is resolved per request; a stolen cookie of a *current* member still lives until the 90-day cap or until that member is removed. [src/EnergyTracker.Api/SessionLifetime.cs]
+
+- [accepted: no handler logic runs either way (RequestedWithFilter remarks)] A request whose body fails minimal-API binding answers the binding's own 400 before the X-Requested-With filter runs (binding precedes endpoint filters), so a header-less malformed request shows the binding error, not the filter's. No handler logic runs either way; accepted (RequestedWithFilter remarks). [src/EnergyTracker.Api/RequestedWithFilter.cs] Same from the no-Household side (Story 11.19 review): an invalid body gets 400 before 403, and no test asserts the order. Merged at the 2026-10-31 triage.
+
+- [accepted: single-user app; reload fixes it] A tab that was open across the 11.8 deploy still runs the old bundle: its next mutation gets a 400 until the page is reloaded, and its logout (a navigation to the removed `GET /logout`) lands on the SPA instead of signing out. Reloading fixes both. Single-user app; not mitigated. [web/src/lib/api-client.ts]
+
+
+### Deferred from: dev-story of story-11-9-member-removal-revocable-invites (2026-10-17)
+
+- [accepted: AC #13c, Q3: global SPA reaction left out on purpose] A removed member's other open tab keeps its stale `ready` state until the page is reloaded; every API request from it fails (`HouseholdMemberEndpointsTests` sweeps every `/api` route as a removed member), and the next load lands in household creation (AC #13c, Q3). A global SPA reaction to a 403 or session polling was left out on purpose. [web/src/App.tsx]
+
+- [accepted: AC #13d; QueuedByHouseholdMemberId is SET NULL] Jobs a removed member queued keep running, and their history shows the generic "a household member" fallback instead of the name (`BackgroundJobs.QueuedByHouseholdMemberId` is `SET NULL`; AC #13d). [src/EnergyTracker.Application/ListSmartPlugImportJobs.cs]
+
+
+### Deferred from: dev-story of story-11-10-upload-hardening (2026-10-21)
+
+- [accepted: bounded by the 20 MB upload cap, tens of MB] A package with hundreds of thousands of tiny zip entries still costs memory in `ZipArchive`'s central directory before any limit runs (bounded by the 20 MB upload cap, roughly tens of MB). [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
+
+- [accepted: check stays, tested; limits untouched (Q1)] `HouseholdImportEndpoints` checks `file.Length > MaxFileSizeBytes`, but `FormOptions.MultipartBodyLengthLimit` is the same 250 MB, so the framework rejects an oversized body first and the friendly 400 can hardly fire; the check stays (it is tested through `HouseholdImportUploadSettings`) and the limits are untouched (Q1). [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
+
+- [accepted: pre-scan skips both kinds; failure would surface as a generic job failure, as before] The real Eve exports carry directory entries and two `docProps` entries (`app.xml`, `core.xml`) that .NET's `ZipArchive` cannot open (OpenXml never reads them); the XLSX pre-scan skips both kinds. If a vendor ever ships a part the parser needs with such a quirk, the failure surfaces from OpenXml as a generic job failure, as before. [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
+
+- [accepted: tens of milliseconds for the largest sample] `ProcessSmartPlugImport` opens the temp file twice (header, then data), so the XLSX decompressed-size pre-scan runs twice per import (tens of milliseconds for the largest sample); a single open would halve it. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs]
+
+
+### Deferred from: dev-story of story-11-12-async-per-request-household-resolution (2026-10-24)
+
+- [accepted: revisit together with another change to the membership lookup] `HouseholdMembershipDbContext` could now be folded into `EnergyTrackerDbContext`: the accessor no longer depends on any context, so the circular-DI reason is gone. What still argues for a separate context is that the lookup stays off the endpoint's tracked context and its query filter (the filter needs the answer this lookup produces). Only worth doing together with another change to the membership lookup. [src/EnergyTracker.Infrastructure/HouseholdMembershipDbContext.cs]
+
+
+### Deferred from: dev-story of story-11-13-single-instance-invariant-documentation (2026-10-24)
+
+- [accepted: revisit together with lifting AD-24 and the job leases] The `AppInstances` heartbeat could later serve AD-6's job staleness, as the 2026-10-10 adversarial review proposed (one `AppInstance` table, a `ProcessingInstanceId` on the job row, a job is stale when its instance row is). Left out on purpose: the heartbeat is evidence read by one log line only (AD-7). Revisit together with lifting AD-24 and the job leases in `deferred.md`.
+
+- [accepted: harmless by design (AC #8b); not a regression] In the Api test fixture the factory's own host starts before the fixture migrates the database, so its first heartbeat fails (the `AppInstances` table is missing) and logs the one failure `Warning` that a self-host install with pending migrations would also log. Harmless and by design (AC #8b); the next beat succeeds. Noted so a test log with that line is not mistaken for a regression.
+
+
+### Deferred from: code review of story-11-13-single-instance-invariant-documentation (2026-10-24)
+
+- [accepted: revisit if a flake is seen] `InstanceHeartbeatServiceTests` rely on 10 ms real timers, up to 10 s polling and 2 s `Task.Delay` negative waits; a loaded CI runner could flake them. No `FakeTimeProvider` package by project rule. Revisit if a flake is seen. [tests/EnergyTracker.Infrastructure.Tests/InstanceHeartbeatServiceTests.cs]
+
+
+### Deferred from: code review of 11-17-timeprovider-recompute-lock-eviction (2026-10-31)
+
+- [accepted: outside Story 11.17 scope; revisit if Task.Delay/CancelAfter need the provider] `ManualTimeProvider` overrides only `GetUtcNow` (not `GetTimestamp`/`CreateTimer`), so `Task.Delay(..., provider)`/`CancelAfter` would use real time, and its `DateTimeOffset` field is not tear-safe across threads (e.g. `WebApplicationFactory` host threads). [tests/Shared/ManualTimeProvider.cs]
+
+- [accepted: outside the AC3 token list] `NoDirectClockReadsTests` does not cover `Stopwatch`, `Environment.TickCount`, `using static System.DateTime` or alias forms. Outside the AC3 token list. [tests/EnergyTracker.Architecture.Tests/NoDirectClockReadsTests.cs]
+
+
+### Deferred from: code review of 11-18-backend-analyzer-format-gate, rules lowered in `.editorconfig` (2026-10-31)
+
+- [accepted: revisit if log volume or allocation pressure becomes a concern] `CA1848` (LoggerMessage source generation) is off for ~60 low-volume `ILogger` call sites; revisit if log volume or allocation pressure becomes a concern. [.editorconfig]
+
+- [accepted: revisit if an outside consumer of the domain Event type appears] `CA1716` (identifier clashes with keywords in other languages) is off because renaming the domain `Event` type is out of proportion while no outside consumer exists. [.editorconfig]
+
+- [accepted: AD-6 port and adapter names] `CA1711` allows the `Queue` and `Stream` suffixes (AD-6 port and adapter names, `HouseholdExportStream`). [.editorconfig]
+
+- [accepted: revisit if a log argument starts to compute something] `CA1873` (expensive log arguments) is off; revisit if a log argument ever starts to compute something. [.editorconfig]
+
+- [accepted: snake_case test names; fixtures without finalizers] `CA1707` and `CA1816` are off for `tests/**` (Snake_case test names; fixtures without finalizers). [.editorconfig]

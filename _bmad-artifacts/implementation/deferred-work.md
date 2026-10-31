@@ -1,22 +1,20 @@
 # Deferred work
 
-Triaged 2026-10-02 against baseline `8c6a90e` (Epic 8 retro action #6, `spec-deferred-work-triage.md`). This file holds **open** and **promoted** items only. Resolved entries were removed; accepted trade-offs moved to `deferred-work-accepted.md`.
+Triaged 2026-10-31 against baseline `3cf5a9b` (Epic 10 retro action #4, `spec-deferred-work-triage-2.md`); earlier triage 2026-10-02 (`spec-deferred-work-triage.md`). This file holds **open** and **promoted** items only. Resolved entries were removed; accepted trade-offs moved to `deferred-work-accepted.md`.
 
-Conventions: append new sections at the end, chronological (see `project-context.md`). Mark each entry `[open]`, `[resolved: <story>]` or `[accepted: <reason>]`; review open items at each epic retro.
+Conventions: append new sections at the end, chronological (see `project-context.md`). Mark each entry `[open]`, `[promoted: Story N]`, `[resolved: <story>]` or `[accepted: <reason>]`; review open items at each epic retro. Add each new entry to the Index.
 
 ## Index
 
-**test-coverage (18)**
+**test-coverage (16)**
 
 - Export stream property names vs HouseholdExportResult, no round-trip test — code review of spec-household-export-oom-fix (2026-09-25)
 - No test distinguishes recompute inside/outside txn — code review of story-4-3-correcting-a-meter-reading (2026-09-10)
 - No middleware-ordering regression test — code review of 1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress (2026-08-14)
 - Uneven length-validation tests — code review of 1-9-room-power-point-device-management (2026-08-14)
 - IDOR test claim inaccurate — code review of story-2.2 (2026-08-15)
-- No double-dispose test for lock — code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
 - act() warnings in full suite — code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 - TZ not pinned in Vitest — code review of spec-trend-chart-time-axis (2026-08-30)
-- Logout ACs only manually verified — code review of story-1.12 (2026-09-17)
 - No chained-call test for timeout carry-over — code review of spec-db-command-timeout-scope (2026-09-17)
 - Mixed-batch test only; one entry path tested — code review of spec-power-point-mapping-duplicate-timeout (2026-09-18)
 - AC3 archive coverage only Room — code review of story-6.2 (2026-09-19)
@@ -37,15 +35,12 @@ Conventions: append new sections at the end, chronological (see `project-context
 - Live region dropped on 660px cross — code review of 8-12-settings-preferences-card-mobile (2026-09-30)
 - Icon buttons 40px not 44px — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
-**infra-hardening (7)**
+**infra-hardening (4)**
 
-- GH Actions pinned to tags, not SHAs — code review of 1-2-azure-infrastructure-as-code-resource-deployment-pipeline (2026-08-12)
-- Actions pinned by mutable tags — code review of 1-4-pull-request-review-workflow (2026-08-13)
 - Orphaned gh-actions-migrate-* firewall rules — code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
 - No timeout-minutes in infra-deploy — code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
 - OTel resource attrs minimal — code review of spec-otel-api-instrumentation (2026-08-15)
 - No cert renewal failure alerting — code review of spec-custom-domain-managed-cert (2026-08-16)
-- RecomputeLock depends on maxReplicas=1, unguarded — code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
 
 **validation (6)**
 
@@ -84,24 +79,127 @@ Conventions: append new sections at the end, chronological (see `project-context
 - Epic 2 Architecture header missing AD-15/10/3 — code review of spec-epic-2-header-ux-dr11 (2026-08-22)
 - Story 2.3 glass cites no UX-DR11 — code review of spec-epic-2-header-ux-dr11 (2026-08-22)
 
-**tech-debt (2)**
+**tech-debt (1)**
 
-- TryGetHouseholdId copy-pasted — code review of story-7.1 (2026-09-22)
 - Value-based, px-only; duplication remains — Breakpoint/column drift guard (spec-breakpoint-drift-test, Epic 8 retro action #3)
 
 **i18n (1)**
 
 - No de-DE test for toggle strings — code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
 
+**migrations-deploy (6)**
 
-## Deferred from: code review of 1-2-azure-infrastructure-as-code-resource-deployment-pipeline (2026-08-12)
+- Self-hosters may have no documented way to apply EF Core migrations **[promoted: 11.21]** — 10-1 story creation (2026-10-02)
+- Expand/contract rule in `project-context.md` is advisory prose only — 10-1-migration-safety-on-deploy
+- No long-term retention (LTR) configured — 10-1-migration-safety-on-deploy
+- Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name t — 10-1-migration-safety-on-deploy
+- Pending-migrations list in the restore-point block runs once before the retry loop and can read "una — 10-1-migration-safety-on-deploy
+- Deploy N's "Apply pending EF Core migrations" step — story-11-4-unmapped-smart-plug-readings-keyed-by-device
 
-- [open] GitHub Actions pinned to floating version tags, not commit SHAs (`azure/login@v2`, `actions/checkout@v4`) [.github/workflows/infra-deploy.yml:22,28] — supply-chain hardening opportunity for a workflow with `id-token: write`; not required by any AC.
+**correlation (1)**
 
+- When the AI answers "None" for a persisting deviation, every later in-window reading costs one AI ca — 10-2-event-correlation-forward-window-recompute
 
-## Deferred from: code review of 1-4-pull-request-review-workflow (2026-08-13)
+**dev-tooling (1)**
 
-- [open] All actions in `pr-review.yml` pinned by mutable major-version tags (`@v7`, `@v6`, `@v3`) rather than SHA [.github/workflows/pr-review.yml] — pre-existing convention from Story 1.2/1.3, propagated rather than introduced by this diff.
+- Set `strictPort: true` in `web/vite.config.ts` so Vite fails instead of silently moving to 5174 when — spec-local-dev-start-stop-scripts
+
+**ux-a11y (2)**
+
+- An open Account menu stays open when the window is resized below 660px, because its trigger sits in — story 10-3-navchrome-dom-order-tab-order
+- No automated guard that the bottom tab bar stays pinned to the viewport bottom — story 10-3-navchrome-dom-order-tab-order
+
+**jobs-queue (2)**
+
+- `AzureStorageQueueJobProcessingService` sets `queueEnsured` once and never resets it, so a queue del — story-11-3-azure-queue-consumer-resilience
+- If the process dies after a committed import/restore has deleted its temp file but before `TryComple` — story-11-3-azure-queue-consumer-resilience
+
+**ci-supply-chain (7)**
+
+- A branch pusher can still read the repository secrets that other workflows hold — story-11-5-ci-identity-split-supply-chain-hygiene
+- `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App im — Story 11.5 R2.2 (2026-10-11)
+- The NuGet Audit gate failed `dotnet restore` on `main` itself — story-11-6-data-protection-key-encryption
+- Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover — story-11-6-data-protection-key-encryption
+- Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key — Story 11.6 close-out (2026-10-17)
+- `maxParallelThreads` is now 8 — spec-ci-pipeline-runtime-speedup
+- Per-test cost left in Infrastructure.Tests — spec-ci-pipeline-runtime-speedup
+
+**auth-members (9)**
+
+- HSTS uses the framework defaults — story-11-7-security-headers-csp-rate-limiting
+- The 90-day cap is on the app's cookie only — story-11-8-auth-hardening-csrf-logout-session-cap
+- `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched — 11-8-auth-hardening-csrf-logout-session-cap
+- After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Ver` — 11-8-auth-hardening-csrf-logout-session-cap
+- Drop the plaintext `HouseholdInvites.Token` column in a later contract migration, at least 7 days af **[promoted: 11.20]** — story-11-9-member-removal-revocable-invites
+- The invite token appears in request paths **[promoted: 11.22]** — story-11-9-member-removal-revocable-invites
+- Expired and revoked invite rows are never swept — story-11-9-member-removal-revocable-invites
+- Invite rows carry no creator, so the open-invite list cannot say who invited — story-11-9-member-removal-revocable-invites
+- The `MemberRemoval` budget — story-11-9-member-removal-revocable-invites
+
+**upload-restore (13)**
+
+- The duplicate-id and reference id sets in `ValidateHouseholdImport` still grow with the file by item — story-11-10-upload-hardening
+- The framework buffers the multipart file to its own temp file before the endpoint copies it, so one — story-11-10-upload-hardening
+- The restore job still materializes the whole object graph; only the string is gone — story-11-10-upload-hardening
+- Orphaned temp files from a process that died between validate and confirm — story-11-10-upload-hardening
+- The Meross CSV parser has no row cap — story-11-10-upload-hardening
+- The API runs Server GC (`System.GC.Server` — story-11-10-upload-hardening
+- The XLSX shared-strings list holds every item as a string, so a hostile table just under the 64 mill — 11-10-upload-hardening
+- `EveHomeXlsxParser.ReadDeviceTag` reads two cells but loads the whole shared-strings table — 11-10-upload-hardening
+- A single worksheet cell is still loaded whole — 11-10-upload-hardening
+- `ValidateHouseholdImport` still does not check a file's own uniqueness beyond duplicate ids per arra — story-11-14-restore-id-collisions-active-job-guard
+- The `AddActiveJobGuard` migration's surplus-failing statement — story-11-14-restore-id-collisions-active-job-guard
+- After a completed restore the SPA reloads only what holds restored ids — story-11-14-restore-id-collisions-active-job-guard
+- `DELETE /api/smart-plug-import-jobs` answers `202` with the id of the active cleanup job even when t — story-11-14-restore-id-collisions-active-job-guard
+
+**container-config (6)**
+
+- S5 leftovers the epic ACs left out — story-11-11-container-config-correctness
+- S8 (`AllowedHosts: *`) is in no Epic 11 story — story-11-11-container-config-correctness
+- `/login` without OIDC is a JSON problem document, not a page in the SPA's voice — story-11-11-container-config-correctness
+- The Azure `ai-api-key` secret is seeded with the placeholder `unset` — story-11-11-container-config-correctness
+- A host that fails startup **[promoted: 11.23]** — story-11-11-container-config-correctness
+- `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 — story-11-11-container-config-correctness
+
+**code-quality (21)**
+
+- The middleware is scoped by the `/api` path — story-11-12-async-per-request-household-resolution
+- Guard-test hardening in `HouseholdMembershipIsResolvedOncePerRequestTests` — story-11-12-async-per-request-household-resolution
+- `HouseholdMembershipMiddleware` resolves the concrete `HouseholdMembershipResolver` through `GetRequ` — story-11-12-async-per-request-household-resolution
+- `SingleInstanceInvariantIsDocumentedTests` finds a new process-local mechanism only by the patterns — story-11-13-single-instance-invariant-documentation
+- The Data Protection key ring's cached ring and the post-cutover `RevokeAllKeys` reasoning — story-11-13-single-instance-invariant-documentation
+- The same guard's pattern list and file-granular allow-list — story-11-13-single-instance-invariant-documentation
+- Several operations read the clock more than once — 11-17-timeprovider-recompute-lock-eviction
+- `HouseholdRecomputeLock` tests still use real 50/100 ms acquisition timeouts and a 60 s churn timeou — 11-17-timeprovider-recompute-lock-eviction
+- The job ownership token is the clock truncated to whole milliseconds with no uniqueness guard, so a — 11-17-timeprovider-recompute-lock-eviction
+- 26 `oxlint` warnings remain in the frontend — 11-18-backend-analyzer-format-gate
+- No `.gitattributes`; `end_of_line = lf` makes `dotnet format --verify-no-changes` fail on Windows au — 11-18-backend-analyzer-format-gate
+- `CSharpSource.StripComments` gaps — 11-18-backend-analyzer-format-gate
+- `WarningsNotAsErrors` (NU1900) vs `WarningsAsErrors` — 11-18-backend-analyzer-format-gate
+- `global.json` `rollForward` — 11-18-backend-analyzer-format-gate
+- Comment trim reached only the files Story 11.19 touched — 11-19-structural-cleanup
+- Endpoint files that serve callers without a Household — 11-19-structural-cleanup
+- `ServiceRegistrationSnapshotTests` pins `OpenTelemetry.*` and `Azure.Monitor.*` descriptors for the — 11-19-structural-cleanup
+- `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do — 11-19-structural-cleanup
+- Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(fal` — 11-19-structural-cleanup
+- An authenticated no-Household caller can stream up to 250 MB to the upload routes before the filter — 11-19-structural-cleanup
+- The split React files repeat three delete-confirmation dialogs and three row blocks — 11-19-structural-cleanup
+
+**docs-process (3)**
+
+- FR-21's settings editor (not built, see the Story 2.4 entry above on threshold range validation) mus — story-11-15-trending-threshold-scaled-to-elapsed
+- Story 11.15 review (decision 1c, Ralf 2026-10-25) added a floor to the scaled trending threshold — story-11-15-trending-threshold-scaled-to-elapsed
+- The Status detail view's "Baseline to date" value and its "(over N days)" use whole-number formats — Part R of story-11-15-trending-threshold-scaled-to-elapsed
+
+**frontend-offline (7)**
+
+- The server's reason on the card is the meter-reading validation `detail`, which is English prose and — story-11-16-offline-queue-rejected-readings-attention
+- A member removed from a Household by someone else keeps queued entries that answer `403` forever and — story-11-16-offline-queue-rejected-readings-attention
+- No cap and no expiry on needs-attention entries, and no "discard all" — story-11-16-offline-queue-rejected-readings-attention
+- `listPending` is a misleading name now that it means "everything queued, pending or needs attention" — story-11-16-offline-queue-rejected-readings-attention
+- `registerOfflineSync` does `void flushQueue(...)`, so a store that cannot be opened — story-11-16-offline-queue-rejected-readings-attention
+- `toDateTimeLocalValue` was copied in `log-reading-sheet.tsx` and `log-event-sheet.tsx`; Story 11.16 — story-11-16-offline-queue-rejected-readings-attention
+- The rejected-readings card follows only changes made in its own tab — story-11-16-offline-queue-rejected-readings-attention
 
 
 ## Deferred from: code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
@@ -123,7 +221,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of 1-9-room-power-point-device-management (2026-08-14)
 
-- [open] No retry action in the tagging-scaffold UI after the initial load fails [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx] — nice-to-have, not blocking.
+- [open] No retry action in the tagging-scaffold UI after the initial load fails [web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx] — nice-to-have, not blocking. Story 11.19 review: `use-tagging-scaffold-data` has one `loadError` flag and no retry; one failed GET hides the lists that loaded. Merged at the 2026-10-31 triage.
 
 - [open] Uneven length-validation test coverage: only `CreateRoomTests` asserts the >200-char rejection; `CreatePowerPointTests`/`CreateDeviceTests`/all three `Rename*Tests` don't, despite sharing `TaggingScaffoldNameValidator` [tests/EnergyTracker.Application.Tests/] — shared-validator logic makes an actual regression unlikely.
 
@@ -186,15 +284,6 @@ Conventions: append new sections at the end, chronological (see `project-context
   summary: `GetRecentByMainMeterAsync` issues three sequential, non-transactional DB round-trips (latest-timestamp, must-include-timestamp, final range query) rather than one query — a missed optimization given the story's own performance motivation, and its true contract ("windowDays trailing whatever was latest at the time of the *first* sub-query, plus anything inserted later, since the final query has no upper bound") isn't stated anywhere as a load-bearing property.
   evidence: Benign today only because the final query has no upper timestamp bound; a future edit adding one could reintroduce a subtle staleness bug between the three round-trips with nothing to catch it. Collapsing to a single correlated-subquery (as round 2's query shape did, before round 3's rewrite) would close both the round-trip count and the documentation gap simultaneously, but round 4 prioritized closing the correctness bug over re-optimizing the query shape. Raised by adversarial review, round 4.
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
-  summary: `HouseholdRecomputeLock`'s in-process locking correctness rests entirely on `infra/modules/container-app.bicep`'s `maxReplicas = 1`, documented only in a source comment — no test or startup assertion fails loudly if that value is ever changed to allow horizontal scaling, which would silently reintroduce the exact race this story fixes.
-  evidence: Same "documented but not guarded" pattern already accepted for other infra/code couplings in this codebase (e.g. the OTel/Application-Insights dual-logging constraint in project-context.md). A guard would most naturally live as an integration/smoke check against the deployed Bicep output rather than unit-testable C#, which is why round 4 didn't add one inline. Raised by adversarial review, round 4.
-
-- [closed] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
-  summary: `HouseholdRecomputeLock`'s internal `Releaser.DisposeAsync` double-dispose guard (`Interlocked.Exchange`) has no test calling `DisposeAsync` twice to prove it actually prevents a double-release.
-  evidence: Low-risk — the guard is a standard, well-understood idiom, and `await using` in every real call site only ever disposes once. Worth a quick test if this type is ever reused outside its current single call site. Raised by adversarial review, round 4.
-  resolution: Closed by Story 11.17 (`11-17-timeprovider-recompute-lock-eviction.md`): `HouseholdRecomputeLockTests` now disposes a handle twice and proves a third caller is not let in early.
-
 
 ## Deferred from: code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 
@@ -245,8 +334,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of story-1.12 (2026-09-17)
 
-- [open] AC #2/#5/#6 (RP-initiated logout actually terminating both sessions, and landing back on the login step) have zero automated regression coverage — proven only by a one-time manual Auth0 + Chrome verification (Task 7), never re-run in CI [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]. Deferred, pre-existing: `/logout`'s implementation is unchanged by this diff (built in Story 1.5); this story only adds a frontend signal and control around an already-existing, unmodified backend mechanism. Raised by adversarial review (Blind Hunter). *Update (Story 11.8, 2026-10-17): `LogoutEndpointTests` and `FederatedLogoutTests` now cover the endpoint and the sign-out event logic automatically; the live provider round-trip stays manual (11.8 Task 8.2 and Part R).*
-
 - [open] No focus/accessibility management across the logoff dialog's three steps — `confirm` → `queue-warning`/`federated-warning` swaps content inside the same mounted `Dialog` with no focus move or live-region announcement telling a screen-reader user the content changed underneath them [web/src/components/settings/settings-page.tsx:108-134]. Deferred, pre-existing pattern: no multi-step dialog anywhere in this codebase establishes focus-management conventions yet, so this isn't a regression specific to this diff. Raised by adversarial review (Blind Hunter) and edge-case review.
 
 
@@ -294,13 +381,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
 
 - [open] No `aria-live` region on the error/validation-failure states [web/src/components/data-import/data-import-panel.tsx:142] — pre-existing systemic gap: `DataExportPanel`'s identical error-rendering pattern has the same gap, unrelated to this story. Raised by adversarial review (Blind Hunter).
-
-
-## Deferred from: code review of story-7.1 (2026-09-22)
-
-- [open] source_story: `_bmad-artifacts/implementation/7-1-full-data-export.md`
-  summary: `TryGetHouseholdId` copy-pasted verbatim into yet another endpoint file — now duplicated across at least `MeterReadingEndpoints`, `EventEndpoints`, and this new `HouseholdExportEndpoints`.
-  evidence: Pre-existing pattern this diff extends rather than introduces; a future bugfix to that logic requires remembering to touch every copy. Raised by adversarial review (Blind Hunter) during code review. [src/EnergyTracker.Api/Endpoints/HouseholdExportEndpoints.cs]
 
 
 ## Deferred from: code review of spec-household-export-oom-fix (2026-09-25)
@@ -397,244 +477,267 @@ Conventions: append new sections at the end, chronological (see `project-context
   summary: The drift test is value-based and px-only; the underlying duplication remains. A shared exported breakpoint constant (hook `WIDE_QUERY`, `wide-viewport.ts` stub) would remove two copies outright, but needed a production change that the spec's Ask First reserved.
   evidence: Review-found. Not scanned: rem/em units, `max-width` queries, `min-[Npx]:` variants, column assertions outside `app-shell.spec.ts`. [web/src/layout-constants.drift.test.ts]
 
+
 ## Deferred from: story creation for Epic 10 (10-1-migration-safety-on-deploy, 2026-10-02)
 
-- [open] source_story: `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md`
+- [promoted: Story 11.21] source_story: `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md`
   summary: Self-hosters may have no documented way to apply EF Core migrations: grep finds no migration step in `docker-compose.yml`, `Dockerfile` or `docs/self-hosting.md`, and the API never calls `Migrate()`/`MigrateAsync()` (only `scripts/migrate.sh` is documented, in `docs/local-development.md`).
   evidence: Found while grounding story 10.1 (originally the Story 1.1 entry, marked resolved on the strength of `docs/local-development.md:32` alone). Not verified end to end against a fresh self-host install; kept out of 10.1's scope. [docs/self-hosting.md, docker-compose.yml]
+
 
 ## Deferred from: code review of 10-1-migration-safety-on-deploy (2026-10-02)
 
 - [open] Expand/contract rule in `project-context.md` is advisory prose only: no lint, review-checklist item or test, and the destructive-change list omits index/constraint drops, type changes, data-modifying `Sql()` and unique indexes on existing data.
+
 - [open] No long-term retention (LTR) configured: a bad migration noticed after the 7-day PITR window is unrecoverable; not documented as an accepted risk.
+
 - [open] Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name the Azure role needed for `az sql db restore`/`rename`.
+
 - [open] Pending-migrations list in the restore-point block runs once before the retry loop and can read "unavailable" while the firewall rule is still propagating.
+
 
 ## Deferred from: story 10-2-event-correlation-forward-window-recompute (2026-10-02)
 
-- [open] After a regression-prompt resolve, the re-evaluated set is "Events since the trigger", uncapped; typically a handful. [src/EnergyTracker.Application/ResolveMeterRegressionPrompt.cs]
-- [open] A correlation can flip or disappear as readings arrive (latest evaluation wins); by design, but not announced in the UI.
 - [open] When the AI answers "None" for a persisting deviation, every later in-window reading costs one AI call: the two persisted columns cannot distinguish "evaluated, no match" from "never evaluated". Bounded by readings per ±7-day window. Epic 9 stories 9.3/9.4 live verification should include one forward-window recompute against the real backend.
-- [open] The requeue trigger skips AI-off Households (documented AD-8 exception, Ask First #3, Ralf 2026-10-02), so enabling the Settings toggle does not re-evaluate existing Events until a Meter Reading in their window next changes. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
 
-## Deferred from: code review of story-10-2 (2026-10-02)
 
-- Same-timestamp tiebreak in `WindowedDeviationCalculator.ExcludeAtOrAfter` (and the in-memory ordering in `CorrelateEvent`) uses .NET `Guid.CompareTo`, which can differ from the database `uuid` ordering; only matters for readings with an identical `ReadingTimestamp` at the open-prompt boundary. [src/EnergyTracker.Domain/Calculations/WindowedDeviationCalculator.cs]
-- Requeue is not deduplicated or capped: every reading write, edit and resolve enqueues one `CorrelateEvent` job per in-range Event. [src/EnergyTracker.Application/RequeueEventCorrelations.cs]
-- Per-Event dedup of requeued `CorrelateEvent` jobs (review decision 2c) needs an Event reference on `BackgroundJob` (new column/migration); not possible inside story 10.2 (AC #10: no migration). Concurrent jobs for one Event remain last-write-wins. [src/EnergyTracker.Application/RequeueEventCorrelations.cs] Reason: Ralf accepts last-write-wins (2026-10-02).
+## Deferred from: spec-local-dev-start-stop-scripts (found 2026-10-02, heading added at the 2026-10-31 triage)
 
-- source_spec: `_bmad-artifacts/implementation/spec-local-dev-start-stop-scripts.md`
+- [open] source_spec: `_bmad-artifacts/implementation/spec-local-dev-start-stop-scripts.md`
   summary: Set `strictPort: true` in `web/vite.config.ts` so Vite fails instead of silently moving to 5174 when 5173 is taken.
   evidence: Without it, `scripts/dev-up.sh` health-checks 5173 (possibly another process) and prints a URL Vite isn't serving; changing vite.config.ts was out of scope (Ask First).
+
 
 ## Deferred from: code review of story 10-3-navchrome-dom-order-tab-order (2026-10-04)
 
 - [open] An open Account menu stays open when the window is resized below 660px, because its trigger sits in the top nav, which becomes `display:none`; the same behaviour existed before 10.3. Seen in the 10.3 live gate. [web/src/components/dashboard/profile-menu.tsx]
+
 - [open] No automated guard that the bottom tab bar stays pinned to the viewport bottom (`mt-auto`) on a short page at <660px; `tab-order.spec.ts` only checks it sits below the content, and unit tests check the class string. [web/src/components/dashboard/nav-chrome.tsx]
+
 
 ## Deferred from: code review of story-11-3-azure-queue-consumer-resilience (2026-10-11)
 
-- [open] A job failed without running (`job-retries-exhausted`, or a `Queued` row failed by the 12-hour backstop whose message is later skipped) leaves its temp upload file on the instance's disk; only a run's own `finally` deletes it. Known and accepted in the story (3b.4); a temp-file sweep or the C3 blob move would close it. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobProcessor.cs]
-- [open] `docs/local-vs-azure-deltas.md` has no row for the queue adapters' difference (Azure consumer survives storage errors and fails a job after 5 dequeues with `job-retries-exhausted`; the in-process adapter has no dequeue limit). Skipped in 11.3 because the file's D1–D6 structure is deployment-gotcha sections, not behaviour rows; add a D7 if that difference ever surprises an operator. [docs/local-vs-azure-deltas.md]
 - [open] `AzureStorageQueueJobProcessingService` sets `queueEnsured` once and never resets it, so a queue deleted after startup produces a 5-minute error loop until the app restarts (before 11.3 it crashed the host). Resetting the flag on a `QueueNotFound` response from `ReceiveMessagesAsync` would close it; the test `The_queue_is_created_once_after_it_succeeds_not_on_every_poll` would need a companion case. [src/EnergyTracker.Infrastructure/Adapters/AzureStorageQueueJobQueue.cs]
+
 - [open] If the process dies after a committed import/restore has deleted its temp file but before `TryComplete`, the redelivery ends `Failed` with `upload-missing` instead of recognising the work as done, and the member is told to re-upload. Narrow window; the outcome class existed before 11.3 (generic failure / "upload it again" message). A fix needs a completion marker that survives the file deletion. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs, src/EnergyTracker.Application/RestoreHouseholdData.cs]
+
 
 ## Deferred from: code review of story-11-4-unmapped-smart-plug-readings-keyed-by-device (2026-10-11)
 
-- [open] The Postgres pre-check in `NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice` counts code points (`length()`), while the parsers and the restore validator count UTF-16 units. A stored `DeviceName` of 101–200 astral characters (emoji) passes the migration, but the household's own export would then fail restore validation and a re-upload of that file would be rejected. SQL Server's `DATALENGTH / 2` already counts UTF-16 units. Needs 101+ emoji in a plug name, so negligible; a fix is a UTF-16-aware length in the Postgres `DO` block. [src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20261011115653_NarrowSmartPlugReadingDeviceNameKeyUnmappedByDevice.cs]
 - [open] Deploy N's "Apply pending EF Core migrations" step (Story 11.4: SQL Server `ALTER COLUMN` nvarchar(max) to nvarchar(200) plus `CREATE INDEX` on `SmartPlugReadings`) took 8 min 49 s (about 529 s) on Azure SQL Basic (5 DTU) against `Command Timeout=600` (run 38147146530; the step timestamps include the whole migration run). It succeeded, but a future column rewrite on this table could exceed the timeout; raise the timeout or plan such changes differently. [.github/workflows/app-deploy.yml]
+
 
 ## Deferred from: dev-story of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
 
-- [open] A branch pusher can still read the repository secrets that other workflows hold (`DATABASE_ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET`) by editing a workflow on their branch; 11.5 only stopped the maintained `validate-infra` job from receiving them (placeholders instead). The real fix is a GitHub Environment with a branch restriction for the secrets, which changes the federated-credential subjects to `environment:`. Also open: Dockerfile base images pinned by digest. Both are out of scope for 11.5. [.github/workflows, Dockerfile]
+- [open] A branch pusher can still read the repository secrets that other workflows hold (`DATABASE_ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET`) by editing a workflow on their branch; 11.5 only stopped the maintained `validate-infra` job from receiving them (placeholders instead). The real fix is a GitHub Environment with a branch restriction for the secrets, which changes the federated-credential subjects to `environment:`. (Base-image digest pinning: see the Story 11.11 S5 entry.) Both are out of scope for 11.5. [.github/workflows, Dockerfile]
 
-## Deferred from: code review of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
-
-- [open] CI (`pr-review.yml`, `app-deploy.yml`) and the Dockerfile frontend stage build on Node 25, a non-LTS line that, to the best of the reviewer's knowledge, reached end of support in mid-2026 (verify). Ralf chose "move CI to match the Dockerfile" during 11.5; the next step is moving both to an LTS line (the vitest `--no-experimental-webstorage` flag is valid there too). [.github/workflows/pr-review.yml, .github/workflows/app-deploy.yml, Dockerfile]
-- [open] `Directory.Packages.props` line 15 comment says "same 10.0.10 line as the rest of EF Core"; the line is 10.0.12 since Dependabot #112. Cosmetic. [Directory.Packages.props]
 
 ## Deferred from: Story 11.5 R2.2 (2026-10-11)
 
 - [open] `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App image" step but never passes `placeholderImage="$CURRENT_IMAGE"` to `az deployment group what-if` (as `infra-deploy.yml` does), so every PR what-if shows the Container App image changing to the quickstart placeholder. Noise only; passing the parameter would make the diff show real changes only. [.github/workflows/pr-review.yml]
 
+
 ## Deferred from: dev-story of story-11-6-data-protection-key-encryption (2026-10-14)
 
 - [open] The NuGet Audit gate failed `dotnet restore` on `main` itself (transitive `System.Security.Cryptography.Pkcs` 9.0.11 via `Microsoft.Data.SqlClient` 6.1.6, Pkcs/Xml 10.0.12 via the ASP.NET Core packages) before Story 11.6 touched anything. Worked around in PR #126 with `CentralPackageTransitivePinningEnabled` and pins to 10.0.13. Remove the two pins once the parent packages ask for patched versions themselves, and look at why Dependabot did not raise this before `main` went red. [Directory.Packages.props]
+
 - [open] Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover (Ralf's call, Q2/R4). Removes live plaintext key material; backups keep it until they expire. [infra/README.md]
-- [open] Key Vault diagnostic settings to Log Analytics (audit trail of wrap/unwrap) were left out on purpose: a second ingestion path against the shared daily cap (AD-19 OTel note). Revisit if an audit trail of key use is wanted. [infra/modules/key-vault.bicep]
-- [open] `Azure.Identity` is now an explicit 1.21.0 pin while `Microsoft.Data.SqlClient` 6.1.6 asks for 1.17.1; a later SqlClient major may need the pin re-checked (AD-21/AD-23 Entra `Active Directory Default` migration path). [Directory.Packages.props]
+
 
 ## Deferred from: Story 11.6 close-out (2026-10-17)
 
 - [open] Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key version (`az keyvault key list-versions --vault-name <vault> -n data-protection`; one version today, 105399eb...). Not run before close because `infra-deploy.yml` has run only once since the vault exists. A second version would be harmless (older versions stay usable for unwrap), but record it. Check after the next routine infra deploy. [infra/modules/key-vault.bicep]
 
+
 ## Deferred from: dev-story of story-11-7-security-headers-csp-rate-limiting (2026-10-17)
 
-- [open] Per-IP `/login` limit keys on the full IPv6 address; a client with a whole `/64` can rotate addresses inside it. Accepted at household scale; group by prefix if it ever matters.
-- [open] The limiter is in-process (AD-24). A distributed limiter store is part of the multi-instance work already listed in `ARCHITECTURE-SPINE/deferred.md`; do it together with lifting `maxReplicas`.
 - [open] HSTS uses the framework defaults (30 days, no `includeSubDomains`, no preload). Raise it (a year, maybe `includeSubDomains`) once the production CSP/HSTS have run clean for a while.
+
 
 ## Deferred from: dev-story of story-11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
 
 - [open] The 90-day cap is on the app's cookie only. An identity-provider session that is still alive re-authenticates silently, so "sign in again" after the cap may not show a login page. `prompt=login` or `max_age` on re-auth is a separate decision. [src/EnergyTracker.Api/SessionLifetime.cs]
-- [open] No server-side revocation of a stolen cookie before the cap (AD-17 accepts this). Member removal now exists (Story 11.9) and cuts a removed identity off on its next request, because membership is resolved per request; a stolen cookie of a *current* member still lives until the 90-day cap or until that member is removed. [src/EnergyTracker.Api/SessionLifetime.cs]
-- [open] A request whose body fails minimal-API binding answers the binding's own 400 before the X-Requested-With filter runs (binding precedes endpoint filters), so a header-less malformed request shows the binding error, not the filter's. No handler logic runs either way; accepted (RequestedWithFilter remarks). [src/EnergyTracker.Api/RequestedWithFilter.cs]
-- [open] A tab that was open across the 11.8 deploy still runs the old bundle: its next mutation gets a 400 until the page is reloaded, and its logout (a navigation to the removed `GET /logout`) lands on the SPA instead of signing out. Reloading fixes both. Single-user app; not mitigated. [web/src/lib/api-client.ts]
+
 
 ## Deferred from: code review of 11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
 
 - [open] `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched (the OIDC handler throws, `UseExceptionHandler` drops the cookie deletion), so during a provider outage a member cannot sign out locally. Pre-existing (the old `GET /logout` failed the same way); consider catching it and degrading to a local sign-out like the "no `end_session_endpoint`" path. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
-- [open] After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Version`, so its first toggle PUT answers 409 and only the refetch-and-retry works (seen in the 11.8 live rehearsal). Pre-existing. [web/src/components/ai-plausibility/ai-plausibility-form.tsx]
+
+- [open] After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Version`, so its first toggle PUT answers 409 and only the refetch-and-retry works (seen in the 11.8 live rehearsal). Pre-existing. [web/src/components/ai-plausibility/ai-plausibility-form.tsx] Also hit after a member removal bumps `Household.Version` (Story 11.9). Merged at the 2026-10-31 triage.
+
 
 ## Deferred from: dev-story of story-11-9-member-removal-revocable-invites (2026-10-17)
 
-- [open] Drop the plaintext `HouseholdInvites.Token` column in a later contract migration, **at least 7 days after Story 11.9's release** (the invite lifetime; give the earliest date as release date + 7 days once known). The exact change: drop the column and its unique index, delete the legacy branch of `FindInviteByTokenAsync`, drop `HouseholdInvite.Token`, update `HouseholdMembershipRepositoryTests`, `HouseholdInviteTests` and the migration tests. Until then legacy invites keep working through the legacy lookup (AC #5). [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
-- [open] A removed member's other open tab keeps its stale `ready` state until the page is reloaded; every API request from it fails (`HouseholdMemberEndpointsTests` sweeps every `/api` route as a removed member), and the next load lands in household creation (AC #13c, Q3). A global SPA reaction to a 403 or session polling was left out on purpose. [web/src/App.tsx]
-- [open] Jobs a removed member queued keep running, and their history shows the generic "a household member" fallback instead of the name (`BackgroundJobs.QueuedByHouseholdMemberId` is `SET NULL`; AC #13d). [src/EnergyTracker.Application/ListSmartPlugImportJobs.cs]
-- [open] The invite token appears in request paths (`/api/household-invites/<token>`, `/api/household-invites/<token>/accept`, `/join/<token>`). Log-level check (AC #11d): the effective logging configuration writes them. Serilog is set up with `ReadFrom.Configuration`, which reads a `Serilog` section; `appsettings.json` has none (only the `Logging:LogLevel` section, which Serilog ignores) and no environment variable sets one, so the minimum level is Serilog's default `Information` with no overrides, and ASP.NET Core's hosting diagnostics ("Request starting ...") write the request path at `Information` to stdout and so into Log Analytics. Azure Monitor traces also carry `url.path`. The token in the URL path is the Story 1.8 design and was not changed here. Options: a `Serilog:MinimumLevel:Override` for `Microsoft.AspNetCore.Hosting.Diagnostics` and a span processor that redacts the invite segment, or moving the token into a fragment or a POST body. [src/EnergyTracker.Api/Program.cs]
+- [promoted: Story 11.20] Drop the plaintext `HouseholdInvites.Token` column in a later contract migration, **at least 7 days after Story 11.9's release** (the invite lifetime; give the earliest date as release date + 7 days once known). The exact change: drop the column and its unique index, delete the legacy branch of `FindInviteByTokenAsync`, drop `HouseholdInvite.Token`, update `HouseholdMembershipRepositoryTests`, `HouseholdInviteTests` and the migration tests. Until then legacy invites keep working through the legacy lookup (AC #5). [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
+
+- [promoted: Story 11.22] The invite token appears in request paths (`/api/household-invites/<token>`, `/api/household-invites/<token>/accept`, `/join/<token>`). Log-level check (AC #11d): the effective logging configuration writes them. Serilog is set up with `ReadFrom.Configuration`, which reads a `Serilog` section; `appsettings.json` has none (only the `Logging:LogLevel` section, which Serilog ignores) and no environment variable sets one, so the minimum level is Serilog's default `Information` with no overrides, and ASP.NET Core's hosting diagnostics ("Request starting ...") write the request path at `Information` to stdout and so into Log Analytics. Azure Monitor traces also carry `url.path`. The token in the URL path is the Story 1.8 design and was not changed here. Options: a `Serilog:MinimumLevel:Override` for `Microsoft.AspNetCore.Hosting.Diagnostics` and a span processor that redacts the invite segment, or moving the token into a fragment or a POST body. [src/EnergyTracker.Api/Program.cs]
+
 - [open] Expired and revoked invite rows are never swept (revoke only expires them in place); the table grows by one row per invite ever created. A sweep like `SmartPlugImportRepository.SweepExpiredAsync` would do it. [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
+
 - [open] Invite rows carry no creator, so the open-invite list cannot say who invited. Needs a nullable creator column and a decision about what to show once that member is removed (Q4). [src/EnergyTracker.Domain/HouseholdInvite.cs]
-- [open] Removing a member bumps `Household.Version`, so a Settings form holding the old version (yearly baseline, AI plausibility) gets one 409 on its next save and recovers through its refetch. The same pre-existing pattern as the 11.8 AI plausibility entry above; expected, not a regression. [web/src/components/ai-plausibility/ai-plausibility-form.tsx]
+
 - [open] The `MemberRemoval` budget (10 per 10 minutes per identity) is shared by every member and invite `DELETE`; the Task 11 walk-through (revoke, remove, leave, a few probes) used eight of ten, and a 429 shows only the generic failure copy ("Check your connection and try again"), which is misleading. Options: a `Retry-After`-aware message, or a higher budget for revoke. Not fixed in 11.9 (the limit is the audit's intended brake; the copy is the gap). Found in Task 11 (2026-10-18).
+
 
 ## Deferred from: dev-story of story-11-10-upload-hardening (2026-10-21)
 
 - [open] The duplicate-id and reference id sets in `ValidateHouseholdImport` still grow with the file by item count, about 32 bytes per id: about 4 MB for the 121,000-reading test export, about 30 MB at the 250 MB cap (roughly 950,000 items). A lower import cap or an on-disk dedupe would remove it. [src/EnergyTracker.Application/ValidateHouseholdImport.cs]
+
 - [open] The framework buffers the multipart file to its own temp file before the endpoint copies it, so one upload briefly uses twice its size on disk. A `MultipartReader`-based endpoint would stream straight into the one file; not done because it replaces `IFormFile` binding and its antiforgery wiring (entry 7.2b). [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
+
 - [open] The restore job still materializes the whole object graph; only the string is gone. Measured peak RSS of the restore phase for the 31.75 MiB test export: 1250 MiB after, 2133 MiB before (Apple M2 Max, Server GC, no container limit), which is above the 1 GiB container on its own. A streaming restore needs `HouseholdRestoreData` to stop being one object. [src/EnergyTracker.Application/RestoreHouseholdData.cs, docs/data-import-restore.md]
-- [open] A package with hundreds of thousands of tiny zip entries still costs memory in `ZipArchive`'s central directory before any limit runs (bounded by the 20 MB upload cap, roughly tens of MB). [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
+
 - [open] Orphaned temp files from a process that died between validate and confirm (the registry is gone with it) are never swept; the existing AD-24 / C3 item. The local temp directory already held many stale `*.json` files from before this story when it was measured. [src/EnergyTracker.Infrastructure/Adapters/MemoryHouseholdImportUploadRegistry.cs]
+
 - [open] The Meross CSV parser has no row cap (out of scope: the story covers XLSX). [src/EnergyTracker.Infrastructure/Adapters/MerossCsvParser.cs]
+
 - [open] The API runs Server GC (`System.GC.Server: true`), whose gen0 budget scales with core count; on a 12-core host the same validation showed 109.7 MiB RSS growth against 21.6 MiB under Workstation GC and 54.6 MiB with a container-like heap limit. Decide the GC mode and `GCHeapCount`/`GCConserveMemory` for the 0.5 vCPU container with Story 11.11 (container config). [src/EnergyTracker.Api/EnergyTracker.Api.csproj, Dockerfile]
-- [open] `HouseholdImportEndpoints` checks `file.Length > MaxFileSizeBytes`, but `FormOptions.MultipartBodyLengthLimit` is the same 250 MB, so the framework rejects an oversized body first and the friendly 400 can hardly fire; the check stays (it is tested through `HouseholdImportUploadSettings`) and the limits are untouched (Q1). [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
-- [open] The real Eve exports carry directory entries and two `docProps` entries (`app.xml`, `core.xml`) that .NET's `ZipArchive` cannot open (OpenXml never reads them); the XLSX pre-scan skips both kinds. If a vendor ever ships a part the parser needs with such a quirk, the failure surfaces from OpenXml as a generic job failure, as before. [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
-- [open] `ProcessSmartPlugImport` opens the temp file twice (header, then data), so the XLSX decompressed-size pre-scan runs twice per import (tens of milliseconds for the largest sample); a single open would halve it. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs]
+
 
 ## Deferred from: code review of 11-10-upload-hardening (2026-10-21)
 
 - [open] The XLSX shared-strings list holds every item as a string, so a hostile table just under the 64 million character limit made of tiny `<si>` items costs on the order of 150 MB (the design accepts a list, AC #10d; the pre-scan limit is the mitigation). A cap on the item count, or resolving strings lazily, would bound it. [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
+
 - [open] `EveHomeXlsxParser.ReadDeviceTag` reads two cells but loads the whole shared-strings table (the old code loaded the whole table DOM on first access too). A lazy lookup would make the header read cheap. [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
+
 - [open] A single worksheet cell is still loaded whole (`LoadCurrentElement` on the `Cell`), so one cell of up to the 64 million character part limit costs on the order of 250 MB (UTF-16 plus the `InnerText` copy). Real cells hold a timestamp or a number; a cell text length cap would bound it. [src/EnergyTracker.Infrastructure/Adapters/EveHomeXlsxParser.cs]
+
 
 ## Deferred from: dev-story of story-11-11-container-config-correctness (2026-10-22)
 
-- [open] S5 leftovers the epic ACs left out (Q4): the base images are pinned by tag (`node:26-alpine`, `sdk:10.0`, `aspnet:10.0`), not by digest, and the image has no `HEALTHCHECK`. The digest matters for supply-chain reproducibility; the `HEALTHCHECK` only for self-hosters (Container Apps has its own probe). The aspnet image has no curl/wget, so a probe needs a tiny `dotnet`-based check or a health tool. [Dockerfile]
+- [open] S5 leftovers the epic ACs left out (Q4): the base images are pinned by tag (`node:26-alpine`, `sdk:10.0`, `aspnet:10.0`), not by digest, and the image has no `HEALTHCHECK`. The digest matters for supply-chain reproducibility; the `HEALTHCHECK` only for self-hosters (Container Apps has its own probe). The aspnet image has no curl/wget, so a probe needs a tiny `dotnet`-based check or a health tool. [Dockerfile] Story 11.5 also listed base-image digest pinning here.
+
 - [open] S8 (`AllowedHosts: *`) is in no Epic 11 story (11.7 decided the forwarded-headers half). It was looked at again here and stays as is: the app serves one host per deployment behind Container Apps ingress or the self-hoster's own proxy, and nothing reads `Host` for a security decision. Revisit when something does (absolute URLs in emails or invite links built from `Request.Host`, or a second hostname on one instance). [src/EnergyTracker.Api/appsettings.json, docs/codebase-audit-2026-10-10.md S8]
+
 - [open] `/login` without OIDC is a JSON problem document, not a page in the SPA's voice (Q5): the operator of an unconfigured instance meets it as raw JSON in the browser. A small static page or an SPA route that reads the 503 would be friendlier. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
+
 - [open] The Azure `ai-api-key` secret is seeded with the placeholder `unset` (a non-empty value is required, D4), so once `Ai__Endpoint` is set without a real key the client sends `Authorization: Bearer unset`. Story 9.2 must supply the secret together with the endpoint, or the Bicep/`OpenAiCompatibleClient` pair must treat the sentinel as "no key". [infra/modules/container-app.bicep]
-- [open] A host that fails startup (any `throw` out of `Program.cs`: the new connection-string and `Ai:Endpoint` checks, and the existing Data Protection fail-closed check) prints its `Unhandled exception` message and then does not exit: the container stays `running` with one core at 100% CPU. Found in the Task 9 rehearsal on the OrbStack/arm64 Docker host; reproduced on the unchanged pre-story image (root, `energy-tracker:before`) with the Data Protection throw, so it is not caused by this story, and `DOTNET_gcServer=0` or disabling the crash report does not change it. Effect: the clear message reaches `docker logs`, but nothing exits non-zero, so `restart:` policies and Container Apps' crash-loop detection never see a failed start (the startup/liveness probe still fails). Needs a look at what the runtime does after the unhandled exception (Serilog/OTel flush on a half-built host, or a host-specific createdump spin), and whether it also happens on Azure or a Linux amd64 host. [src/EnergyTracker.Api/Program.cs, Dockerfile]
+
+- [promoted: Story 11.23] A host that fails startup (any `throw` out of `Program.cs`: the new connection-string and `Ai:Endpoint` checks, and the existing Data Protection fail-closed check) prints its `Unhandled exception` message and then does not exit: the container stays `running` with one core at 100% CPU. Found in the Task 9 rehearsal on the OrbStack/arm64 Docker host; reproduced on the unchanged pre-story image (root, `energy-tracker:before`) with the Data Protection throw, so it is not caused by this story, and `DOTNET_gcServer=0` or disabling the crash report does not change it. Effect: the clear message reaches `docker logs`, but nothing exits non-zero, so `restart:` policies and Container Apps' crash-loop detection never see a failed start (the startup/liveness probe still fails). Needs a look at what the runtime does after the unhandled exception (Serilog/OTel flush on a half-built host, or a host-specific createdump spin), and whether it also happens on Azure or a Linux amd64 host. [src/EnergyTracker.Api/Program.cs, Dockerfile]
+
 
 ## Deferred from: code review of story-11-11-container-config-correctness (2026-10-23)
 
-- [open] `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 problem detail and `docs/self-hosting.md` say all three of `Oidc__Authority`, `Oidc__ClientId`, `Oidc__ClientSecret` are required. With the secret missing the OIDC scheme registers and `/login` redirects, then the code exchange fails at the provider. Pre-existing gate, not changed by Story 11.11; decide whether the gate should include the secret (a public-client/PKCE-only setup would then lose sign-in) or the wording should say "Authority and ClientId, plus ClientSecret for a confidential client". [src/EnergyTracker.Api/Program.cs:249]
-- (The startup-failure-does-not-exit item found again in the same review is already `[open]` above under story-11-11's dev-story entry; not duplicated.)
+- [open] `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 problem detail and `docs/self-hosting.md` say all three of `Oidc__Authority`, `Oidc__ClientId`, `Oidc__ClientSecret` are required. With the secret missing the OIDC scheme registers and `/login` redirects, then the code exchange fails at the provider. Pre-existing gate, not changed by Story 11.11; decide whether the gate should include the secret (a public-client/PKCE-only setup would then lose sign-in) or the wording should say "Authority and ClientId, plus ClientSecret for a confidential client". [src/EnergyTracker.Api/Program.cs:249] Story 11.19 review: an empty `JobQueue:ConnectionString` with `azurestoragequeue` also fails at first resolve, not at startup. Merged at the 2026-10-31 triage.
+
 
 ## Deferred from: code review of spec-ci-pipeline-runtime-speedup (2026-10-23)
 
 - [open] `maxParallelThreads` is now 8 (Ralf's call) for Infrastructure.Tests, all sharing one Postgres whose default `max_connections` is 100 and one SQL Server, on a 4-vCPU runner. The local run (8 threads, arm64 Mac) was clean, but a "too many clients" or timing-sensitive flake is only visible on CI. Watch the first PR and main runs; if one appears, raise Postgres `max_connections` on the shared container or lower the cap. [tests/EnergyTracker.Infrastructure.Tests/xunit.runner.json, tests/Shared/SharedDatabaseServers.cs]
+
 - [open] Per-test cost left in Infrastructure.Tests: `CREATE DATABASE` plus replaying 30 migrations for every test. If the PR run shows it dominating, clone a pre-migrated Postgres template (`CREATE DATABASE ... TEMPLATE`) and restore a SQL Server backup instead. [tests/Shared/SharedDatabaseServers.cs]
+
 
 ## Deferred from: dev-story of story-11-12-async-per-request-household-resolution (2026-10-24)
 
-- [open] `HouseholdMembershipDbContext` could now be folded into `EnergyTrackerDbContext`: the accessor no longer depends on any context, so the circular-DI reason is gone. What still argues for a separate context is that the lookup stays off the endpoint's tracked context and its query filter (the filter needs the answer this lookup produces). Only worth doing together with another change to the membership lookup. [src/EnergyTracker.Infrastructure/HouseholdMembershipDbContext.cs]
 - [open] The middleware is scoped by the `/api` path (Q2), so a future authenticated route outside `/api` that reads the Household makes `CurrentHouseholdAccessor` throw (by design: loud, not a silent fallback). If such a route appears, either move it under `/api` or switch the middleware to endpoint metadata. `POST /api/households`, the invite routes and `GET /api/session` pay one indexed lookup they do not need; accepted. [src/EnergyTracker.Api/HouseholdMembershipMiddleware.cs]
-- [open] `HouseholdMembershipResolver.ResolveAsync` is `virtual` only so `HouseholdMembershipMiddlewareTests` can substitute it with NSubstitute (an interface would have to sit in `Application`, and AD-1 keeps `ICurrentHouseholdAccessor` as its one household port). If the project ever gets a second Infrastructure-internal seam style, this is a candidate to revisit. [src/EnergyTracker.Infrastructure/Adapters/HouseholdMembershipResolver.cs]
+
 
 ## Deferred from: code review of story-11-12-async-per-request-household-resolution (2026-10-24)
 
-- [open] Guard-test hardening in `HouseholdMembershipIsResolvedOncePerRequestTests`: the `new Claim(` scan misses target-typed `new("household_id", ...)` and fully qualified constructors and fails on any legitimate future claim (`validatedIssuerClaims.ShouldBe(1)`); `StripComments` (copied from `HouseholdImportIsStreamedTests`) does not handle char, verbatim, raw or interpolated string literals; the registration-order check is first-occurrence only and sees only `app.Map…` as an endpoint; the `static` ban rejects `static` lambdas and the `.Result` ban matches `.ResultCount`. Best-effort text guards, all fail loudly; harden the shared `StripComments` once for every guard rather than per file. [tests/EnergyTracker.Architecture.Tests/HouseholdMembershipIsResolvedOncePerRequestTests.cs]
+- [open] Guard-test hardening in `HouseholdMembershipIsResolvedOncePerRequestTests`: the `new Claim(` scan misses target-typed `new("household_id", ...)` and fully qualified constructors and fails on any legitimate future claim (`validatedIssuerClaims.ShouldBe(1)`); `StripComments` (copied from `HouseholdImportIsStreamedTests`) does not handle char, verbatim, raw or interpolated string literals; the registration-order check is first-occurrence only and sees only `app.Map…` as an endpoint; the `static` ban rejects `static` lambdas and the `.Result` ban matches `.ResultCount`. Best-effort text guards, all fail loudly; harden the shared `StripComments` once for every guard rather than per file. [tests/EnergyTracker.Architecture.Tests/HouseholdMembershipIsResolvedOncePerRequestTests.cs] Same gap in `SingleInstanceInvariantIsDocumentedTests` (its pattern list and file-granular allow-list are also open: `MemoryCache`, `ConcurrentQueue`/`ConcurrentBag`, `Path.GetTempFileName`, `Directory.CreateTempSubdirectory` not matched; a marker comment or attribute convention is the sturdier guard) and in `CSharpSource.StripComments` (11.18 review, below). Merged at the 2026-10-31 triage.
+
 - [open] `HouseholdMembershipMiddleware` resolves the concrete `HouseholdMembershipResolver` through `GetRequiredService` and `ResolveAsync` is `virtual` only for NSubstitute; an interface in Infrastructure or Api, or a constructor-injected middleware class, would drop both. Same item as the dev-story entry above, recorded again so the review trail is complete. [src/EnergyTracker.Api/HouseholdMembershipMiddleware.cs:17]
-- [open] Test cost: the per-request test class builds about 15 `WithWebHostBuilder` hosts and each resolver test creates a fresh database and replays 30 migrations (the shape of `HouseholdMembershipRepositoryTests`). Covered by the open per-test migration cost item from the ci-pipeline review; no separate action. [tests/EnergyTracker.Infrastructure.Tests/HouseholdMembershipResolverTests.cs]
+
 
 ## Deferred from: dev-story of story-11-13-single-instance-invariant-documentation (2026-10-24)
 
-- [open] The `AppInstances` heartbeat could later serve AD-6's job staleness, as the 2026-10-10 adversarial review proposed (one `AppInstance` table, a `ProcessingInstanceId` on the job row, a job is stale when its instance row is). Left out on purpose: the heartbeat is evidence read by one log line only (AD-7). Revisit together with lifting AD-24 and the job leases in `deferred.md`.
 - [open] `SingleInstanceInvariantIsDocumentedTests` finds a new process-local mechanism only by the patterns `ConcurrentDictionary<`, `SemaphoreSlim`, `Channel.Create`, `IMemoryCache`, `AddRateLimiter` and `Path.GetTempPath`. A mechanism built from other types (a plain `Dictionary<,>` behind a `lock`, which is exactly what `MemoryHouseholdImportUploadRegistry` is, a `static` field, `Lazy<T>` state) is covered only by the explicit file list, so a new one of those slips through until a reviewer notices. Widening the patterns would flag every legitimate dictionary in `src`; a convention (a marker comment or attribute on process-local state) would be the sturdier guard. [tests/EnergyTracker.Architecture.Tests/SingleInstanceInvariantIsDocumentedTests.cs]
+
 - [open] The Data Protection key ring's cached ring and the post-cutover `RevokeAllKeys` reasoning (Story 11.6) also assume one process, but AD-24's Binds list does not name them, so neither the docs table nor the guard lists them. Add them to AD-24's Binds and to the table if the shared-state work for lifting AD-24 is ever scheduled.
-- [open] Orphaned temp files of a dead process (an upload whose replica was replaced) are never swept. Already `[open]` under Story 11.10; not duplicated. The docs section "Run exactly one instance" names the effect ("One instance does not mean a stable disk").
-- [open] In the Api test fixture the factory's own host starts before the fixture migrates the database, so its first heartbeat fails (the `AppInstances` table is missing) and logs the one failure `Warning` that a self-host install with pending migrations would also log. Harmless and by design (AC #8b); the next beat succeeds. Noted so a test log with that line is not mistaken for a regression.
+
 
 ## Deferred from: code review of story-11-13-single-instance-invariant-documentation (2026-10-24)
 
-- [open] `SingleInstanceInvariantIsDocumentedTests` copies the text scanner of `HouseholdImportIsStreamedTests`: `StripComments` ignores char, verbatim, raw and interpolated literals (its comment says no scanned file uses raw strings, but `src/.../SmartPlugImportRepository.cs` does, and it only works because the quote count balances), `CommentsOf` treats `//` inside a string as a comment, and the registration check counts braces over raw text (a braceless `if` passes). Fold into the open shared-`StripComments` hardening item rather than fixing per file. [tests/EnergyTracker.Architecture.Tests/SingleInstanceInvariantIsDocumentedTests.cs]
 - [open] The same guard's pattern list and file-granular allow-list: `MemoryCache`, `ConcurrentQueue`/`ConcurrentBag`, `Path.GetTempFileName` and `Directory.CreateTempSubdirectory` are not matched, and a new mechanism inside an already listed file such as `Program.cs` is never seen. Extends the dev-story entry above; a marker comment or attribute convention is the sturdier guard. [tests/EnergyTracker.Architecture.Tests/SingleInstanceInvariantIsDocumentedTests.cs]
-- [open] EF Core package patch drift: `Directory.Packages.props` has `Microsoft.EntityFrameworkCore`/`.Relational` at 10.0.13 and `Microsoft.EntityFrameworkCore.Design` at 10.0.12, so model snapshots are stamped `ProductVersion` 10.0.13 by the installed tool and `project-context.md` still says 10.0.12. Align the packages (they must move together) and the project-context line in one change. [Directory.Packages.props]
-- [open] `InstanceHeartbeatServiceTests` rely on 10 ms real timers, up to 10 s polling and 2 s `Task.Delay` negative waits; a loaded CI runner could flake them. No `FakeTimeProvider` package by project rule. Revisit if a flake is seen. [tests/EnergyTracker.Infrastructure.Tests/InstanceHeartbeatServiceTests.cs]
+
 
 ## Deferred from: dev-story of story-11-14-restore-id-collisions-active-job-guard (2026-10-25)
 
 - [open] `ValidateHouseholdImport` still does not check a file's own uniqueness beyond duplicate ids per array and reference resolution: duplicate Room names, duplicate `(RoomId, Name)` or `(PowerPointId, Name)` pairs and duplicate `(PowerPointId, IntervalStart)` readings inside one file still end in a generic restore failure after the delete phase has rolled back. Duplicate `idempotencyKey` values inside one file stopped mattering with this story (every key is regenerated). From the story's "Considered and left out"; the unique-index names were not re-verified here.
+
 - [open] The `AddActiveJobGuard` migration's surplus-failing statement (fails all but the newest active restore or cleanup row per Household before the index is built) has only been exercised against seeded rows in `PostgresMigrationTests`/`SqlServerMigrationTests`, never against real production data. The expected production state is zero rows touched; Part R reads the migration step's log for that.
-- [open] After a completed restore the SPA reloads only what holds restored ids: the Settings scaffold (rooms, power points, devices) and the open meter regression prompt that `App` holds. Other state held above or beside the restore panel is still the pre-restore state until the next reload: `App`'s `state.household` (locale and currency, which a restore replaces), the dashboard Status and the tariff check, and Settings' Yearly Baseline and AI toggle forms. None of it holds an id, so it was out of this story's Task 6.2 scope; one `onDataRestored` callback in `App.tsx` could refresh all of it.
+
+- [open] After a completed restore the SPA reloads only what holds restored ids: the Settings scaffold (rooms, power points, devices) and the open meter regression prompt that `App` holds. Other state held above or beside the restore panel is still the pre-restore state until the next reload: `App`'s `state.household` (locale and currency, which a restore replaces), the dashboard Status and the tariff check, and Settings' Yearly Baseline and AI toggle forms. None of it holds an id, so it was out of this story's Task 6.2 scope; one `onDataRestored` callback in `App.tsx` could refresh all of it. Story 11.14 review: a member who leaves Settings while a restore job still polls unmounts `DataImportPanel`, so `onRestored` never fires and `App` keeps the pre-restore open meter regression prompt (old id); resolving it answers 404 until a reload. Fix needs App-level knowledge of the running restore job or a 404-triggered refetch. Merged at the 2026-10-31 triage.
+
 
 ## Deferred from: code review of story-11-14-restore-id-collisions-active-job-guard (2026-10-25)
 
 - [open] `DELETE /api/smart-plug-import-jobs` answers `202` with the id of the active cleanup job even when the request's `deleteAll` differs from the active job's payload (`deleteAll=true` while a `deleteAll=false` cleanup is queued gets the narrower job). Pre-existing in the early-check path; Story 11.14 extends the same answer to the lost-race path (`ActiveJobAlreadyExistsException`). Fix when touched: compare the payload scope, or answer `409` when it widens.
-- [open] A member who leaves Settings while a restore job is still polling unmounts `DataImportPanel`, so `onRestored` never fires and `App` keeps the pre-restore open meter regression prompt (old id); resolving it then answers 404 until a reload. Narrow: it needs an open prompt and a restore that outlives the Settings visit. A fix needs App-level knowledge of the running restore job (lift the poll above the page) or a 404-triggered refetch in the prompt dialog. Related to the Story 11.14 `[open]` entry on SPA state after a restore.
+
 
 ## Deferred from: dev-story of story-11-15-trending-threshold-scaled-to-elapsed (2026-10-25)
 
 - [open] FR-21's settings editor (not built, see the Story 2.4 entry above on threshold range validation) must label `TrendingThresholdKwh` "per year" / "pro Jahr" and bound-check it. Until then the only place the setting is labelled is the Status detail view's configured-threshold row, "Trending threshold (per year)" / "Schwellenwert für Anstieg (pro Jahr)" (Story 11.15, AC #6). [web/src/components/dashboard/status-detail-dialog.tsx]
+
 - [open] Story 11.15 review (decision 1c, Ralf 2026-10-25) added a floor to the scaled trending threshold: one meter step (1 kWh), never above the configured annual figure, shared by Status and the Event window check (`TrendingThreshold.ScaleToDate`). PRD FR-6 and FR-30 still say "same relative sensitivity" with no floor; John and Ralf should add one line to them (the story forbade editing the PRD, so it was left). A minimum elapsed span remains a possible further step if a 1 kWh bar proves too sensitive for the first days. [src/EnergyTracker.Domain/Calculations/TrendingThreshold.cs]
+
 
 ## Deferred from: Part R of story-11-15-trending-threshold-scaled-to-elapsed (2026-10-25)
 
 - [open] The Status detail view's "Baseline to date" value and its "(over N days)" use whole-number formats, so a span of a few hours (a new household's first readings) reads "0 kWh (over 0 days)" next to a Difference of 0.58 kWh and a 1 kWh threshold. Seen live on the test household. Story 11.15 gave the difference sentence and the scaled threshold finer formats but left these two (Story 2.7 formats). Fix when touched: one decimal for the baseline under 10 kWh and fractional days under 2. [web/src/components/dashboard/status-detail-dialog.tsx]
 
+
 ## Deferred from: dev-story of story-11-16-offline-queue-rejected-readings-attention (2026-10-28)
 
 - [open] The server's reason on the card is the meter-reading validation `detail`, which is English prose and is shown verbatim, so a `de-DE` household sees English there (the labels around it are translated). Add an `errorCode` to `CreateMeterReading`'s 400s (the `EventEndpoints` pattern) and map it to translated text on `RejectedReadingsCard`. [web/src/components/meter-reading/rejected-readings-card.tsx, src/EnergyTracker.Api/Endpoints/MeterReadingEndpoints.cs]
+
 - [open] A member removed from a Household by someone else keeps queued entries that answer `403` forever and are never shown (Story 11.9 only handles *leaving*, where `removeForHousehold` runs). `flushQueue` keeps 403 entries pending by design (an expired session answers 403 too), so nothing tells the two apart. [web/src/lib/meter-reading-sync.ts]
-- [open] No cap and no expiry on needs-attention entries, and no "discard all". A device that keeps producing refused readings grows the list without limit. [web/src/lib/offline-queue.ts]
+
+- [open] No cap and no expiry on needs-attention entries, and no "discard all". A device that keeps producing refused readings grows the list without limit. [web/src/lib/offline-queue.ts] Story 11.16 review: a deterministic 5xx on one payload keeps the entry pending and `flushQueue` re-posts it on every flush forever. Merged at the 2026-10-31 triage.
+
 - [open] `listPending` is a misleading name now that it means "everything queued, pending or needs attention" (kept on purpose, Story 11.16 AC #4). A rename touches `logoff.ts`, `offline-queue.ts`, `leave-household-dialog.tsx` and their tests. [web/src/lib/offline-queue.ts]
+
 - [open] `registerOfflineSync` does `void flushQueue(...)`, so a store that cannot be opened (private browsing, blocked storage) is an unhandled promise rejection. Pre-existing; Story 11.16's `useRejectedReadings` swallows the same failure for the card only. [web/src/lib/meter-reading-sync.ts]
+
 - [open] `toDateTimeLocalValue` was copied in `log-reading-sheet.tsx` and `log-event-sheet.tsx`; Story 11.16 moved the first into `web/src/lib/datetime-local.ts` (as specified) and left `log-event-sheet.tsx` with its own copy. Import the shared one there too. [web/src/components/event/log-event-sheet.tsx]
+
 
 ## Deferred from: code review of story-11-16-offline-queue-rejected-readings-attention (2026-10-28)
 
 - [open] The rejected-readings card follows only changes made in its own tab: `QUEUE_CHANGED_EVENT` is a `window` event, so a discard or resend in a second tab leaves a stale row, and acting on it hits `resendRejectedReading`'s `missing` outcome, where the dialog closes without telling the member their correction was dropped. Deferred because AC #10 and Q8 chose the same-window event; revisit with a `BroadcastChannel` bridge (and a notice for `missing`) if multi-tab use shows up. [web/src/lib/offline-queue.ts, web/src/components/meter-reading/resend-rejected-reading-dialog.tsx]
-- [open] A deterministic 5xx on one payload keeps the entry pending and `flushQueue` re-posts it on every flush forever (one request per reconnect per poisoned entry). Pre-existing behaviour, same family as the "no cap or expiry" item above. [web/src/lib/meter-reading-sync.ts]
+
 
 ## Deferred from: code review of 11-17-timeprovider-recompute-lock-eviction (2026-10-31)
 
 - [open] Several operations read the clock more than once (`ProcessSmartPlugImport` CreatedAtUtc/CompletedAtUtc, `CreateMeterReading` three reads, `BackgroundJobLifecycle.TryStartAsync` staleBefore vs `NewToken`, upload registry sweep vs lookup, invite endpoint vs use case). Read counts were kept identical on purpose (AC2 behaviour-neutral); capture one `now` per operation in a later change. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs, src/EnergyTracker.Application/CreateMeterReading.cs, src/EnergyTracker.Infrastructure/Adapters/BackgroundJobLifecycle.cs]
-- [open] `ManualTimeProvider` overrides only `GetUtcNow` (not `GetTimestamp`/`CreateTimer`), so `Task.Delay(..., provider)`/`CancelAfter` would use real time, and its `DateTimeOffset` field is not tear-safe across threads (e.g. `WebApplicationFactory` host threads). [tests/Shared/ManualTimeProvider.cs]
+
 - [open] `HouseholdRecomputeLock` tests still use real 50/100 ms acquisition timeouts and a 60 s churn timeout; no test covers a waiter's timeout racing the holder's release. The timeout stays `CancelAfter` per Story 11.17 Dev Notes. [tests/EnergyTracker.Infrastructure.Tests/HouseholdRecomputeLockTests.cs]
-- [open] `NoDirectClockReadsTests` does not cover `Stopwatch`, `Environment.TickCount`, `using static System.DateTime` or alias forms. Outside the AC3 token list. [tests/EnergyTracker.Architecture.Tests/NoDirectClockReadsTests.cs]
+
 - [open] The job ownership token is the clock truncated to whole milliseconds with no uniqueness guard, so a frozen test clock gives two owners the same token and fencing fails silently. Same token shape as before Story 11.17. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobLifecycle.cs]
+
 
 ## Deferred from: create-story of 11-18-backend-analyzer-format-gate (2026-10-31)
 
 - [open] 26 `oxlint` warnings remain in the frontend (`react(set-state-in-effect)` 17, `react(refs)` 5, `react(only-export-components)` 3, `react(purity)` 1). `npm --prefix web run lint` does not fail on warnings today; a `--deny-warnings` gate would need all of them fixed first. Rules arrived with oxlint 1.75, after the 2026-10-10 audit. [web/src]
 
+
 ## Deferred from: code review of 11-18-backend-analyzer-format-gate (2026-10-31)
 
 - [open] No `.gitattributes`; `end_of_line = lf` makes `dotnet format --verify-no-changes` fail on Windows autocrlf checkouts. [.editorconfig]
+
 - [open] `CSharpSource.StripComments` gaps (`\u0041` char escapes, `$"""` raw interpolation), `root = true` regex rejects a trailing comment, magic `Count > N` thresholds in the guard. [tests/EnergyTracker.Architecture.Tests/CSharpSource.cs]
+
 - [open] `WarningsNotAsErrors` (NU1900) vs `WarningsAsErrors` (NU1902-NU1904) interaction under `-p:TreatWarningsAsErrors=true` untested; NU1901 unaddressed. [Directory.Build.props]
+
 - [open] `global.json` `rollForward: latestFeature` lets a new SDK band add Recommended rules and fail unrelated PRs. [global.json]
 
-## Deferred from: code review of 11-18-backend-analyzer-format-gate, rules lowered in `.editorconfig` (2026-10-31)
-
-- [open] `CA1848` (LoggerMessage source generation) is off for ~60 low-volume `ILogger` call sites; revisit if log volume or allocation pressure becomes a concern. [.editorconfig]
-- [open] `CA1716` (identifier clashes with keywords in other languages) is off because renaming the domain `Event` type is out of proportion while no outside consumer exists. [.editorconfig]
-- [open] `CA1711` allows the `Queue` and `Stream` suffixes (AD-6 port and adapter names, `HouseholdExportStream`). [.editorconfig]
-- [open] `CA1873` (expensive log arguments) is off; revisit if a log argument ever starts to compute something. [.editorconfig]
-- [open] `CA1707` and `CA1816` are off for `tests/**` (Snake_case test names; fixtures without finalizers). [.editorconfig]
 
 ## Deferred from: create-story of 11-19-structural-cleanup (2026-10-31)
 
 - [open] Comment trim reached only the files Story 11.19 touched. These source files still hold more than 40 `//` lines of story and review narration (count of `//` lines): `ValidateHouseholdImport.cs` 91, `Ports/ISmartPlugImportRepository.cs` 91 (port contract text, mostly worth keeping), `EveHomeXlsxParser.cs` 87, `ProcessSmartPlugImport.cs` 83, `SmartPlugReadingConfiguration.cs` 49, `BackgroundJobProcessor.cs` 49, `HouseholdExportReader.cs` 48, `HouseholdRepository.cs` 47, `WindowedDeviationCalculator.cs` 47, `HouseholdRestoreWriter.cs` 43, `AzureStorageQueueJobQueue.cs` 43, `SmartPlugGapDetector.cs` 41. Extend `NoHistoryNarratingCommentsTests` to each file as it is trimmed.
+
 - [open] Endpoint files that serve callers without a Household (`AuthEndpoints`, `SessionEndpoints`) were trimmed for narration only in the review pass; their longer why-comments may still deserve a pass. `HouseholdEndpoints`, `HouseholdInviteEndpoints` and `HouseholdMemberEndpoints` are trimmed.
+
 - [open] `ServiceRegistrationSnapshotTests` pins `OpenTelemetry.*` and `Azure.Monitor.*` descriptors for the two exporter variants. A Dependabot upgrade of those packages can change the approved text without a behaviour change; re-approve with `ENERGYTRACKER_UPDATE_SNAPSHOTS=1` after reviewing the diff.
+
 
 ## Deferred from: code review of 11-19-structural-cleanup (2026-10-31)
 
 - [open] `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
+
 - [open] Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(false)` fire into the next dialog; only the success path is guarded. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
-- [open] `use-tagging-scaffold-data` has one `loadError` flag and no retry; one failed GET hides the lists that loaded. [web/src/components/tagging-scaffold/use-tagging-scaffold-data.ts]
-- [open] Endpoint filters run after parameter binding, so a no-Household caller with an invalid body gets 400 before 403. No test asserts the order.
+
 - [open] An authenticated no-Household caller can stream up to 250 MB to the upload routes before the filter answers 403. [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
-- [open] `oidcConfigured` ignores an empty `Oidc:ClientSecret`; an empty `JobQueue:ConnectionString` with `azurestoragequeue` fails at first resolve, not at startup. [src/EnergyTracker.Api/Composition]
+
 - [open] The split React files repeat three delete-confirmation dialogs and three row blocks. [web/src/components/tagging-scaffold]
-- [open] Local DB holds smoke-test rows "Smoke Room B" and archived "Smoke PP" from the Story 11.19 live smoke.

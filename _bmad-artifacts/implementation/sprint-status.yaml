@@ -158,6 +158,10 @@ development_status:
   11-17-timeprovider-recompute-lock-eviction: done
   11-18-backend-analyzer-format-gate: done
   11-19-structural-cleanup: done
+  11-20-drop-plaintext-invite-token-column: backlog
+  11-21-self-host-migration-path: backlog
+  11-22-keep-invite-token-out-of-logs: backlog
+  11-23-failed-startup-must-exit: backlog
   epic-11-retrospective: optional
 
 action_items:
@@ -184,5 +188,5 @@ action_items:
   - epic: 10
     action: "Triage deferred-work.md again (marker and index cleanup, drop entries closed by Epic 11 stories)"
     owner: "Amelia + Charlie + Dana"
-    status: open
-    note: "2026-10-10 epic-10 retro. After Epic 11, per Ralf. Marker and index structure stays unchanged until then."
+    status: done
+    note: "2026-10-10 epic-10 retro. Done 2026-10-31 (spec-deferred-work-triage-2.md, baseline 3cf5a9b): 21 entries removed (resolved, duplicate or merged), 33 archived to deferred-work-accepted.md, 4 promoted to Epic 11 stories 11.20-11.23, 129 left with markers and a rebuilt Index."
