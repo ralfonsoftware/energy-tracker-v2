@@ -6,8 +6,6 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class HouseholdImportEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
     // Story 7.1's own live-verification export of one real (fairly small) household was already
     // 32 MB (Task 1) — the 20 MB cap SmartPlugImportEndpoints uses does not transfer here. 250 MB
     // is generous headroom while still bounding what a single upload can occupy on temp disk.
@@ -26,25 +24,10 @@ public static class HouseholdImportEndpoints
     // 7.2 Pass 1).
     internal const long BodySizeHeadroomBytes = 5L * 1024 * 1024;
 
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced across
-    // files (that helper is private to its own class).
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapHouseholdImportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/household-import", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/household-import", async (
             IFormFile file,
             ICurrentHouseholdAccessor householdAccessor,
             ValidateHouseholdImport validateHouseholdImport,
@@ -52,10 +35,7 @@ public static class HouseholdImportEndpoints
             HouseholdImportUploadSettings uploadSettings,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             return await ReceiveUploadAsync(
                 file, householdId, validateHouseholdImport, uploadRegistry, uploadSettings, cancellationToken);
@@ -66,7 +46,7 @@ public static class HouseholdImportEndpoints
         .DisableAntiforgery()
         .RequireRateLimiting(RateLimitPolicies.Upload);
 
-        api.MapPost("/household-import/{token:guid}/confirm", async (
+        household.MapPost("/household-import/{token:guid}/confirm", async (
             Guid token,
             ICurrentHouseholdAccessor householdAccessor,
             IHouseholdImportUploadRegistry uploadRegistry,
@@ -75,10 +55,7 @@ public static class HouseholdImportEndpoints
             IBackgroundJobQueue jobQueue,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             // Atomically verifies the token belongs to THIS Household and removes it in one step
             // — a guessed/leaked token from a different Household 404s exactly like an unknown
