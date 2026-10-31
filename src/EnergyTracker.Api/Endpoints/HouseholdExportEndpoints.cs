@@ -28,9 +28,7 @@ public static class HouseholdExportEndpoints
         {
             var householdId = householdAccessor.RequireHouseholdId();
 
-            // spec-household-export-observability.md (Epic 7 retro action item #1): spans the
-            // whole request, not just the write — a slow reader-side query is as much a "danger
-            // zone" signal as a slow write.
+            // Spans the whole request, not just the write: a slow reader-side query is as much a danger signal as a slow write.
             var stopwatch = Stopwatch.StartNew();
             var export = await exportHouseholdData.ExecuteAsync(householdId, cancellationToken);
 
@@ -41,14 +39,11 @@ public static class HouseholdExportEndpoints
             context.Response.ContentType = "application/json";
             context.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{fileName}\"";
             // No Content-Length: the size is unknown until the last row is streamed, so the download shows no progress percentage.
-
             try
             {
                 await WriteExportAsync(context.Response.BodyWriter, export, cancellationToken);
 
-                // Success path only (spec-household-export-observability.md) — a mid-export fault
-                // falls through to the catch block below and its own existing log calls instead;
-                // this line never fires for a truncated/aborted response.
+                // Success path only: a mid-export fault falls through to the catch block, so this never logs a truncated response.
                 stopwatch.Stop();
                 logger.LogInformation(
                     "Household export succeeded for household {HouseholdId} in {DurationMs}ms: {@CollectionStats}",

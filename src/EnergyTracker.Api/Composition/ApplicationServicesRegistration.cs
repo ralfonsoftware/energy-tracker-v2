@@ -3,7 +3,6 @@ using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Infrastructure.Adapters;
 
-
 namespace EnergyTracker.Api.Composition;
 
 internal static class ApplicationServicesRegistration
@@ -74,7 +73,7 @@ internal static class ApplicationServicesRegistration
         services.AddScoped<IHouseholdExportReader, HouseholdExportReader>();
         services.AddScoped<ExportHouseholdData>();
 
-        // Story 7.2 — restore/migration import. Registry is a singleton (in-memory token→temp-file
+        // Restore/migration import. Registry is a singleton (in-memory token→temp-file
         // mapping, MemoryHouseholdImportUploadRegistry's own doc comment); the writer/use case are scoped
         // like every other DbContext-backed adapter/use case in this file.
         services.AddSingleton<IHouseholdImportUploadRegistry, MemoryHouseholdImportUploadRegistry>();

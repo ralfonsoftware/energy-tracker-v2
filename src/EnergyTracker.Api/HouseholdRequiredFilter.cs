@@ -3,7 +3,7 @@ using EnergyTracker.Application.Ports;
 namespace EnergyTracker.Api;
 
 /// <summary>
-/// Answers 403 ProblemDetails when the authenticated principal belongs to no Household (Story 11.19, audit R1).
+/// Answers 403 ProblemDetails when the authenticated principal belongs to no Household.
 /// Replaces the private <c>TryGetHouseholdId</c> copy every Household-scoped endpoint file used to carry.
 /// </summary>
 /// <remarks>
@@ -27,7 +27,7 @@ internal sealed class HouseholdRequiredFilter : IEndpointFilter
 internal static class HouseholdRequiredFilterExtensions
 {
     /// <summary>
-    /// Puts the Household filter and its marker metadata on a route group or a single route (Story 11.19, AC #3, #6).
+    /// Puts the Household filter and its marker metadata on a route group or a single route.
     /// Both are added together so they cannot drift apart.
     /// </summary>
     public static TBuilder RequireHousehold<TBuilder>(this TBuilder builder)

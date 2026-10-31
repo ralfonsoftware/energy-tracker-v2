@@ -6,7 +6,6 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 
-
 namespace EnergyTracker.Api.Composition;
 
 internal static class ObservabilityRegistration
@@ -67,7 +66,7 @@ internal static class ObservabilityRegistration
 
             default:
                 // Unset/unrecognized: OTel stays fully off — same graceful-degrade shape as unconfigured
-                // OIDC below. Must not throw or affect any other route.
+                // OIDC in AuthRegistration. Must not throw or affect any other route.
                 break;
         }
 

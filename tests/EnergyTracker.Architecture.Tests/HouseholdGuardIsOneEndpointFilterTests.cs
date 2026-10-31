@@ -61,10 +61,14 @@ public class HouseholdGuardIsOneEndpointFilterTests
     private static List<string> HitsIn(string code) =>
         Forbidden.Where(token => code.Contains(token, StringComparison.Ordinal)).ToList();
 
-    private static List<string> EndpointFiles(string root) =>
-        Directory.EnumerateFiles(Path.Combine(root, EndpointsFolder), "*.cs", SearchOption.TopDirectoryOnly)
+    private static List<string> EndpointFiles(string root)
+    {
+        var folder = Path.Combine(root, EndpointsFolder);
+        Directory.Exists(folder).ShouldBeTrue($"{EndpointsFolder} does not exist: did the layout move? Update this guard with it.");
+        return Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
             .ToList();
+    }
 
     private static string FindRepoRoot()
     {

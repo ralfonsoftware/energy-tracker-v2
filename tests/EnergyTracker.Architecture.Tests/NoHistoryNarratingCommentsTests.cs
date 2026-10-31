@@ -29,6 +29,11 @@ public partial class NoHistoryNarratingCommentsTests
         "src/EnergyTracker.Api/Endpoints/StatusEndpoints.cs",
         "src/EnergyTracker.Api/Endpoints/EventEndpoints.cs",
         "src/EnergyTracker.Api/Endpoints/JobEndpoints.cs",
+        "src/EnergyTracker.Api/Endpoints/HouseholdEndpoints.cs",
+        "src/EnergyTracker.Api/Endpoints/HouseholdInviteEndpoints.cs",
+        "src/EnergyTracker.Api/Endpoints/HouseholdMemberEndpoints.cs",
+        "src/EnergyTracker.Api/HouseholdRequiredMetadata.cs",
+        "src/EnergyTracker.Api/Endpoints/TaggingScaffoldContracts.cs",
     ];
 
     private static readonly string[] ScopeFolders =
@@ -41,8 +46,11 @@ public partial class NoHistoryNarratingCommentsTests
     private const string RepositoryFolder = "src/EnergyTracker.Infrastructure/Adapters";
     private const string RepositoryPattern = "SmartPlugImportRepository*.cs";
 
-    [GeneratedRegex(@"Story \d+\.\d+ review|code review|review fix|\bPass \d|review finding|\bRound[- ]\d", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"Story \d+\.\d+|code review|review fix|\bPass \d|review finding|\bRound[- ]\d|\bAC #\d|\b[Aa]udit [A-Z]\d", RegexOptions.IgnoreCase)]
     private static partial Regex HistoryPhrase();
+
+    [GeneratedRegex(@"\bAD-\d+|\bADR \d{4}")]
+    private static partial Regex PointerPhrase();
 
     [Fact]
     public void Comments_in_the_touched_files_are_short_and_do_not_narrate_history()
@@ -87,6 +95,20 @@ public partial class NoHistoryNarratingCommentsTests
 
         Problems(["// fixed in Code Review, Story 7.2 Pass 1", "var x = 1;"], "a.cs").ShouldHaveSingleItem();
         Problems(["var x = 1; // Round-3 review fix"], "a.cs").ShouldHaveSingleItem();
+        Problems(["// Story 7.2 added this", "var x = 1;"], "a.cs").ShouldHaveSingleItem();
+        Problems(["// per AC #6", "var x = 1;"], "a.cs").ShouldHaveSingleItem();
+        Problems(["// see audit R2", "var x = 1;"], "a.cs").ShouldHaveSingleItem();
+        Problems(["/// <summary>Added in Story 11.19.</summary>", "var x = 1;"], "a.cs").ShouldHaveSingleItem();
+        Problems(["var url = \"https://example.test/Story 1.2\";", "var y = 1; // fine"], "a.cs").ShouldBeEmpty();
+        Problems(["// see https://example.test/docs", "var y = 1;"], "a.cs").ShouldBeEmpty();
+        Problems(["var s = \"// Round-3 review fix\";"], "a.cs").ShouldBeEmpty();
+
+        // A pointer is AD-<n> or ADR <nnnn>, not any word that contains AD- or ADR.
+        string[] fakePointer = ["// BROAD-ish one", "// two", "// three", "// four", "var x = 1;"];
+        Problems(fakePointer, "a.cs").ShouldHaveSingleItem();
+        string[] adrPointer = ["// one", "// two", "// three", "// four", "// see ADR 0003", "var x = 1;"];
+        Problems(adrPointer, "a.cs").ShouldBeEmpty();
+
         Problems(["/// <summary>summary line</summary>", "/// <remarks>and more</remarks>", "/// three", "/// four", "/// five"], "a.cs").ShouldBeEmpty();
     }
 
@@ -104,7 +126,7 @@ public partial class NoHistoryNarratingCommentsTests
             else if (!isComment && runStart >= 0)
             {
                 var run = lines[runStart..i];
-                var pointer = run.Any(l => l.Contains("AD-", StringComparison.Ordinal) || l.Contains("ADR", StringComparison.Ordinal));
+                var pointer = run.Any(l => PointerPhrase().IsMatch(l));
                 var allowed = pointer ? MaxPointerRun : MaxPlainRun;
                 if (run.Length > allowed)
                 {
@@ -133,20 +155,46 @@ public partial class NoHistoryNarratingCommentsTests
         return trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith("///", StringComparison.Ordinal);
     }
 
+    // The comment of a line (`//` and `///` included), or null. A `//` inside a string literal or right after a
+    // colon (a URL such as https://host) does not start a comment.
     private static string? CommentText(string line)
     {
-        var index = line.IndexOf("//", StringComparison.Ordinal);
-        if (index < 0 || line.AsSpan(index).StartsWith("///", StringComparison.Ordinal))
+        var quote = '\0';
+        for (var i = 0; i < line.Length; i++)
         {
-            return null;
+            var c = line[i];
+            if (quote != '\0')
+            {
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == quote)
+                {
+                    quote = '\0';
+                }
+            }
+            else if (c is '"' or '\'' or '`')
+            {
+                quote = c;
+            }
+            else if (c == '/' && i + 1 < line.Length && line[i + 1] == '/' && (i == 0 || line[i - 1] != ':'))
+            {
+                return line[i..];
+            }
         }
 
-        return line[index..];
+        return null;
     }
 
     private static List<string> Files(string root)
     {
         var files = new List<string>(ScopeFiles);
+        foreach (var directory in ScopeFolders.Append(RepositoryFolder))
+        {
+            Directory.Exists(Path.Combine(root, directory)).ShouldBeTrue($"{directory} does not exist: did the layout move? Update this guard with it.");
+        }
+
         files.AddRange(Directory.EnumerateFiles(Path.Combine(root, RepositoryFolder), RepositoryPattern).Select(f => Relative(root, f)));
         foreach (var folder in ScopeFolders)
         {

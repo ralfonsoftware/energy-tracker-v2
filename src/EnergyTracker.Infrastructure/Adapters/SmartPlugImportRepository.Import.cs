@@ -1,6 +1,4 @@
-using System.Data.Common;
 using EFCore.BulkExtensions;
-using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using Microsoft.EntityFrameworkCore;

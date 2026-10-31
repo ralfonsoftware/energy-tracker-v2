@@ -16,8 +16,7 @@ public static class HouseholdInviteEndpoints
             var householdId = householdAccessor.HouseholdId;
             if (householdId is null)
             {
-                // Authenticated but no Household yet — can't invite people into a Household
-                // you're not in.
+                // Authenticated but no Household yet: cannot invite into a Household you are not in.
                 return Results.Problem(
                     detail: HouseholdRequiredFilter.RejectionDetail,
                     statusCode: StatusCodes.Status403Forbidden);
@@ -74,11 +73,8 @@ public static class HouseholdInviteEndpoints
             }
         }).RequireRateLimiting(RateLimitPolicies.MemberRemoval);
 
-        // Side-effect-free preview/validity check — this endpoint must never consume the
-        // invite. Correct REST semantics for a GET, and defense in depth: the route sits behind
-        // RequireAuthorization() so an anonymous link-preview bot can't reach it today, but a
-        // GET with a side effect would be one auth-policy change away from letting exactly that
-        // scenario silently burn a single-use invite before the real person clicks anything.
+        // Side-effect-free preview: a GET must never consume the invite. Defense in depth, since a link-preview
+        // bot reaching a consuming GET would burn the single-use invite before the real person clicks.
         api.MapGet("/household-invites/{token}", async (
             string token,
             IHouseholdRepository repository,
@@ -118,8 +114,7 @@ public static class HouseholdInviteEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            // Story 3.6/UX-DR21: same nullable, never-fabricated OIDC `name` claim read as
-            // HouseholdEndpoints' POST /households (see HouseholdClaimTypes.ResolveDisplayName).
+            // Same nullable OIDC `name` claim as HouseholdEndpoints' POST /households (see HouseholdClaimTypes.ResolveDisplayName).
             var displayName = HouseholdClaimTypes.ResolveDisplayName(user);
 
             try
@@ -135,7 +130,7 @@ public static class HouseholdInviteEndpoints
             }
             catch (HouseholdInviteNotFoundException ex)
             {
-                // The exceptions carry no token, so nothing the caller presented is echoed back (Story 11.9 AC #11).
+                // The exceptions carry no token, so nothing the caller presented is echoed back.
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
             }
             catch (HouseholdInviteExpiredOrConsumedException ex)
@@ -144,8 +139,7 @@ public static class HouseholdInviteEndpoints
             }
             catch (HouseholdAlreadyExistsException ex)
             {
-                // Reuses the exact status code POST /households already uses for the same
-                // underlying "this principal already has a Household" condition.
+                // Same status code POST /households uses for "this principal already has a Household".
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
         }).RequireRateLimiting(RateLimitPolicies.InviteRedeem);

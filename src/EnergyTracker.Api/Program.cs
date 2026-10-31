@@ -15,7 +15,7 @@ builder.AddObservability();
 // Database:Provider is read exactly once, here at the composition root (Consistency Conventions) —
 // nothing in Infrastructure re-reads or branches on it independently.
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "Postgres";
-// Development only (audit S7): matches docker-compose.yml and .env.example defaults. Outside Development a missing
+// Development only: matches docker-compose.yml and .env.example defaults. Outside Development a missing
 // connection string stops the host instead of using these.
 const string DevelopmentConnectionString = "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";
 var configuredConnectionString = builder.Configuration.GetConnectionString("Default");
@@ -65,22 +65,21 @@ builder.Services.AddDbContext<EnergyTrackerDbContext>(ConfigureDbContext);
 builder.Services.AddDbContextFactory<HouseholdMembershipDbContext>(ConfigureDbContext);
 
 builder.Services.AddHttpContextAccessor();
-// Story 11.8: the clock comes from DI so the session cap can be tested; tests may substitute it.
+// The clock comes from DI so the session cap can be tested; tests may substitute it.
 builder.Services.TryAddSingleton(TimeProvider.System);
 
 var oidcConfigured = builder.AddAuth();
 
 builder.Services.AddProblemDetails();
-// AD-27 (audit S3): per-route rate-limit policies, applied with RequireRateLimiting on the routes in
-// the Story 11.7 rate-limit table. In-process, so correct for one instance (AD-24).
+// AD-27: per-route rate-limit policies, applied with RequireRateLimiting on the routes. In-process, so correct for one instance (AD-24).
 builder.Services.AddHttpRateLimiting();
 
-// AC #4: Data Protection keys persisted externally, not regenerated in memory on cold start —
-// the one registration that makes sessions survive a scale-to-zero Azure Container Apps restart.
+// Data Protection keys persisted externally, not regenerated in memory on cold start: this makes sessions
+// survive a scale-to-zero Azure Container Apps restart.
 var dataProtectionBuilder = builder.Services.AddDataProtection()
     .PersistKeysToDbContext<EnergyTrackerDbContext>();
 
-// AD-17 (audit S2): the key ring is protected by exactly one of Key Vault, a certificate or an explicit opt-out, chosen
+// AD-17: the key ring is protected by exactly one of Key Vault, a certificate or an explicit opt-out, chosen
 // once. Outside Development none configured stops the host: without a protector the keys would sit in plaintext in the database.
 var dataProtectionKeyProtection = DataProtectionKeyProtection.Configure(
     dataProtectionBuilder, builder.Configuration, builder.Environment);
@@ -90,7 +89,7 @@ builder.Services.AddApplicationServices();
 // Raised once, here: the upload cap exceeds FormOptions' default. The Kestrel limit is raised per route, not globally. ADR 0004.
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = HouseholdImportEndpoints.MaxFileSizeBytes);
 
-// AD-8 (audit C1): the AI backend comes from the Ai:* section only, read once inside this call; see
+// AD-8: the AI backend comes from the Ai:* section only, read once inside this call; see
 // AiPlausibilityBackendConfiguration. An invalid Ai:Endpoint stops startup here.
 var aiPlausibilityBackend = AiPlausibilityBackendConfiguration.Configure(builder.Services, builder.Configuration);
 
@@ -106,7 +105,7 @@ DataProtectionKeyProtection.ApplyStartupActions(app.Services, dataProtectionKeyP
 // whether their configuration took effect.
 AiPlausibilityBackendConfiguration.LogSelection(app.Logger, aiPlausibilityBackend);
 
-// AD-27 (audit S3): the security headers middleware is registered FIRST so it also covers error,
+// AD-27: the security headers middleware is registered FIRST so it also covers error,
 // rate-limit and static-file responses. Production only: Vite dev mode injects inline scripts.
 if (!app.Environment.IsDevelopment())
 {
@@ -114,14 +113,15 @@ if (!app.Environment.IsDevelopment())
 }
 
 // Must run before anything reads Request.Scheme/Host (TLS ends at the Container Apps ingress). No KnownProxies allowlist on
-// purpose: the ingress is the only way in, and the /login rate-limit key is not spoofable there. Do not narrow it. ADR 0003.
+// purpose: the ingress is the only way in, and the /login rate-limit key is not spoofable there. Do not narrow it.
+// Without a reverse proxy this empty trust extends to any direct caller, so self-hosters must front the app with one. ADR 0003.
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
 };
 // KnownIPNetworks/KnownProxies default to loopback-only, which Container Apps' internal ingress
 // peer never matches — without clearing these, the middleware silently ignores the headers
-// above and Request.Scheme stays "http" (Story 1.7's production bug).
+// above and Request.Scheme stays "http".
 forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
@@ -160,7 +160,7 @@ app.UseAuthorization();
 // the principal; after authorization so unauthenticated requests get a cheap 401 and never create
 // identity buckets. /login has no authorization metadata and still reaches the limiter.
 app.UseRateLimiter();
-// Audit C2 (Story 11.12): after authorization and the rate limiter so a 401 or 429 costs no lookup, after
+// After authorization and the rate limiter so a 401 or 429 costs no lookup, after
 // UseExceptionHandler so a database failure answers the usual RFC 7807 500, before the endpoints that read
 // the cached Household. HouseholdMembershipIsResolvedOncePerRequestTests pins this position.
 app.UseHouseholdMembership();

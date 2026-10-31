@@ -19,8 +19,8 @@ public static class StatusEndpoints
             var householdId = householdAccessor.RequireHouseholdId();
 
             var result = await getCurrentStatus.ExecuteAsync(householdId, cancellationToken);
-            // 200 with a null body when undefined (AC #6) — same "is there one?" shape as
-            // GET /api/meter-regression-prompts/open, not a 404/204. Story 2.5's onboarding empty
+            // 200 with a null body when undefined — same "is there one?" shape as
+            // GET /api/meter-regression-prompts/open, not a 404/204. The onboarding empty
             // state is driven by this null, not by an error response.
             return Results.Ok(result is null ? null : ToResponse(result));
         });

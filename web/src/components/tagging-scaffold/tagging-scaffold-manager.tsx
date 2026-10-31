@@ -26,7 +26,7 @@ export function TaggingScaffoldManager() {
     handleDelete,
     handleMoveTo,
   } = useTaggingScaffoldDialog({ setRooms, setPowerPoints, setDevices })
-  // No persistence by design (AC #6) — resets to hidden on every mount.
+  // No persistence by design: resets to hidden on every mount.
   const [showArchived, setShowArchived] = useState(false)
 
   const powerPointsByRoom = new Map<string, PowerPointDto[]>()
@@ -43,7 +43,7 @@ export function TaggingScaffoldManager() {
     devicesByPowerPoint.set(device.powerPointId, siblings)
   }
 
-  // AC #5: an archived parent with live children must not hide them. A Room/Power Point is absent only when archived, hidden and
+  // An archived parent with live children must not hide them. A Room/Power Point is absent only when archived, hidden and
   // without visible children; roomHasVisibleChildren recurses through powerPointHasVisibleChildren for that.
   const powerPointHasVisibleChildren = (powerPoint: PowerPointDto) =>
     (devicesByPowerPoint.get(powerPoint.id) ?? []).some((device) => showArchived || !device.archivedAt)
@@ -54,29 +54,29 @@ export function TaggingScaffoldManager() {
 
   return (
     <div className="flex flex-col gap-4">
-    <div className="flex items-center justify-between">
-      <h2 className="wide:hidden text-lg font-semibold">{t('taggingScaffold.heading')}</h2>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-pressed={showArchived}
-          aria-label={
-            showArchived ? t('taggingScaffold.hideArchivedToggle') : t('taggingScaffold.showArchivedToggle')
-          }
-          onClick={() => setShowArchived((current) => !current)}
-        >
-          {showArchived ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-        </Button>
-        <Button onClick={() => openDialog({ kind: 'create-room' })}>{t('taggingScaffold.addRoom')}</Button>
+      <div className="flex items-center justify-between">
+        <h2 className="wide:hidden text-lg font-semibold">{t('taggingScaffold.heading')}</h2>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-pressed={showArchived}
+            aria-label={
+              showArchived ? t('taggingScaffold.hideArchivedToggle') : t('taggingScaffold.showArchivedToggle')
+            }
+            onClick={() => setShowArchived((current) => !current)}
+          >
+            {showArchived ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+          </Button>
+          <Button onClick={() => openDialog({ kind: 'create-room' })}>{t('taggingScaffold.addRoom')}</Button>
+        </div>
       </div>
-    </div>
 
-    {loading && <p className="text-muted-foreground text-sm">{t('taggingScaffold.loading')}</p>}
-    {loadError && <p className="text-destructive text-sm">{t('taggingScaffold.errorGeneric')}</p>}
-    {!loading && !loadError && rooms.length === 0 && (
-      <p className="text-muted-foreground text-sm">{t('taggingScaffold.roomsEmpty')}</p>
-    )}
+      {loading && <p className="text-muted-foreground text-sm">{t('taggingScaffold.loading')}</p>}
+      {loadError && <p className="text-destructive text-sm">{t('taggingScaffold.errorGeneric')}</p>}
+      {!loading && !loadError && rooms.length === 0 && (
+        <p className="text-muted-foreground text-sm">{t('taggingScaffold.roomsEmpty')}</p>
+      )}
 
       {rooms.length > 0 && (
         <GlassCard className="gap-0 p-0">

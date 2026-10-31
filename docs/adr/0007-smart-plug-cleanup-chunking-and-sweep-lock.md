@@ -1,7 +1,7 @@
 # 0007: Smart Plug cleanup, chunked deletes and the sweep lock
 
 Source: AD-6 (extension), AD-20, AD-2, Stories 3.6 and 3.10, CAP-4 to CAP-6, production incidents of 2026-09-12 (rounds 1 to 4).
-Code: `SmartPlugImportRepository.Cleanup.cs`. Open risks: `_bmad-artifacts/implementation/deferred-work.md`.
+Code: `SmartPlugImportRepository.Cleanup.cs`.
 
 ## Context
 
@@ -30,6 +30,6 @@ Both limits are starting values taken from the incident evidence, not benchmarke
 
 ## Consequences
 
-- Residual risks, tracked in `deferred-work.md`: an import still receiving rows during the detach loop leaves a few rows to the FK cascade; the sweep pays the detach loop's wall clock inline on the poll that triggers it; no bound on the total time across chunks.
+- Residual risks: an import still receiving rows during the detach loop leaves a few rows to the FK cascade; the sweep pays the detach loop's wall clock inline on the poll that triggers it; no bound on the total time across chunks.
 - Changing `DeleteBatchSize` also changes the parameter count of the reading count query, which was sized with it.
 - A new provider needs its own lock primitive.

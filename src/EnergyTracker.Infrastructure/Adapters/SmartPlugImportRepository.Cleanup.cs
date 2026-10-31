@@ -1,11 +1,6 @@
-using System.Data.Common;
-using EFCore.BulkExtensions;
 using EnergyTracker.Application;
-using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.Logging;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
@@ -130,7 +125,7 @@ public partial class SmartPlugImportRepository
 
     public async Task<int> DeleteJobsAsync(Guid householdId, DateTimeOffset? cutoffUtc, CancellationToken cancellationToken)
     {
-        // Manual counterpart of the sweep (Story 3.10): any state is eligible and cutoffUtc is optional. Its own query, so the
+        // Manual counterpart of the sweep: any state is eligible and cutoffUtc is optional. Its own query, so the
         // sweep's rules cannot regress. Age: import.CompletedAtUtc, else job.CompletedAtUtc, else job.CreatedAtUtc.
         var eligible = await (
             from job in dbContext.BackgroundJobs

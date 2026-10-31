@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -22,12 +23,12 @@ public class ServiceRegistrationSnapshotTests
     private static readonly Type[] ExplicitFrameworkTypes = [typeof(TimeProvider), typeof(IHttpContextAccessor)];
 
     public static TheoryData<string> Variants =>
-        ["default", "azurestoragequeue", "otlp", "azuremonitor"];
+        ["default", "azurestoragequeue", "otlp", "azuremonitor", "oidc"];
 
     private static string SnapshotDirectory([CallerFilePath] string testFile = "") =>
         Path.Combine(Path.GetDirectoryName(testFile)!, "Snapshots");
 
-    private static List<ServiceDescriptor> CaptureRegistrations(string variant)
+    private static (List<ServiceDescriptor> Registrations, List<string> Schemes) Capture(string variant)
     {
         List<ServiceDescriptor>? captured = null;
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -46,13 +47,21 @@ public class ServiceRegistrationSnapshotTests
                     builder.UseSetting("Otel:Exporter", "azuremonitor");
                     builder.UseSetting("Otel:AzureMonitorConnectionString", "InstrumentationKey=00000000-0000-0000-0000-000000000000");
                     break;
+                case "oidc":
+                    builder.UseSetting("Oidc:Authority", "https://snapshot-issuer.example");
+                    builder.UseSetting("Oidc:ClientId", "snapshot-client");
+                    builder.UseSetting("Oidc:ClientSecret", "snapshot-secret");
+                    break;
             }
 
             builder.ConfigureTestServices(services => captured = [.. services]);
         });
 
-        _ = factory.Services;
-        return captured ?? throw new InvalidOperationException("The host did not expose its service collection.");
+        var schemes = factory.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetAllSchemesAsync().GetAwaiter().GetResult()
+            .Select(scheme => scheme.Name)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        return (captured ?? throw new InvalidOperationException("The host did not expose its service collection."), schemes);
     }
 
     private static bool IsPinned(ServiceDescriptor descriptor, bool telemetry)
@@ -80,7 +89,7 @@ public class ServiceRegistrationSnapshotTests
         return $"{descriptor.Lifetime} {descriptor.ServiceType.FullName}{key} -> {implementation}";
     }
 
-    internal static string Render(IEnumerable<ServiceDescriptor> registrations, bool telemetry)
+    internal static string Render(IEnumerable<ServiceDescriptor> registrations, bool telemetry, IReadOnlyList<string>? schemes = null)
     {
         var all = registrations.ToList();
         var text = new StringBuilder();
@@ -97,6 +106,16 @@ public class ServiceRegistrationSnapshotTests
             text.AppendLine(ImplementationName(descriptor) ?? "factory");
         }
 
+        if (schemes is not null)
+        {
+            text.AppendLine();
+            text.AppendLine("# authentication schemes, by name");
+            foreach (var scheme in schemes)
+            {
+                text.AppendLine(scheme);
+            }
+        }
+
         return text.ToString().Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
@@ -104,11 +123,17 @@ public class ServiceRegistrationSnapshotTests
     [MemberData(nameof(Variants))]
     public void Registrations_match_the_approved_snapshot(string variant)
     {
-        var actual = Render(CaptureRegistrations(variant), telemetry: variant is "otlp" or "azuremonitor");
+        var (registrations, schemes) = Capture(variant);
+        var actual = Render(registrations, telemetry: variant is "otlp" or "azuremonitor", variant is "default" or "oidc" ? schemes : null);
         var path = Path.Combine(SnapshotDirectory(), $"service-registrations.{variant}.txt");
 
         if (Environment.GetEnvironmentVariable("ENERGYTRACKER_UPDATE_SNAPSHOTS") == "1")
         {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
+            {
+                throw new InvalidOperationException("ENERGYTRACKER_UPDATE_SNAPSHOTS=1 is for local runs only: CI must compare, never rewrite, the approved snapshots.");
+            }
+
             File.WriteAllText(path, actual);
         }
 
@@ -120,12 +145,20 @@ public class ServiceRegistrationSnapshotTests
     [Fact]
     public void The_snapshot_is_not_vacuous_and_sees_the_known_registrations()
     {
-        var text = Render(CaptureRegistrations("default"), telemetry: false);
+        var (registrations, _) = Capture("default");
+        var text = Render(registrations, telemetry: false);
 
         text.ShouldContain("Scoped EnergyTracker.Application.Ports.ISmartPlugParser -> EnergyTracker.Infrastructure.Adapters.EveHomeXlsxParser");
         text.ShouldContain("Scoped EnergyTracker.Application.Ports.ISmartPlugParser -> EnergyTracker.Infrastructure.Adapters.MerossCsvParser");
         text.ShouldContain("InstanceHeartbeatService");
         text.Split('\n').Length.ShouldBeGreaterThan(60);
+    }
+
+    [Fact]
+    public void The_oidc_variant_registers_the_oidc_scheme_and_the_default_does_not()
+    {
+        Capture("default").Schemes.ShouldNotContain("OpenIdConnect");
+        Capture("oidc").Schemes.ShouldContain("OpenIdConnect");
     }
 
     [Fact]

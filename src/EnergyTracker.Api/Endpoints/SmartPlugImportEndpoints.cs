@@ -69,8 +69,8 @@ public static class SmartPlugImportEndpoints
                 throw;
             }
 
-            // 202 Accepted — no parsing happens synchronously (AC #1); the client learns
-            // completion by polling GET /api/jobs/{id} (AC #2).
+            // 202 Accepted — no parsing happens synchronously; the client learns
+            // completion by polling GET /api/jobs/{id}.
             return Results.Accepted($"/api/jobs/{jobId}", new SmartPlugImportUploadResponse(jobId));
         })
         // Minimal APIs attach antiforgery metadata to IFormFile endpoints and this app has no UseAntiforgery() middleware, so the
@@ -119,7 +119,7 @@ public static class SmartPlugImportEndpoints
             return Results.Ok(jobs.Select(ToJobHistoryResponse).ToList());
         });
 
-        // Manual cleanup (Story 3.10): deleteAll=false deletes records older than 30 days, true deletes everything. Eligible in all
+        // Manual cleanup deleteAll=false deletes records older than 30 days, true deletes everything. Eligible in all
         // six states, unlike the lazy sweep. Runs as an async job (AD-6): a Household's total work can exceed the ~240s ingress limit.
         household.MapDelete("/smart-plug-import-jobs", async (
             ICurrentHouseholdAccessor householdAccessor,

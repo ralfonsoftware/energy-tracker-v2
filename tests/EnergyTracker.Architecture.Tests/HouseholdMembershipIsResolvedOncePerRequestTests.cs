@@ -247,6 +247,7 @@ public partial class HouseholdMembershipIsResolvedOncePerRequestTests
     {
         var root = FindRepoRoot();
         var src = Path.Combine(root, "src");
+        Directory.Exists(src).ShouldBeTrue($"{src} does not exist: did the layout move? Update this guard with it.");
         return Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories)
             .Where(path =>
             {

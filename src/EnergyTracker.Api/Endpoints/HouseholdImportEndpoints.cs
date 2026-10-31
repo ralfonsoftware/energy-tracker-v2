@@ -6,8 +6,8 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class HouseholdImportEndpoints
 {
-    // 250 MB bounds what one upload can occupy on temp disk (a small real export was already 32 MB). The Kestrel and form limits
-    // are raised for this route only. ADR 0004.
+    // 250 MB bounds what one upload can occupy on temp disk (a small real export was already 32 MB). The Kestrel body limit is
+    // raised for this route only (Program.cs); the form limit is raised globally. ADR 0004.
     internal const long MaxFileSizeBytes = 250L * 1024 * 1024;
 
     // Headroom for the multipart framing, which makes the raw body larger than IFormFile.Length. ADR 0004.
@@ -80,7 +80,7 @@ public static class HouseholdImportEndpoints
             }
             catch (ActiveJobAlreadyExistsException)
             {
-                // Lost the race the early check cannot see (Story 11.14): the database index rejected the
+                // Lost the race the early check cannot see: the database index rejected the
                 // row before anything was sent, so the consumed upload's file is deleted like on the
                 // early-check path and the answer is the same 409.
                 DeleteTempFile(reference.TempFilePath);
@@ -109,7 +109,7 @@ public static class HouseholdImportEndpoints
         detail: "A restore is already in progress for this Household — wait for it to finish before starting another.",
         statusCode: StatusCodes.Status409Conflict);
 
-    // Every confirm path that does not end in an enqueued job deletes the consumed upload's file (Story 11.10).
+    // Every confirm path that does not end in an enqueued job deletes the consumed upload's file.
     private static void DeleteTempFile(string path)
     {
         if (File.Exists(path))
@@ -118,7 +118,7 @@ public static class HouseholdImportEndpoints
         }
     }
 
-    // Streamed to a temp file and validated from there (audit S4). The file exists before validation, so every exit that does not
+    // Streamed to a temp file and validated from there. The file exists before validation, so every exit that does not
     // register it deletes it; one try/finally owns that.
     internal static async Task<IResult> ReceiveUploadAsync(
         IFormFile file,
@@ -150,8 +150,8 @@ public static class HouseholdImportEndpoints
                 await source.CopyToAsync(target, cancellationToken);
             }
 
-            // Pure read/parse — no DB write of any kind happens in this phase (AC #2's "never
-            // partially applied" structurally, not by convention).
+            // Pure read/parse — no DB write of any kind happens in this phase (never partially
+            // applied, structurally rather than by convention).
             HouseholdImportValidationResult result;
             await using (var validated = new FileStream(
                 tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.SequentialScan))

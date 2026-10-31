@@ -3,7 +3,6 @@ using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Infrastructure.Adapters;
 
-
 namespace EnergyTracker.Api.Composition;
 
 internal static class JobQueueRegistration
@@ -11,11 +10,11 @@ internal static class JobQueueRegistration
     public static IServiceCollection AddJobQueue(this IServiceCollection services, IConfiguration configuration)
     {
         // AD-6: JobQueue:Provider is read exactly once, here at the composition root — same
-        // switch-on-lowercased-config-value shape as Database:Provider/Otel:Exporter above.
+        // switch-on-lowercased-config-value shape as Database:Provider (Program.cs) and Otel:Exporter (ObservabilityRegistration).
         services.AddScoped<JobHouseholdContext>();
         services.AddSingleton<BackgroundJobProcessor>();
         // Singleton — both queue adapters below (InProcessChannelJobQueue/AzureStorageQueueJobQueue) are
-        // themselves singletons and inject this directly (Story 3.6/AD-6 extension).
+        // themselves singletons and inject this directly (AD-6).
         services.AddSingleton<BackgroundJobEnqueueRecorder>();
         services.AddScoped<IBackgroundJobRepository, BackgroundJobRepository>();
         // AD-6 (amended 2026-10-10): the one writer of BackgroundJob.Status. Timings are operational
@@ -42,7 +41,7 @@ internal static class JobQueueRegistration
                 services.AddSingleton(sp =>
                 {
                     var queueOptions = new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 };
-                    // A body that fails Base64 decoding would otherwise make ReceiveMessagesAsync throw forever (audit C7).
+                    // A body that fails Base64 decoding would otherwise make ReceiveMessagesAsync throw forever.
                     var decodingLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<AzureStorageQueueJobProcessingService>();
                     queueOptions.MessageDecodingFailed += args => QueueMessageDecodingFailureHandler.HandleAsync(args, decodingLogger);
                     return new QueueClient(jobQueueConnectionString, "jobs", queueOptions);

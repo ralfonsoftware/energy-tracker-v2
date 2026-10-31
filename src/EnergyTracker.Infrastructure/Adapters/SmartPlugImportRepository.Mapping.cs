@@ -1,10 +1,6 @@
 using System.Data.Common;
-using EFCore.BulkExtensions;
-using EnergyTracker.Application;
-using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace EnergyTracker.Infrastructure.Adapters;
@@ -106,7 +102,7 @@ public partial class SmartPlugImportRepository
                 continue;
             }
 
-            // DeviceName is part of the exact-duplicate match: a Power Point can hold readings of several devices (Story 3.7).
+            // DeviceName is part of the exact-duplicate match: a Power Point can hold readings of several devices.
             if (existing.DeviceName == reading.DeviceName
                 && existing.KwhValue == reading.KwhValue
                 && existing.IntervalEnd == reading.IntervalEnd)

@@ -1,0 +1,103 @@
+# service descriptors, in registration order
+Scoped EnergyTracker.Infrastructure.EnergyTrackerDbContext -> EnergyTracker.Infrastructure.EnergyTrackerDbContext
+Scoped EnergyTracker.Infrastructure.HouseholdMembershipDbContext -> factory
+Singleton Microsoft.AspNetCore.Http.IHttpContextAccessor -> Microsoft.AspNetCore.Http.HttpContextAccessor
+Singleton System.TimeProvider -> instance System.TimeProvider+SystemTimeProvider
+Singleton Microsoft.Extensions.Hosting.IHostedService -> Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService
+Scoped EnergyTracker.Application.Ports.IHouseholdRepository -> EnergyTracker.Infrastructure.Adapters.HouseholdRepository
+Scoped EnergyTracker.Application.Ports.ICurrentHouseholdAccessor -> EnergyTracker.Infrastructure.Adapters.CurrentHouseholdAccessor
+Singleton EnergyTracker.Infrastructure.Adapters.HouseholdMembershipResolver -> EnergyTracker.Infrastructure.Adapters.HouseholdMembershipResolver
+Scoped EnergyTracker.Application.CreateHousehold -> EnergyTracker.Application.CreateHousehold
+Scoped EnergyTracker.Application.CreateHouseholdInvite -> EnergyTracker.Application.CreateHouseholdInvite
+Scoped EnergyTracker.Application.AcceptHouseholdInvite -> EnergyTracker.Application.AcceptHouseholdInvite
+Scoped EnergyTracker.Application.RemoveHouseholdMember -> EnergyTracker.Application.RemoveHouseholdMember
+Scoped EnergyTracker.Application.ListHouseholdMembers -> EnergyTracker.Application.ListHouseholdMembers
+Scoped EnergyTracker.Application.ListOpenHouseholdInvites -> EnergyTracker.Application.ListOpenHouseholdInvites
+Scoped EnergyTracker.Application.RevokeHouseholdInvite -> EnergyTracker.Application.RevokeHouseholdInvite
+Scoped EnergyTracker.Application.SetYearlyBaseline -> EnergyTracker.Application.SetYearlyBaseline
+Scoped EnergyTracker.Application.SetHouseholdLocale -> EnergyTracker.Application.SetHouseholdLocale
+Scoped EnergyTracker.Application.Ports.ITaggingScaffoldRepository -> EnergyTracker.Infrastructure.Adapters.TaggingScaffoldRepository
+Scoped EnergyTracker.Application.CreateRoom -> EnergyTracker.Application.CreateRoom
+Scoped EnergyTracker.Application.RenameRoom -> EnergyTracker.Application.RenameRoom
+Scoped EnergyTracker.Application.ArchiveRoom -> EnergyTracker.Application.ArchiveRoom
+Scoped EnergyTracker.Application.CreatePowerPoint -> EnergyTracker.Application.CreatePowerPoint
+Scoped EnergyTracker.Application.RenamePowerPoint -> EnergyTracker.Application.RenamePowerPoint
+Scoped EnergyTracker.Application.ArchivePowerPoint -> EnergyTracker.Application.ArchivePowerPoint
+Scoped EnergyTracker.Application.MovePowerPoint -> EnergyTracker.Application.MovePowerPoint
+Scoped EnergyTracker.Application.CreateDevice -> EnergyTracker.Application.CreateDevice
+Scoped EnergyTracker.Application.RenameDevice -> EnergyTracker.Application.RenameDevice
+Scoped EnergyTracker.Application.ArchiveDevice -> EnergyTracker.Application.ArchiveDevice
+Scoped EnergyTracker.Application.MoveDevice -> EnergyTracker.Application.MoveDevice
+Scoped EnergyTracker.Application.Ports.IMeterReadingRepository -> EnergyTracker.Infrastructure.Adapters.MeterReadingRepository
+Scoped EnergyTracker.Application.Ports.IMeterRegressionPromptRepository -> EnergyTracker.Infrastructure.Adapters.MeterRegressionPromptRepository
+Singleton EnergyTracker.Application.Ports.IHouseholdRecomputeLock -> EnergyTracker.Infrastructure.Adapters.HouseholdRecomputeLock
+Scoped EnergyTracker.Application.Ports.IStatusRecomputeService -> EnergyTracker.Infrastructure.Adapters.StatusRecomputeService
+Scoped EnergyTracker.Application.Ports.ISmartPlugCoverageSignal -> EnergyTracker.Infrastructure.Adapters.SmartPlugCoverageSignal
+Scoped EnergyTracker.Application.Ports.IAuditCorrectionRecorder -> EnergyTracker.Infrastructure.Adapters.AuditCorrectionRecorder
+Scoped EnergyTracker.Application.Ports.IUnitOfWork -> EnergyTracker.Infrastructure.Adapters.UnitOfWork
+Scoped EnergyTracker.Application.CreateMeterReading -> EnergyTracker.Application.CreateMeterReading
+Scoped EnergyTracker.Application.ResolveMeterRegressionPrompt -> EnergyTracker.Application.ResolveMeterRegressionPrompt
+Scoped EnergyTracker.Application.GetOpenMeterRegressionPrompt -> EnergyTracker.Application.GetOpenMeterRegressionPrompt
+Scoped EnergyTracker.Application.GetCurrentStatus -> EnergyTracker.Application.GetCurrentStatus
+Scoped EnergyTracker.Application.GetMeterReadingHistory -> EnergyTracker.Application.GetMeterReadingHistory
+Scoped EnergyTracker.Application.EditMeterReading -> EnergyTracker.Application.EditMeterReading
+Scoped EnergyTracker.Application.Ports.IStatusSnapshotRepository -> EnergyTracker.Infrastructure.Adapters.StatusSnapshotRepository
+Scoped EnergyTracker.Application.GetStatusHistory -> EnergyTracker.Application.GetStatusHistory
+Scoped EnergyTracker.Application.Ports.ISmartPlugReadingRepository -> EnergyTracker.Infrastructure.Adapters.SmartPlugReadingRepository
+Scoped EnergyTracker.Application.GetPerPlugMeasuredData -> EnergyTracker.Application.GetPerPlugMeasuredData
+Scoped EnergyTracker.Application.Ports.ITariffRepository -> EnergyTracker.Infrastructure.Adapters.TariffRepository
+Scoped EnergyTracker.Application.CreateTariff -> EnergyTracker.Application.CreateTariff
+Scoped EnergyTracker.Application.GetTariffHistory -> EnergyTracker.Application.GetTariffHistory
+Scoped EnergyTracker.Application.EditTariff -> EnergyTracker.Application.EditTariff
+Scoped EnergyTracker.Application.CompareTariff -> EnergyTracker.Application.CompareTariff
+Scoped EnergyTracker.Application.GetTariffCheckReminder -> EnergyTracker.Application.GetTariffCheckReminder
+Scoped EnergyTracker.Application.Ports.IEventRepository -> EnergyTracker.Infrastructure.Adapters.EventRepository
+Scoped EnergyTracker.Application.CreateEvent -> EnergyTracker.Application.CreateEvent
+Scoped EnergyTracker.Application.GetEventHistory -> EnergyTracker.Application.GetEventHistory
+Scoped EnergyTracker.Application.SetAiPlausibilityEnabled -> EnergyTracker.Application.SetAiPlausibilityEnabled
+Scoped EnergyTracker.Application.CorrelateEvent -> EnergyTracker.Application.CorrelateEvent
+Scoped EnergyTracker.Application.RequeueEventCorrelations -> EnergyTracker.Application.RequeueEventCorrelations
+Scoped EnergyTracker.Application.Ports.IHouseholdExportReader -> EnergyTracker.Infrastructure.Adapters.HouseholdExportReader
+Scoped EnergyTracker.Application.ExportHouseholdData -> EnergyTracker.Application.ExportHouseholdData
+Singleton EnergyTracker.Application.Ports.IHouseholdImportUploadRegistry -> EnergyTracker.Infrastructure.Adapters.MemoryHouseholdImportUploadRegistry
+Singleton EnergyTracker.Api.Endpoints.HouseholdImportUploadSettings -> instance EnergyTracker.Api.Endpoints.HouseholdImportUploadSettings
+Scoped EnergyTracker.Application.ValidateHouseholdImport -> EnergyTracker.Application.ValidateHouseholdImport
+Scoped EnergyTracker.Application.Ports.IHouseholdRestoreWriter -> EnergyTracker.Infrastructure.Adapters.HouseholdRestoreWriter
+Scoped EnergyTracker.Application.RestoreHouseholdData -> EnergyTracker.Application.RestoreHouseholdData
+Singleton EnergyTracker.Application.AiPlausibilityBackendOptions -> instance EnergyTracker.Application.AiPlausibilityBackendOptions
+Singleton EnergyTracker.Application.Ports.IAiPlausibilityClient -> EnergyTracker.Infrastructure.Adapters.NoOpAiPlausibilityClient
+Scoped EnergyTracker.Infrastructure.Adapters.JobHouseholdContext -> EnergyTracker.Infrastructure.Adapters.JobHouseholdContext
+Singleton EnergyTracker.Infrastructure.Adapters.BackgroundJobProcessor -> EnergyTracker.Infrastructure.Adapters.BackgroundJobProcessor
+Singleton EnergyTracker.Infrastructure.Adapters.BackgroundJobEnqueueRecorder -> EnergyTracker.Infrastructure.Adapters.BackgroundJobEnqueueRecorder
+Scoped EnergyTracker.Application.Ports.IBackgroundJobRepository -> EnergyTracker.Infrastructure.Adapters.BackgroundJobRepository
+Singleton EnergyTracker.Application.JobLifecycleTimings -> instance EnergyTracker.Application.JobLifecycleTimings
+Scoped EnergyTracker.Application.Ports.IBackgroundJobLifecycle -> EnergyTracker.Infrastructure.Adapters.BackgroundJobLifecycle
+Scoped EnergyTracker.Application.GetBackgroundJobStatus -> EnergyTracker.Application.GetBackgroundJobStatus
+Scoped EnergyTracker.Application.ListSmartPlugImportJobs -> EnergyTracker.Application.ListSmartPlugImportJobs
+Scoped EnergyTracker.Application.CleanUpSmartPlugImportJobs -> EnergyTracker.Application.CleanUpSmartPlugImportJobs
+Scoped EnergyTracker.Application.Ports.ISmartPlugParser -> EnergyTracker.Infrastructure.Adapters.EveHomeXlsxParser
+Scoped EnergyTracker.Application.Ports.ISmartPlugParser -> EnergyTracker.Infrastructure.Adapters.MerossCsvParser
+Scoped EnergyTracker.Application.Ports.ISmartPlugImportRepository -> EnergyTracker.Infrastructure.Adapters.SmartPlugImportRepository
+Scoped EnergyTracker.Application.CompleteSmartPlugImportProcessing -> EnergyTracker.Application.CompleteSmartPlugImportProcessing
+Scoped EnergyTracker.Application.ProcessSmartPlugImport -> EnergyTracker.Application.ProcessSmartPlugImport
+Scoped EnergyTracker.Application.MapSmartPlugImportToPowerPoint -> EnergyTracker.Application.MapSmartPlugImportToPowerPoint
+Singleton EnergyTracker.Infrastructure.Adapters.InProcessChannelJobQueue -> EnergyTracker.Infrastructure.Adapters.InProcessChannelJobQueue
+Singleton EnergyTracker.Infrastructure.Adapters.InProcessJobStartupSweep -> EnergyTracker.Infrastructure.Adapters.InProcessJobStartupSweep
+Singleton EnergyTracker.Application.Ports.IBackgroundJobQueue -> factory
+Singleton Microsoft.Extensions.Hosting.IHostedService -> EnergyTracker.Infrastructure.Adapters.InProcessChannelJobProcessingService
+Singleton EnergyTracker.Infrastructure.Adapters.AppInstanceIdentity -> factory
+Singleton EnergyTracker.Application.InstanceHeartbeatTimings -> instance EnergyTracker.Application.InstanceHeartbeatTimings
+Scoped EnergyTracker.Application.Ports.IAppInstanceRepository -> EnergyTracker.Infrastructure.Adapters.AppInstanceRepository
+Scoped EnergyTracker.Application.RecordInstanceHeartbeat -> EnergyTracker.Application.RecordInstanceHeartbeat
+Singleton Microsoft.Extensions.Hosting.IHostedService -> EnergyTracker.Infrastructure.Adapters.InstanceHeartbeatService
+Singleton Microsoft.Extensions.Hosting.IHostedService -> Microsoft.AspNetCore.Hosting.GenericWebHostService
+
+# hosted services, in start order
+Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService
+EnergyTracker.Infrastructure.Adapters.InProcessChannelJobProcessingService
+EnergyTracker.Infrastructure.Adapters.InstanceHeartbeatService
+Microsoft.AspNetCore.Hosting.GenericWebHostService
+
+# authentication schemes, by name
+Cookies
+OpenIdConnect

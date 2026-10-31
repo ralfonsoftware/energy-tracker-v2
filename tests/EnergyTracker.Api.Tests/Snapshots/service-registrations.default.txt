@@ -97,3 +97,6 @@ Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService
 EnergyTracker.Infrastructure.Adapters.InProcessChannelJobProcessingService
 EnergyTracker.Infrastructure.Adapters.InstanceHeartbeatService
 Microsoft.AspNetCore.Hosting.GenericWebHostService
+
+# authentication schemes, by name
+Cookies

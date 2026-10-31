@@ -7,11 +7,11 @@ Code: `src/EnergyTracker.Api/Composition/ObservabilityRegistration.cs`.
 
 `WebApplicationBuilder` registers Console, Debug, EventSource and EventLog logger providers. `UseSerilog` replaces `ILoggerFactory`, so with its default `writeToProviders: false` those providers stay registered but never receive an event.
 
-The OTLP path needs `writeToProviders: true`, so that Serilog events also reach the OpenTelemetry logging provider (Aspire Dashboard, trace correlation). That flag forwards to every registered `ILoggerProvider`. The dormant default Console provider then wakes up and every console line appears twice (seen in a docker-compose smoke test).
+The OTLP path needs `writeToProviders: true`, so that Serilog events also reach the OpenTelemetry logging provider (Aspire Dashboard, trace correlation). That flag forwards to every registered `ILoggerProvider`. The dormant default Console provider then wakes up and every console line would appear twice.
 
 The Azure Monitor path must not forward. Application Insights is workspace based on the same Log Analytics workspace that Container Apps already streams stdout into, so a forward would ingest every line twice against the shared `dailyQuotaGb` cap. The same flag decides whether Azure Monitor's bundled logging provider ever receives events.
 
-`Otel:Exporter` was once compared case insensitively for `writeToProviders` but switched on case sensitively, so `otlp` or `OTLP` silently disabled all telemetry.
+Comparing `Otel:Exporter` case insensitively in one place and case sensitively in another would let `otlp` or `OTLP` silently disable all telemetry.
 
 ## Decision
 

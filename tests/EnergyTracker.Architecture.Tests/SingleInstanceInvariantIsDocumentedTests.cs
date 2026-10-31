@@ -42,11 +42,18 @@ public class SingleInstanceInvariantIsDocumentedTests
         "src/EnergyTracker.Api/Composition/ApplicationServicesRegistration.cs",
     ];
 
-    // The composition root is Program.cs plus the Composition folder (Story 11.19). The AD-24 comments of its
-    // four mechanisms (rate limiter, upload temp path, startup sweep, heartbeat) are counted over the union.
-    private const string CompositionFolder = "src/EnergyTracker.Api/Composition";
+    // The composition root registers four mechanisms (Story 11.19). Each needs its own AD-24 comment within
+    // AnchorWindow lines above (or on) the registration code, so one comment cannot stand in for the others.
     private const string ProgramFile = "src/EnergyTracker.Api/Program.cs";
-    private const int MinimumCompositionAd24Comments = 4;
+    private const int AnchorWindow = 6;
+
+    private static readonly (string Mechanism, string File, string Anchor)[] CompositionAnchors =
+    [
+        ("rate limiter", "src/EnergyTracker.Api/Program.cs", "AddHttpRateLimiting()"),
+        ("upload temp path", "src/EnergyTracker.Api/Composition/ApplicationServicesRegistration.cs", "Path.GetTempPath()"),
+        ("startup sweep", "src/EnergyTracker.Api/Composition/JobQueueRegistration.cs", "AddSingleton<InProcessJobStartupSweep>()"),
+        ("heartbeat", "src/EnergyTracker.Api/Composition/JobQueueRegistration.cs", "AddHostedService<InstanceHeartbeatService>()"),
+    ];
 
     // Files that carry one AD-24 comment at a mechanism: the ones above plus the mechanisms whose code
     // does not match a pattern (the upload registry keeps plain dictionaries behind one lock, the startup
@@ -132,25 +139,24 @@ public class SingleInstanceInvariantIsDocumentedTests
             var expected = MinimumAd24Comments.GetValueOrDefault(file, 1);
             CountAd24Comments(CommentsOf(file)).ShouldBeGreaterThanOrEqualTo(expected, $"{file} needs {expected} one-line AD-24 comment(s), one at each process-local mechanism it holds. {FailureHint}");
         }
-
-        var composition = CompositionRootFiles();
-        composition.ShouldContain(ProgramFile);
-        composition.Count.ShouldBeGreaterThan(1, $"No files found in {CompositionFolder}: was the folder renamed? Update this guard with it.");
-        composition.Sum(file => CountAd24Comments(CommentsOf(file)))
-            .ShouldBeGreaterThanOrEqualTo(MinimumCompositionAd24Comments, $"The composition root (Program.cs and {CompositionFolder}) needs {MinimumCompositionAd24Comments} one-line AD-24 comments in total, one at each process-local mechanism it registers. {FailureHint}");
     }
 
-    private static List<string> CompositionRootFiles()
+    [Fact]
+    public void Each_composition_root_mechanism_has_its_own_AD_24_comment_next_to_its_registration()
     {
-        var root = FindRepoRoot();
-        return
-        [
-            ProgramFile,
-            .. Directory.EnumerateFiles(Path.Combine(root, CompositionFolder), "*.cs", SearchOption.TopDirectoryOnly)
-                .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
-                .Order(StringComparer.Ordinal),
-        ];
+        foreach (var (mechanism, file, anchor) in CompositionAnchors)
+        {
+            var lines = ReadText(file).Replace("\r\n", "\n").Split('\n');
+            var index = Array.FindIndex(lines, l => l.Contains(anchor, StringComparison.Ordinal) && !l.TrimStart().StartsWith("//", StringComparison.Ordinal));
+            index.ShouldBeGreaterThan(-1, $"{file} no longer contains '{anchor}' ({mechanism}): was it moved? Update this guard with it.");
+            HasAd24CommentNear(lines, index, AnchorWindow)
+                .ShouldBeTrue($"{file}: the {mechanism} registration ('{anchor}') needs an AD-24 comment within {AnchorWindow} lines above it. {FailureHint}");
+        }
     }
+
+    private static bool HasAd24CommentNear(string[] lines, int index, int window) =>
+        Enumerable.Range(Math.Max(0, index - window), index - Math.Max(0, index - window) + 1)
+            .Any(i => CountAd24Comments(lines[i]) > 0);
 
     [Fact]
     public void No_comment_still_claims_that_several_replicas_work()
@@ -211,7 +217,7 @@ public class SingleInstanceInvariantIsDocumentedTests
         var code = CodeOf(registrationFile);
         var switchStart = code.IndexOf("switch (jobQueueProvider)", StringComparison.Ordinal);
         var registration = code.IndexOf("AddHostedService<InstanceHeartbeatService>()", StringComparison.Ordinal);
-        var methodEnd = code.IndexOf("return services;", StringComparison.Ordinal);
+        var methodEnd = code.LastIndexOf("return services;", StringComparison.Ordinal);
 
         switchStart.ShouldBeGreaterThan(-1, $"{registrationFile} no longer has the queue-provider switch: update this guard with it.");
         registration.ShouldBeGreaterThan(switchStart, $"{registrationFile}: register InstanceHeartbeatService after the queue-provider switch, for both providers (AD-24).");
@@ -239,6 +245,10 @@ public class SingleInstanceInvariantIsDocumentedTests
         var bicep = DescribedParam("@description('One instance only, see AD-24')\n@minValue(1)\nparam maxReplicas int = 1\n", "maxReplicas");
         bicep.Description.ShouldBe("One instance only, see AD-24");
         bicep.Value.ShouldBe("1");
+        string[] near = ["// AD-24: one", "var a = 1;", "var b = 2;", "Register();"];
+        HasAd24CommentNear(near, 3, 3).ShouldBeTrue();
+        HasAd24CommentNear(near, 3, 2).ShouldBeFalse();
+        HasAd24CommentNear(["var s = \"AD-24\";", "Register();"], 1, 3).ShouldBeFalse();
         CountAd24Comments("// AD-24 first\nvar s = \"AD-24 in a string\";\n// no pointer\nvar t = 1; // AD-24 second").ShouldBe(2);
     }
 

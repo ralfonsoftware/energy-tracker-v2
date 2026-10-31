@@ -2,7 +2,7 @@ import { ChevronRight, Move, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { ArchivedBadge } from './archived-badge'
-import { DeviceList } from './device-row'
+import { DeviceList } from './device-list'
 import { WIDE_TILE_CLASS } from './tagging-scaffold-classes'
 import type { DeviceDto, DialogState, PowerPointDto } from './tagging-scaffold-types'
 

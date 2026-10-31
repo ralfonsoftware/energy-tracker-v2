@@ -105,7 +105,7 @@ public static class TariffEndpoints
                     householdId, request.CandidateMonthlyBaseFee, request.CandidatePricePerKwh, request.CandidateSwitchingBonus, cancellationToken);
                 // 200 with a null body when undefined — same "is there one?" shape as GET
                 // /api/status (StatusEndpoints.cs's own comment): no pace yet, or no current
-                // Tariff configured yet (AC #3).
+                // Tariff configured yet.
                 return Results.Ok(result is null ? null : ToComparisonResponse(result));
             }
             catch (TariffValidationException ex)
@@ -115,7 +115,7 @@ public static class TariffEndpoints
         });
 
         // Singleton resource, not a collection (consistent with /api/status, /api/session — Consistency
-        // Conventions). 200 with a null body when no current Tariff exists (AC #3) — same "is there
+        // Conventions). 200 with a null body when no current Tariff exists — same "is there
         // one?" shape as GET /api/status and POST /api/tariffs/compare.
         household.MapGet("/tariff-check", async (
             ICurrentHouseholdAccessor householdAccessor,

@@ -15,7 +15,7 @@ public static class SessionEndpoints
     {
         // Singleton resource, not a collection — /api/session, not plural (consistent with /health).
         // Sits behind the /api group's auth requirement, so an unauthenticated call 401s; the SPA's
-        // response to that 401 is what triggers navigation to /login (AC #1).
+        // response to that 401 is what triggers navigation to /login.
         api.MapGet("/session", async (
             ClaimsPrincipal user,
             ICurrentHouseholdAccessor householdAccessor,
@@ -25,7 +25,7 @@ public static class SessionEndpoints
         {
             var oidcOptions = oidcOptionsMonitor.Get(OpenIdConnectDefaults.AuthenticationScheme);
             var supportsFederatedLogout = await ResolveSupportsFederatedLogoutAsync(oidcOptions, cancellationToken);
-            // Story 8.1/AC #3: read from claims at request time, never persisted — the same
+            // Read from claims at request time, never persisted — the same
             // "don't duplicate identity" discipline ResolveDisplayName already follows.
             var email = HouseholdClaimTypes.ResolveEmail(user);
 
@@ -42,7 +42,7 @@ public static class SessionEndpoints
         return api;
     }
 
-    // FR-33/AC #3: reads the OIDC handler's own cached discovery document (the same
+    // FR-33: reads the OIDC handler's own cached discovery document (the same
     // ConfigurationManager the login flow already populates — no extra network round trip) rather
     // than re-implementing discovery. When OIDC is unconfigured, the scheme was never registered
     // (Program.cs), so IOptionsMonitor.Get returns a default-constructed OpenIdConnectOptions whose
@@ -56,8 +56,8 @@ public static class SessionEndpoints
 
         // A discovery fetch failure (IdP unreachable, e.g. on cold start before any successful
         // fetch populates the cache) must not fail the whole /api/session request — it only means
-        // this one signal degrades to "unsupported," the same graceful fallback AC #3 already
-        // requires for a provider that genuinely lacks RP-initiated logout.
+        // this one signal degrades to "unsupported," the same graceful fallback
+        // required for a provider that genuinely lacks RP-initiated logout.
         OpenIdConnectConfiguration configuration;
         try
         {

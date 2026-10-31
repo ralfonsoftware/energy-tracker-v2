@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/lib/api-client'
 import type { DeviceDto, PowerPointDto, RoomDto } from './tagging-scaffold-types'
 
-// Fetches the whole Room → Power Point → Device tagging scaffold (AC #1-#4). Three
+// Fetches the whole Room → Power Point → Device tagging scaffold. Three
 // parallel GETs, no combined endpoint — unneeded complexity at this data scale (a household's
 // Room/PowerPoint/Device count is small, dozens not thousands).
 export function useTaggingScaffoldData() {

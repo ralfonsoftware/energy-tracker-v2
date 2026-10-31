@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Json;
 using EnergyTracker.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -33,12 +35,22 @@ public class HouseholdRequiredRoutesTests(EnergyTrackerApiFactory factory) : ICl
     private List<(string Key, bool Marked)> ApiRoutes() =>
         factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
-            .Where(endpoint => endpoint.RoutePattern.RawText?.StartsWith("/api", StringComparison.Ordinal) == true)
-            .SelectMany(endpoint => (endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? [])
+            .Where(endpoint => IsApiRoute(endpoint.RoutePattern.RawText))
+            .SelectMany(endpoint => MethodsOf(endpoint)
                 .Select(method => (
                     Key: $"{method} {endpoint.RoutePattern.RawText}",
                     Marked: endpoint.Metadata.GetMetadata<HouseholdRequiredMetadata>() is not null)))
             .ToList();
+
+    private static bool IsApiRoute(string? rawText) =>
+        rawText == "/api" || rawText?.StartsWith("/api/", StringComparison.Ordinal) == true;
+
+    // A route without HTTP method metadata answers every method: it is listed as ANY, never skipped.
+    private static IEnumerable<string> MethodsOf(RouteEndpoint endpoint)
+    {
+        var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods;
+        return methods is { Count: > 0 } ? methods : ["ANY"];
+    }
 
     [Fact]
     public void Every_route_under_api_is_behind_RequireHousehold_or_named_in_the_allowlist()
@@ -52,6 +64,8 @@ public class HouseholdRequiredRoutesTests(EnergyTrackerApiFactory factory) : ICl
         routes.ShouldContain(r => r.Key == "GET /api/jobs/{id:guid}" && r.Marked);
         routes.ShouldContain(r => r.Key == "POST /api/households" && !r.Marked);
 
+        routes.Select(r => r.Key).Distinct().Count().ShouldBe(routes.Count, "Two /api routes share one method and pattern.");
+
         var unguarded = routes.Where(r => !r.Marked && !WorksWithoutHousehold.Contains(r.Key)).Select(r => r.Key).ToList();
         unguarded.ShouldBeEmpty("These /api routes lack RequireHousehold() and are not in the allowlist (Story 11.19, audit R1).");
     }
@@ -63,5 +77,30 @@ public class HouseholdRequiredRoutesTests(EnergyTrackerApiFactory factory) : ICl
 
         WorksWithoutHousehold.Except(routes.Select(r => r.Key)).ShouldBeEmpty("The allowlist names routes that no longer exist: remove them.");
         routes.Where(r => r.Marked && WorksWithoutHousehold.Contains(r.Key)).ShouldBeEmpty("A marked route is also allowlisted: remove it from the allowlist.");
+    }
+
+    [Theory]
+    [InlineData("GET", "/api/rooms")]
+    [InlineData("GET", "/api/status")]
+    public async Task A_marked_route_answers_403_to_a_caller_without_a_Household(string method, string path)
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Mapping_a_Smart_Plug_import_without_a_Household_is_403_not_404()
+    {
+        var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/smart-plug-imports/{Guid.NewGuid()}/power-point-mapping",
+            new { powerPointId = Guid.NewGuid() },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 }

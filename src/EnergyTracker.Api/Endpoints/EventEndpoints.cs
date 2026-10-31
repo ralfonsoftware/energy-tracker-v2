@@ -43,8 +43,7 @@ public static class EventEndpoints
             int page = 1,
             int pageSize = 20) =>
         {
-            // Auth gate only — the id itself is discarded because AD-3's query filter does the
-            // scoping (see GetEventHistory/IEventRepository).
+            // No Household id here: AD-3's query filter does the scoping (see GetEventHistory/IEventRepository).
             try
             {
                 var result = await getEventHistory.ExecuteAsync(page, pageSize, cancellationToken);
