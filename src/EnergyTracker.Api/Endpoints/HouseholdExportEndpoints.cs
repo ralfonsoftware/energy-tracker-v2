@@ -13,40 +13,20 @@ public static class HouseholdExportEndpoints
     // their own class as T; a static host class can't do that).
     private sealed class LogCategory;
 
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
     // Web defaults (camelCase) — matches every other endpoint's implicit Results.Ok() serialization.
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced across
-    // files (that helper is private to its own class).
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapHouseholdExportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/household-export", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapGet("/household-export", async (
             HttpContext context,
             ICurrentHouseholdAccessor householdAccessor,
             ExportHouseholdData exportHouseholdData,
             ILogger<LogCategory> logger,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             // spec-household-export-observability.md (Epic 7 retro action item #1): spans the
             // whole request, not just the write — a slow reader-side query is as much a "danger
