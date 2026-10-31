@@ -382,7 +382,11 @@ public class CreateMeterReadingTests
         _repository.AddAsync(Arg.Any<MeterReading>(), Arg.Any<CancellationToken>()).Returns(callInfo => callInfo.Arg<MeterReading>());
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
         {
-            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+            Id = householdId,
+            Locale = "en-US",
+            Currency = "USD",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            AiPlausibilityEnabled = true,
         });
         var backfilledTimestamp = DateTimeOffset.UtcNow.AddDays(-20);
 
@@ -398,14 +402,19 @@ public class CreateMeterReadingTests
         var householdId = Guid.NewGuid();
         var existing = new MeterReading
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = Guid.NewGuid(), KwhValue = 1m,
-            ReadingTimestamp = DateTimeOffset.UtcNow, IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = Guid.NewGuid(),
+            KwhValue = 1m,
+            ReadingTimestamp = DateTimeOffset.UtcNow,
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         _repository.FindByIdempotencyKeyAsync(existing.IdempotencyKey, Arg.Any<CancellationToken>()).Returns(existing);
 
         await Sut().ExecuteAsync(householdId, 1m, existing.ReadingTimestamp, existing.IdempotencyKey, TestContext.Current.CancellationToken);
 
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
     }
 
     // Review patch: a reading that opens a regression prompt makes AD-12 exclude everything at or
@@ -421,12 +430,21 @@ public class CreateMeterReadingTests
         var backfilledTimestamp = DateTimeOffset.UtcNow.AddDays(-20);
         _repository.FindImmediatelyPrecedingAsync(mainMeter.Id, backfilledTimestamp, Arg.Any<CancellationToken>()).Returns(new MeterReading
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = mainMeter.Id, KwhValue = 9000m,
-            ReadingTimestamp = backfilledTimestamp.AddDays(-1), IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = mainMeter.Id,
+            KwhValue = 9000m,
+            ReadingTimestamp = backfilledTimestamp.AddDays(-1),
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
         {
-            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+            Id = householdId,
+            Locale = "en-US",
+            Currency = "USD",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            AiPlausibilityEnabled = true,
         });
 
         await Sut().ExecuteAsync(householdId, 100m, backfilledTimestamp, Guid.NewGuid(), TestContext.Current.CancellationToken);

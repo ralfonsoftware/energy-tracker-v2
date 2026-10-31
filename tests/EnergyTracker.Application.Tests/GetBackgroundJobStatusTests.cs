@@ -20,8 +20,12 @@ public class GetBackgroundJobStatusTests
         var jobId = Guid.NewGuid();
         var job = new BackgroundJob
         {
-            Id = jobId, HouseholdId = _householdId, JobType = "UnknownJobType", Status = BackgroundJobStatus.Failed,
-            ErrorMessage = "job-interrupted", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = jobId,
+            HouseholdId = _householdId,
+            JobType = "UnknownJobType",
+            Status = BackgroundJobStatus.Failed,
+            ErrorMessage = "job-interrupted",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         _repository.FindByIdAsync(_householdId, jobId, Arg.Any<CancellationToken>()).Returns(job);
 

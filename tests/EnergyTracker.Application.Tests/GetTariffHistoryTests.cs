@@ -139,13 +139,25 @@ public class GetTariffHistoryTests
         var tariff = NewTariff(householdId, DateTimeOffset.UtcNow);
         var baseFeeCorrection = new AuditCorrection
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, EntityType = "Tariff", EntityId = tariff.Id,
-            FieldName = "MonthlyBaseFee", OldValue = "10", NewValue = "15", CorrectedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            EntityType = "Tariff",
+            EntityId = tariff.Id,
+            FieldName = "MonthlyBaseFee",
+            OldValue = "10",
+            NewValue = "15",
+            CorrectedAtUtc = DateTimeOffset.UtcNow,
         };
         var priceCorrection = new AuditCorrection
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, EntityType = "Tariff", EntityId = tariff.Id,
-            FieldName = "PricePerKwh", OldValue = "0.32", NewValue = "0.35", CorrectedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            EntityType = "Tariff",
+            EntityId = tariff.Id,
+            FieldName = "PricePerKwh",
+            OldValue = "0.32",
+            NewValue = "0.35",
+            CorrectedAtUtc = DateTimeOffset.UtcNow,
         };
         _tariffRepository.GetHistoryForHouseholdAsync(householdId, 1, 20, Arg.Any<CancellationToken>())
             .Returns((new List<Tariff> { tariff }, 1));

@@ -84,7 +84,7 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
 
             foreach (var timestamp in timestamps)
             {
-                sheetData.Append(BuildRow(rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss"), "820"));
+                sheetData.Append(BuildRow(rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture), "820"));
             }
 
             worksheetPart.Worksheet.Save();
@@ -105,7 +105,7 @@ public class SmartPlugImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         }
     }
 
-    private async Task<JobStatusResponse> PollJobToTerminalAsync(HttpClient client, Guid jobId)
+    private static async Task<JobStatusResponse> PollJobToTerminalAsync(HttpClient client, Guid jobId)
     {
         // InProcessChannelJobProcessingService runs as a real hosted BackgroundService in this
         // test host — genuinely async, so polling (not an artificial delay) is the correct way

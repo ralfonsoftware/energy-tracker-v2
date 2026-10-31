@@ -19,7 +19,7 @@ public class JobEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<
         return (client, created!.Id);
     }
 
-    private async Task<Guid> UploadAndGetJobIdAsync(HttpClient client)
+    private static async Task<Guid> UploadAndGetJobIdAsync(HttpClient client)
     {
         var bytes = File.ReadAllBytes(EveSampleFilePath);
         using var content = new MultipartFormDataContent();

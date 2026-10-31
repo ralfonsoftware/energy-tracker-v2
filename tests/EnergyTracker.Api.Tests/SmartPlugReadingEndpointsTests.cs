@@ -18,20 +18,20 @@ public class SmartPlugReadingEndpointsTests(EnergyTrackerApiFactory factory) : I
         return (client, created!.Id);
     }
 
-    private async Task<Guid> CreateRoomAsync(HttpClient client, string roomName)
+    private static async Task<Guid> CreateRoomAsync(HttpClient client, string roomName)
     {
         var roomResponse = await client.PostAsJsonAsync("/api/rooms", new { name = roomName }, TestContext.Current.CancellationToken);
         var room = await roomResponse.Content.ReadFromJsonAsync<RoomResponse>(TestContext.Current.CancellationToken);
         return room!.Id;
     }
 
-    private async Task<Guid> CreatePowerPointAsync(HttpClient client, string roomName, string powerPointName)
+    private static async Task<Guid> CreatePowerPointAsync(HttpClient client, string roomName, string powerPointName)
     {
         var roomId = await CreateRoomAsync(client, roomName);
         return await CreatePowerPointInRoomAsync(client, roomId, powerPointName);
     }
 
-    private async Task<Guid> CreatePowerPointInRoomAsync(HttpClient client, Guid roomId, string powerPointName)
+    private static async Task<Guid> CreatePowerPointInRoomAsync(HttpClient client, Guid roomId, string powerPointName)
     {
         var powerPointResponse = await client.PostAsJsonAsync(
             "/api/power-points", new { roomId, name = powerPointName }, TestContext.Current.CancellationToken);

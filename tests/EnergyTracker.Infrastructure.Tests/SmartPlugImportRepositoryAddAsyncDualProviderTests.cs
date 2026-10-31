@@ -94,18 +94,18 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     private static SmartPlugReading MakeReading(
         Guid householdId, Guid smartPlugImportId, Guid? powerPointId, DateTimeOffset intervalStart, decimal kwhValue = 0.5m,
         string deviceName = "Fridge") => new()
-    {
-        Id = Guid.NewGuid(),
-        HouseholdId = householdId,
-        SmartPlugImportId = smartPlugImportId,
-        PowerPointId = powerPointId,
-        RoomName = "Kitchen",
-        PowerPointName = "Fridge",
-        DeviceName = deviceName,
-        IntervalStart = intervalStart,
-        IntervalEnd = intervalStart,
-        KwhValue = kwhValue,
-    };
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            SmartPlugImportId = smartPlugImportId,
+            PowerPointId = powerPointId,
+            RoomName = "Kitchen",
+            PowerPointName = "Fridge",
+            DeviceName = deviceName,
+            IntervalStart = intervalStart,
+            IntervalEnd = intervalStart,
+            KwhValue = kwhValue,
+        };
 
     [Fact]
     public async Task AddAsync_inserts_and_upserts_via_the_primary_PowerPointId_IntervalStart_match_key()

@@ -98,7 +98,7 @@ public class ForwardedHeadersTests : IAsyncLifetime
             });
         });
 
-    private class ObservingStartupFilter(Action<string, IPAddress?> observe) : IStartupFilter
+    private sealed class ObservingStartupFilter(Action<string, IPAddress?> observe) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {

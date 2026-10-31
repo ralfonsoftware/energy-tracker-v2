@@ -67,13 +67,21 @@ public abstract class HouseholdExportReaderTestsBase
         dbContext.Rooms.Add(room);
         var powerPoint = new PowerPoint
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Outlet",
-            CreatedAtUtc = DateTimeOffset.UtcNow, ArchivedAt = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            RoomId = room.Id,
+            Name = "Outlet",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ArchivedAt = DateTimeOffset.UtcNow,
         };
         dbContext.PowerPoints.Add(powerPoint);
         var device = new Device
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, PowerPointId = powerPoint.Id, Name = "Kettle", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            PowerPointId = powerPoint.Id,
+            Name = "Kettle",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.Devices.Add(device);
         var reading = new MeterReading
@@ -101,8 +109,11 @@ public abstract class HouseholdExportReaderTestsBase
         dbContext.Tariffs.Add(tariff);
         var @event = new Event
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, Description = "cooked 2h",
-            OccurredAt = DateTimeOffset.UtcNow, CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "cooked 2h",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.Events.Add(@event);
         var smartPlugReading = new SmartPlugReading
@@ -120,14 +131,25 @@ public abstract class HouseholdExportReaderTestsBase
         dbContext.SmartPlugReadings.Add(smartPlugReading);
         var snapshot = new StatusSnapshot
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, Status = Status.WithinRange,
-            PaceToDateKwh = 10m, BaselineToDateKwh = 12m, IsLowConfidence = false, ComputedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Status = Status.WithinRange,
+            PaceToDateKwh = 10m,
+            BaselineToDateKwh = 12m,
+            IsLowConfidence = false,
+            ComputedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.StatusSnapshots.Add(snapshot);
         var correction = new AuditCorrection
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, EntityType = "MeterReading", EntityId = reading.Id,
-            FieldName = "KwhValue", OldValue = "90", NewValue = "100", CorrectedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            EntityType = "MeterReading",
+            EntityId = reading.Id,
+            FieldName = "KwhValue",
+            OldValue = "90",
+            NewValue = "100",
+            CorrectedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.AuditCorrections.Add(correction);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -254,11 +276,19 @@ public abstract class HouseholdExportReaderTestsBase
         dbContext.Rooms.Add(room);
         var powerPointA = new PowerPoint
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Outlet A", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            RoomId = room.Id,
+            Name = "Outlet A",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         var powerPointB = new PowerPoint
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Outlet B", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            RoomId = room.Id,
+            Name = "Outlet B",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.PowerPoints.AddRange(powerPointA, powerPointB);
         var sharedIntervalStart = DateTimeOffset.UtcNow.AddHours(-1);
@@ -329,13 +359,19 @@ public abstract class HouseholdExportReaderTestsBase
         // (not the tuple alone) keeps the cursor unique and stable across a page boundary.
         var tiedFirst = new Event
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, Description = "tied-first",
-            OccurredAt = tiedOccurredAt, CreatedAtUtc = tiedCreatedAt,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "tied-first",
+            OccurredAt = tiedOccurredAt,
+            CreatedAtUtc = tiedCreatedAt,
         };
         var tiedSecond = new Event
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, Description = "tied-second",
-            OccurredAt = tiedOccurredAt, CreatedAtUtc = tiedCreatedAt,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Description = "tied-second",
+            OccurredAt = tiedOccurredAt,
+            CreatedAtUtc = tiedCreatedAt,
         };
         dbContext.Events.AddRange(tiedFirst, tiedSecond);
         expectedIds.Add(tiedFirst.Id);
@@ -368,19 +404,30 @@ public abstract class HouseholdExportReaderTestsBase
         dbContext.Households.Add(NewHousehold(otherHouseholdId));
         dbContext.HouseholdMembers.Add(new HouseholdMember
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, ExternalIssuer = "https://issuer.test/",
-            ExternalSubjectId = "sub-other", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            ExternalIssuer = "https://issuer.test/",
+            ExternalSubjectId = "sub-other",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         var otherRoom = new Room { Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, Name = "NotYours", CreatedAtUtc = DateTimeOffset.UtcNow };
         dbContext.Rooms.Add(otherRoom);
         var otherPowerPoint = new PowerPoint
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, RoomId = otherRoom.Id, Name = "NotYoursOutlet", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            RoomId = otherRoom.Id,
+            Name = "NotYoursOutlet",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.PowerPoints.Add(otherPowerPoint);
         dbContext.Devices.Add(new Device
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, PowerPointId = otherPowerPoint.Id, Name = "NotYoursKettle", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            PowerPointId = otherPowerPoint.Id,
+            Name = "NotYoursKettle",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         var otherMainMeter = new MainMeter { Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, CreatedAtUtc = DateTimeOffset.UtcNow };
         dbContext.MainMeters.Add(otherMainMeter);
@@ -428,8 +475,11 @@ public abstract class HouseholdExportReaderTestsBase
         });
         dbContext.Events.Add(new Event
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, Description = "NotYoursEvent",
-            OccurredAt = DateTimeOffset.UtcNow, CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            Description = "NotYoursEvent",
+            OccurredAt = DateTimeOffset.UtcNow,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
@@ -445,13 +495,24 @@ public abstract class HouseholdExportReaderTestsBase
         });
         dbContext.StatusSnapshots.Add(new StatusSnapshot
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, Status = Status.WithinRange,
-            PaceToDateKwh = 1m, BaselineToDateKwh = 2m, IsLowConfidence = false, ComputedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            Status = Status.WithinRange,
+            PaceToDateKwh = 1m,
+            BaselineToDateKwh = 2m,
+            IsLowConfidence = false,
+            ComputedAtUtc = DateTimeOffset.UtcNow,
         });
         dbContext.AuditCorrections.Add(new AuditCorrection
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, EntityType = "MeterReading", EntityId = otherReading.Id,
-            FieldName = "KwhValue", OldValue = "998", NewValue = "999", CorrectedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            EntityType = "MeterReading",
+            EntityId = otherReading.Id,
+            FieldName = "KwhValue",
+            OldValue = "998",
+            NewValue = "999",
+            CorrectedAtUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var reader = new HouseholdExportReader(dbContext);

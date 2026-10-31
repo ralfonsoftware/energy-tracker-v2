@@ -68,7 +68,7 @@ public class ProcessSmartPlugImportTests
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    private SmartPlugReading MakeReading(string deviceTag, DateTimeOffset intervalStart, decimal kwhValue = 0.5m) => new()
+    private static SmartPlugReading MakeReading(string deviceTag, DateTimeOffset intervalStart, decimal kwhValue = 0.5m) => new()
     {
         Id = Guid.NewGuid(),
         HouseholdId = Guid.Empty,

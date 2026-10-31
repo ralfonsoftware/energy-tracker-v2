@@ -31,7 +31,7 @@ public abstract class AppInstanceRepositoryTestsBase
         return await call(new AppInstanceRepository(dbContext));
     }
 
-    private Task WithRepositoryAsync(Func<AppInstanceRepository, Task> call) =>
+    private Task<object?> WithRepositoryAsync(Func<AppInstanceRepository, Task> call) =>
         WithRepositoryAsync<object?>(async repository =>
         {
             await call(repository);
@@ -44,10 +44,10 @@ public abstract class AppInstanceRepositoryTestsBase
         return await verify.AppInstances.AsNoTracking().ToListAsync(TestContext.Current.CancellationToken);
     }
 
-    private Task BeatAsync(Guid id, DateTimeOffset startedAtUtc, DateTimeOffset nowUtc) =>
+    private Task<object?> BeatAsync(Guid id, DateTimeOffset startedAtUtc, DateTimeOffset nowUtc) =>
         WithRepositoryAsync(repository => repository.BeatAsync(id, startedAtUtc, nowUtc, TestContext.Current.CancellationToken));
 
-    private Task DeleteAsync(Guid id) =>
+    private Task<object?> DeleteAsync(Guid id) =>
         WithRepositoryAsync(repository => repository.DeleteAsync(id, TestContext.Current.CancellationToken));
 
     [Fact]

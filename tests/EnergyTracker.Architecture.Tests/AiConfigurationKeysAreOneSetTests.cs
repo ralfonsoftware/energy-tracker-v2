@@ -109,7 +109,7 @@ public class AiConfigurationKeysAreOneSetTests
             env.ShouldBe(EnvNameByKey[key], $"{file}: Ai__{key} must come from {EnvNameByKey[key]}.");
         }
 
-        Regex.Matches(code, @"Ai__\w+").Count.ShouldBe(Keys.Length, $"{file} names an Ai__ key more than once or outside the set.");
+        Regex.Count(code, @"Ai__\w+").ShouldBe(Keys.Length, $"{file} names an Ai__ key more than once or outside the set.");
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class AiConfigurationKeysAreOneSetTests
         var names = Regex.Matches(code, @"'Ai__(\w+)'").Select(m => m.Groups[1].Value).ToList();
 
         names.ShouldBe(Keys, ignoreOrder: true, $"{Bicep} must name exactly the Ai__ env vars of the key set.");
-        Regex.Matches(code, @"Ai__\w+").Count.ShouldBe(Keys.Length, $"{Bicep} names an Ai__ key outside the quoted env var names.");
+        Regex.Count(code, @"Ai__\w+").ShouldBe(Keys.Length, $"{Bicep} names an Ai__ key outside the quoted env var names.");
     }
 
     // Non-vacuous: the extraction helpers are proven against known-bad text, so a refactor of this test

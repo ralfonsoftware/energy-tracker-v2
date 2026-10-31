@@ -24,17 +24,17 @@ public class EditTariffTests
     private static Tariff NewTariff(
         Guid householdId, decimal monthlyBaseFee, decimal pricePerKwh, string currency, DateTimeOffset contractStartDate,
         int contractPeriodMonths = 12, int version = 0, Guid? id = null) => new()
-    {
-        Id = id ?? Guid.NewGuid(),
-        HouseholdId = householdId,
-        MonthlyBaseFee = monthlyBaseFee,
-        PricePerKwh = pricePerKwh,
-        Currency = currency,
-        ContractStartDate = contractStartDate,
-        ContractPeriodMonths = contractPeriodMonths,
-        CreatedAtUtc = DateTimeOffset.UtcNow,
-        Version = version,
-    };
+        {
+            Id = id ?? Guid.NewGuid(),
+            HouseholdId = householdId,
+            MonthlyBaseFee = monthlyBaseFee,
+            PricePerKwh = pricePerKwh,
+            Currency = currency,
+            ContractStartDate = contractStartDate,
+            ContractPeriodMonths = contractPeriodMonths,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            Version = version,
+        };
 
     [Fact]
     public async Task A_valid_edit_of_a_future_dated_entry_updates_the_field_and_increments_Version_with_no_override_needed()

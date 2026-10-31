@@ -15,6 +15,8 @@ namespace EnergyTracker.Infrastructure.Tests;
 // (project-context.md's Story 5.1 lesson).
 public abstract class HouseholdRestoreWriterTestsBase
 {
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
+
     protected abstract Task<EnergyTrackerDbContext> OpenMigratedDbContextAsync(Guid householdId, CancellationToken cancellationToken);
 
     protected sealed class FixedHouseholdAccessor(Guid householdId) : ICurrentHouseholdAccessor
@@ -161,7 +163,10 @@ public abstract class HouseholdRestoreWriterTestsBase
         dbContext.MainMeters.Add(preExistingMainMeter);
         var preExistingMember = new HouseholdMember
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://old.test/", ExternalSubjectId = "old-sub",
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            ExternalIssuer = "https://old.test/",
+            ExternalSubjectId = "old-sub",
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.HouseholdMembers.Add(preExistingMember);
@@ -227,13 +232,21 @@ public abstract class HouseholdRestoreWriterTestsBase
         dbContext.HouseholdMembers.AddRange(
             new HouseholdMember
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://real.test/", ExternalSubjectId = "auth0|alice",
-                DisplayName = "Alice", CreatedAtUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                ExternalIssuer = "https://real.test/",
+                ExternalSubjectId = "auth0|alice",
+                DisplayName = "Alice",
+                CreatedAtUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
             },
             new HouseholdMember
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://real.test/", ExternalSubjectId = "auth0|bob",
-                DisplayName = null, CreatedAtUtc = new DateTimeOffset(2026, 2, 3, 4, 5, 6, TimeSpan.Zero),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                ExternalIssuer = "https://real.test/",
+                ExternalSubjectId = "auth0|bob",
+                DisplayName = null,
+                CreatedAtUtc = new DateTimeOffset(2026, 2, 3, 4, 5, 6, TimeSpan.Zero),
             });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var membersBefore = await ReadMembersAsync(dbContext, TestContext.Current.CancellationToken);
@@ -343,7 +356,7 @@ public abstract class HouseholdRestoreWriterTestsBase
             await Drain(stream.SmartPlugReadings), await Drain(stream.StatusSnapshots), await Drain(stream.AuditCorrections));
 
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)), cancellationToken);
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(result, WebOptions), cancellationToken);
         return path;
     }
 

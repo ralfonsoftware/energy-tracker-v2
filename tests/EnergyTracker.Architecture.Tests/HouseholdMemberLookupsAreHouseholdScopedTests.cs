@@ -39,7 +39,7 @@ public partial class HouseholdMemberLookupsAreHouseholdScopedTests
     [GeneratedRegex(@"FindMemberInHouseholdAsync\(Guid householdId, Guid memberId[^;]*?HouseholdMembers[^;]*?HouseholdId\s*==[^;]*?(?<![A-Za-z])Id\s*==[^;]*;", RegexOptions.Singleline)]
     private static partial Regex TheScopedLookup();
 
-    private record SourceFile(string Name, string RelativePath, string Code);
+    private sealed record SourceFile(string Name, string RelativePath, string Code);
 
     private static List<SourceFile> Sources()
     {
@@ -123,7 +123,7 @@ public partial class HouseholdMemberLookupsAreHouseholdScopedTests
 
         var repository = sources.Single(f => f.Name == "HouseholdRepository.cs");
         StatementsTouching(repository, "HouseholdMembers").Count(s => ByIdPredicate().IsMatch(s)).ShouldBe(1);
-        TheScopedLookup().Matches(repository.Code).Count.ShouldBe(1, "FindMemberInHouseholdAsync must be the one by-id member lookup, with HouseholdId and Id in its predicate.");
+        TheScopedLookup().Count(repository.Code).ShouldBe(1, "FindMemberInHouseholdAsync must be the one by-id member lookup, with HouseholdId and Id in its predicate.");
     }
 
     [Fact]

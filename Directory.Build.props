@@ -24,4 +24,21 @@
     <WarningsAsErrors>$(WarningsAsErrors);NU1902;NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 
+  <!--
+    Backend analyzer gate (Story 11.18, audit R3). The analyzers ship with the .NET SDK, so no package
+    is needed. Recommended turns most CA rules into warnings; it leaves most CA3xxx/CA5xxx security
+    rules off, so AnalysisModeSecurity=All raises those to warnings too.
+
+    Warnings fail only in CI: pr-review.yml builds with -p:TreatWarningsAsErrors=true and runs
+    `dotnet format` with the verify-no-changes option. TreatWarningsAsErrors is not set here so a new SDK feature band
+    cannot break a deploy or hotfix build. NU1900 (audit could not run) stays a warning even in that
+    build, same reason as above. Rules are lowered in .editorconfig only, with a comment (guard:
+    BackendAnalyzerGateIsConfiguredTests).
+  -->
+  <PropertyGroup>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900</WarningsNotAsErrors>
+  </PropertyGroup>
+
 </Project>

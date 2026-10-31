@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
@@ -48,7 +49,7 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
     .Enrich.FromLogContext()
-    .WriteTo.Console(),
+    .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture),
     // Otlp path forwards Serilog's events into OTel's log pipeline too (Aspire Dashboard,
     // trace-correlated). AzureMonitor path must NOT do this: Application Insights is
     // workspace-based on the same Log Analytics workspace Container Apps already streams stdout
@@ -482,11 +483,7 @@ DataProtectionKeyProtection.ApplyStartupActions(app.Services, dataProtectionKeyP
 
 // States which AI adapter the Ai:* section selected (never the API key), so a self-hoster can see in the log
 // whether their configuration took effect.
-app.Logger.LogInformation("AI plausibility backend: {Backend}", aiPlausibilityBackend.Description);
-if (aiPlausibilityBackend.Warning is { } aiPlausibilityWarning)
-{
-    app.Logger.LogWarning("AI plausibility backend: {Warning}", aiPlausibilityWarning);
-}
+AiPlausibilityBackendConfiguration.LogSelection(app.Logger, aiPlausibilityBackend);
 
 // AD-27 (audit S3): the security headers middleware is registered FIRST so it also covers error,
 // rate-limit and static-file responses. Production only: Vite dev mode injects inline scripts.
