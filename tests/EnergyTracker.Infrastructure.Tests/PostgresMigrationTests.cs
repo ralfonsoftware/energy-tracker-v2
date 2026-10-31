@@ -682,10 +682,8 @@ public class PostgresMigrationTests : IAsyncLifetime
             .ShouldBe(64);
         (await dbContext.Database.SqlQueryRaw<string>("SELECT is_nullable AS \"Value\" FROM information_schema.columns WHERE table_name = 'HouseholdInvites' AND column_name = 'Token'").SingleAsync(TestContext.Current.CancellationToken))
             .ShouldBe("YES");
-        dbContext.ChangeTracker.Clear();
-        var legacy = await dbContext.HouseholdInvites.AsNoTracking().SingleAsync(i => i.Id == legacyId, TestContext.Current.CancellationToken);
-        legacy.Token.ShouldBe("legacytoken000000000000000001");
-        legacy.TokenHash.ShouldBeNull();
+        (await dbContext.Database.SqlQueryRaw<string>("SELECT \"Token\" AS \"Value\" FROM \"HouseholdInvites\" WHERE \"TokenHash\" IS NULL").SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBe("legacytoken000000000000000001");
 
         dbContext.HouseholdInvites.AddRange(
             new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, TokenHash = new string('a', 64), CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) },
@@ -693,8 +691,53 @@ public class PostgresMigrationTests : IAsyncLifetime
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // The legacy Token column stays unique for its own rows.
-        dbContext.HouseholdInvites.Add(new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, Token = "legacytoken000000000000000001", CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) });
-        await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
+        var duplicateId = Guid.NewGuid();
+        var duplicate = await Should.ThrowAsync<DbException>(() => dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "HouseholdInvites" ("Id", "HouseholdId", "Token", "CreatedAtUtc", "ExpiresAtUtc", "Version")
+            VALUES ({duplicateId}, {householdId}, 'legacytoken000000000000000001', {DateTimeOffset.UtcNow}, {DateTimeOffset.UtcNow.AddDays(7)}, 0)
+            """, TestContext.Current.CancellationToken));
+        duplicate.SqlState.ShouldBe("23505");
+    }
+
+    // --- Story 11.20 (AD-26): the plaintext Token column and its unique index are dropped. ---
+
+    private const string DropTokenColumnMigrationSuffix = "_DropHouseholdInviteTokenColumn";
+
+    [Fact]
+    public async Task DropHouseholdInviteTokenColumn_migration_drops_Token_and_its_index_and_keeps_TokenHash_and_rows()
+    {
+        var householdId = Guid.NewGuid();
+        var legacyId = Guid.NewGuid();
+        await using var dbContext = NewDeviceNameKeyDbContext(householdId);
+        var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
+        var migrations = dbContext.Database.GetMigrations().ToList();
+        var drop = migrations.Single(m => m.EndsWith(DropTokenColumnMigrationSuffix, StringComparison.Ordinal));
+        migrations.IndexOf(drop).ShouldBeGreaterThan(0);
+        await migrator.MigrateAsync(migrations[migrations.IndexOf(drop) - 1], TestContext.Current.CancellationToken);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Households" ("Id", "Locale", "Currency", "CreatedAtUtc") VALUES ({householdId}, 'en-US', 'USD', {DateTimeOffset.UtcNow})
+            """, TestContext.Current.CancellationToken);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "HouseholdInvites" ("Id", "HouseholdId", "Token", "CreatedAtUtc", "ExpiresAtUtc", "Version")
+            VALUES ({legacyId}, {householdId}, 'legacytoken000000000000000001', {DateTimeOffset.UtcNow.AddDays(-9)}, {DateTimeOffset.UtcNow.AddDays(-2)}, 0)
+            """, TestContext.Current.CancellationToken);
+        const string columnsSql = "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_name = 'HouseholdInvites'";
+        const string indexesSql = "SELECT indexname AS \"Value\" FROM pg_indexes WHERE tablename = 'HouseholdInvites'";
+        (await dbContext.Database.SqlQueryRaw<string>(columnsSql).ToListAsync(TestContext.Current.CancellationToken)).ShouldContain("Token");
+        (await dbContext.Database.SqlQueryRaw<string>(indexesSql).ToListAsync(TestContext.Current.CancellationToken)).ShouldContain("IX_HouseholdInvites_Token");
+
+        await migrator.MigrateAsync(drop, TestContext.Current.CancellationToken);
+
+        var columns = await dbContext.Database.SqlQueryRaw<string>(columnsSql).ToListAsync(TestContext.Current.CancellationToken);
+        columns.ShouldNotContain("Token");
+        columns.ShouldContain("TokenHash");
+        var indexes = await dbContext.Database.SqlQueryRaw<string>(indexesSql).ToListAsync(TestContext.Current.CancellationToken);
+        indexes.ShouldNotContain("IX_HouseholdInvites_Token");
+        indexes.ShouldContain("IX_HouseholdInvites_TokenHash");
+        (await dbContext.HouseholdInvites.AsNoTracking().CountAsync(i => i.Id == legacyId, TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        dbContext.HouseholdInvites.Add(new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = householdId, TokenHash = new string('a', 64), CreatedAtUtc = DateTimeOffset.UtcNow, ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7) });
+        await Should.NotThrowAsync(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
     }
 
     // --- Story 11.14 (AD-6, audit C10): AddActiveJobGuard fails the surplus active restore/cleanup rows of a

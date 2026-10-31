@@ -63,7 +63,7 @@ public class HouseholdInviteTests(EnergyTrackerApiFactory factory) : IClassFixtu
 
         // Construct an already-expired invite directly against the DbContext — no constructor
         // parameter is exposed to shorten CreateHouseholdInvite.InviteLifetime for a test.
-        var token = Guid.NewGuid().ToString("N");
+        var token = InviteToken.Generate();
         using (var scope = factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
@@ -71,7 +71,7 @@ public class HouseholdInviteTests(EnergyTrackerApiFactory factory) : IClassFixtu
             {
                 Id = Guid.NewGuid(),
                 HouseholdId = household!.Id,
-                Token = token,
+                TokenHash = InviteToken.Hash(token),
                 CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-8),
                 ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
             });

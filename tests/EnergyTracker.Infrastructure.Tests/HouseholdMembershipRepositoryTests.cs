@@ -361,36 +361,6 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         var found = await new HouseholdRepository(dbContext, TimeProvider.System).FindInviteByTokenAsync(token, TestContext.Current.CancellationToken);
 
         found.ShouldNotBeNull().Id.ShouldBe(invite.Id);
-        found.Token.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task FindInviteByTokenAsync_finds_a_legacy_plaintext_only_invite()
-    {
-        var (household, _) = await SeedHouseholdAsync(1);
-        var legacyToken = Guid.NewGuid().ToString("N");
-        var invite = new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = household.Id, Token = legacyToken, CreatedAtUtc = Now, ExpiresAtUtc = Now.AddDays(7) };
-        await AddAsync(invite);
-        await using var dbContext = OpenFreshDbContext();
-
-        var found = await new HouseholdRepository(dbContext, TimeProvider.System).FindInviteByTokenAsync(legacyToken, TestContext.Current.CancellationToken);
-
-        found.ShouldNotBeNull().Id.ShouldBe(invite.Id);
-    }
-
-    [Fact]
-    public async Task FindInviteByTokenAsync_prefers_the_hash_row_when_both_a_hash_row_and_a_plaintext_row_match()
-    {
-        var (household, _) = await SeedHouseholdAsync(1);
-        var token = Guid.NewGuid().ToString("N");
-        var hashRow = new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = household.Id, TokenHash = InviteToken.Hash(token), CreatedAtUtc = Now, ExpiresAtUtc = Now.AddDays(7) };
-        var legacyRow = new HouseholdInvite { Id = Guid.NewGuid(), HouseholdId = household.Id, Token = token, CreatedAtUtc = Now, ExpiresAtUtc = Now.AddDays(7) };
-        await AddAsync(hashRow, legacyRow);
-        await using var dbContext = OpenFreshDbContext();
-
-        var found = await new HouseholdRepository(dbContext, TimeProvider.System).FindInviteByTokenAsync(token, TestContext.Current.CancellationToken);
-
-        found.ShouldNotBeNull().Id.ShouldBe(hashRow.Id);
     }
 
     [Fact]
@@ -405,17 +375,15 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         (await repository.FindInviteByTokenAsync("", TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
-    // AC #12: the NULL-unique-index trap. A plain unique index on SQL Server treats NULLs as equal, so a
-    // second hash-only invite (Token NULL) would fail without the filtered index EF/the migration adds.
     [Fact]
-    public async Task Two_hash_only_invites_with_a_null_Token_can_coexist()
+    public async Task Two_invites_with_different_hashes_can_coexist()
     {
         var (household, _) = await SeedHouseholdAsync(1);
 
         await AddAsync(NewInvite(household.Id), NewInvite(household.Id));
 
         await using var verify = OpenFreshDbContext();
-        (await verify.HouseholdInvites.CountAsync(i => i.HouseholdId == household.Id && i.Token == null, TestContext.Current.CancellationToken)).ShouldBe(2);
+        (await verify.HouseholdInvites.CountAsync(i => i.HouseholdId == household.Id, TestContext.Current.CancellationToken)).ShouldBe(2);
     }
 }
 

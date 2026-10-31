@@ -313,34 +313,7 @@ public class HouseholdMemberEndpointsTests(EnergyTrackerApiFactory factory) : IC
         invite.Token.Length.ShouldBe(43);
         invite.Token.ShouldMatch("^[A-Za-z0-9_-]{43}$");
         var stored = await StoredInviteAsync((await ListInvitesAsync(a)).Single().Id);
-        stored.Token.ShouldBeNull();
         stored.TokenHash.ShouldBe(InviteToken.Hash(invite.Token));
-    }
-
-    [Fact]
-    public async Task A_legacy_plaintext_invite_still_previews_and_accepts()
-    {
-        var a = NewPrincipal();
-        var household = await CreateHouseholdAsync(a);
-        var legacyToken = Guid.NewGuid().ToString("N");
-        using (var scope = factory.Services.CreateScope())
-        {
-            var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
-            dbContext.HouseholdInvites.Add(new HouseholdInvite
-            {
-                Id = Guid.NewGuid(),
-                HouseholdId = household.Id,
-                Token = legacyToken,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-                ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(3),
-            });
-            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        var joiner = NewPrincipal();
-        (await joiner.Client.GetAsync($"/api/household-invites/{legacyToken}", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await joiner.Client.PostAsync($"/api/household-invites/{legacyToken}/accept", null, TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await ListMembersAsync(a)).Count.ShouldBe(2);
     }
 
     [Fact]

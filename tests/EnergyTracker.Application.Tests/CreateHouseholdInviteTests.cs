@@ -26,7 +26,7 @@ public class CreateHouseholdInviteTests
         stored.ShouldNotBeNull();
         stored.HouseholdId.ShouldBe(householdId);
         stored.Id.ShouldNotBe(Guid.Empty);
-        stored.Token.ShouldBeNull();
+        typeof(HouseholdInvite).GetProperty("Token").ShouldBeNull();
         stored.TokenHash.ShouldBe(InviteToken.Hash(created.Token));
         stored.ConsumedAtUtc.ShouldBeNull();
         (stored.ExpiresAtUtc - stored.CreatedAtUtc).ShouldBe(CreateHouseholdInvite.InviteLifetime);

@@ -129,7 +129,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 - The 90-day cap is on the app's cookie only — story-11-8-auth-hardening-csrf-logout-session-cap
 - `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched **[promoted: 11.29]** — 11-8-auth-hardening-csrf-logout-session-cap
 - After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Ver` **[promoted: Epic 12]** — 11-8-auth-hardening-csrf-logout-session-cap
-- Drop the plaintext `HouseholdInvites.Token` column in a later contract migration, at least 7 days af **[promoted: 11.20]** — story-11-9-member-removal-revocable-invites
 - The invite token appears in request paths **[promoted: 11.22]** — story-11-9-member-removal-revocable-invites
 - Expired and revoked invite rows are never swept **[promoted: Epic 12]** — story-11-9-member-removal-revocable-invites
 - Invite rows carry no creator, so the open-invite list cannot say who invited — story-11-9-member-removal-revocable-invites
@@ -565,8 +564,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: dev-story of story-11-9-member-removal-revocable-invites (2026-10-17)
 
-- [promoted: Story 11.20] Drop the plaintext `HouseholdInvites.Token` column in a later contract migration, **at least 7 days after Story 11.9's release** (the invite lifetime; give the earliest date as release date + 7 days once known). The exact change: drop the column and its unique index, delete the legacy branch of `FindInviteByTokenAsync`, drop `HouseholdInvite.Token`, update `HouseholdMembershipRepositoryTests`, `HouseholdInviteTests` and the migration tests. Until then legacy invites keep working through the legacy lookup (AC #5). [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
-
 - [promoted: Story 11.22] The invite token appears in request paths (`/api/household-invites/<token>`, `/api/household-invites/<token>/accept`, `/join/<token>`). Log-level check (AC #11d): the effective logging configuration writes them. Serilog is set up with `ReadFrom.Configuration`, which reads a `Serilog` section; `appsettings.json` has none (only the `Logging:LogLevel` section, which Serilog ignores) and no environment variable sets one, so the minimum level is Serilog's default `Information` with no overrides, and ASP.NET Core's hosting diagnostics ("Request starting ...") write the request path at `Information` to stdout and so into Log Analytics. Azure Monitor traces also carry `url.path`. The token in the URL path is the Story 1.8 design and was not changed here. Options: a `Serilog:MinimumLevel:Override` for `Microsoft.AspNetCore.Hosting.Diagnostics` and a span processor that redacts the invite segment, or moving the token into a fragment or a POST body. [src/EnergyTracker.Api/Program.cs]
 
 - [promoted: Epic 12] Expired and revoked invite rows are never swept (revoke only expires them in place); the table grows by one row per invite ever created. A sweep like `SmartPlugImportRepository.SweepExpiredAsync` would do it. [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
@@ -738,3 +735,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] An authenticated no-Household caller can stream up to 250 MB to the upload routes before the filter answers 403. [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
 
 - [open] The split React files repeat three delete-confirmation dialogs and three row blocks. [web/src/components/tagging-scaffold]
+
+## Deferred from: code review of story-11-20-drop-plaintext-invite-token-column (2026-10-31)
+
+- [open] `HouseholdInvites.TokenHash` is still nullable and non-unique, and `FindInviteByTokenAsync` uses `FirstOrDefault` with no ordering. With `Token` gone, a NULL-hash row is an unfindable orphan. Tighten in its own destructive-class migration: purge NULL-hash rows, then make the column NOT NULL and the index unique. [src/EnergyTracker.Infrastructure/Configurations/HouseholdInviteConfiguration.cs]
+
+- [open] `DropHouseholdInviteTokenColumn` has no in-DB guard against live legacy invites (`TokenHash IS NULL` and unexpired). The 0-row gate query covers production only; the self-host migration path (Story 11.21) should check or document it. [src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20261031173415_DropHouseholdInviteTokenColumn.cs]

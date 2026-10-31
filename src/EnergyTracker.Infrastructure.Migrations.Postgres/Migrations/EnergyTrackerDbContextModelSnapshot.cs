@@ -281,10 +281,6 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Token")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
                     b.Property<string>("TokenHash")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -296,9 +292,6 @@ namespace EnergyTracker.Infrastructure.Migrations.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("HouseholdId");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
 
                     b.HasIndex("TokenHash");
 
