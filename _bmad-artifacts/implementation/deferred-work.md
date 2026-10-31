@@ -621,3 +621,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] `CA1711` allows the `Queue` and `Stream` suffixes (AD-6 port and adapter names, `HouseholdExportStream`). [.editorconfig]
 - [open] `CA1873` (expensive log arguments) is off; revisit if a log argument ever starts to compute something. [.editorconfig]
 - [open] `CA1707` and `CA1816` are off for `tests/**` (Snake_case test names; fixtures without finalizers). [.editorconfig]
+
+## Deferred from: dev-story of 11-19-structural-cleanup (2026-10-31)
+
+- [open] Comment trim reached only the files Story 11.19 touched. These source files still hold more than 40 `//` lines of story and review narration (count of `//` lines): `ValidateHouseholdImport.cs` 91, `Ports/ISmartPlugImportRepository.cs` 91 (port contract text, mostly worth keeping), `EveHomeXlsxParser.cs` 87, `ProcessSmartPlugImport.cs` 83, `SmartPlugReadingConfiguration.cs` 49, `BackgroundJobProcessor.cs` 49, `HouseholdExportReader.cs` 48, `HouseholdRepository.cs` 47, `WindowedDeviationCalculator.cs` 47, `HouseholdRestoreWriter.cs` 43, `AzureStorageQueueJobQueue.cs` 43, `SmartPlugGapDetector.cs` 41. Extend `NoHistoryNarratingCommentsTests` to each file as it is trimmed.
+- [open] Endpoint files that serve callers without a Household (`AuthEndpoints`, `SessionEndpoints`, `HouseholdEndpoints`, `HouseholdInviteEndpoints`, `HouseholdMemberEndpoints`) keep their long comments; they were edited only to share `HouseholdRequiredFilter.RejectionDetail`.
+- [open] `ServiceRegistrationSnapshotTests` pins `OpenTelemetry.*` and `Azure.Monitor.*` descriptors for the two exporter variants. A Dependabot upgrade of those packages can change the approved text without a behaviour change; re-approve with `ENERGYTRACKER_UPDATE_SNAPSHOTS=1` after reviewing the diff.
