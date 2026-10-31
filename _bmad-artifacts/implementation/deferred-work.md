@@ -27,20 +27,20 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 **a11y (7)**
 
-- No aria-live on import/export error states — code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
-- No focus mgmt across logoff dialog steps — code review of story-1.12 (2026-09-17)
+- No aria-live on import/export error states **[promoted: Epic 12]** — code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
+- No focus mgmt across logoff dialog steps **[promoted: Epic 12]** — code review of story-1.12 (2026-09-17)
 - No check shortLabel substring of entryPointLabel — code review of story-8.3 (2026-09-26)
 - Trailing action TableHead unlabeled — code review of story-8.3 (2026-09-26)
-- role=menu contains radiogroups — code review of 8-10-theme-toggle-profile-menu (2026-09-30)
+- role=menu contains radiogroups **[promoted: Epic 12]** — code review of 8-10-theme-toggle-profile-menu (2026-09-30)
 - Live region dropped on 660px cross — code review of 8-12-settings-preferences-card-mobile (2026-09-30)
-- Icon buttons 40px not 44px — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
+- Icon buttons 40px not 44px **[promoted: Epic 12]** — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
 **infra-hardening (4)**
 
-- Orphaned gh-actions-migrate-* firewall rules — code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
-- No timeout-minutes in infra-deploy — code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
+- Orphaned gh-actions-migrate-* firewall rules **[promoted: Epic 12]** — code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
+- No timeout-minutes in infra-deploy **[promoted: Epic 12]** — code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
 - OTel resource attrs minimal — code review of spec-otel-api-instrumentation (2026-08-15)
-- No cert renewal failure alerting — code review of spec-custom-domain-managed-cert (2026-08-16)
+- No cert renewal failure alerting **[promoted: Epic 12]** — code review of spec-custom-domain-managed-cert (2026-08-16)
 
 **validation (6)**
 
@@ -49,30 +49,30 @@ Conventions: append new sections at the end, chronological (see `project-context
 - Threshold/gap-days no range validation — code review of story-2.4 (2026-08-17)
 - No lower bound on estimated kWh — code review of story-3.3 (2026-08-20)
 - DST gap/ambiguous local time rewritten silently — code review of story-6.1 (2026-09-18)
-- Device clock >5min ahead rejects default timestamp — code review of story-6.1 (2026-09-18)
+- Device clock >5min ahead rejects default timestamp **[promoted: Epic 12]** — code review of story-6.1 (2026-09-18)
 
 **ux-polish (6)**
 
 - No retry after tagging-scaffold load failure — code review of 1-9-room-power-point-device-management (2026-08-14)
 - Can't cancel queue item while uploading/processing — code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
 - No cap on files per drop — code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
-- Shared DialogContent lacks max-h — code review of spec-power-point-mapping-list-scroll (2026-09-02)
+- Shared DialogContent lacks max-h **[promoted: Epic 12]** — code review of spec-power-point-mapping-list-scroll (2026-09-02)
 - No progress indication during cleanup — code review of spec-3-10-cleanup-async-job (2026-09-12)
-- Tariff history scrolls 10px at 659 de-DE — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
+- Tariff history scrolls 10px at 659 de-DE **[promoted: Epic 12]** — locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
 **perf (5)**
 
-- Old HouseholdId index redundant on SmartPlugReadings — code review of spec-household-export-oom-fix (2026-09-25)
+- Old HouseholdId index redundant on SmartPlugReadings **[promoted: 11.31]** — code review of spec-household-export-oom-fix (2026-09-25)
 - 3 sequential round-trips, contract unstated — code review of spec-status-recompute-serialization-perf, round 4 (2026-08-24)
 - Unbounded StatusSnapshot read — story-4-1-trend-history-view (2026-08-29)
-- Cumulative row locks may escalate to table lock — code review of spec-3-10-cleanup-per-import-detach (2026-09-12)
+- Cumulative row locks may escalate to table lock **[promoted: Epic 12]** — code review of spec-3-10-cleanup-per-import-detach (2026-09-12)
 - Eager fetch in collapsed disclosure cards — code review of story-6.2 (2026-09-19)
 
 **concurrency (3)**
 
 - Unsequenced concurrent refreshStatus — code review of story-2-5-dashboard-status-display (2026-08-17)
-- SQL Server sweep SELECT can block on writer locks — code review of spec-3-10-cleanup-sweep-async (2026-09-17)
-- DeleteEligibleAsync (manual) takes no lock — code review of spec-3-10-cleanup-sweep-async (2026-09-17)
+- SQL Server sweep SELECT can block on writer locks **[promoted: Epic 12]** — code review of spec-3-10-cleanup-sweep-async (2026-09-17)
+- DeleteEligibleAsync (manual) takes no lock **[promoted: Epic 12]** — code review of spec-3-10-cleanup-sweep-async (2026-09-17)
 
 **docs (2)**
 
@@ -87,14 +87,13 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - No de-DE test for toggle strings — code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
 
-**migrations-deploy (6)**
+**migrations-deploy (5)**
 
 - Self-hosters may have no documented way to apply EF Core migrations **[promoted: 11.21]** — 10-1 story creation (2026-10-02)
 - Expand/contract rule in `project-context.md` is advisory prose only — 10-1-migration-safety-on-deploy
-- No long-term retention (LTR) configured — 10-1-migration-safety-on-deploy
-- Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name t — 10-1-migration-safety-on-deploy
+- Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name t **[promoted: 11.26]** — 10-1-migration-safety-on-deploy
 - Pending-migrations list in the restore-point block runs once before the retry loop and can read "una — 10-1-migration-safety-on-deploy
-- Deploy N's "Apply pending EF Core migrations" step — story-11-4-unmapped-smart-plug-readings-keyed-by-device
+- Deploy N's "Apply pending EF Core migrations" step **[promoted: 11.24]** — story-11-4-unmapped-smart-plug-readings-keyed-by-device
 
 **correlation (1)**
 
@@ -116,50 +115,50 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 **ci-supply-chain (7)**
 
-- A branch pusher can still read the repository secrets that other workflows hold — story-11-5-ci-identity-split-supply-chain-hygiene
-- `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App im — Story 11.5 R2.2 (2026-10-11)
-- The NuGet Audit gate failed `dotnet restore` on `main` itself — story-11-6-data-protection-key-encryption
-- Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover — story-11-6-data-protection-key-encryption
-- Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key — Story 11.6 close-out (2026-10-17)
+- A branch pusher can still read the repository secrets that other workflows hold **[promoted: Epic 12]** — story-11-5-ci-identity-split-supply-chain-hygiene
+- `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App im **[promoted: Epic 12]** — Story 11.5 R2.2 (2026-10-11)
+- The NuGet Audit gate failed `dotnet restore` on `main` itself **[promoted: Epic 12]** — story-11-6-data-protection-key-encryption
+- Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover **[promoted: 11.28]** — story-11-6-data-protection-key-encryption
+- Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key **[promoted: 11.27]** — Story 11.6 close-out (2026-10-17)
 - `maxParallelThreads` is now 8 — spec-ci-pipeline-runtime-speedup
 - Per-test cost left in Infrastructure.Tests — spec-ci-pipeline-runtime-speedup
 
 **auth-members (9)**
 
-- HSTS uses the framework defaults — story-11-7-security-headers-csp-rate-limiting
+- HSTS uses the framework defaults **[promoted: Epic 12]** — story-11-7-security-headers-csp-rate-limiting
 - The 90-day cap is on the app's cookie only — story-11-8-auth-hardening-csrf-logout-session-cap
-- `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched — 11-8-auth-hardening-csrf-logout-session-cap
-- After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Ver` — 11-8-auth-hardening-csrf-logout-session-cap
+- `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched **[promoted: 11.29]** — 11-8-auth-hardening-csrf-logout-session-cap
+- After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Ver` **[promoted: Epic 12]** — 11-8-auth-hardening-csrf-logout-session-cap
 - Drop the plaintext `HouseholdInvites.Token` column in a later contract migration, at least 7 days af **[promoted: 11.20]** — story-11-9-member-removal-revocable-invites
 - The invite token appears in request paths **[promoted: 11.22]** — story-11-9-member-removal-revocable-invites
-- Expired and revoked invite rows are never swept — story-11-9-member-removal-revocable-invites
+- Expired and revoked invite rows are never swept **[promoted: Epic 12]** — story-11-9-member-removal-revocable-invites
 - Invite rows carry no creator, so the open-invite list cannot say who invited — story-11-9-member-removal-revocable-invites
-- The `MemberRemoval` budget — story-11-9-member-removal-revocable-invites
+- The `MemberRemoval` budget **[promoted: Epic 12]** — story-11-9-member-removal-revocable-invites
 
 **upload-restore (13)**
 
 - The duplicate-id and reference id sets in `ValidateHouseholdImport` still grow with the file by item — story-11-10-upload-hardening
 - The framework buffers the multipart file to its own temp file before the endpoint copies it, so one — story-11-10-upload-hardening
-- The restore job still materializes the whole object graph; only the string is gone — story-11-10-upload-hardening
+- The restore job still materializes the whole object graph; only the string is gone **[promoted: 11.25]** — story-11-10-upload-hardening
 - Orphaned temp files from a process that died between validate and confirm — story-11-10-upload-hardening
 - The Meross CSV parser has no row cap — story-11-10-upload-hardening
-- The API runs Server GC (`System.GC.Server` — story-11-10-upload-hardening
+- The API runs Server GC (`System.GC.Server` **[promoted: 11.25]** — story-11-10-upload-hardening
 - The XLSX shared-strings list holds every item as a string, so a hostile table just under the 64 mill — 11-10-upload-hardening
 - `EveHomeXlsxParser.ReadDeviceTag` reads two cells but loads the whole shared-strings table — 11-10-upload-hardening
 - A single worksheet cell is still loaded whole — 11-10-upload-hardening
-- `ValidateHouseholdImport` still does not check a file's own uniqueness beyond duplicate ids per arra — story-11-14-restore-id-collisions-active-job-guard
-- The `AddActiveJobGuard` migration's surplus-failing statement — story-11-14-restore-id-collisions-active-job-guard
-- After a completed restore the SPA reloads only what holds restored ids — story-11-14-restore-id-collisions-active-job-guard
+- `ValidateHouseholdImport` still does not check a file's own uniqueness beyond duplicate ids per arra **[promoted: Epic 12]** — story-11-14-restore-id-collisions-active-job-guard
+- The `AddActiveJobGuard` migration's surplus-failing statement **[promoted: 11.27]** — story-11-14-restore-id-collisions-active-job-guard
+- After a completed restore the SPA reloads only what holds restored ids **[promoted: Epic 12]** — story-11-14-restore-id-collisions-active-job-guard
 - `DELETE /api/smart-plug-import-jobs` answers `202` with the id of the active cleanup job even when t — story-11-14-restore-id-collisions-active-job-guard
 
 **container-config (6)**
 
-- S5 leftovers the epic ACs left out — story-11-11-container-config-correctness
-- S8 (`AllowedHosts: *`) is in no Epic 11 story — story-11-11-container-config-correctness
-- `/login` without OIDC is a JSON problem document, not a page in the SPA's voice — story-11-11-container-config-correctness
-- The Azure `ai-api-key` secret is seeded with the placeholder `unset` — story-11-11-container-config-correctness
+- S5 leftovers the epic ACs left out **[promoted: Epic 12]** — story-11-11-container-config-correctness
+- S8 (`AllowedHosts: *`) is in no Epic 11 story **[promoted: Epic 12]** — story-11-11-container-config-correctness
+- `/login` without OIDC is a JSON problem document, not a page in the SPA's voice **[promoted: Epic 12]** — story-11-11-container-config-correctness
+- The Azure `ai-api-key` secret is seeded with the placeholder `unset` **[promoted: 11.30]** — story-11-11-container-config-correctness
 - A host that fails startup **[promoted: 11.23]** — story-11-11-container-config-correctness
-- `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 — story-11-11-container-config-correctness
+- `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 **[promoted: Epic 12]** — story-11-11-container-config-correctness
 
 **code-quality (21)**
 
@@ -180,38 +179,38 @@ Conventions: append new sections at the end, chronological (see `project-context
 - Comment trim reached only the files Story 11.19 touched — 11-19-structural-cleanup
 - Endpoint files that serve callers without a Household — 11-19-structural-cleanup
 - `ServiceRegistrationSnapshotTests` pins `OpenTelemetry.*` and `Azure.Monitor.*` descriptors for the — 11-19-structural-cleanup
-- `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do — 11-19-structural-cleanup
-- Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(fal` — 11-19-structural-cleanup
+- `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do **[promoted: Epic 12]** — 11-19-structural-cleanup
+- Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(fal` **[promoted: Epic 12]** — 11-19-structural-cleanup
 - An authenticated no-Household caller can stream up to 250 MB to the upload routes before the filter — 11-19-structural-cleanup
 - The split React files repeat three delete-confirmation dialogs and three row blocks — 11-19-structural-cleanup
 
 **docs-process (3)**
 
-- FR-21's settings editor (not built, see the Story 2.4 entry above on threshold range validation) mus — story-11-15-trending-threshold-scaled-to-elapsed
-- Story 11.15 review (decision 1c, Ralf 2026-10-25) added a floor to the scaled trending threshold — story-11-15-trending-threshold-scaled-to-elapsed
-- The Status detail view's "Baseline to date" value and its "(over N days)" use whole-number formats — Part R of story-11-15-trending-threshold-scaled-to-elapsed
+- FR-21's settings editor (not built, see the Story 2.4 entry above on threshold range validation) mus **[promoted: Epic 12]** — story-11-15-trending-threshold-scaled-to-elapsed
+- Story 11.15 review (decision 1c, Ralf 2026-10-25) added a floor to the scaled trending threshold **[promoted: Epic 12]** — story-11-15-trending-threshold-scaled-to-elapsed
+- The Status detail view's "Baseline to date" value and its "(over N days)" use whole-number formats **[promoted: Epic 12]** — Part R of story-11-15-trending-threshold-scaled-to-elapsed
 
 **frontend-offline (7)**
 
-- The server's reason on the card is the meter-reading validation `detail`, which is English prose and — story-11-16-offline-queue-rejected-readings-attention
-- A member removed from a Household by someone else keeps queued entries that answer `403` forever and — story-11-16-offline-queue-rejected-readings-attention
-- No cap and no expiry on needs-attention entries, and no "discard all" — story-11-16-offline-queue-rejected-readings-attention
+- The server's reason on the card is the meter-reading validation `detail`, which is English prose and **[promoted: Epic 12]** — story-11-16-offline-queue-rejected-readings-attention
+- A member removed from a Household by someone else keeps queued entries that answer `403` forever and **[promoted: Epic 12]** — story-11-16-offline-queue-rejected-readings-attention
+- No cap and no expiry on needs-attention entries, and no "discard all" **[promoted: Epic 12]** — story-11-16-offline-queue-rejected-readings-attention
 - `listPending` is a misleading name now that it means "everything queued, pending or needs attention" — story-11-16-offline-queue-rejected-readings-attention
 - `registerOfflineSync` does `void flushQueue(...)`, so a store that cannot be opened — story-11-16-offline-queue-rejected-readings-attention
-- `toDateTimeLocalValue` was copied in `log-reading-sheet.tsx` and `log-event-sheet.tsx`; Story 11.16 — story-11-16-offline-queue-rejected-readings-attention
+- `toDateTimeLocalValue` was copied in `log-reading-sheet.tsx` and `log-event-sheet.tsx`; Story 11.16 **[promoted: Epic 12]** — story-11-16-offline-queue-rejected-readings-attention
 - The rejected-readings card follows only changes made in its own tab — story-11-16-offline-queue-rejected-readings-attention
 
 
 ## Deferred from: code review of spec-azure-sql-ci-migration-firewall (2026-08-13)
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
+- [promoted: Epic 12] source_spec: `_bmad-artifacts/implementation/spec-azure-sql-ci-migration-firewall.md`
   summary: No periodic sweep prunes orphaned `gh-actions-migrate-*` SQL firewall rules left behind by a killed/force-cancelled runner (the in-job `if: always()`+`continue-on-error` cleanup only covers normal step failure, not hard cancellation).
   evidence: Azure SQL server-level firewall rules have a hard cap (128); enough abandoned runs could eventually exhaust it and start blocking legitimate deploys. Building a reaper is a distinct, separately-scoped task, not part of this hotfix.
 
 
 ## Deferred from: code review of 1-6-cicd-deploy-idempotency-container-app-image-preservation (2026-08-14)
 
-- [open] No `timeout-minutes` set on `infra-deploy.yml`'s job or any of its steps, including the new "Resolve current Container App image" step [.github/workflows/infra-deploy.yml] — pre-existing gap across the whole workflow file (only `app-deploy.yml`'s SQL-related steps set per-step timeouts); not unique to this diff.
+- [promoted: Epic 12] No `timeout-minutes` set on `infra-deploy.yml`'s job or any of its steps, including the new "Resolve current Container App image" step [.github/workflows/infra-deploy.yml] — pre-existing gap across the whole workflow file (only `app-deploy.yml`'s SQL-related steps set per-step timeouts); not unique to this diff.
 
 
 ## Deferred from: code review of 1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress (2026-08-14)
@@ -242,7 +241,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of spec-custom-domain-managed-cert (2026-08-16)
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
+- [promoted: Epic 12] source_spec: `_bmad-artifacts/implementation/spec-custom-domain-managed-cert.md`
   summary: No renewal-failure alerting exists for the custom-domain managed certificate — an indirect CNAME or a missing CAA record silently blocks issuance/renewal (per D5), and nothing surfaces that until TLS actually starts failing in production.
   evidence: This story only scaffolds the dormant Bicep constructs (customDomainName defaults to ''); the feature has no live consumer yet, so there's nothing to alert on today. The existing `monitorAlert`/`otelAlertNotificationEmail` pattern in `infra/main.bicep` is the natural template to extend once a real custom domain is actually bound and worth monitoring.
 
@@ -308,7 +307,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of spec-power-point-mapping-list-scroll (2026-09-02)
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
+- [promoted: Epic 12] source_spec: `_bmad-artifacts/implementation/spec-power-point-mapping-list-scroll.md`
   summary: Shared `DialogContent` (`web/src/components/ui/dialog.tsx`) has no viewport-relative height constraint (`max-h-[...vh]`/`overflow-y-auto`) of its own, so a Dialog with enough content in total (header + body copy + inputs + this now-capped list + error text) can still overflow a short viewport even though the "many Power Points" failure mode this diff targets is fixed.
   evidence: Pre-existing gap in the shared Dialog primitive, affecting every `DialogContent` consumer in the app, not introduced by this diff — fixing it here would mean changing shared UI behavior for every dialog in the codebase, well beyond this one-shot's scope of the Power Point mapping list specifically. Raised by adversarial review (Blind Hunter).
 
@@ -327,21 +326,21 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of spec-3-10-cleanup-per-import-detach (2026-09-12)
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-per-import-detach.md`
+- [promoted: Epic 12] source_spec: `_bmad-artifacts/implementation/spec-3-10-cleanup-per-import-detach.md`
   summary: Issuing on the order of hundreds of sequential row-level `UPDATE`s against `SmartPlugReadings` within one long-lived transaction (this round's per-import detach loop) could, on SQL Server, cross the automatic lock-escalation threshold (~5,000 locks) and upgrade to a table-level lock — blocking every household's reads/writes against that shared table (AD-3 multi-tenant architecture) for the job's full duration, not just the household being cleaned up.
   evidence: Raised by adversarial review (Blind Hunter). Plausible but not confirmed against production Azure SQL Basic-tier — SQL Server's escalation check is documented as per-statement (each of this loop's `UPDATE`s only touches ≤200 rows, well under the threshold), but locks held by earlier statements in the same uncommitted transaction are not released until commit, so the *cumulative* row-lock count against `SmartPlugReadings` grows across the whole loop; whether that alone triggers escalation (vs. only a single statement's own count) is genuinely uncertain without a load test against Azure SQL Basic-tier at incident scale. A confirmed fix (e.g. `ALTER TABLE SmartPlugReadings SET (LOCK_ESCALATION = DISABLE)`) is a schema change with its own memory-overhead tradeoff, deserving its own dedicated investigation rather than a same-day guess under incident pressure. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — DetachReadingsForImportAsync]
 
 
 ## Deferred from: code review of story-1.12 (2026-09-17)
 
-- [open] No focus/accessibility management across the logoff dialog's three steps — `confirm` → `queue-warning`/`federated-warning` swaps content inside the same mounted `Dialog` with no focus move or live-region announcement telling a screen-reader user the content changed underneath them [web/src/components/settings/settings-page.tsx:108-134]. Deferred, pre-existing pattern: no multi-step dialog anywhere in this codebase establishes focus-management conventions yet, so this isn't a regression specific to this diff. Raised by adversarial review (Blind Hunter) and edge-case review.
+- [promoted: Epic 12] No focus/accessibility management across the logoff dialog's three steps — `confirm` → `queue-warning`/`federated-warning` swaps content inside the same mounted `Dialog` with no focus move or live-region announcement telling a screen-reader user the content changed underneath them [web/src/components/settings/settings-page.tsx:108-134]. Deferred, pre-existing pattern: no multi-step dialog anywhere in this codebase establishes focus-management conventions yet, so this isn't a regression specific to this diff. Raised by adversarial review (Blind Hunter) and edge-case review.
 
 
 ## Deferred from: code review of spec-3-10-cleanup-sweep-async (2026-09-17)
 
-- [open] On SQL Server (the production provider — Azure SQL, no `READ_COMMITTED_SNAPSHOT`/RCSI configured anywhere in this repo), `SweepExpiredAsync`'s eligibility `SELECT` can itself block on row locks held by another household poll's still-in-flight, uncommitted bounded-chunk transaction — SQL Server's default (locking) Read Committed lets a reader block on an uncommitted writer's exclusive locks, unlike Postgres's MVCC (non-blocking reads), which this spec's own concurrency guard (`pg_try_advisory_xact_lock`/`sp_getapplock`) does not address since it only gates the *delete* phase, not this earlier read. Bounded impact: the block, when it happens, is bounded by the winning poll's own one-chunk duration (the same latency this spec's design already accepts for the poll that legitimately does the work) and self-heals on the next poll — not unbounded, not data-corrupting. A full fix (e.g. a scoped `READPAST` table hint on this specific query, or enabling database-wide RCSI) has its own tradeoffs and blast radius (RCSI is a database-wide isolation change) better suited to a dedicated follow-up spec than folding into this bugfix. Raised by adversarial review (Blind Hunter), loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `SweepExpiredAsync`'s eligibility query, `TryAcquireHouseholdSweepLockSqlServerAsync`]
+- [promoted: Epic 12] On SQL Server (the production provider — Azure SQL, no `READ_COMMITTED_SNAPSHOT`/RCSI configured anywhere in this repo), `SweepExpiredAsync`'s eligibility `SELECT` can itself block on row locks held by another household poll's still-in-flight, uncommitted bounded-chunk transaction — SQL Server's default (locking) Read Committed lets a reader block on an uncommitted writer's exclusive locks, unlike Postgres's MVCC (non-blocking reads), which this spec's own concurrency guard (`pg_try_advisory_xact_lock`/`sp_getapplock`) does not address since it only gates the *delete* phase, not this earlier read. Bounded impact: the block, when it happens, is bounded by the winning poll's own one-chunk duration (the same latency this spec's design already accepts for the poll that legitimately does the work) and self-heals on the next poll — not unbounded, not data-corrupting. A full fix (e.g. a scoped `READPAST` table hint on this specific query, or enabling database-wide RCSI) has its own tradeoffs and blast radius (RCSI is a database-wide isolation change) better suited to a dedicated follow-up spec than folding into this bugfix. Raised by adversarial review (Blind Hunter), loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `SweepExpiredAsync`'s eligibility query, `TryAcquireHouseholdSweepLockSqlServerAsync`]
 
-- [open] The new per-household advisory lock only guards `SweepExpiredAsync`'s bounded-chunk path; `DeleteEligibleAsync` — shared via the extracted `DeleteImportChunkAsync` helper but also called directly by `DeleteJobsAsync` (the manual "clean up everything" endpoint) — acquires no lock. A concurrent manual cleanup and an in-flight automatic sweep chunk for the same household can still contend on real DB row locks, reproducing this spec's own target latency-spike shape for that specific caller pair. Deferred rather than fixed here: this spec's own frozen "Never" boundary explicitly excludes touching `DeleteJobsAsync`'s call path, so closing this gap requires renegotiating that scope, not a patch to the current diff. Raised by edge-case review, loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `DeleteEligibleAsync`, `DeleteJobsAsync`]
+- [promoted: Epic 12] The new per-household advisory lock only guards `SweepExpiredAsync`'s bounded-chunk path; `DeleteEligibleAsync` — shared via the extracted `DeleteImportChunkAsync` helper but also called directly by `DeleteJobsAsync` (the manual "clean up everything" endpoint) — acquires no lock. A concurrent manual cleanup and an in-flight automatic sweep chunk for the same household can still contend on real DB row locks, reproducing this spec's own target latency-spike shape for that specific caller pair. Deferred rather than fixed here: this spec's own frozen "Never" boundary explicitly excludes touching `DeleteJobsAsync`'s call path, so closing this gap requires renegotiating that scope, not a patch to the current diff. Raised by edge-case review, loop 2. [src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs — `DeleteEligibleAsync`, `DeleteJobsAsync`]
 
 
 ## Deferred from: code review of spec-db-command-timeout-scope (2026-09-17)
@@ -358,11 +357,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of story-6.1 (2026-09-18)
 
-- [open] source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
+- [promoted: Epic 12] source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
   summary: `new Date(datetimeLocalValue).toISOString()` silently rewrites DST-transition local times — a spring-forward gap time (`2026-03-29T02:30` in Europe/Berlin) is normalized forward an hour, and a fall-back ambiguous time resolves to the first (DST) instance. The value posted is not the value the user picked, with no warning on either side.
   evidence: Raised by edge-case review. Pre-existing pattern shared with `log-reading-sheet.tsx`, which uses the same `toDateTimeLocalValue` helper and the same `new Date(...)` conversion — so this is a project-wide backfill-entry characteristic, not a story-6.1 regression. Server-side timestamp checks are only the future-skew and year-2000 floor, neither of which catches it. [web/src/components/event/log-event-sheet.tsx:194, web/src/components/meter-reading/log-reading-sheet.tsx]
 
-- [open] source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
+- [promoted: Epic 12] source_story: `_bmad-artifacts/implementation/6-1-event-logging.md`
   summary: A device clock running more than 5 minutes ahead of the server makes the sheet's *untouched default* timestamp fail validation — the prefill comes from `new Date()` and the server rejects `occurredAt > UtcNow + 5min`, so the user gets a 400 without having edited anything. No client-side `max` on the input and no clamp before send.
   evidence: Raised by edge-case review. Pre-existing: `CreateMeterReading` uses the identical `MaxFutureClockSkew` constant against an identically prefilled `datetime-local` field, so the Log Reading sheet has the same behavior. Worth one shared fix (clamp client-side, or widen/relax the skew rule) rather than a per-feature patch. [web/src/components/event/log-event-sheet.tsx:87, src/EnergyTracker.Application/CreateEvent.cs:38]
 
@@ -380,12 +379,12 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of 7-2-full-data-import-restore-migration (2026-09-22, Pass 2/frontend+docs)
 
-- [open] No `aria-live` region on the error/validation-failure states [web/src/components/data-import/data-import-panel.tsx:142] — pre-existing systemic gap: `DataExportPanel`'s identical error-rendering pattern has the same gap, unrelated to this story. Raised by adversarial review (Blind Hunter).
+- [promoted: Epic 12] No `aria-live` region on the error/validation-failure states [web/src/components/data-import/data-import-panel.tsx:142] — pre-existing systemic gap: `DataExportPanel`'s identical error-rendering pattern has the same gap, unrelated to this story. Raised by adversarial review (Blind Hunter).
 
 
 ## Deferred from: code review of spec-household-export-oom-fix (2026-09-25)
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
+- [promoted: Story 11.31] source_spec: `_bmad-artifacts/implementation/spec-household-export-oom-fix.md`
   summary: The new `(HouseholdId, IntervalStart, Id)` composite index on `SmartPlugReadings` makes the pre-existing standalone `HouseholdId` index largely redundant (leftmost-prefix rule), but that older index wasn't removed, adding a fourth index's write overhead to the highest-ingest-volume table in the schema — the very table whose volume caused this incident.
   evidence: Raised by adversarial review (Blind Hunter). Real but out of this bugfix's stated Code Map scope (which only asked for the new composite index); dropping an index other query paths might still rely on deserves its own explicit look, not a silent removal bundled into an incident fix.
 
@@ -437,7 +436,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of 8-10-theme-toggle-profile-menu (2026-09-30)
 
-- [open] source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
+- [promoted: Epic 12] source_story: `_bmad-artifacts/implementation/8-10-theme-toggle-profile-menu.md`
   summary: Radix `role="menu"` now contains non-menuitem radiogroups (wrapped in `role="none"`); screen-reader menu navigation may skip them. Popover fallback not evaluated.
   evidence: Design-level; revisit with 8.11/8.12. Still open after 8.12 (Profile-menu-specific; the Settings card is plain-page context with correct radiogroup semantics). [web/src/components/dashboard/profile-menu.tsx]
 
@@ -455,11 +454,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: locale × theme sweep (spec-locale-theme-sweep, 2026-10-02)
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
+- [promoted: Epic 12] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
   summary: Tariff Radar history table scrolls horizontally by ~10px at 659px in de-DE (scrollWidth 587 > clientWidth 577 in the `overflow-x-auto` wrapper) when an entry carries correction notes.
   evidence: Found in the live pass with real household data; the page itself does not overflow. The e2e matrix seed (3 entries, corrections, date ranges) only reaches 578 vs 577, within the audit's 1px tolerance, so this defect has NO automated regression guard. Candidate fixes: tighter column padding or wrapping on the correction note, or accept the scroll container as intentional. [web/src/components/tariff/tariff-history-list.tsx]
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
+- [promoted: Epic 12] source_spec: `_bmad-artifacts/implementation/spec-locale-theme-sweep.md`
   summary: Icon-only header buttons below 660px (Import in `trend-history-page.tsx`, and the Dashboard Event/Import equivalents) are `size-10` (40px) with no `::before` hit-area extension, so the touch target is 40px, not the 44px the sweep spec and Stories 8.2/8.3 assumed.
   evidence: Hit-testing 2px outside each edge of the 659px Import button lands outside the button on all four sides; the e2e test pins the 40px box. Fix is `size-11` or a `::before` extension, a visual change deferred for a decision. [web/src/components/trend-history/trend-history-page.tsx:84]
 
@@ -489,9 +488,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] Expand/contract rule in `project-context.md` is advisory prose only: no lint, review-checklist item or test, and the destructive-change list omits index/constraint drops, type changes, data-modifying `Sql()` and unique indexes on existing data.
 
-- [open] No long-term retention (LTR) configured: a bad migration noticed after the 7-day PITR window is unrecoverable; not documented as an accepted risk.
-
-- [open] Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name the Azure role needed for `az sql db restore`/`rename`.
+- [promoted: Story 11.26] Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name the Azure role needed for `az sql db restore`/`rename`.
 
 - [open] Pending-migrations list in the restore-point block runs once before the retry loop and can read "unavailable" while the firewall rule is still propagating.
 
@@ -524,34 +521,34 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of story-11-4-unmapped-smart-plug-readings-keyed-by-device (2026-10-11)
 
-- [open] Deploy N's "Apply pending EF Core migrations" step (Story 11.4: SQL Server `ALTER COLUMN` nvarchar(max) to nvarchar(200) plus `CREATE INDEX` on `SmartPlugReadings`) took 8 min 49 s (about 529 s) on Azure SQL Basic (5 DTU) against `Command Timeout=600` (run 38147146530; the step timestamps include the whole migration run). It succeeded, but a future column rewrite on this table could exceed the timeout; raise the timeout or plan such changes differently. [.github/workflows/app-deploy.yml]
+- [promoted: Story 11.24] Deploy N's "Apply pending EF Core migrations" step (Story 11.4: SQL Server `ALTER COLUMN` nvarchar(max) to nvarchar(200) plus `CREATE INDEX` on `SmartPlugReadings`) took 8 min 49 s (about 529 s) on Azure SQL Basic (5 DTU) against `Command Timeout=600` (run 38147146530; the step timestamps include the whole migration run). It succeeded, but a future column rewrite on this table could exceed the timeout; raise the timeout or plan such changes differently. [.github/workflows/app-deploy.yml]
 
 
 ## Deferred from: dev-story of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
 
-- [open] A branch pusher can still read the repository secrets that other workflows hold (`DATABASE_ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET`) by editing a workflow on their branch; 11.5 only stopped the maintained `validate-infra` job from receiving them (placeholders instead). The real fix is a GitHub Environment with a branch restriction for the secrets, which changes the federated-credential subjects to `environment:`. (Base-image digest pinning: see the Story 11.11 S5 entry.) Both are out of scope for 11.5. [.github/workflows, Dockerfile]
+- [promoted: Epic 12] A branch pusher can still read the repository secrets that other workflows hold (`DATABASE_ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET`) by editing a workflow on their branch; 11.5 only stopped the maintained `validate-infra` job from receiving them (placeholders instead). The real fix is a GitHub Environment with a branch restriction for the secrets, which changes the federated-credential subjects to `environment:`. (Base-image digest pinning: see the Story 11.11 S5 entry.) Both are out of scope for 11.5. [.github/workflows, Dockerfile]
 
 
 ## Deferred from: Story 11.5 R2.2 (2026-10-11)
 
-- [open] `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App image" step but never passes `placeholderImage="$CURRENT_IMAGE"` to `az deployment group what-if` (as `infra-deploy.yml` does), so every PR what-if shows the Container App image changing to the quickstart placeholder. Noise only; passing the parameter would make the diff show real changes only. [.github/workflows/pr-review.yml]
+- [promoted: Epic 12] `pr-review.yml` "What-if validation" sets `CURRENT_IMAGE` from the "Resolve current Container App image" step but never passes `placeholderImage="$CURRENT_IMAGE"` to `az deployment group what-if` (as `infra-deploy.yml` does), so every PR what-if shows the Container App image changing to the quickstart placeholder. Noise only; passing the parameter would make the diff show real changes only. [.github/workflows/pr-review.yml]
 
 
 ## Deferred from: dev-story of story-11-6-data-protection-key-encryption (2026-10-14)
 
-- [open] The NuGet Audit gate failed `dotnet restore` on `main` itself (transitive `System.Security.Cryptography.Pkcs` 9.0.11 via `Microsoft.Data.SqlClient` 6.1.6, Pkcs/Xml 10.0.12 via the ASP.NET Core packages) before Story 11.6 touched anything. Worked around in PR #126 with `CentralPackageTransitivePinningEnabled` and pins to 10.0.13. Remove the two pins once the parent packages ask for patched versions themselves, and look at why Dependabot did not raise this before `main` went red. [Directory.Packages.props]
+- [promoted: Epic 12] The NuGet Audit gate failed `dotnet restore` on `main` itself (transitive `System.Security.Cryptography.Pkcs` 9.0.11 via `Microsoft.Data.SqlClient` 6.1.6, Pkcs/Xml 10.0.12 via the ASP.NET Core packages) before Story 11.6 touched anything. Worked around in PR #126 with `CentralPackageTransitivePinningEnabled` and pins to 10.0.13. Remove the two pins once the parent packages ask for patched versions themselves, and look at why Dependabot did not raise this before `main` went red. [Directory.Packages.props]
 
-- [open] Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover (Ralf's call, Q2/R4). Removes live plaintext key material; backups keep it until they expire. [infra/README.md]
+- [promoted: Story 11.28] Optional: delete the revoked plaintext `DataProtectionKeys` rows after the Story 11.6 cutover (Ralf's call, Q2/R4). Removes live plaintext key material; backups keep it until they expire. [infra/README.md]
 
 
 ## Deferred from: Story 11.6 close-out (2026-10-17)
 
-- [open] Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key version (`az keyvault key list-versions --vault-name <vault> -n data-protection`; one version today, 105399eb...). Not run before close because `infra-deploy.yml` has run only once since the vault exists. A second version would be harmless (older versions stay usable for unwrap), but record it. Check after the next routine infra deploy. [infra/modules/key-vault.bicep]
+- [promoted: Story 11.27] Story 11.6 A2.4: confirm a second `infra-deploy.yml` run does not add a second `data-protection` key version (`az keyvault key list-versions --vault-name <vault> -n data-protection`; one version today, 105399eb...). Not run before close because `infra-deploy.yml` has run only once since the vault exists. A second version would be harmless (older versions stay usable for unwrap), but record it. Check after the next routine infra deploy. [infra/modules/key-vault.bicep]
 
 
 ## Deferred from: dev-story of story-11-7-security-headers-csp-rate-limiting (2026-10-17)
 
-- [open] HSTS uses the framework defaults (30 days, no `includeSubDomains`, no preload). Raise it (a year, maybe `includeSubDomains`) once the production CSP/HSTS have run clean for a while.
+- [promoted: Epic 12] HSTS uses the framework defaults (30 days, no `includeSubDomains`, no preload). Raise it (a year, maybe `includeSubDomains`) once the production CSP/HSTS have run clean for a while.
 
 
 ## Deferred from: dev-story of story-11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
@@ -561,9 +558,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of 11-8-auth-hardening-csrf-logout-session-cap (2026-10-17)
 
-- [open] `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched (the OIDC handler throws, `UseExceptionHandler` drops the cookie deletion), so during a provider outage a member cannot sign out locally. Pre-existing (the old `GET /logout` failed the same way); consider catching it and degrading to a local sign-out like the "no `end_session_endpoint`" path. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
+- [promoted: Story 11.29] `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched (the OIDC handler throws, `UseExceptionHandler` drops the cookie deletion), so during a provider outage a member cannot sign out locally. Pre-existing (the old `GET /logout` failed the same way); consider catching it and degrading to a local sign-out like the "no `end_session_endpoint`" path. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
 
-- [open] After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Version`, so its first toggle PUT answers 409 and only the refetch-and-retry works (seen in the 11.8 live rehearsal). Pre-existing. [web/src/components/ai-plausibility/ai-plausibility-form.tsx] Also hit after a member removal bumps `Household.Version` (Story 11.9). Merged at the 2026-10-31 triage.
+- [promoted: Epic 12] After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Version`, so its first toggle PUT answers 409 and only the refetch-and-retry works (seen in the 11.8 live rehearsal). Pre-existing. [web/src/components/ai-plausibility/ai-plausibility-form.tsx] Also hit after a member removal bumps `Household.Version` (Story 11.9). Merged at the 2026-10-31 triage.
 
 
 ## Deferred from: dev-story of story-11-9-member-removal-revocable-invites (2026-10-17)
@@ -572,11 +569,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [promoted: Story 11.22] The invite token appears in request paths (`/api/household-invites/<token>`, `/api/household-invites/<token>/accept`, `/join/<token>`). Log-level check (AC #11d): the effective logging configuration writes them. Serilog is set up with `ReadFrom.Configuration`, which reads a `Serilog` section; `appsettings.json` has none (only the `Logging:LogLevel` section, which Serilog ignores) and no environment variable sets one, so the minimum level is Serilog's default `Information` with no overrides, and ASP.NET Core's hosting diagnostics ("Request starting ...") write the request path at `Information` to stdout and so into Log Analytics. Azure Monitor traces also carry `url.path`. The token in the URL path is the Story 1.8 design and was not changed here. Options: a `Serilog:MinimumLevel:Override` for `Microsoft.AspNetCore.Hosting.Diagnostics` and a span processor that redacts the invite segment, or moving the token into a fragment or a POST body. [src/EnergyTracker.Api/Program.cs]
 
-- [open] Expired and revoked invite rows are never swept (revoke only expires them in place); the table grows by one row per invite ever created. A sweep like `SmartPlugImportRepository.SweepExpiredAsync` would do it. [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
+- [promoted: Epic 12] Expired and revoked invite rows are never swept (revoke only expires them in place); the table grows by one row per invite ever created. A sweep like `SmartPlugImportRepository.SweepExpiredAsync` would do it. [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
 
 - [open] Invite rows carry no creator, so the open-invite list cannot say who invited. Needs a nullable creator column and a decision about what to show once that member is removed (Q4). [src/EnergyTracker.Domain/HouseholdInvite.cs]
 
-- [open] The `MemberRemoval` budget (10 per 10 minutes per identity) is shared by every member and invite `DELETE`; the Task 11 walk-through (revoke, remove, leave, a few probes) used eight of ten, and a 429 shows only the generic failure copy ("Check your connection and try again"), which is misleading. Options: a `Retry-After`-aware message, or a higher budget for revoke. Not fixed in 11.9 (the limit is the audit's intended brake; the copy is the gap). Found in Task 11 (2026-10-18).
+- [promoted: Epic 12] The `MemberRemoval` budget (10 per 10 minutes per identity) is shared by every member and invite `DELETE`; the Task 11 walk-through (revoke, remove, leave, a few probes) used eight of ten, and a 429 shows only the generic failure copy ("Check your connection and try again"), which is misleading. Options: a `Retry-After`-aware message, or a higher budget for revoke. Not fixed in 11.9 (the limit is the audit's intended brake; the copy is the gap). Found in Task 11 (2026-10-18).
 
 
 ## Deferred from: dev-story of story-11-10-upload-hardening (2026-10-21)
@@ -585,13 +582,13 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] The framework buffers the multipart file to its own temp file before the endpoint copies it, so one upload briefly uses twice its size on disk. A `MultipartReader`-based endpoint would stream straight into the one file; not done because it replaces `IFormFile` binding and its antiforgery wiring (entry 7.2b). [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
 
-- [open] The restore job still materializes the whole object graph; only the string is gone. Measured peak RSS of the restore phase for the 31.75 MiB test export: 1250 MiB after, 2133 MiB before (Apple M2 Max, Server GC, no container limit), which is above the 1 GiB container on its own. A streaming restore needs `HouseholdRestoreData` to stop being one object. [src/EnergyTracker.Application/RestoreHouseholdData.cs, docs/data-import-restore.md]
+- [promoted: Story 11.25] The restore job still materializes the whole object graph; only the string is gone. Measured peak RSS of the restore phase for the 31.75 MiB test export: 1250 MiB after, 2133 MiB before (Apple M2 Max, Server GC, no container limit), which is above the 1 GiB container on its own. A streaming restore needs `HouseholdRestoreData` to stop being one object. [src/EnergyTracker.Application/RestoreHouseholdData.cs, docs/data-import-restore.md]
 
 - [open] Orphaned temp files from a process that died between validate and confirm (the registry is gone with it) are never swept; the existing AD-24 / C3 item. The local temp directory already held many stale `*.json` files from before this story when it was measured. [src/EnergyTracker.Infrastructure/Adapters/MemoryHouseholdImportUploadRegistry.cs]
 
 - [open] The Meross CSV parser has no row cap (out of scope: the story covers XLSX). [src/EnergyTracker.Infrastructure/Adapters/MerossCsvParser.cs]
 
-- [open] The API runs Server GC (`System.GC.Server: true`), whose gen0 budget scales with core count; on a 12-core host the same validation showed 109.7 MiB RSS growth against 21.6 MiB under Workstation GC and 54.6 MiB with a container-like heap limit. Decide the GC mode and `GCHeapCount`/`GCConserveMemory` for the 0.5 vCPU container with Story 11.11 (container config). [src/EnergyTracker.Api/EnergyTracker.Api.csproj, Dockerfile]
+- [promoted: Story 11.25] The API runs Server GC (`System.GC.Server: true`), whose gen0 budget scales with core count; on a 12-core host the same validation showed 109.7 MiB RSS growth against 21.6 MiB under Workstation GC and 54.6 MiB with a container-like heap limit. Decide the GC mode and `GCHeapCount`/`GCConserveMemory` for the 0.5 vCPU container with Story 11.11 (container config). [src/EnergyTracker.Api/EnergyTracker.Api.csproj, Dockerfile]
 
 
 ## Deferred from: code review of 11-10-upload-hardening (2026-10-21)
@@ -605,20 +602,20 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: dev-story of story-11-11-container-config-correctness (2026-10-22)
 
-- [open] S5 leftovers the epic ACs left out (Q4): the base images are pinned by tag (`node:26-alpine`, `sdk:10.0`, `aspnet:10.0`), not by digest, and the image has no `HEALTHCHECK`. The digest matters for supply-chain reproducibility; the `HEALTHCHECK` only for self-hosters (Container Apps has its own probe). The aspnet image has no curl/wget, so a probe needs a tiny `dotnet`-based check or a health tool. [Dockerfile] Story 11.5 also listed base-image digest pinning here.
+- [promoted: Epic 12] S5 leftovers the epic ACs left out (Q4): the base images are pinned by tag (`node:26-alpine`, `sdk:10.0`, `aspnet:10.0`), not by digest, and the image has no `HEALTHCHECK`. The digest matters for supply-chain reproducibility; the `HEALTHCHECK` only for self-hosters (Container Apps has its own probe). The aspnet image has no curl/wget, so a probe needs a tiny `dotnet`-based check or a health tool. [Dockerfile] Story 11.5 also listed base-image digest pinning here.
 
-- [open] S8 (`AllowedHosts: *`) is in no Epic 11 story (11.7 decided the forwarded-headers half). It was looked at again here and stays as is: the app serves one host per deployment behind Container Apps ingress or the self-hoster's own proxy, and nothing reads `Host` for a security decision. Revisit when something does (absolute URLs in emails or invite links built from `Request.Host`, or a second hostname on one instance). [src/EnergyTracker.Api/appsettings.json, docs/codebase-audit-2026-10-10.md S8]
+- [promoted: Epic 12] S8 (`AllowedHosts: *`) is in no Epic 11 story (11.7 decided the forwarded-headers half). It was looked at again here and stays as is: the app serves one host per deployment behind Container Apps ingress or the self-hoster's own proxy, and nothing reads `Host` for a security decision. Revisit when something does (absolute URLs in emails or invite links built from `Request.Host`, or a second hostname on one instance). [src/EnergyTracker.Api/appsettings.json, docs/codebase-audit-2026-10-10.md S8]
 
-- [open] `/login` without OIDC is a JSON problem document, not a page in the SPA's voice (Q5): the operator of an unconfigured instance meets it as raw JSON in the browser. A small static page or an SPA route that reads the 503 would be friendlier. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
+- [promoted: Epic 12] `/login` without OIDC is a JSON problem document, not a page in the SPA's voice (Q5): the operator of an unconfigured instance meets it as raw JSON in the browser. A small static page or an SPA route that reads the 503 would be friendlier. [src/EnergyTracker.Api/Endpoints/AuthEndpoints.cs]
 
-- [open] The Azure `ai-api-key` secret is seeded with the placeholder `unset` (a non-empty value is required, D4), so once `Ai__Endpoint` is set without a real key the client sends `Authorization: Bearer unset`. Story 9.2 must supply the secret together with the endpoint, or the Bicep/`OpenAiCompatibleClient` pair must treat the sentinel as "no key". [infra/modules/container-app.bicep]
+- [promoted: Story 11.30] The Azure `ai-api-key` secret is seeded with the placeholder `unset` (a non-empty value is required, D4), so once `Ai__Endpoint` is set without a real key the client sends `Authorization: Bearer unset`. Story 9.2 must supply the secret together with the endpoint, or the Bicep/`OpenAiCompatibleClient` pair must treat the sentinel as "no key". [infra/modules/container-app.bicep]
 
 - [promoted: Story 11.23] A host that fails startup (any `throw` out of `Program.cs`: the new connection-string and `Ai:Endpoint` checks, and the existing Data Protection fail-closed check) prints its `Unhandled exception` message and then does not exit: the container stays `running` with one core at 100% CPU. Found in the Task 9 rehearsal on the OrbStack/arm64 Docker host; reproduced on the unchanged pre-story image (root, `energy-tracker:before`) with the Data Protection throw, so it is not caused by this story, and `DOTNET_gcServer=0` or disabling the crash report does not change it. Effect: the clear message reaches `docker logs`, but nothing exits non-zero, so `restart:` policies and Container Apps' crash-loop detection never see a failed start (the startup/liveness probe still fails). Needs a look at what the runtime does after the unhandled exception (Serilog/OTel flush on a half-built host, or a host-specific createdump spin), and whether it also happens on Azure or a Linux amd64 host. [src/EnergyTracker.Api/Program.cs, Dockerfile]
 
 
 ## Deferred from: code review of story-11-11-container-config-correctness (2026-10-23)
 
-- [open] `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 problem detail and `docs/self-hosting.md` say all three of `Oidc__Authority`, `Oidc__ClientId`, `Oidc__ClientSecret` are required. With the secret missing the OIDC scheme registers and `/login` redirects, then the code exchange fails at the provider. Pre-existing gate, not changed by Story 11.11; decide whether the gate should include the secret (a public-client/PKCE-only setup would then lose sign-in) or the wording should say "Authority and ClientId, plus ClientSecret for a confidential client". [src/EnergyTracker.Api/Program.cs:249] Story 11.19 review: an empty `JobQueue:ConnectionString` with `azurestoragequeue` also fails at first resolve, not at startup. Merged at the 2026-10-31 triage.
+- [promoted: Epic 12] `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 problem detail and `docs/self-hosting.md` say all three of `Oidc__Authority`, `Oidc__ClientId`, `Oidc__ClientSecret` are required. With the secret missing the OIDC scheme registers and `/login` redirects, then the code exchange fails at the provider. Pre-existing gate, not changed by Story 11.11; decide whether the gate should include the secret (a public-client/PKCE-only setup would then lose sign-in) or the wording should say "Authority and ClientId, plus ClientSecret for a confidential client". [src/EnergyTracker.Api/Program.cs:249] Story 11.19 review: an empty `JobQueue:ConnectionString` with `azurestoragequeue` also fails at first resolve, not at startup. Merged at the 2026-10-31 triage.
 
 
 ## Deferred from: code review of spec-ci-pipeline-runtime-speedup (2026-10-23)
@@ -654,11 +651,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: dev-story of story-11-14-restore-id-collisions-active-job-guard (2026-10-25)
 
-- [open] `ValidateHouseholdImport` still does not check a file's own uniqueness beyond duplicate ids per array and reference resolution: duplicate Room names, duplicate `(RoomId, Name)` or `(PowerPointId, Name)` pairs and duplicate `(PowerPointId, IntervalStart)` readings inside one file still end in a generic restore failure after the delete phase has rolled back. Duplicate `idempotencyKey` values inside one file stopped mattering with this story (every key is regenerated). From the story's "Considered and left out"; the unique-index names were not re-verified here.
+- [promoted: Epic 12] `ValidateHouseholdImport` still does not check a file's own uniqueness beyond duplicate ids per array and reference resolution: duplicate Room names, duplicate `(RoomId, Name)` or `(PowerPointId, Name)` pairs and duplicate `(PowerPointId, IntervalStart)` readings inside one file still end in a generic restore failure after the delete phase has rolled back. Duplicate `idempotencyKey` values inside one file stopped mattering with this story (every key is regenerated). From the story's "Considered and left out"; the unique-index names were not re-verified here.
 
-- [open] The `AddActiveJobGuard` migration's surplus-failing statement (fails all but the newest active restore or cleanup row per Household before the index is built) has only been exercised against seeded rows in `PostgresMigrationTests`/`SqlServerMigrationTests`, never against real production data. The expected production state is zero rows touched; Part R reads the migration step's log for that.
+- [promoted: Story 11.27] The `AddActiveJobGuard` migration's surplus-failing statement (fails all but the newest active restore or cleanup row per Household before the index is built) has only been exercised against seeded rows in `PostgresMigrationTests`/`SqlServerMigrationTests`, never against real production data. The expected production state is zero rows touched; Part R reads the migration step's log for that.
 
-- [open] After a completed restore the SPA reloads only what holds restored ids: the Settings scaffold (rooms, power points, devices) and the open meter regression prompt that `App` holds. Other state held above or beside the restore panel is still the pre-restore state until the next reload: `App`'s `state.household` (locale and currency, which a restore replaces), the dashboard Status and the tariff check, and Settings' Yearly Baseline and AI toggle forms. None of it holds an id, so it was out of this story's Task 6.2 scope; one `onDataRestored` callback in `App.tsx` could refresh all of it. Story 11.14 review: a member who leaves Settings while a restore job still polls unmounts `DataImportPanel`, so `onRestored` never fires and `App` keeps the pre-restore open meter regression prompt (old id); resolving it answers 404 until a reload. Fix needs App-level knowledge of the running restore job or a 404-triggered refetch. Merged at the 2026-10-31 triage.
+- [promoted: Epic 12] After a completed restore the SPA reloads only what holds restored ids: the Settings scaffold (rooms, power points, devices) and the open meter regression prompt that `App` holds. Other state held above or beside the restore panel is still the pre-restore state until the next reload: `App`'s `state.household` (locale and currency, which a restore replaces), the dashboard Status and the tariff check, and Settings' Yearly Baseline and AI toggle forms. None of it holds an id, so it was out of this story's Task 6.2 scope; one `onDataRestored` callback in `App.tsx` could refresh all of it. Story 11.14 review: a member who leaves Settings while a restore job still polls unmounts `DataImportPanel`, so `onRestored` never fires and `App` keeps the pre-restore open meter regression prompt (old id); resolving it answers 404 until a reload. Fix needs App-level knowledge of the running restore job or a 404-triggered refetch. Merged at the 2026-10-31 triage.
 
 
 ## Deferred from: code review of story-11-14-restore-id-collisions-active-job-guard (2026-10-25)
@@ -668,23 +665,23 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: dev-story of story-11-15-trending-threshold-scaled-to-elapsed (2026-10-25)
 
-- [open] FR-21's settings editor (not built, see the Story 2.4 entry above on threshold range validation) must label `TrendingThresholdKwh` "per year" / "pro Jahr" and bound-check it. Until then the only place the setting is labelled is the Status detail view's configured-threshold row, "Trending threshold (per year)" / "Schwellenwert für Anstieg (pro Jahr)" (Story 11.15, AC #6). [web/src/components/dashboard/status-detail-dialog.tsx]
+- [promoted: Epic 12] FR-21's settings editor (not built, see the Story 2.4 entry above on threshold range validation) must label `TrendingThresholdKwh` "per year" / "pro Jahr" and bound-check it. Until then the only place the setting is labelled is the Status detail view's configured-threshold row, "Trending threshold (per year)" / "Schwellenwert für Anstieg (pro Jahr)" (Story 11.15, AC #6). [web/src/components/dashboard/status-detail-dialog.tsx]
 
-- [open] Story 11.15 review (decision 1c, Ralf 2026-10-25) added a floor to the scaled trending threshold: one meter step (1 kWh), never above the configured annual figure, shared by Status and the Event window check (`TrendingThreshold.ScaleToDate`). PRD FR-6 and FR-30 still say "same relative sensitivity" with no floor; John and Ralf should add one line to them (the story forbade editing the PRD, so it was left). A minimum elapsed span remains a possible further step if a 1 kWh bar proves too sensitive for the first days. [src/EnergyTracker.Domain/Calculations/TrendingThreshold.cs]
+- [promoted: Epic 12] Story 11.15 review (decision 1c, Ralf 2026-10-25) added a floor to the scaled trending threshold: one meter step (1 kWh), never above the configured annual figure, shared by Status and the Event window check (`TrendingThreshold.ScaleToDate`). PRD FR-6 and FR-30 still say "same relative sensitivity" with no floor; John and Ralf should add one line to them (the story forbade editing the PRD, so it was left). A minimum elapsed span remains a possible further step if a 1 kWh bar proves too sensitive for the first days. [src/EnergyTracker.Domain/Calculations/TrendingThreshold.cs]
 
 
 ## Deferred from: Part R of story-11-15-trending-threshold-scaled-to-elapsed (2026-10-25)
 
-- [open] The Status detail view's "Baseline to date" value and its "(over N days)" use whole-number formats, so a span of a few hours (a new household's first readings) reads "0 kWh (over 0 days)" next to a Difference of 0.58 kWh and a 1 kWh threshold. Seen live on the test household. Story 11.15 gave the difference sentence and the scaled threshold finer formats but left these two (Story 2.7 formats). Fix when touched: one decimal for the baseline under 10 kWh and fractional days under 2. [web/src/components/dashboard/status-detail-dialog.tsx]
+- [promoted: Epic 12] The Status detail view's "Baseline to date" value and its "(over N days)" use whole-number formats, so a span of a few hours (a new household's first readings) reads "0 kWh (over 0 days)" next to a Difference of 0.58 kWh and a 1 kWh threshold. Seen live on the test household. Story 11.15 gave the difference sentence and the scaled threshold finer formats but left these two (Story 2.7 formats). Fix when touched: one decimal for the baseline under 10 kWh and fractional days under 2. [web/src/components/dashboard/status-detail-dialog.tsx]
 
 
 ## Deferred from: dev-story of story-11-16-offline-queue-rejected-readings-attention (2026-10-28)
 
-- [open] The server's reason on the card is the meter-reading validation `detail`, which is English prose and is shown verbatim, so a `de-DE` household sees English there (the labels around it are translated). Add an `errorCode` to `CreateMeterReading`'s 400s (the `EventEndpoints` pattern) and map it to translated text on `RejectedReadingsCard`. [web/src/components/meter-reading/rejected-readings-card.tsx, src/EnergyTracker.Api/Endpoints/MeterReadingEndpoints.cs]
+- [promoted: Epic 12] The server's reason on the card is the meter-reading validation `detail`, which is English prose and is shown verbatim, so a `de-DE` household sees English there (the labels around it are translated). Add an `errorCode` to `CreateMeterReading`'s 400s (the `EventEndpoints` pattern) and map it to translated text on `RejectedReadingsCard`. [web/src/components/meter-reading/rejected-readings-card.tsx, src/EnergyTracker.Api/Endpoints/MeterReadingEndpoints.cs]
 
-- [open] A member removed from a Household by someone else keeps queued entries that answer `403` forever and are never shown (Story 11.9 only handles *leaving*, where `removeForHousehold` runs). `flushQueue` keeps 403 entries pending by design (an expired session answers 403 too), so nothing tells the two apart. [web/src/lib/meter-reading-sync.ts]
+- [promoted: Epic 12] A member removed from a Household by someone else keeps queued entries that answer `403` forever and are never shown (Story 11.9 only handles *leaving*, where `removeForHousehold` runs). `flushQueue` keeps 403 entries pending by design (an expired session answers 403 too), so nothing tells the two apart. [web/src/lib/meter-reading-sync.ts]
 
-- [open] No cap and no expiry on needs-attention entries, and no "discard all". A device that keeps producing refused readings grows the list without limit. [web/src/lib/offline-queue.ts] Story 11.16 review: a deterministic 5xx on one payload keeps the entry pending and `flushQueue` re-posts it on every flush forever. Merged at the 2026-10-31 triage.
+- [promoted: Epic 12] No cap and no expiry on needs-attention entries, and no "discard all". A device that keeps producing refused readings grows the list without limit. [web/src/lib/offline-queue.ts] Story 11.16 review: a deterministic 5xx on one payload keeps the entry pending and `flushQueue` re-posts it on every flush forever. Merged at the 2026-10-31 triage.
 
 - [open] `listPending` is a misleading name now that it means "everything queued, pending or needs attention" (kept on purpose, Story 11.16 AC #4). A rename touches `logoff.ts`, `offline-queue.ts`, `leave-household-dialog.tsx` and their tests. [web/src/lib/offline-queue.ts]
 
@@ -734,9 +731,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: code review of 11-19-structural-cleanup (2026-10-31)
 
-- [open] `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
+- [promoted: Epic 12] `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
 
-- [open] Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(false)` fire into the next dialog; only the success path is guarded. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
+- [promoted: Epic 12] Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(false)` fire into the next dialog; only the success path is guarded. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
 
 - [open] An authenticated no-Household caller can stream up to 250 MB to the upload routes before the filter answers 403. [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
 

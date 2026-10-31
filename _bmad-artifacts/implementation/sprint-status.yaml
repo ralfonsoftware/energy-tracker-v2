@@ -162,7 +162,18 @@ development_status:
   11-21-self-host-migration-path: backlog
   11-22-keep-invite-token-out-of-logs: backlog
   11-23-failed-startup-must-exit: backlog
+  11-24-migration-timeout-headroom: backlog
+  11-25-restore-memory-and-gc-mode: backlog
+  11-26-rollback-runbook-completeness: backlog
+  11-27-production-verification-carry-overs: backlog
+  11-28-remove-revoked-plaintext-key-rows: backlog
+  11-29-local-sign-out-when-idp-down: backlog
+  11-30-ai-key-sentinel: backlog
+  11-31-drop-redundant-smartplugreadings-householdid-index: backlog
   epic-11-retrospective: optional
+
+  # Epic 12: not yet defined; holds the 35 "Soon" deferred-work entries (see planning/epics/epic-12-follow-up-hardening.md)
+  epic-12: backlog
 
 action_items:
   - epic: 6
@@ -189,4 +200,4 @@ action_items:
     action: "Triage deferred-work.md again (marker and index cleanup, drop entries closed by Epic 11 stories)"
     owner: "Amelia + Charlie + Dana"
     status: done
-    note: "2026-10-10 epic-10 retro. Done 2026-10-31 (spec-deferred-work-triage-2.md, baseline 3cf5a9b): 21 entries removed (resolved, duplicate or merged), 33 archived to deferred-work-accepted.md, 4 promoted to Epic 11 stories 11.20-11.23, 129 left with markers and a rebuilt Index."
+    note: "2026-10-10 epic-10 retro. Done 2026-10-31 (spec-deferred-work-triage-2.md, baseline 3cf5a9b): 21 entries removed (resolved, duplicate or merged), 33 archived to deferred-work-accepted.md, 14 promoted to Epic 11 stories 11.20-11.31 and 35 to the undefined Epic 12, 1 more archived (no long-term retention, accepted), a rebuilt Index."

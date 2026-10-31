@@ -147,3 +147,10 @@ Epic 10 and 11 entries that stay open, by new theme for the Index:
 Decisions: (1) ACCEPTED entries archived; (2) all four PROMOTE candidates go into Epic 11 as stories 11.20 (plaintext invite token column), 11.21 (self-host migration path), 11.22 (invite token out of logs), 11.23 (failed startup must exit), all `backlog`; (3) both fix-now doc edits applied; (4) committed doc-only directly on `main`.
 
 Applied: 21 entries removed (7 resolved, 14 duplicate/merged/noise incl. the 2 fix-now entries), 33 archived (fewer than the 35 estimated), 4 promoted, 129 entries left, 3 unmarked entries now `[open]`, Index rebuilt with the Epic 10 and 11 entries under new themes. Retro action #4 closed.
+
+### Follow-up decisions (Ralf 2026-10-31)
+
+- **Urgent tier to Epic 11:** Stories 11.24 (migration timeout), 11.25 (restore memory and GC mode), 11.26 (rollback runbook), 11.27 (verification carry-overs), 11.28 (revoked plaintext key rows), 11.29 (local sign-out), 11.30 (AI key sentinel), plus 11.31 (drop the redundant `SmartPlugReadings.HouseholdId` index, from the Later tier). All `backlog`.
+- **No long-term retention:** accepted and archived. Azure SQL Basic SKU keeps 7-day PITR, long-term retention costs extra, and a full export can be taken manually. Revisit if the SKU changes.
+- **Soon tier to Epic 12:** 35 entries marked `[promoted: Epic 12]`; `epic-12-follow-up-hardening.md` lists them and says the epic is not yet defined.
+

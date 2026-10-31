@@ -518,3 +518,7 @@ Each entry keeps its original section in its title line; the `[accepted: ...]` m
 - [accepted: revisit if a log argument starts to compute something] `CA1873` (expensive log arguments) is off; revisit if a log argument ever starts to compute something. [.editorconfig]
 
 - [accepted: snake_case test names; fixtures without finalizers] `CA1707` and `CA1816` are off for `tests/**` (Snake_case test names; fixtures without finalizers). [.editorconfig]
+
+### Deferred from: code review of 10-1-migration-safety-on-deploy (2026-10-02)
+
+- [accepted: Azure SQL Basic SKU gives 7-day PITR only, and long-term retention is a cost; Ralf 2026-10-31. A full export can be taken manually (Story 7.1) as an extra restore point. Revisit if the SKU changes] No long-term retention (LTR) configured: a bad migration noticed after the 7-day PITR window is unrecoverable; not documented as an accepted risk.

@@ -7,7 +7,7 @@ Fixes the findings of the 2026-10-10 codebase audit (`docs/codebase-audit-2026-1
 **FRs covered:** none new. FR-6/FR-30 clarified (C12). Hardens FR-4, FR-22, FR-23, FR-26–FR-28 and FR-33.
 **Architecture:** AD-6, AD-17, AD-20 (amended 2026-10-10); AD-24, AD-25, AD-26, AD-27 (new); AD-3, AD-4, AD-5, AD-7 and AD-18 constrain the implementation.
 
-**Tiers:** Now (11.1–11.6) → Soon (11.7–11.11) → Later (11.12–11.19) → Triage follow-ups (11.20–11.23, promoted from `deferred-work.md` on 2026-10-31).
+**Tiers:** Now (11.1–11.6) → Soon (11.7–11.11) → Later (11.12–11.19) → Triage follow-ups (11.20–11.31, promoted from `deferred-work.md` on 2026-10-31).
 **Dependencies:**
 - 11.3 needs 11.2.
 - 11.6 needs 11.5.
@@ -555,3 +555,131 @@ So that restart policies and Container Apps crash-loop detection see the failure
 **Given** the cause is not yet known (Serilog/OTel flush on a half-built host, or a host-specific createdump spin),
 **When** this story starts,
 **Then** it first reproduces on the OrbStack/arm64 host and on a Linux amd64 host or Azure, and records the finding before changing code.
+
+## Story 11.24: Migration Timeout Headroom
+
+As an operator,
+I want deploys with a long column rewrite not to hit the migration timeout,
+So that a schema change on `SmartPlugReadings` cannot fail a release (promoted from `deferred-work.md`, Story 11.4 dev-story entry).
+
+**Acceptance Criteria:**
+
+**Given** Story 11.4's deploy took about 529 s against `Command Timeout=600` (run 38147146530),
+**When** this story is done,
+**Then** the timeout and the rule for planning long rewrites are decided (raise the timeout, batch the change, or a documented off-peak path; Ask First) and recorded in `project-context.md` next to the expand/contract rule.
+
+**Given** the chosen option,
+**When** it ships,
+**Then** `app-deploy.yml` and its guard test reflect it, and the current size of `SmartPlugReadings` is noted so the next estimate has a baseline.
+
+## Story 11.25: Restore Memory and GC Mode
+
+As an operator,
+I want a restore of a large household to stay inside the 1 GiB container,
+So that a restore cannot run the instance out of memory (promoted from `deferred-work.md`, Story 11.10 dev-story entries).
+
+**Acceptance Criteria:**
+
+**Given** the measured restore peak of 1250 MiB RSS for the 31.75 MiB test export (no container limit),
+**When** this story is done,
+**Then** the peak is measured again under a 1 GiB limit, and either the restore stays under it or fails with a clear message before an out-of-memory kill. A streaming restore is an option, not a requirement (Ask First).
+
+**Given** Server GC is on (`System.GC.Server: true`) and no `GCHeapCount` or `GCConserveMemory` setting exists,
+**When** this story is done,
+**Then** the GC mode for the 0.5 vCPU, 1 GiB container is decided, set in `EnergyTracker.Api.csproj` or `Dockerfile`, and recorded in `docs/data-import-restore.md`.
+
+## Story 11.26: Rollback Runbook Completeness
+
+As an operator,
+I want the rollback runbook to cover the whole swapped-in database,
+So that a restore does not silently drop auditing, firewall, TDE or alerts (promoted from `deferred-work.md`, Story 10.1 review entry).
+
+**Acceptance Criteria:**
+
+**Given** the runbook in `infra/README.md`,
+**When** this story is done,
+**Then** it has a verification step for auditing, firewall rules, TDE and alerts on the swapped-in database, and it names the Azure role needed for `az sql db restore` and `rename`.
+
+**Given** the updated runbook,
+**When** it is reviewed,
+**Then** each command is checked against the Bicep (auditing, firewall, TDE) and the CI and operator identities from Story 11.5.
+
+## Story 11.27: Production Verification Carry-Overs
+
+As the project lead,
+I want two open production observations recorded,
+So that Stories 11.6 and 11.14 are closed on evidence (promoted from `deferred-work.md`).
+
+**Acceptance Criteria:**
+
+**Given** the deploy that applied the `AddActiveJobGuard` migration,
+**When** this story is done,
+**Then** the migration step log is read and the number of rows its surplus-failing statement touched is recorded (expected: zero).
+
+**Given** the next routine `infra-deploy.yml` run after the Key Vault exists,
+**When** it finishes,
+**Then** `az keyvault key list-versions --vault-name <vault> -n data-protection` is run and the version count is recorded (one expected; a second is harmless, record it). Blocked until that run happens.
+
+## Story 11.28: Remove Revoked Plaintext Key Rows
+
+As the project lead,
+I want the revoked plaintext Data Protection key rows deleted after the Story 11.6 cutover,
+So that no live plaintext key material stays in the database (promoted from `deferred-work.md`, Story 11.6 dev-story entry). Ralf's call (Q2/R4): irreversible, confirm before running.
+
+**Acceptance Criteria:**
+
+**Given** the Key Vault-wrapped ring is in use,
+**When** this story is done,
+**Then** only revoked plaintext `DataProtectionKeys` rows are deleted, with a documented procedure in `infra/README.md`, and a manual full export or restore point is taken first.
+
+**Given** the deletion,
+**When** the app restarts,
+**Then** sign-in still works with an existing cookie and the Key Vault-wrapped ring is untouched. Backups keep the old rows until they expire; the story says so.
+
+## Story 11.29: Local Sign-Out When the Identity Provider Is Down
+
+As a member,
+I want to sign out locally when the identity provider cannot be reached,
+So that a provider outage cannot leave me signed in (promoted from `deferred-work.md`, Story 11.8 review entry).
+
+**Acceptance Criteria:**
+
+**Given** the provider's discovery document cannot be fetched,
+**When** the SPA sends `POST /logout`,
+**Then** the app cookie is deleted and the response degrades to a local sign-out, like the "no `end_session_endpoint`" path, instead of 500.
+
+**Given** the change,
+**When** tests run,
+**Then** `LogoutEndpointTests` covers the discovery failure.
+
+## Story 11.30: AI Key Sentinel
+
+As an operator,
+I want the placeholder `ai-api-key` secret never sent as a real key,
+So that `Authorization: Bearer unset` cannot reach an AI backend (promoted from `deferred-work.md`, Story 11.11 dev-story entry). Closest to Story 9.2: if Epic 9 starts first, fold this in there.
+
+**Acceptance Criteria:**
+
+**Given** `Ai__Endpoint` is set and the secret still holds `unset`,
+**When** the client builds a request,
+**Then** `OpenAiCompatibleClient` sends no `Authorization` header (the sentinel means "no key"), or the Bicep requires a real secret together with the endpoint. The option is chosen as an Ask First.
+
+**Given** the change,
+**When** tests run,
+**Then** a test proves the sentinel is not sent.
+
+## Story 11.31: Drop the Redundant SmartPlugReadings HouseholdId Index
+
+As an operator,
+I want the redundant `HouseholdId` index removed from the highest-volume table,
+So that every smart plug write pays for one index less (promoted from `deferred-work.md`, `spec-household-export-oom-fix` review entries).
+
+**Acceptance Criteria:**
+
+**Given** the composite `(HouseholdId, IntervalStart, Id)` index covers the leftmost prefix,
+**When** this story starts,
+**Then** every query path that filters on `HouseholdId` alone is listed and shown to use the composite index (plans on both providers), before anything is dropped.
+
+**Given** the check passes,
+**When** this story is done,
+**Then** a contract migration drops the old index for both providers under the expand/contract rule, the migration tests cover it, and the restore point from Story 10.1 is in place for the deploy.
