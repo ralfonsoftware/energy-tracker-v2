@@ -15,10 +15,8 @@ builder.AddObservability();
 // Database:Provider is read exactly once, here at the composition root (Consistency Conventions) —
 // nothing in Infrastructure re-reads or branches on it independently.
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "Postgres";
-// Development only (audit S7): matches docker-compose.yml's default POSTGRES_USER/POSTGRES_DB and
-// .env.example's default POSTGRES_PASSWORD, so `dotnet run` against `docker compose up postgres -d` works
-// with no extra configuration as long as .env's password wasn't changed from the example. Outside
-// Development a missing connection string stops the host instead of quietly using these defaults.
+// Development only (audit S7): matches docker-compose.yml and .env.example defaults. Outside Development a missing
+// connection string stops the host instead of using these.
 const string DevelopmentConnectionString = "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";
 var configuredConnectionString = builder.Configuration.GetConnectionString("Default");
 string connectionString;
@@ -49,24 +47,8 @@ void ConfigureDbContext(DbContextOptionsBuilder options)
                 o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.Postgres").MaxBatchSize(1000));
             break;
         case "sqlserver":
-            // Default MaxBatchSize (42) meant a large Smart Plug import (Story 3.3 — a full-history
-            // Eve Home export can be hundreds of thousands of SmartPlugReading rows) round-tripped
-            // to the DB in tiny batches; on Basic-tier Azure SQL each round trip's latency dominated,
-            // stretching one import to 15+ minutes and starving every job queued behind it (AD-6 has
-            // exactly one worker). EF clamps this to whatever fits SQL Server's 2100-parameter
-            // batch limit for the widest entity being saved, so 1000 is a safe upper bound, not a
-            // literal row count.
-            //
-            // CommandTimeout is left at the 30s ADO.NET default here. It was briefly raised to 120s
-            // globally (2026-09-05, to cover Basic-tier Azure SQL hitting 100% DTU during a large
-            // SmartPlugReadings import) but that applied to every command app-wide, not just the
-            // import path that needed the headroom. spec-db-command-timeout-scope narrows this: the
-            // elevated 120s now lives only on the DbContext scope used by the Smart Plug import write
-            // path (see SmartPlugImportRepository.AddAsyncCore's SetCommandTimeout call), so an
-            // unrelated slow/blocked query elsewhere still fails fast at 30s. UpdateMappingAsync's own
-            // separate 180s (elsewhere in the same class) is untouched by and independent of this —
-            // 120s does not uniformly cover the whole Smart Plug import lifecycle, only AddAsyncCore's
-            // scope.
+            // MaxBatchSize 1000: the default 42 made a full-history import round-trip in tiny batches (15+ minutes on Basic-tier
+            // Azure SQL). EF clamps it to the 2100-parameter limit. CommandTimeout stays 30s; the import path raises its own (ADR 0005).
             options.UseSqlServer(connectionString,
                 o => o.MigrationsAssembly("EnergyTracker.Infrastructure.Migrations.SqlServer").MaxBatchSize(1000));
             break;
@@ -98,26 +80,14 @@ builder.Services.AddHttpRateLimiting();
 var dataProtectionBuilder = builder.Services.AddDataProtection()
     .PersistKeysToDbContext<EnergyTrackerDbContext>();
 
-// AD-17 (audit S2): the key ring is protected by exactly one of Azure Key Vault, a certificate or an
-// explicit opt-out, chosen from DataProtection:* here, once. Outside Development the app refuses to
-// start when none is configured (fail closed). Without a protector ASP.NET Core has no DPAPI to fall
-// back on (Linux/Container Apps) and would persist the key XML in plaintext in the same database as
-// the household data, so anyone with DB read access or a backup could forge a session cookie.
+// AD-17 (audit S2): the key ring is protected by exactly one of Key Vault, a certificate or an explicit opt-out, chosen
+// once. Outside Development none configured stops the host: without a protector the keys would sit in plaintext in the database.
 var dataProtectionKeyProtection = DataProtectionKeyProtection.Configure(
     dataProtectionBuilder, builder.Configuration, builder.Environment);
 
 builder.Services.AddApplicationServices();
 
-// Task 1's decided upload cap (HouseholdImportEndpoints.MaxFileSizeBytes) exceeds FormOptions'
-// default MultipartBodyLengthLimit (128 MB) — raised once, here at the composition root.
-// FormOptions.MultipartBodyLengthLimit is a secondary, form-parsing-stage limit only reached
-// after Kestrel's own MaxRequestBodySize gate (below) has already let the body through, so
-// raising it globally is harmless as long as that primary gate stays correctly scoped: the
-// Kestrel-level raise is deliberately NOT applied globally here — see the route-scoped middleware
-// below (Code Review, Story 7.2 Pass 1: a process-wide Kestrel raise previously widened
-// SmartPlugImportEndpoints' own DoS exposure too, since Kestrel would then buffer up to this same
-// 250 MB for every route before that endpoint's own lower 20 MB app-level check ever got a chance
-// to run).
+// Raised once, here: the upload cap exceeds FormOptions' default. The Kestrel limit is raised per route, not globally. ADR 0004.
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = HouseholdImportEndpoints.MaxFileSizeBytes);
 
 // AD-8 (audit C1): the AI backend comes from the Ai:* section only, read once inside this call; see
@@ -143,19 +113,8 @@ if (!app.Environment.IsDevelopment())
     app.UseSecurityHeaders();
 }
 
-// Must run before anything reads Request.Scheme/Host — Azure Container Apps (this story's own
-// deploy target, infra/modules/container-app.bicep) terminates TLS at its ingress and forwards
-// plain HTTP to the container. Without this, the OIDC handler builds an http:// redirect_uri
-// instead of https://, breaking login against any provider that requires an exact match.
-// Container Apps' external ingress is the only path into the container (no direct access
-// bypassing it), so trusting X-Forwarded-* headers here without a KnownProxies allowlist is safe.
-// Self-host (docs/self-hosting.md) must put a reverse proxy in front of the container: this trust
-// extends to any direct caller otherwise. The OIDC redirect_uri and the cookie Secure-flag
-// decision read Request.Scheme and are not exploitable by a client lying about its own scheme, but
-// the /login rate limiter (AD-27) keys on the client IP resolved here. On Azure that key is not
-// spoofable: ingress supplies the rightmost X-Forwarded-For entry and ForwardLimit stays at its
-// default of 1 (confirmed by a live probe, Story 11.7). Do not narrow these networks to "fix" that:
-// it re-breaks Story 1.7. See Story 1.7 and 11.7 Dev Notes for the per-target analysis.
+// Must run before anything reads Request.Scheme/Host (TLS ends at the Container Apps ingress). No KnownProxies allowlist on
+// purpose: the ingress is the only way in, and the /login rate-limit key is not spoofable there. Do not narrow it. ADR 0003.
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
@@ -174,13 +133,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// Scopes the raised body-size limit to just /api/household-import (Code Review, Story 7.2 Pass 1)
-// — Minimal API's IFormFile model binding reads the whole body as part of invoking the endpoint,
-// before the lambda body itself ever runs, so an in-handler override would be too late; this must
-// run as middleware, before routing/endpoint execution, to actually take effect first. Every
-// other route keeps Kestrel's original default MaxRequestBodySize (~28.6 MB) — including
-// SmartPlugImportEndpoints, whose own lower 20 MB app-level cap this restores the original
-// headroom for.
+// The raised body limit applies to /api/household-import only, and must run as middleware: IFormFile binding reads the body
+// before the handler. ADR 0004.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/household-import"))
@@ -217,11 +171,8 @@ app.MapGet("/health", () => Results.Ok());
 
 app.MapAuthEndpoints(oidcConfigured);
 
-// Every route under /api requires an authenticated principal (AC #5). /health and static
-// SPA asset serving stay outside this group — the browser must be able to load the app shell
-// itself before any login can happen, and /health must never require auth (AD-19).
-// Story 11.8 (AD-27, audit S9): every POST/PUT/PATCH/DELETE under /api needs X-Requested-With, via one
-// endpoint filter on the group. RequestedWithRoutesTests fails for a mutation route that lacks it.
+// Every /api route needs an authenticated principal; /health and the SPA assets stay outside (AD-19). Every mutation needs
+// X-Requested-With, via one group filter (AD-27); RequestedWithRoutesTests fails for a route without it.
 var api = app.MapGroup("/api").RequireAuthorization().RequireRequestedWith();
 api.MapSessionEndpoints();
 api.MapHouseholdEndpoints();

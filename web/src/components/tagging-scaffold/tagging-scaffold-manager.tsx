@@ -43,12 +43,8 @@ export function TaggingScaffoldManager() {
     devicesByPowerPoint.set(device.powerPointId, siblings)
   }
 
-  // AC #5: an archived parent with non-archived children must not cascade-hide those children —
-  // a Room/Power Point is only fully absent when it's archived, hiding is on, AND it has no
-  // visible children; otherwise it still renders, with just its own row suppressed. See Dev Notes.
-  // roomHasVisibleChildren must recurse through powerPointHasVisibleChildren (not just check each
-  // Power Point's own archivedAt) — otherwise a Room whose only Power Point is itself archived but
-  // has a live Device underneath it is wrongly treated as having no visible children at all.
+  // AC #5: an archived parent with live children must not hide them. A Room/Power Point is absent only when archived, hidden and
+  // without visible children; roomHasVisibleChildren recurses through powerPointHasVisibleChildren for that.
   const powerPointHasVisibleChildren = (powerPoint: PowerPointDto) =>
     (devicesByPowerPoint.get(powerPoint.id) ?? []).some((device) => showArchived || !device.archivedAt)
   const roomHasVisibleChildren = (room: RoomDto) =>

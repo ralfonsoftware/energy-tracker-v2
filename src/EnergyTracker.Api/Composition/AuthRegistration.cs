@@ -58,16 +58,8 @@ internal static class AuthRegistration
                 };
             });
 
-        // Only register the OIDC scheme when BOTH ClientId and Authority are actually configured (not
-        // just ClientId — OpenIdConnectOptions.Validate() also throws on a blank Authority/MetadataAddress,
-        // the same failure mode below, just from the other half of this config pair). ASP.NET Core's
-        // AuthenticationMiddleware initializes every IAuthenticationRequestHandler scheme on EVERY
-        // request (not just OIDC ones) so it can check whether the request matches that scheme's
-        // callback path — and a half-configured OIDC scheme would otherwise 500 every route in the app,
-        // including /health, the moment this ships without a real provider configured yet (an expected
-        // self-host state — Task 6/Dev Notes). Skipping registration entirely keeps the rest of the app
-        // functional; only /login (which needs a real provider to mean anything) answers 503 "not configured"
-        // until Oidc:Authority/Oidc:ClientId/Oidc:ClientSecret are all set.
+        // Register the OIDC scheme only when ClientId and Authority are both set: a half-configured scheme would 500 every route,
+        // /health included. Only /login answers 503 until it is configured. ADR 0002.
         var oidcConfigured = !string.IsNullOrEmpty(oidcClientId) && !string.IsNullOrEmpty(oidcAuthority);
         if (oidcConfigured)
         {
@@ -77,12 +69,7 @@ internal static class AuthRegistration
                 options.ClientId = oidcClientId;
                 options.ClientSecret = oidcClientSecret;
                 options.ResponseType = "code";
-                // Story 8.1/AC #3, found via live Auth0 verification: the handler's default Scope
-                // (openid, profile) never included "email" — HouseholdClaimTypes.ResolveEmail's raw-
-                // claim-first/ClaimTypes.Email-fallback logic is correct, but Auth0 (per the OIDC spec)
-                // omits the email claim entirely from both the ID token and the userinfo response unless
-                // this scope is explicitly requested, so /api/session's Email came back null regardless
-                // of claim-key handling. Distinct root cause from Story 3.6's ClaimTypes.Name mapping gap.
+                // Auth0 sends no email claim unless the email scope is requested.
                 options.Scope.Add("email");
                 options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
                 // Identity lives in the server-side cookie only — never persist provider tokens where
@@ -91,12 +78,8 @@ internal static class AuthRegistration
                 options.GetClaimsFromUserInfoEndpoint = true;
                 options.Events = new OpenIdConnectEvents
                 {
-                    // Capture the ID token's validated issuer as an explicit, dedicated claim right
-                    // after token validation — before GetClaimsFromUserInfoEndpoint's claim-merge step
-                    // runs below, which is not guaranteed to preserve the original validated
-                    // Claim.Issuer on every claim. Issuer+subject is the entire basis for this app's
-                    // tenant isolation (ICurrentHouseholdAccessor, HouseholdEndpoints), so it must not
-                    // depend on that ambient propagation behavior.
+                    // Keep the validated issuer as its own claim before the userinfo claim merge: issuer + subject is the basis of tenant
+                    // isolation (AD-3). ADR 0002.
                     OnTokenValidated = context =>
                     {
                         var validatedIssuer = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Issuer;
@@ -107,13 +90,7 @@ internal static class AuthRegistration
 
                         return Task.CompletedTask;
                     },
-                    // Auth0 (and other OIDC providers) validate post_logout_redirect_uri against the
-                    // calling application's registered Allowed Logout URLs — but need either
-                    // id_token_hint or client_id to know WHICH application that is. SaveTokens=false
-                    // above means there's never an id_token to offer as id_token_hint, and the handler
-                    // doesn't populate ClientId on the end-session request by default, so without this,
-                    // sign-out fails provider-side with "post_logout_redirect_uri is not defined as a
-                    // valid URL" even when it genuinely is registered.
+                    // The provider needs client_id on the end-session request, because SaveTokens=false leaves no id_token_hint. ADR 0002.
                     OnRedirectToIdentityProviderForSignOut = context =>
                     {
                         context.ProtocolMessage.ClientId = oidcClientId;

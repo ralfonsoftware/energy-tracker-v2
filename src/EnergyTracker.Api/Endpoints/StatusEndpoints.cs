@@ -9,10 +9,8 @@ public static class StatusEndpoints
     public static RouteGroupBuilder MapStatusEndpoints(this RouteGroupBuilder api)
     {
         var household = api.MapGroup(string.Empty).RequireHousehold();
-        // Singleton resource, not a collection — /api/status, not plural (consistent with
-        // /api/session, /health). Per Consistency Conventions: only the current Status value and
-        // its supporting figures — drill-down data (Trend History, FR-8) is always a separate
-        // endpoint, never merged in here.
+        // Singleton resource, not a collection: only the current Status and its figures; drill-down data (Trend History, FR-8) is
+        // always a separate endpoint.
         household.MapGet("/status", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetCurrentStatus getCurrentStatus,
@@ -27,10 +25,7 @@ public static class StatusEndpoints
             return Results.Ok(result is null ? null : ToResponse(result));
         });
 
-        // Sub-resource drill-down of the singleton /api/status (AC #6, Story 2.7): the aggregate
-        // figures behind the headline, never a Meter Reading list (AC #2). Reuses the exact same
-        // GetCurrentStatus.ExecuteAsync call as /status above — AD-7's single live-computation
-        // seam, not a second calculation path.
+        // Aggregate figures behind the headline, from the same GetCurrentStatus call as /status: AD-7's one live-computation seam.
         household.MapGet("/status/detail", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetCurrentStatus getCurrentStatus,
@@ -42,11 +37,7 @@ public static class StatusEndpoints
             return Results.Ok(result is null ? null : ToDetailResponse(result));
         });
 
-        // Second drill-down of the singleton /api/status (AC #4, #5, Story 4.1): the full
-        // StatusSnapshot lifetime for the Trend History chart — always persisted history, never a
-        // live recomputation (AD-7). Unlike /status and /status/detail above, "no history yet" is
-        // legitimately an empty array, not an undefined single value, so this always returns 200
-        // with a (possibly empty) array, never a null body.
+        // Persisted StatusSnapshot history for Trend History (AD-7), never a recomputation. "No history yet" is an empty array, not a null body.
         household.MapGet("/status/history", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetStatusHistory getStatusHistory,

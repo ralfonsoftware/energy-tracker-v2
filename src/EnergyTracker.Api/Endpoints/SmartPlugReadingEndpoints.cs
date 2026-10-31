@@ -8,10 +8,7 @@ public static class SmartPlugReadingEndpoints
     public static RouteGroupBuilder MapSmartPlugReadingEndpoints(this RouteGroupBuilder api)
     {
         var household = api.MapGroup(string.Empty).RequireHousehold();
-        // Read-only display drill-down (AC #1, #2, Story 4.2): the Room -> Power Point -> Device
-        // measured-data tree. "No Smart Plug data imported yet" is FR-9's normal starting state for
-        // every new Household, not an error — always 200 with a (possibly empty) array, never null,
-        // same discipline as GET /status/history.
+        // Read-only Room -> Power Point -> Device measured-data tree. No import yet is FR-9's normal start, so 200 with a possibly empty array.
         household.MapGet("/smart-plug-readings", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetPerPlugMeasuredData getPerPlugMeasuredData,

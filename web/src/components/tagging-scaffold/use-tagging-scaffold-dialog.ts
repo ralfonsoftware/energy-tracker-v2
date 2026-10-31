@@ -156,11 +156,7 @@ export function useTaggingScaffoldDialog({
 
       closeDialogIfUnchanged(target)
     } catch (err) {
-      // A race — another tab archived the parent while this dialog was open — is the one
-      // scenario worth a distinct message; the client-side picker exclusion below only prevents
-      // *opening* a create dialog for an already-archived parent visible in this tab's data.
-      // Otherwise, prefer the backend's own validation detail (e.g. a too-long or duplicate
-      // Name) over a generic message, when the server sent one.
+      // 409 means another tab archived the parent while this dialog was open; otherwise prefer the backend's validation detail.
       if (err instanceof ApiError && err.status === 409) {
         setDialogError(t('taggingScaffold.errorParentArchived'))
       } else if (err instanceof ApiError && err.detail) {

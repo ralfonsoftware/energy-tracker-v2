@@ -89,10 +89,8 @@ public static class TariffEndpoints
             }
         });
 
-        // Story 5.2 (FR-11): a candidate Tariff comparison — POST because a 4-decimal-place price
-        // body is cleaner than query-string params (matching CreateTariffRequest's convention),
-        // but this performs NO write: FR-11's "scratch/exploratory, never alters the actual
-        // Tariff" is the reason, unlike every other Tariff POST in this file.
+        // FR-11: POST because the 4-decimal price body is cleaner than query parameters, but it performs no write: the comparison
+        // is scratch and never alters the Tariff.
         household.MapPost("/tariffs/compare", async (
             CompareTariffRequest request,
             ICurrentHouseholdAccessor householdAccessor,
@@ -206,11 +204,8 @@ public record TariffHistoryItemResponse(
     DateTimeOffset? EffectiveUntil,
     IReadOnlyList<TariffFieldCorrectionResponse> Corrections);
 
-// FieldName is the raw AuditCorrection.FieldName ("MonthlyBaseFee", "PricePerKwh", "Currency",
-// "ContractStartDate", "ContractPeriodMonths") — OldValue/NewValue are the same
-// locale-neutral (InvariantCulture) strings AuditCorrection stores; the frontend parses/formats
-// per field type and the household's own Locale (AD-18), same inversion MeterReadingEndpoints'
-// CorrectedFromKwhValue already does for a single field.
+// FieldName is the raw AuditCorrection.FieldName; OldValue/NewValue are its locale-neutral (InvariantCulture) strings, and the
+// frontend formats them per field type and the Household's Locale (AD-18).
 public record TariffFieldCorrectionResponse(string FieldName, string OldValue, string NewValue, DateTimeOffset CorrectedAtUtc);
 
 public record EditTariffRequest(

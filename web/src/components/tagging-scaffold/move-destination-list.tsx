@@ -1,12 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { ArchivedBadge } from './archived-badge'
 
-// Shared by the Power Point (Room destinations) and Device (Power Point destinations) move
-// dialogs. `items` is the caller's own non-archived candidate list, which may or may not still
-// contain `currentId` — a Room/Power Point can be archived after something was created under it
-// (ArchiveRoom/ArchivePowerPoint don't cascade-archive their children), so the current parent is
-// not guaranteed to survive the archived-filter. The "any other option" check must therefore look
-// for a non-current entry rather than comparing the list length against a fixed threshold.
+// Shared by the Power Point and Device move dialogs. `items` may not contain `currentId` (archiving does not cascade),
+// so look for any non-current entry instead of comparing the list length.
 export function MoveDestinationList<T extends { id: string }>({
   items,
   currentId,
