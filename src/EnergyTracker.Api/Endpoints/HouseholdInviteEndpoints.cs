@@ -19,7 +19,7 @@ public static class HouseholdInviteEndpoints
                 // Authenticated but no Household yet — can't invite people into a Household
                 // you're not in.
                 return Results.Problem(
-                    detail: "The authenticated principal does not belong to a Household.",
+                    detail: HouseholdRequiredFilter.RejectionDetail,
                     statusCode: StatusCodes.Status403Forbidden);
             }
 

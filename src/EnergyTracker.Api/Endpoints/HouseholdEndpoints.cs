@@ -9,7 +9,6 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class HouseholdEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
     private const string ForeignHouseholdDetail = "The authenticated principal does not belong to this Household.";
 
     // Household has no AD-3 query filter on itself (it's the tenant root), so every route below
@@ -20,7 +19,7 @@ public static class HouseholdEndpoints
     {
         if (householdAccessor.HouseholdId is not { } ownHouseholdId)
         {
-            forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
+            forbidden = Results.Problem(detail: HouseholdRequiredFilter.RejectionDetail, statusCode: StatusCodes.Status403Forbidden);
             return false;
         }
 
