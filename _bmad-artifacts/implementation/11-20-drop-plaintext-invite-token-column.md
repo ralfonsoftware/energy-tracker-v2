@@ -4,7 +4,7 @@ baseline_commit: f213b6c8d576f035d5f73c6afd18544f072175ec
 
 # Story 11.20: Drop the Plaintext Invite Token Column
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier "Triage follow-ups", promoted from deferred-work.md on 2026-10-31 (Story 11.9 dev-story entry). Origin: audit S10 follow-up. Architecture: AD-26 (invite tokens hashed), AD-2 (dual provider, migrations in both projects), AD-3 (HouseholdInvite has no query filter, on purpose). This file cites the AD IDs, which satisfies the spec-per-fix gate (project-context.md). -->
@@ -52,7 +52,7 @@ Red first for every behaviour change; record runs in Debug Log References (Story
 - [x] Task 4: Docs (AC: #6). invariants-rules.md `[AMENDED 2026-10-31, Story 11.20]` note (lookup and column gone); delete the two `[promoted: 11.20]` entries in `deferred-work.md`; `grep -n "HouseholdInvites\|plaintext" infra/README.md docs/self-hosting.md` and fix any mention.
 - [ ] Task 5: Verify and PR (AC: all)
   - [x] 5.1 `dotnet format EnergyTracker.sln`, rerun the 0.2 gate, full `dotnet test` per project. Record counts and exact delta (2 legacy tests removed, new migration and guard tests added).
-  - [ ] 5.2 Open one PR against `main`. After merge, Ralf's steps (the dev does not run these): watch the App Deploy run, read the "Pre-migration restore point" block in the run summary (Story 10.1), record the run id, run the post-deploy query (Dev Notes, expect `Token` and `IX_HouseholdInvites_Token` gone), create and preview an invite in the live app. Story `done` only after that.
+  - [x] 5.2 Open one PR against `main`. After merge, Ralf's steps (the dev does not run these): watch the App Deploy run, read the "Pre-migration restore point" block in the run summary (Story 10.1), record the run id, run the post-deploy query (Dev Notes, expect `Token` and `IX_HouseholdInvites_Token` gone), create and preview an invite in the live app. Story `done` only after that.
 
 ### Review Findings
 
@@ -160,7 +160,8 @@ Sonnet 5.5 (claude-sonnet-5-5)
 - Deviation: the story named six test files, but `tests/EnergyTracker.Api.Tests/HouseholdMemberEndpointsTests.cs` also used `Token`. Deleted `A_legacy_plaintext_invite_still_previews_and_accepts` (tests removed behaviour) and dropped `stored.Token.ShouldBeNull()` (covered by the guards).
 - Test delta: Infrastructure 566 to 565 (the 2 legacy repository tests run on 2 providers = -4; +1 model guard, +2 migration tests). Api 457 to 456. Application and Architecture unchanged.
 - Docs: AD-26 `[AMENDED 2026-10-31, Story 11.20]` note; both `[promoted: 11.20]` deferred-work entries deleted. `infra/README.md` and `docs/self-hosting.md` mentions of "plaintext" concern Data Protection keys, not invites; no change.
-- Open: Task 5.2 (PR and post-deploy steps) not done. Opening the PR needs Ralf's go-ahead; the deploy checks are Ralf's per the story. Story is `done` only after those.
+- Post-deploy evidence (Ralf, 2026-10-31): PR #160 merged and deployed. App Deploy run 41229321303 (https://github.com/ralfonsoftware/energy-tracker-v2/actions/runs/41229321303). Pre-migration restore point 2026-10-31T18:31:10Z on `energytracker-prod-qvc6vfmtp5-sql` / `energytracker` (earliest restore 2026-10-24T18:31:02Z); pending migration was `20261031173418_DropHouseholdInviteTokenColumn`. `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('HouseholdInvites') AND name = 'Token'` returned 0.
+- Post-deploy checks complete (Ralf, 2026-10-31): `IX_HouseholdInvites_Token` count in `sys.indexes` is 0. Live smoke: invite created in the app, and its `/join/<token>` link shows the join-household page. Task 5.2 done.
 
 ### File List
 
