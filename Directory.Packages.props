@@ -10,7 +10,7 @@
   <ItemGroup>
     <!-- EF Core — pinned to one version across every project to avoid transitive version conflicts -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
@@ -32,22 +32,22 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
 
     <!-- OTel (AD-19 extension) -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
     <!-- Still beta-only upstream (OTel .NET Contrib has never shipped a stable release of this
          package — rechecked 2026-10-11: 1.19.1-beta.1 is the newest); accepted anyway since it's the
          only EF Core tracing option available, and only affects instrumentation, not reliability. -->
     <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.19.1-beta.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
 
     <!-- AD-17 (amendment 2026-10-10, audit S2): wraps the Data Protection key ring with a Key Vault
          key. Azure.Identity is also a transitive dependency of Microsoft.Data.SqlClient; it is pinned
          explicitly here and referenced by the Api project so its version is a decision, not whatever
          SqlClient happens to ask for. -->
-    <PackageVersion Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.4" />
+    <PackageVersion Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.5" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
 
     <!-- AD-6 async job queue cloud adapter (AzureStorageQueueJobQueue) -->
@@ -72,7 +72,7 @@
     <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.2" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <!-- 4.14.0+ bumps its own SSH.NET dependency to 2026.0.0, past 2025.1.0's two high-severity
          ScpClient advisories (GHSA-q939-rpr3-3284 path traversal, GHSA-mggc-4xg6-vcxf command
          injection) — no local override needed. -->
