@@ -4,7 +4,7 @@ baseline_commit: e8bbc9d9fd912b5de880b25e9c0b9847990c4845
 
 # Story 11.19: Structural Cleanup
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier Later, last story of the epic. Origin: codebase audit 2026-10-10 findings A3 (oversized units), R1 (repeated household guard), R2 api side (history-narrating comments). 11.17 and 11.18 explicitly deferred the Program.cs split and the SmartPlugImportRepository split to this story. -->
@@ -72,10 +72,10 @@ Write each new test red first (or characterization-green first, for AC #7) and r
 - [x] Task 8: ADRs (AC: #4)
   - [x] 8.1 Create `docs/adr/README.md` (what an ADR is here, the three-heading template, "AD-nn lives in the architecture spine; ADRs here hold implementation reasoning too long for a comment") and the ADRs for the comments you actually cut. Candidates, from the longest comments in the scope files: (1) Serilog default providers and `writeToProviders` double console lines; (2) OIDC scheme registered only when fully configured; (3) forwarded headers without `KnownProxies` allowlist and the `/login` rate-limit key; (4) route-scoped `MaxRequestBodySize` for `/api/household-import`; (5) `AddAsync` set-based write paths and its explicit transaction (AD-23); (6) `UpdateMappingAsync` set-based conflict classification (the 2026-09-18 incident); (7) delete cascade chunking and the per-Household sweep lock. Write only the ones whose comments you shorten; do not invent others. Each ADR cites its AD/story/incident source and is under about 60 lines.
   - [x] 8.2 `docs/adr/README.md` lists them in order; `project-context.md` gets the pointer (Task 9.1).
-- [ ] Task 9: Docs, memory, verification (AC: #8)
+- [x] Task 9: Docs, memory, verification (AC: #8)
   - [x] 9.1 `project-context.md`: one rule under "Development Workflow Rules" or "Code Quality" (composition lives in `Api/Composition`, `Program.cs` is pipeline plus the few registrations that must stay; new endpoint file with Household-scoped routes uses `RequireHousehold()`, never a private helper, guard names; ADR convention). Correct the existing bullets that say "in `Program.cs`" for things that moved (Dev Notes lists them). Bump "Last Updated". Style: the file's existing one.
   - [x] 9.2 Full verification: `dotnet build -c Release --no-incremental -p:TreatWarningsAsErrors=true` 0 warnings; `dotnet format EnergyTracker.sln --verify-no-changes --no-restore` exit 0 (the 11.18 gate applies to the new files: `.editorconfig` is `root`, no `#pragma`, no `NoWarn`, Snake_case test names); all four .NET test projects; Vitest; `npm --prefix web run lint` (count not above Task 0.2); `npm --prefix web run build`. Record the counts.
-  - [ ] 9.3 Live smoke (the SPA structure changed): run the app (`scripts/run-api.sh` per `docs/local-development.md`), sign in, open Settings, create a Room, a Power Point and a Device, rename, move and archive one, toggle archived visibility. Because the sandbox cannot be trusted to resize correctly (project-context, "Live-resize verification"), check one narrow and one wide width by asking Ralf if the fresh-tab procedure fails. If Chrome or Auth0 is unavailable, say so and **pause for the user**; do not mark this subtask done on tests alone. This is the Story 8.x precedent for UI-structure moves, not an auth change.
+  - [x] 9.3 Live smoke (the SPA structure changed): run the app (`scripts/run-api.sh` per `docs/local-development.md`), sign in, open Settings, create a Room, a Power Point and a Device, rename, move and archive one, toggle archived visibility. Because the sandbox cannot be trusted to resize correctly (project-context, "Live-resize verification"), check one narrow and one wide width by asking Ralf if the fresh-tab procedure fails. If Chrome or Auth0 is unavailable, say so and **pause for the user**; do not mark this subtask done on tests alone. This is the Story 8.x precedent for UI-structure moves, not an auth change.
   - [x] 9.4 `sprint-status.yaml`: dev-story moves the story to `in-progress` and `review`; this create-story run only sets `ready-for-dev`.
 
 ## Dev Notes
@@ -254,7 +254,7 @@ Claude Sonnet 5.5 (`claude-sonnet-5-5`), Claude Code, dev-story run 2026-10-31.
 - `TaggingScaffoldEndpoints.cs` 401 lines split into `Room/PowerPoint/DeviceEndpoints` (now `internal static`), `TaggingScaffoldContracts.cs` (records stay `public`). Largest repository file after the trim is `.Cleanup.cs` (273 lines). Largest React file is `use-tagging-scaffold-dialog.ts` (279 lines, under the 300 target); the manager is 120 lines.
 - Seven ADRs in `docs/adr/` for the comments that were cut. No ADR for the trims of `HouseholdExportEndpoints` or `SmartPlugImportEndpoints`: their removed text was story and review narration.
 - `.git-blame-ignore-revs` lists the six move commits. `deferred-work.md`, `project-context.md` updated. `docs/self-hosting.md` and `docs/local-development.md` have no stale `Program.cs` mechanism reference (`local-development.md` line 141 names the cookie setting, still in the OIDC handler options).
-- **Open: Task 9.3 live smoke of the Settings screen (Rooms, Power Points, Devices) in Chrome with Auth0 was not run.** It needs a signed-in browser session. Per the story it is not marked done on tests alone. The black-box suite (951 lines) covers the component and passes unedited.
+- **Task 9.3 live smoke done (2026-10-31, Chrome, real OIDC login by Ralf, `https://localhost:5173`):** created a Room, renamed it, added a Power Point and a Device, moved the Device to another Power Point, archived the Power Point, toggled archived visibility (Archived badge shown, row hidden when off). Wide (~909px, tile grid) and narrow (480px, single-column list) both render and behave. Local setup needed `docker-compose.local.yml` (published port 5432) and `./scripts/migrate.sh` (stale volume). Test data left in the local DB: "Smoke Room B" with archived "Smoke PP".
 
 ### File List
 
@@ -266,4 +266,4 @@ Modified: `src/EnergyTracker.Api/Program.cs`, `src/EnergyTracker.Api/Endpoints/{
 
 ## Change Log
 
-- 2026-10-31: Story 11.19 implemented. Program.cs registrations moved to `Api/Composition`, one `RequireHousehold()` endpoint filter replaces 11 private guards, three oversized units split, comments in touched files trimmed with seven ADRs, project-context and deferred-work updated. Pending: live Settings smoke (Task 9.3).
+- 2026-10-31: Story 11.19 implemented. Program.cs registrations moved to `Api/Composition`, one `RequireHousehold()` endpoint filter replaces 11 private guards, three oversized units split, comments in touched files trimmed with seven ADRs, project-context and deferred-work updated. Live Settings smoke done.
