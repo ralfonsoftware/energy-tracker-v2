@@ -168,15 +168,27 @@ public class ListSmartPlugImportJobsTests
         var importB = MakeImport(jobB.Id, SmartPlugImportStatus.FlaggedForReview);
         var gapA = new SmartPlugImportGap
         {
-            Id = Guid.NewGuid(), HouseholdId = _householdId, SmartPlugImportId = importA.Id, PowerPointId = null,
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = _householdId,
+            SmartPlugImportId = importA.Id,
+            PowerPointId = null,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+            EstimatedTotalKwh = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         var gapB = new SmartPlugImportGap
         {
-            Id = Guid.NewGuid(), HouseholdId = _householdId, SmartPlugImportId = importB.Id, PowerPointId = null,
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = _householdId,
+            SmartPlugImportId = importB.Id,
+            PowerPointId = null,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+            EstimatedTotalKwh = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         ReturnJobs(jobA, jobB);
         ReturnImports(importA, importB);

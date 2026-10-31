@@ -209,9 +209,13 @@ public class ResolveMeterRegressionPromptTests
         var prompt = NewOpenPrompt(householdId, Guid.NewGuid());
         var trigger = new MeterReading
         {
-            Id = prompt.MeterReadingId, HouseholdId = householdId, MainMeterId = prompt.MainMeterId, KwhValue = 5m,
+            Id = prompt.MeterReadingId,
+            HouseholdId = householdId,
+            MainMeterId = prompt.MainMeterId,
+            KwhValue = 5m,
             ReadingTimestamp = new DateTimeOffset(2026, 5, 20, 8, 0, 0, TimeSpan.Zero),
-            IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         _repository.FindByIdAsync(householdId, prompt.Id, Arg.Any<CancellationToken>()).Returns(prompt);
         _repository.GetOpenForHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(prompt);
@@ -219,7 +223,11 @@ public class ResolveMeterRegressionPromptTests
         _readingRepository.FindByIdAsync(trigger.Id, Arg.Any<CancellationToken>()).Returns(trigger);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
         {
-            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+            Id = householdId,
+            Locale = "en-US",
+            Currency = "USD",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            AiPlausibilityEnabled = true,
         });
 
         await Sut().ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken);

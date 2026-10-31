@@ -387,9 +387,14 @@ public class ValidateHouseholdImportTests
     // restore must reject an over-long value up front instead of failing mid-write.
     private static Dictionary<string, object?> SmartPlugReadingWithDeviceName(string deviceName) => new()
     {
-        ["id"] = Guid.NewGuid().ToString(), ["powerPointId"] = null, ["roomName"] = "Kitchen",
-        ["powerPointName"] = "Outlet", ["deviceName"] = deviceName, ["intervalStart"] = "2026-09-01T00:00:00+00:00",
-        ["intervalEnd"] = "2026-09-01T00:15:00+00:00", ["kwhValue"] = 0.5,
+        ["id"] = Guid.NewGuid().ToString(),
+        ["powerPointId"] = null,
+        ["roomName"] = "Kitchen",
+        ["powerPointName"] = "Outlet",
+        ["deviceName"] = deviceName,
+        ["intervalStart"] = "2026-09-01T00:00:00+00:00",
+        ["intervalEnd"] = "2026-09-01T00:15:00+00:00",
+        ["kwhValue"] = 0.5,
     };
 
     [Fact]
@@ -452,7 +457,9 @@ public class ValidateHouseholdImportTests
         var document = ValidDocument()
             .With("mainMeter", new Dictionary<string, object?>
             {
-                ["id"] = mainMeterId.ToString(), ["createdAtUtc"] = "2026-01-05T09:00:00+00:00", ["digitCapacityKwh"] = null,
+                ["id"] = mainMeterId.ToString(),
+                ["createdAtUtc"] = "2026-01-05T09:00:00+00:00",
+                ["digitCapacityKwh"] = null,
             })
             .With("rooms", new List<object?>
             {
@@ -651,8 +658,12 @@ public class ValidateHouseholdImportTests
         var powerPointId = Guid.NewGuid();
         Dictionary<string, object?> Reading(Guid id, double kwh, string at) => new()
         {
-            ["id"] = id.ToString(), ["mainMeterId"] = mainMeterId.ToString(), ["kwhValue"] = kwh, ["readingTimestamp"] = at,
-            ["idempotencyKey"] = Guid.NewGuid().ToString(), ["createdAtUtc"] = at,
+            ["id"] = id.ToString(),
+            ["mainMeterId"] = mainMeterId.ToString(),
+            ["kwhValue"] = kwh,
+            ["readingTimestamp"] = at,
+            ["idempotencyKey"] = Guid.NewGuid().ToString(),
+            ["createdAtUtc"] = at,
         };
 
         return ValidDocument()
@@ -681,9 +692,14 @@ public class ValidateHouseholdImportTests
 
     private static Dictionary<string, object?> SmartPlugReadingFor(Guid powerPointId) => new()
     {
-        ["id"] = Guid.NewGuid().ToString(), ["powerPointId"] = powerPointId.ToString(), ["roomName"] = "Kitchen",
-        ["powerPointName"] = "Outlet", ["deviceName"] = "Kettle", ["intervalStart"] = "2026-09-01T00:00:00+00:00",
-        ["intervalEnd"] = "2026-09-01T00:15:00+00:00", ["kwhValue"] = 0.5,
+        ["id"] = Guid.NewGuid().ToString(),
+        ["powerPointId"] = powerPointId.ToString(),
+        ["roomName"] = "Kitchen",
+        ["powerPointName"] = "Outlet",
+        ["deviceName"] = "Kettle",
+        ["intervalStart"] = "2026-09-01T00:00:00+00:00",
+        ["intervalEnd"] = "2026-09-01T00:15:00+00:00",
+        ["kwhValue"] = 0.5,
     };
 
     // AC #6c: a reference to an array that appears LATER in the file still resolves, for every kind of
@@ -758,7 +774,10 @@ public class ValidateHouseholdImportTests
     {
         var room = new Dictionary<string, object?>
         {
-            ["id"] = Guid.NewGuid().ToString("N"), ["name"] = "Kitchen", ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null,
+            ["id"] = Guid.NewGuid().ToString("N"),
+            ["name"] = "Kitchen",
+            ["createdAtUtc"] = "2026-01-05T08:15:00+00:00",
+            ["archivedAt"] = null,
         };
 
         var result = Validate(ValidDocument().With("rooms", new List<object?> { room }).Build());
@@ -806,7 +825,9 @@ public class ValidateHouseholdImportTests
     {
         var rooms = Enumerable.Range(0, 200).Select(_ => (object?)new Dictionary<string, object?>
         {
-            ["id"] = Guid.NewGuid().ToString(), ["name"] = "Kitchen", ["createdAtUtc"] = "not a date",
+            ["id"] = Guid.NewGuid().ToString(),
+            ["name"] = "Kitchen",
+            ["createdAtUtc"] = "not a date",
         }).ToList();
 
         var result = Validate(ValidDocument().With("rooms", rooms).Build());
@@ -898,9 +919,16 @@ public class ValidateHouseholdImportTests
             writer.WritePropertyName("household");
             JsonSerializer.Serialize(writer, new Dictionary<string, object?>
             {
-                ["id"] = Guid.NewGuid(), ["createdAtUtc"] = "2026-01-05T08:00:00+00:00", ["locale"] = "de-DE", ["currency"] = "EUR",
-                ["yearlyBaselineKwh"] = 3500.0, ["trendingThresholdKwh"] = 100.0, ["lowConfidenceGapDays"] = 45,
-                ["tariffCheckCadenceMonths"] = 3, ["aiPlausibilityEnabled"] = false, ["aiPlausibilityBackendConfigured"] = false,
+                ["id"] = Guid.NewGuid(),
+                ["createdAtUtc"] = "2026-01-05T08:00:00+00:00",
+                ["locale"] = "de-DE",
+                ["currency"] = "EUR",
+                ["yearlyBaselineKwh"] = 3500.0,
+                ["trendingThresholdKwh"] = 100.0,
+                ["lowConfidenceGapDays"] = 45,
+                ["tariffCheckCadenceMonths"] = 3,
+                ["aiPlausibilityEnabled"] = false,
+                ["aiPlausibilityBackendConfigured"] = false,
                 ["aiPlausibilityBackendLabel"] = null,
             });
             foreach (var empty in new[] { "householdMembers", "meterReadings", "meterRegressionPrompts", "tariffs", "events" })
@@ -1012,7 +1040,11 @@ public class ValidateHouseholdImportTests
         var room = new Dictionary<string, object?> { ["id"] = roomId.ToString(), ["name"] = "Kitchen", ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null };
         var powerPoint = new Dictionary<string, object?>
         {
-            ["id"] = Guid.NewGuid().ToString(), ["roomId"] = roomId.ToString(), ["name"] = "Outlet", ["createdAtUtc"] = "2026-01-05T08:16:00+00:00", ["archivedAt"] = null,
+            ["id"] = Guid.NewGuid().ToString(),
+            ["roomId"] = roomId.ToString(),
+            ["name"] = "Outlet",
+            ["createdAtUtc"] = "2026-01-05T08:16:00+00:00",
+            ["archivedAt"] = null,
         };
         // rooms: [room] first, then rooms: [] again. The restore would see the second (empty) one.
         var json = ValidDocument().With("rooms", new List<object?> { room }).With("powerPoints", new List<object?> { powerPoint }).Build();
@@ -1084,7 +1116,10 @@ public class ValidateHouseholdImportTests
     {
         var rooms = Enumerable.Range(0, 3000).Select(i => (object?)new Dictionary<string, object?>
         {
-            ["id"] = Guid.NewGuid().ToString(), ["name"] = $"Room {i}", ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null,
+            ["id"] = Guid.NewGuid().ToString(),
+            ["name"] = $"Room {i}",
+            ["createdAtUtc"] = "2026-01-05T08:15:00+00:00",
+            ["archivedAt"] = null,
         }).ToList();
         var bytes = Encoding.UTF8.GetBytes(ValidDocument().With("rooms", rooms).Build());
         bytes.Length.ShouldBeGreaterThan(3 * 64 * 1024);

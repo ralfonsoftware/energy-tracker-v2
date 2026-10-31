@@ -186,8 +186,13 @@ public class RequeueEventCorrelationsTests
         SeedHousehold(householdId, aiPlausibilityEnabled: true);
         var trigger = new MeterReading
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = Guid.NewGuid(), KwhValue = 5m,
-            ReadingTimestamp = From, IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = Guid.NewGuid(),
+            KwhValue = 5m,
+            ReadingTimestamp = From,
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         _readingRepository.FindByIdAsync(trigger.Id, Arg.Any<CancellationToken>()).Returns(trigger);
 

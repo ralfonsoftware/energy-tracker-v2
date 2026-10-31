@@ -161,7 +161,10 @@ public abstract class HouseholdRestoreWriterTestsBase
         dbContext.MainMeters.Add(preExistingMainMeter);
         var preExistingMember = new HouseholdMember
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://old.test/", ExternalSubjectId = "old-sub",
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            ExternalIssuer = "https://old.test/",
+            ExternalSubjectId = "old-sub",
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         dbContext.HouseholdMembers.Add(preExistingMember);
@@ -227,13 +230,21 @@ public abstract class HouseholdRestoreWriterTestsBase
         dbContext.HouseholdMembers.AddRange(
             new HouseholdMember
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://real.test/", ExternalSubjectId = "auth0|alice",
-                DisplayName = "Alice", CreatedAtUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                ExternalIssuer = "https://real.test/",
+                ExternalSubjectId = "auth0|alice",
+                DisplayName = "Alice",
+                CreatedAtUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
             },
             new HouseholdMember
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, ExternalIssuer = "https://real.test/", ExternalSubjectId = "auth0|bob",
-                DisplayName = null, CreatedAtUtc = new DateTimeOffset(2026, 2, 3, 4, 5, 6, TimeSpan.Zero),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                ExternalIssuer = "https://real.test/",
+                ExternalSubjectId = "auth0|bob",
+                DisplayName = null,
+                CreatedAtUtc = new DateTimeOffset(2026, 2, 3, 4, 5, 6, TimeSpan.Zero),
             });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var membersBefore = await ReadMembersAsync(dbContext, TestContext.Current.CancellationToken);

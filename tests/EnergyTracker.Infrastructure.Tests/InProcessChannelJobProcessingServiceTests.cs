@@ -73,7 +73,10 @@ public class InProcessChannelJobProcessingServiceTests : IAsyncLifetime
             orphanId = Guid.NewGuid();
             dbContext.BackgroundJobs.Add(new BackgroundJob
             {
-                Id = orphanId, HouseholdId = householdId, JobType = "UnknownJobType", Status = BackgroundJobStatus.Queued,
+                Id = orphanId,
+                HouseholdId = householdId,
+                JobType = "UnknownJobType",
+                Status = BackgroundJobStatus.Queued,
                 CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
             });
             await dbContext.SaveChangesAsync(ct);

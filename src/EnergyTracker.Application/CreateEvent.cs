@@ -120,63 +120,63 @@ public class CreateEvent(
         switch (taggedEntityType)
         {
             case "Room":
-            {
-                var room = await taggingScaffoldRepository.FindRoomAsync(taggedEntityId, cancellationToken);
-                if (room is null)
                 {
-                    throw new EventTaggedEntityNotFoundException(taggedEntityType, taggedEntityId);
-                }
+                    var room = await taggingScaffoldRepository.FindRoomAsync(taggedEntityId, cancellationToken);
+                    if (room is null)
+                    {
+                        throw new EventTaggedEntityNotFoundException(taggedEntityType, taggedEntityId);
+                    }
 
-                if (room.ArchivedAt is not null)
-                {
-                    throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId);
-                }
+                    if (room.ArchivedAt is not null)
+                    {
+                        throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId);
+                    }
 
-                return room.Name;
-            }
+                    return room.Name;
+                }
             case "PowerPoint":
-            {
-                var powerPoint = await taggingScaffoldRepository.FindPowerPointAsync(taggedEntityId, cancellationToken);
-                if (powerPoint is null)
                 {
-                    throw new EventTaggedEntityNotFoundException(taggedEntityType, taggedEntityId);
+                    var powerPoint = await taggingScaffoldRepository.FindPowerPointAsync(taggedEntityId, cancellationToken);
+                    if (powerPoint is null)
+                    {
+                        throw new EventTaggedEntityNotFoundException(taggedEntityType, taggedEntityId);
+                    }
+
+                    if (powerPoint.ArchivedAt is not null)
+                    {
+                        throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId);
+                    }
+
+                    // ArchiveRoom deliberately does not cascade to its Power Points, so a live Power
+                    // Point can still sit under an archived Room — a hierarchy the household has
+                    // already retired, and not a valid new tag target.
+                    await EnsureAncestorsAreLiveAsync(taggedEntityType, taggedEntityId, powerPoint.RoomId, cancellationToken);
+
+                    return powerPoint.Name;
                 }
-
-                if (powerPoint.ArchivedAt is not null)
-                {
-                    throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId);
-                }
-
-                // ArchiveRoom deliberately does not cascade to its Power Points, so a live Power
-                // Point can still sit under an archived Room — a hierarchy the household has
-                // already retired, and not a valid new tag target.
-                await EnsureAncestorsAreLiveAsync(taggedEntityType, taggedEntityId, powerPoint.RoomId, cancellationToken);
-
-                return powerPoint.Name;
-            }
             case "Device":
-            {
-                var device = await taggingScaffoldRepository.FindDeviceAsync(taggedEntityId, cancellationToken);
-                if (device is null)
                 {
-                    throw new EventTaggedEntityNotFoundException(taggedEntityType, taggedEntityId);
+                    var device = await taggingScaffoldRepository.FindDeviceAsync(taggedEntityId, cancellationToken);
+                    if (device is null)
+                    {
+                        throw new EventTaggedEntityNotFoundException(taggedEntityType, taggedEntityId);
+                    }
+
+                    if (device.ArchivedAt is not null)
+                    {
+                        throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId);
+                    }
+
+                    var parentPowerPoint = await taggingScaffoldRepository.FindPowerPointAsync(device.PowerPointId, cancellationToken);
+                    if (parentPowerPoint is null || parentPowerPoint.ArchivedAt is not null)
+                    {
+                        throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId, viaAncestor: true);
+                    }
+
+                    await EnsureAncestorsAreLiveAsync(taggedEntityType, taggedEntityId, parentPowerPoint.RoomId, cancellationToken);
+
+                    return device.Name;
                 }
-
-                if (device.ArchivedAt is not null)
-                {
-                    throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId);
-                }
-
-                var parentPowerPoint = await taggingScaffoldRepository.FindPowerPointAsync(device.PowerPointId, cancellationToken);
-                if (parentPowerPoint is null || parentPowerPoint.ArchivedAt is not null)
-                {
-                    throw new EventTaggedEntityArchivedException(taggedEntityType, taggedEntityId, viaAncestor: true);
-                }
-
-                await EnsureAncestorsAreLiveAsync(taggedEntityType, taggedEntityId, parentPowerPoint.RoomId, cancellationToken);
-
-                return device.Name;
-            }
             default:
                 throw new EventValidationException(
                     $"TaggedEntityType '{taggedEntityType}' is not a recognized taggable entity type.", "event.tag_type_unknown");

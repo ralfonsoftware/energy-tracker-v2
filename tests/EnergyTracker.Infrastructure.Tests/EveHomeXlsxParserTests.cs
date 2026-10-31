@@ -635,7 +635,9 @@ public class EveHomeXlsxParserTests
             worksheetPart.Worksheet = new Worksheet(sheetData);
             workbookPart.Workbook.AppendChild(new Sheets()).Append(new Sheet
             {
-                Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Gesamtverbrauch",
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Gesamtverbrauch",
             });
 
             Row SharedRow(uint index, params int[] stringIndexes)
@@ -742,7 +744,9 @@ public class EveHomeXlsxParserTests
             worksheetPart.Worksheet = new Worksheet(sheetData);
             workbookPart.Workbook.AppendChild(new Sheets()).Append(new Sheet
             {
-                Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Gesamtverbrauch",
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Gesamtverbrauch",
             });
             sheetData.Append(BuildRow(1, "Gerät: Steckdose 1"));
             sheetData.Append(BuildRow(2, "Raum: Zimmer 1"));

@@ -95,29 +95,47 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.PowerPoints.Add(powerPoint);
         var olderJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         var newerJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         await InsertBackgroundJobPreStory36Async(dbContext, olderJob, TestContext.Current.CancellationToken);
         await InsertBackgroundJobPreStory36Async(dbContext, newerJob, TestContext.Current.CancellationToken);
         var olderImport = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = olderJob.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "older.xlsx",
-            Status = SmartPlugImportStatus.Completed, DeviceTag = "Fridge",
-            CreatedAtUtc = now.AddDays(-1), CompletedAtUtc = now.AddDays(-1),
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            BackgroundJobId = olderJob.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "older.xlsx",
+            Status = SmartPlugImportStatus.Completed,
+            DeviceTag = "Fridge",
+            CreatedAtUtc = now.AddDays(-1),
+            CompletedAtUtc = now.AddDays(-1),
         };
         var newerImport = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = newerJob.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "newer.xlsx",
-            Status = SmartPlugImportStatus.Completed, DeviceTag = "Fridge",
-            CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            BackgroundJobId = newerJob.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "newer.xlsx",
+            Status = SmartPlugImportStatus.Completed,
+            DeviceTag = "Fridge",
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         dbContext.SmartPlugImports.AddRange(olderImport, newerImport);
         var duplicateIntervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
@@ -132,27 +150,55 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.SmartPlugReadings.AddRange(
             new SmartPlugReading
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = olderImport.Id, PowerPointId = powerPoint.Id,
-                RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-                IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.1m,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = olderImport.Id,
+                PowerPointId = powerPoint.Id,
+                RoomName = "Kitchen",
+                PowerPointName = "Fridge",
+                DeviceName = "Fridge",
+                IntervalStart = duplicateIntervalStart,
+                IntervalEnd = duplicateIntervalStart,
+                KwhValue = 0.1m,
             },
             new SmartPlugReading
             {
-                Id = survivorId, HouseholdId = householdId, SmartPlugImportId = newerImport.Id, PowerPointId = powerPoint.Id,
-                RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-                IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.2m,
+                Id = survivorId,
+                HouseholdId = householdId,
+                SmartPlugImportId = newerImport.Id,
+                PowerPointId = powerPoint.Id,
+                RoomName = "Kitchen",
+                PowerPointName = "Fridge",
+                DeviceName = "Fridge",
+                IntervalStart = duplicateIntervalStart,
+                IntervalEnd = duplicateIntervalStart,
+                KwhValue = 0.2m,
             },
             new SmartPlugReading
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = olderImport.Id, PowerPointId = null,
-                RoomName = string.Empty, PowerPointName = "Unmapped Plug", DeviceName = "Unmapped Plug",
-                IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.4m,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = olderImport.Id,
+                PowerPointId = null,
+                RoomName = string.Empty,
+                PowerPointName = "Unmapped Plug",
+                DeviceName = "Unmapped Plug",
+                IntervalStart = duplicateIntervalStart,
+                IntervalEnd = duplicateIntervalStart,
+                KwhValue = 0.4m,
             },
             new SmartPlugReading
             {
-                Id = nullPowerPointSurvivorId, HouseholdId = householdId, SmartPlugImportId = newerImport.Id, PowerPointId = null,
-                RoomName = string.Empty, PowerPointName = "Unmapped Plug", DeviceName = "Unmapped Plug",
-                IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.5m,
+                Id = nullPowerPointSurvivorId,
+                HouseholdId = householdId,
+                SmartPlugImportId = newerImport.Id,
+                PowerPointId = null,
+                RoomName = string.Empty,
+                PowerPointName = "Unmapped Plug",
+                DeviceName = "Unmapped Plug",
+                IntervalStart = duplicateIntervalStart,
+                IntervalEnd = duplicateIntervalStart,
+                KwhValue = 0.5m,
             });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -174,18 +220,32 @@ public class SqlServerMigrationTests : IAsyncLifetime
 
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = newerImport.Id, PowerPointId = powerPoint.Id,
-            RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-            IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.3m,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            SmartPlugImportId = newerImport.Id,
+            PowerPointId = powerPoint.Id,
+            RoomName = "Kitchen",
+            PowerPointName = "Fridge",
+            DeviceName = "Fridge",
+            IntervalStart = duplicateIntervalStart,
+            IntervalEnd = duplicateIntervalStart,
+            KwhValue = 0.3m,
         });
         await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
         dbContext.ChangeTracker.Clear();
 
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = newerImport.Id, PowerPointId = null,
-            RoomName = string.Empty, PowerPointName = "Unmapped Plug", DeviceName = "Unmapped Plug",
-            IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.6m,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            SmartPlugImportId = newerImport.Id,
+            PowerPointId = null,
+            RoomName = string.Empty,
+            PowerPointName = "Unmapped Plug",
+            DeviceName = "Unmapped Plug",
+            IntervalStart = duplicateIntervalStart,
+            IntervalEnd = duplicateIntervalStart,
+            KwhValue = 0.6m,
         });
         await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
         dbContext.ChangeTracker.Clear();
@@ -197,23 +257,39 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.Households.Add(new Household { Id = otherHouseholdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = now });
         var otherJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         dbContext.BackgroundJobs.Add(otherJob);
         var otherImport = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, BackgroundJobId = otherJob.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "other-household.xlsx",
-            Status = SmartPlugImportStatus.AwaitingPowerPointMapping, DeviceTag = "Unmapped Plug",
-            CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            BackgroundJobId = otherJob.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "other-household.xlsx",
+            Status = SmartPlugImportStatus.AwaitingPowerPointMapping,
+            DeviceTag = "Unmapped Plug",
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         dbContext.SmartPlugImports.Add(otherImport);
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
-            Id = Guid.NewGuid(), HouseholdId = otherHouseholdId, SmartPlugImportId = otherImport.Id, PowerPointId = null,
-            RoomName = string.Empty, PowerPointName = "Unmapped Plug", DeviceName = "Unmapped Plug",
-            IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.7m,
+            Id = Guid.NewGuid(),
+            HouseholdId = otherHouseholdId,
+            SmartPlugImportId = otherImport.Id,
+            PowerPointId = null,
+            RoomName = string.Empty,
+            PowerPointName = "Unmapped Plug",
+            DeviceName = "Unmapped Plug",
+            IntervalStart = duplicateIntervalStart,
+            IntervalEnd = duplicateIntervalStart,
+            KwhValue = 0.7m,
         });
         await Should.NotThrowAsync(() => dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
     }
@@ -250,42 +326,69 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.PowerPoints.Add(powerPoint);
         var mappedJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         var orphanedJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         var stillAwaitingJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         await InsertBackgroundJobPreStory36Async(dbContext, mappedJob, TestContext.Current.CancellationToken);
         await InsertBackgroundJobPreStory36Async(dbContext, orphanedJob, TestContext.Current.CancellationToken);
         await InsertBackgroundJobPreStory36Async(dbContext, stillAwaitingJob, TestContext.Current.CancellationToken);
         var mappedImport = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = mappedJob.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "mapped.xlsx",
-            Status = SmartPlugImportStatus.Completed, DeviceTag = "Fridge",
-            CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            BackgroundJobId = mappedJob.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "mapped.xlsx",
+            Status = SmartPlugImportStatus.Completed,
+            DeviceTag = "Fridge",
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         var orphanedImport = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = orphanedJob.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "orphaned.xlsx",
-            Status = SmartPlugImportStatus.Completed, DeviceTag = "Fridge",
-            CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            BackgroundJobId = orphanedJob.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "orphaned.xlsx",
+            Status = SmartPlugImportStatus.Completed,
+            DeviceTag = "Fridge",
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         var stillAwaitingImport = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = stillAwaitingJob.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "still-awaiting.xlsx",
-            Status = SmartPlugImportStatus.AwaitingPowerPointMapping, DeviceTag = "HiFi",
-            CreatedAtUtc = now, CompletedAtUtc = null,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            BackgroundJobId = stillAwaitingJob.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "still-awaiting.xlsx",
+            Status = SmartPlugImportStatus.AwaitingPowerPointMapping,
+            DeviceTag = "HiFi",
+            CreatedAtUtc = now,
+            CompletedAtUtc = null,
         };
         dbContext.SmartPlugImports.AddRange(mappedImport, orphanedImport, stillAwaitingImport);
 
@@ -296,26 +399,47 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.SmartPlugReadings.AddRange(
             new SmartPlugReading
             {
-                Id = mappedReadingId, HouseholdId = householdId, SmartPlugImportId = mappedImport.Id, PowerPointId = powerPoint.Id,
-                RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-                IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.5m,
+                Id = mappedReadingId,
+                HouseholdId = householdId,
+                SmartPlugImportId = mappedImport.Id,
+                PowerPointId = powerPoint.Id,
+                RoomName = "Kitchen",
+                PowerPointName = "Fridge",
+                DeviceName = "Fridge",
+                IntervalStart = duplicateIntervalStart,
+                IntervalEnd = duplicateIntervalStart,
+                KwhValue = 0.5m,
             },
             new SmartPlugReading
             {
                 // Exact duplicate of the mapped reading above (same HouseholdId/DeviceName/
                 // IntervalStart/IntervalEnd/KwhValue), left orphaned by the pre-Story-3.7
                 // conflict-tolerant fallback — this is the row the migration must delete.
-                Id = orphanedReadingId, HouseholdId = householdId, SmartPlugImportId = orphanedImport.Id, PowerPointId = null,
-                RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-                IntervalStart = duplicateIntervalStart, IntervalEnd = duplicateIntervalStart, KwhValue = 0.5m,
+                Id = orphanedReadingId,
+                HouseholdId = householdId,
+                SmartPlugImportId = orphanedImport.Id,
+                PowerPointId = null,
+                RoomName = "Kitchen",
+                PowerPointName = "Fridge",
+                DeviceName = "Fridge",
+                IntervalStart = duplicateIntervalStart,
+                IntervalEnd = duplicateIntervalStart,
+                KwhValue = 0.5m,
             },
             new SmartPlugReading
             {
                 // A different device tag, different IntervalStart, no mapped twin anywhere —
                 // genuinely still AwaitingPowerPointMapping, must survive untouched.
-                Id = stillAwaitingReadingId, HouseholdId = householdId, SmartPlugImportId = stillAwaitingImport.Id, PowerPointId = null,
-                RoomName = string.Empty, PowerPointName = "HiFi", DeviceName = "HiFi",
-                IntervalStart = duplicateIntervalStart.AddDays(1), IntervalEnd = duplicateIntervalStart.AddDays(1), KwhValue = 0.9m,
+                Id = stillAwaitingReadingId,
+                HouseholdId = householdId,
+                SmartPlugImportId = stillAwaitingImport.Id,
+                PowerPointId = null,
+                RoomName = string.Empty,
+                PowerPointName = "HiFi",
+                DeviceName = "HiFi",
+                IntervalStart = duplicateIntervalStart.AddDays(1),
+                IntervalEnd = duplicateIntervalStart.AddDays(1),
+                KwhValue = 0.9m,
             });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -352,25 +476,41 @@ public class SqlServerMigrationTests : IAsyncLifetime
         dbContext.PowerPoints.Add(powerPoint);
         var job = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         dbContext.BackgroundJobs.Add(job);
         var import = new SmartPlugImport
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, BackgroundJobId = job.Id,
-            VendorFormat = SmartPlugVendorFormat.EveHome, OriginalFileName = "export.xlsx",
-            Status = SmartPlugImportStatus.Completed, DeviceTag = "Fridge",
-            CreatedAtUtc = now, CompletedAtUtc = now,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            BackgroundJobId = job.Id,
+            VendorFormat = SmartPlugVendorFormat.EveHome,
+            OriginalFileName = "export.xlsx",
+            Status = SmartPlugImportStatus.Completed,
+            DeviceTag = "Fridge",
+            CreatedAtUtc = now,
+            CompletedAtUtc = now,
         };
         dbContext.SmartPlugImports.Add(import);
         var readingId = Guid.NewGuid();
         var intervalStart = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
-            Id = readingId, HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = powerPoint.Id,
-            RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-            IntervalStart = intervalStart, IntervalEnd = intervalStart, KwhValue = 0.5m,
+            Id = readingId,
+            HouseholdId = householdId,
+            SmartPlugImportId = import.Id,
+            PowerPointId = powerPoint.Id,
+            RoomName = "Kitchen",
+            PowerPointName = "Fridge",
+            DeviceName = "Fridge",
+            IntervalStart = intervalStart,
+            IntervalEnd = intervalStart,
+            KwhValue = 0.5m,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -418,9 +558,16 @@ public class SqlServerMigrationTests : IAsyncLifetime
         {
             dbContext.SmartPlugReadings.Add(new SmartPlugReading
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = null, PowerPointId = null,
-                RoomName = string.Empty, PowerPointName = "Unmapped", DeviceName = deviceNames[i],
-                IntervalStart = start.AddMinutes(10 * i), IntervalEnd = start.AddMinutes(10 * i), KwhValue = 0.5m,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = null,
+                PowerPointId = null,
+                RoomName = string.Empty,
+                PowerPointName = "Unmapped",
+                DeviceName = deviceNames[i],
+                IntervalStart = start.AddMinutes(10 * i),
+                IntervalEnd = start.AddMinutes(10 * i),
+                KwhValue = 0.5m,
             });
         }
 
@@ -565,9 +712,14 @@ public class SqlServerMigrationTests : IAsyncLifetime
 
     private static BackgroundJob Job(
         Guid id, Guid householdId, string jobType, BackgroundJobStatus status, DateTimeOffset createdAt, DateTimeOffset? completedAt = null) => new()
-    {
-        Id = id, HouseholdId = householdId, JobType = jobType, Status = status, CreatedAtUtc = createdAt, CompletedAtUtc = completedAt,
-    };
+        {
+            Id = id,
+            HouseholdId = householdId,
+            JobType = jobType,
+            Status = status,
+            CreatedAtUtc = createdAt,
+            CompletedAtUtc = completedAt,
+        };
 
     private static Guid Id(int n) => new($"00000000-0000-0000-0000-{n:D12}");
 

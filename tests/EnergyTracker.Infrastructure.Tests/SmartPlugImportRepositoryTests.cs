@@ -101,18 +101,18 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
     private static SmartPlugReading MakeReading(
         Guid householdId, Guid smartPlugImportId, Guid? powerPointId, DateTimeOffset intervalStart,
         decimal kwhValue = 0.5m, DateTimeOffset? intervalEnd = null, string deviceName = "Fridge") => new()
-    {
-        Id = Guid.NewGuid(),
-        HouseholdId = householdId,
-        SmartPlugImportId = smartPlugImportId,
-        PowerPointId = powerPointId,
-        RoomName = "Kitchen",
-        PowerPointName = "Fridge",
-        DeviceName = deviceName,
-        IntervalStart = intervalStart,
-        IntervalEnd = intervalEnd ?? intervalStart,
-        KwhValue = kwhValue,
-    };
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            SmartPlugImportId = smartPlugImportId,
+            PowerPointId = powerPointId,
+            RoomName = "Kitchen",
+            PowerPointName = "Fridge",
+            DeviceName = deviceName,
+            IntervalStart = intervalStart,
+            IntervalEnd = intervalEnd ?? intervalStart,
+            KwhValue = kwhValue,
+        };
 
     [Fact]
     public async Task FindLatestReadingWatermarkByPowerPointAsync_returns_null_when_no_readings_exist()
@@ -700,9 +700,16 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var readingId = Guid.NewGuid();
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
-            Id = readingId, HouseholdId = householdId, SmartPlugImportId = importId, PowerPointId = powerPointId,
-            RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-            IntervalStart = DateTimeOffset.UtcNow, IntervalEnd = DateTimeOffset.UtcNow, KwhValue = 0.5m,
+            Id = readingId,
+            HouseholdId = householdId,
+            SmartPlugImportId = importId,
+            PowerPointId = powerPointId,
+            RoomName = "Kitchen",
+            PowerPointName = "Fridge",
+            DeviceName = "Fridge",
+            IntervalStart = DateTimeOffset.UtcNow,
+            IntervalEnd = DateTimeOffset.UtcNow,
+            KwhValue = 0.5m,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -799,13 +806,21 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
         var queuedJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40), CompletedAtUtc = null,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+            CompletedAtUtc = null,
         };
         var processingJob = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Processing, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40), CompletedAtUtc = null,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Processing,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+            CompletedAtUtc = null,
         };
         dbContext.BackgroundJobs.AddRange(queuedJob, processingJob);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -829,8 +844,11 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var jobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Failed, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Failed,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
             CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -854,8 +872,11 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
         var job = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Completed,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
             CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
         };
         dbContext.BackgroundJobs.Add(job);
@@ -924,8 +945,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         {
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = baseline, CompletedAtUtc = baseline.AddSeconds(i),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = baseline,
+                CompletedAtUtc = baseline.AddSeconds(i),
             };
             dbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
@@ -1023,8 +1048,11 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
                 CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
             };
             seedDbContext.BackgroundJobs.Add(job);
@@ -1033,9 +1061,15 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             seedDbContext.SmartPlugImports.Add(import);
             seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = import.Id,
+                PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                EstimatedTotalKwh = null,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
             });
             for (var i = 0; i < readingCount; i++)
             {
@@ -1087,8 +1121,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         {
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Failed, CreatedAtUtc = baseline, CompletedAtUtc = baseline.AddSeconds(i * 2),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Failed,
+                CreatedAtUtc = baseline,
+                CompletedAtUtc = baseline.AddSeconds(i * 2),
             };
             dbContext.BackgroundJobs.Add(job);
             bareFailedJobIds.Add(job.Id);
@@ -1100,8 +1138,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         {
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = baseline, CompletedAtUtc = baseline.AddSeconds((i * 2) + 1),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = baseline,
+                CompletedAtUtc = baseline.AddSeconds((i * 2) + 1),
             };
             dbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: $"Mixed-{i}");
@@ -1182,8 +1224,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var jobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1203,8 +1249,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var jobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Processing, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Processing,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1244,9 +1294,16 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var readingId = Guid.NewGuid();
         dbContext.SmartPlugReadings.Add(new SmartPlugReading
         {
-            Id = readingId, HouseholdId = householdId, SmartPlugImportId = importId, PowerPointId = powerPointId,
-            RoomName = "Kitchen", PowerPointName = "Fridge", DeviceName = "Fridge",
-            IntervalStart = DateTimeOffset.UtcNow, IntervalEnd = DateTimeOffset.UtcNow, KwhValue = 0.5m,
+            Id = readingId,
+            HouseholdId = householdId,
+            SmartPlugImportId = importId,
+            PowerPointId = powerPointId,
+            RoomName = "Kitchen",
+            PowerPointName = "Fridge",
+            DeviceName = "Fridge",
+            IntervalStart = DateTimeOffset.UtcNow,
+            IntervalEnd = DateTimeOffset.UtcNow,
+            KwhValue = 0.5m,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1273,8 +1330,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var jobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Failed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Failed,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1329,8 +1390,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var jobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-31), CompletedAtUtc = null,
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
+            CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1350,8 +1415,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var jobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = jobId, HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1), CompletedAtUtc = null,
+            Id = jobId,
+            HouseholdId = householdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued,
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1373,8 +1442,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var otherHouseholdJobId = Guid.NewGuid();
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = otherHouseholdJobId, HouseholdId = otherHouseholdId, JobType = "ProcessSmartPlugImport",
-            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
+            Id = otherHouseholdJobId,
+            HouseholdId = otherHouseholdId,
+            JobType = "ProcessSmartPlugImport",
+            Status = BackgroundJobStatus.Queued,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
@@ -1413,17 +1486,27 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         {
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CompletedAtUtc = DateTimeOffset.UtcNow,
             };
             dbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
             dbContext.SmartPlugImports.Add(import);
             dbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = import.Id,
+                PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                EstimatedTotalKwh = null,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
             });
             // Round-1 review finding: neither original test seeded any SmartPlugReading rows, so
             // the SetNull cascade this whole fix exists to bound was never actually exercised. One
@@ -1480,8 +1563,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             {
                 var job = new BackgroundJob
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    CompletedAtUtc = DateTimeOffset.UtcNow,
                 };
                 seedDbContext.BackgroundJobs.Add(job);
                 var import = MakeImport(householdId, job.Id, deviceTag);
@@ -1492,9 +1579,15 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
                 // chunk boundaries at all.
                 seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    SmartPlugImportId = import.Id,
+                    PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                    EstimatedTotalKwh = null,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
                 });
                 allJobIds.Add(job.Id);
                 allImportIds.Add(import.Id);
@@ -1573,17 +1666,27 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CompletedAtUtc = DateTimeOffset.UtcNow,
             };
             seedDbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: "Huge-import");
             seedDbContext.SmartPlugImports.Add(import);
             seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = import.Id,
+                PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                EstimatedTotalKwh = null,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
             });
             for (var i = 0; i < readingCount; i++)
             {
@@ -1636,8 +1739,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CompletedAtUtc = DateTimeOffset.UtcNow,
             };
             seedDbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: "Exactly-one-batch");
@@ -1685,8 +1792,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         {
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Failed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Failed,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CompletedAtUtc = DateTimeOffset.UtcNow,
             };
             dbContext.BackgroundJobs.Add(job);
             jobIds.Add(job.Id);
@@ -1790,17 +1901,27 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             {
                 var job = new BackgroundJob
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    CompletedAtUtc = DateTimeOffset.UtcNow,
                 };
                 seedDbContext.BackgroundJobs.Add(job);
                 var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
                 seedDbContext.SmartPlugImports.Add(import);
                 seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    SmartPlugImportId = import.Id,
+                    PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                    EstimatedTotalKwh = null,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
                 });
                 var reading = MakeReading(householdId, import.Id, powerPointId: null, DateTimeOffset.UtcNow.AddMinutes(-i));
                 seedDbContext.SmartPlugReadings.Add(reading);
@@ -1851,8 +1972,12 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             {
                 var job = new BackgroundJob
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    CompletedAtUtc = DateTimeOffset.UtcNow,
                 };
                 seedDbContext.BackgroundJobs.Add(job);
                 var import = MakeImport(householdId, job.Id, deviceTag: $"Large-{i}");
@@ -1863,9 +1988,15 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
                 // only one that ever exercised gap rollback.
                 seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    SmartPlugImportId = import.Id,
+                    PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                    EstimatedTotalKwh = null,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
                 });
                 for (var r = 0; r < readingsPerImport; r++)
                 {

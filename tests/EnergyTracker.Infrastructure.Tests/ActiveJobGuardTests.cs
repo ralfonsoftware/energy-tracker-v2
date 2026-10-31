@@ -263,8 +263,11 @@ public abstract class ActiveJobGuardTestsBase
         await using var dbContext = NewDbContext(householdId);
         dbContext.BackgroundJobs.Add(new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = JobTypes.RestoreHouseholdData,
-            Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = JobTypes.RestoreHouseholdData,
+            Status = BackgroundJobStatus.Queued,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         });
 
         await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(ct));

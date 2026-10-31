@@ -178,11 +178,19 @@ public class ExportHouseholdDataTests
         var room = new Room { Id = Guid.NewGuid(), HouseholdId = householdId, Name = "Kitchen", CreatedAtUtc = DateTimeOffset.UtcNow };
         var powerPoint = new PowerPoint
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, RoomId = room.Id, Name = "Outlet", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            RoomId = room.Id,
+            Name = "Outlet",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         var device = new Device
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, PowerPointId = powerPoint.Id, Name = "Kettle", CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            PowerPointId = powerPoint.Id,
+            Name = "Kettle",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         var smartPlugReading = new SmartPlugReading
         {

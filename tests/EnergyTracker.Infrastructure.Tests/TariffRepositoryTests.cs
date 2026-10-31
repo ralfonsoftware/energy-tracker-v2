@@ -34,16 +34,16 @@ public abstract class TariffRepositoryTestsBase
     protected static Tariff NewTariff(
         Guid householdId, decimal monthlyBaseFee, decimal pricePerKwh, string currency, DateTimeOffset contractStartDate,
         int contractPeriodMonths = 12, DateTimeOffset? createdAtUtc = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        HouseholdId = householdId,
-        MonthlyBaseFee = monthlyBaseFee,
-        PricePerKwh = pricePerKwh,
-        Currency = currency,
-        ContractStartDate = contractStartDate,
-        ContractPeriodMonths = contractPeriodMonths,
-        CreatedAtUtc = createdAtUtc ?? DateTimeOffset.UtcNow,
-    };
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MonthlyBaseFee = monthlyBaseFee,
+            PricePerKwh = pricePerKwh,
+            Currency = currency,
+            ContractStartDate = contractStartDate,
+            ContractPeriodMonths = contractPeriodMonths,
+            CreatedAtUtc = createdAtUtc ?? DateTimeOffset.UtcNow,
+        };
 
     [Fact]
     public async Task AddAsync_persists_a_new_Tariff_entry()

@@ -180,7 +180,11 @@ public class EditMeterReadingTests
         _readingRepository.UpdateKwhValueAsync(reading.Id, 150m, 3, Arg.Any<CancellationToken>()).Returns(updated);
         _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(new Household
         {
-            Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow, AiPlausibilityEnabled = true,
+            Id = householdId,
+            Locale = "en-US",
+            Currency = "USD",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            AiPlausibilityEnabled = true,
         });
 
         await Sut().ExecuteAsync(householdId, reading.Id, 150m, 3, TestContext.Current.CancellationToken);
