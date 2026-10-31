@@ -1,4 +1,3 @@
-using System.Text;
 using Shouldly;
 
 namespace EnergyTracker.Architecture.Tests;
@@ -31,7 +30,7 @@ public class NoDirectClockReadsTests
         var root = FindRepoRoot();
         var hits = SourceFiles(root)
             .Where(f => f != CompositionRoot)
-            .SelectMany(f => HitsIn(StripComments(File.ReadAllText(Path.Combine(root, f)))).Select(h => $"{f} ({h})"))
+            .SelectMany(f => HitsIn(CSharpSource.StripComments(File.ReadAllText(Path.Combine(root, f)))).Select(h => $"{f} ({h})"))
             .ToList();
 
         hits.ShouldBeEmpty(
@@ -43,7 +42,7 @@ public class NoDirectClockReadsTests
     public void The_composition_root_is_the_only_allow_listed_file()
     {
         // Program.cs registers TimeProvider.System once; nothing else may name it.
-        var code = StripComments(File.ReadAllText(Path.Combine(FindRepoRoot(), CompositionRoot)));
+        var code = CSharpSource.StripComments(File.ReadAllText(Path.Combine(FindRepoRoot(), CompositionRoot)));
 
         code.ShouldContain(SystemClock, Case.Sensitive, $"{CompositionRoot} no longer registers TimeProvider.System: was it moved? Update this guard with it.");
         HitsIn(code).ShouldBe([SystemClock]);
@@ -70,11 +69,11 @@ public class NoDirectClockReadsTests
     public void The_scan_itself_detects_what_it_guards_against_and_ignores_comments()
     {
         const string bad = "var a = DateTimeOffset.UtcNow; var b = DateTime.Now; var c = TimeProvider.System; // DateTime.Today\n";
-        HitsIn(StripComments(bad)).ShouldBe(["DateTimeOffset.UtcNow", "DateTime.Now", "TimeProvider.System"]);
+        HitsIn(CSharpSource.StripComments(bad)).ShouldBe(["DateTimeOffset.UtcNow", "DateTime.Now", "TimeProvider.System"]);
 
-        HitsIn(StripComments("// DateTimeOffset.UtcNow\n/* DateTime.UtcNow, TimeProvider.System */ var x = 1;")).ShouldBeEmpty();
-        HitsIn(StripComments("var now = timeProvider.GetUtcNow();")).ShouldBeEmpty();
-        HitsIn(StripComments("var x = DateTimeOffset.Now; var y = DateTime.UtcNow; var z = DateTime.Today;"))
+        HitsIn(CSharpSource.StripComments("// DateTimeOffset.UtcNow\n/* DateTime.UtcNow, TimeProvider.System */ var x = 1;")).ShouldBeEmpty();
+        HitsIn(CSharpSource.StripComments("var now = timeProvider.GetUtcNow();")).ShouldBeEmpty();
+        HitsIn(CSharpSource.StripComments("var x = DateTimeOffset.Now; var y = DateTime.UtcNow; var z = DateTime.Today;"))
             .ShouldBe(["DateTimeOffset.Now", "DateTime.UtcNow", "DateTime.Today"]);
     }
 
@@ -89,7 +88,7 @@ public class NoDirectClockReadsTests
     [InlineData("var s = \"a // b\"; var x = TimeProvider.System;", "TimeProvider.System")]
     public void The_scan_is_not_fooled_by_verbatim_raw_or_char_literals(string code, string expected)
     {
-        HitsIn(StripComments(code)).ShouldBe([expected]);
+        HitsIn(CSharpSource.StripComments(code)).ShouldBe([expected]);
     }
 
     private static List<string> HitsIn(string code) =>
@@ -103,112 +102,6 @@ public class NoDirectClockReadsTests
 
     private static bool IsBuildOrMigrationPath(string relativePath) =>
         relativePath.Split('/').Any(segment => segment is "Migrations" or "obj" or "bin");
-
-    // Removes // and /* */ comments but keeps the contents of string and char literals (a `//` inside
-    // a string is not a comment). Knows regular "...", verbatim @"..." (no escapes, "" is a quote),
-    // raw """...""" (closed by the same quote run) and char literals ('"', '\''), so none of them
-    // desyncs the quote state and hides a later clock read.
-    private static string StripComments(string source)
-    {
-        var result = new StringBuilder(source.Length);
-        var i = 0;
-        while (i < source.Length)
-        {
-            var c = source[i];
-            if (c == '"')
-            {
-                var quoteRun = 0;
-                while (i + quoteRun < source.Length && source[i + quoteRun] == '"')
-                {
-                    quoteRun++;
-                }
-
-                if (quoteRun >= 3)
-                {
-                    // Raw string: copy through the next run of at least quoteRun quotes.
-                    var close = source.IndexOf(new string('"', quoteRun), i + quoteRun, StringComparison.Ordinal);
-                    var end = close < 0 ? source.Length : close + quoteRun;
-                    result.Append(source, i, end - i);
-                    i = end;
-                    continue;
-                }
-
-                var verbatim = (i > 0 && source[i - 1] == '@') || (i > 1 && source[i - 1] == '$' && source[i - 2] == '@');
-                result.Append(c);
-                i++;
-                while (i < source.Length)
-                {
-                    if (source[i] == '"')
-                    {
-                        if (verbatim && i + 1 < source.Length && source[i + 1] == '"')
-                        {
-                            result.Append("\"\"");
-                            i += 2;
-                            continue;
-                        }
-
-                        break;
-                    }
-
-                    if (!verbatim && source[i] == '\\' && i + 1 < source.Length)
-                    {
-                        result.Append(source[i++]);
-                    }
-
-                    result.Append(source[i++]);
-                }
-
-                if (i < source.Length)
-                {
-                    result.Append(source[i++]);
-                }
-            }
-            else if (c == '\'')
-            {
-                // Char literal: one char or one escape, then the closing quote.
-                result.Append(c);
-                i++;
-                if (i < source.Length && source[i] == '\\' && i + 1 < source.Length)
-                {
-                    result.Append(source[i++]);
-                }
-
-                if (i < source.Length)
-                {
-                    result.Append(source[i++]);
-                }
-
-                if (i < source.Length && source[i] == '\'')
-                {
-                    result.Append(source[i++]);
-                }
-            }
-            else if (c == '/' && i + 1 < source.Length && source[i + 1] == '/')
-            {
-                while (i < source.Length && source[i] != '\n')
-                {
-                    i++;
-                }
-            }
-            else if (c == '/' && i + 1 < source.Length && source[i + 1] == '*')
-            {
-                i += 2;
-                while (i + 1 < source.Length && !(source[i] == '*' && source[i + 1] == '/'))
-                {
-                    i++;
-                }
-
-                i += 2;
-            }
-            else
-            {
-                result.Append(c);
-                i++;
-            }
-        }
-
-        return result.ToString();
-    }
 
     private static string FindRepoRoot()
     {
