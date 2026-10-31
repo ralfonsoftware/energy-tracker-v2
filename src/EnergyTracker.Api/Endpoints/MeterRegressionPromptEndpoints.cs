@@ -6,36 +6,15 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class MeterRegressionPromptEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced
-    // across files (that helper is private to its own class); a MeterRegressionPrompt is
-    // Household-scoped exactly like MeterReading.
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapMeterRegressionPromptEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/meter-regression-prompts/open", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapGet("/meter-regression-prompts/open", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetOpenMeterRegressionPrompt getOpenMeterRegressionPrompt,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var details = await getOpenMeterRegressionPrompt.ExecuteAsync(householdId, cancellationToken);
             // 200 with a null body when nothing's open — this is an "is there one?" poll-style
@@ -43,17 +22,14 @@ public static class MeterRegressionPromptEndpoints
             return Results.Ok(details is null ? null : ToResponse(details));
         });
 
-        api.MapPost("/meter-regression-prompts/{id:guid}/resolve", async (
+        household.MapPost("/meter-regression-prompts/{id:guid}/resolve", async (
             Guid id,
             ResolveMeterRegressionPromptRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             ResolveMeterRegressionPrompt resolveMeterRegressionPrompt,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             MeterRegressionClassification classification;
             if (string.Equals(request.Classification, "reset", StringComparison.OrdinalIgnoreCase))
