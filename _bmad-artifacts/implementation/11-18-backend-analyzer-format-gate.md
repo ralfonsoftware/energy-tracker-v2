@@ -73,13 +73,14 @@ Write each guard test red first and record the red run in Debug Log References (
 - [ ] Task 8: Final verification
   - [x] 8.1 Full .NET test suite and Vitest green; counts recorded (expected: Architecture grows by the new guard's tests, everything else unchanged plus Task 6's tests).
   - [ ] 8.2 Push the branch and confirm on the PR that `build-test-lint` runs the new step and passes. Then prove the gate bites: push a throwaway commit that adds one mis-indented line and one `CA1305`-violating call, see the job fail on both steps, and revert it. Record the run URLs in Debug Log.
+    - 2026-10-31 (build step proven): PR #157 merged to `main` (7f46745). Throwaway draft PR https://github.com/ralfonsoftware/energy-tracker-v2/pull/158 (branch `test/11-18-ci-gate-proof`, one commit adding a `CA1305` `int.ToString()` in `src/EnergyTracker.Domain/CiGateProbe.cs`): reported by Ralf to fail at the build step (`-p:TreatWarningsAsErrors=true`) as expected. NOT yet proven: the `dotnet format --verify-no-changes` step (no mis-indented line was pushed) and the CI run URL. Close PR #158 and delete the branch after.
 
 ### Review Findings
 
 - [x] [Review][Patch] CA1873: remove the ~11 member-wide `SuppressMessage` attributes; add one commented `.editorconfig` line for CA1873 (decided D1 c) [src/**; .editorconfig]
 - [x] [Review][Patch] Merge PR with a merge commit or rebase (not squash) so `4050379` survives in `.git-blame-ignore-revs`; note in PR description (decided D2 a) [.git-blame-ignore-revs:2] — recorded here; do at merge time, not code.
 - [x] [Review][Patch] Add `deferred-work.md` entry for rules disabled in `.editorconfig` (CA1848 ~60 sites, CA1716, CA1707, CA1816, CA1711 suffixes) (decided D3 b) [.editorconfig; deferred-work.md]
-- [ ] [Review][Patch] Task 8.2 open: push and prove the gate fails on a throwaway violation; commit story file and `sprint-status.yaml` [story Task 8] — PARTIAL: local proof done (probe file failed `dotnet build -p:TreatWarningsAsErrors=true` with CA1305, then removed). Push of a throwaway failing commit and committing story/sprint files left to Ralf (outward-facing).
+- [ ] [Review][Patch] Task 8.2 open: push and prove the gate fails on a throwaway violation; commit story file and `sprint-status.yaml` [story Task 8] — PARTIAL: build step proven in CI via PR #158 (CA1305, 2026-10-31); format step still unproven in CI (see Task 8.2 note).
 - [x] [Review][Patch] `SuppressMessage` guard regex misses `[Fact, SuppressMessage(...)]`, `[module: ...]`, `]` inside Justification, and accepts whitespace-only Justification; add self-tests [tests/EnergyTracker.Architecture.Tests/BackendAnalyzerGateIsConfiguredTests.cs:1721-1728]
 - [x] [Review][Patch] Guard misses other bypasses: `RunAnalyzers`/`EnableNETAnalyzers=false`, `AnalysisMode*`, per-project `TreatWarningsAsErrors`, `WarningsNotAsErrors` beyond NU1900, nested `.editorconfig`/`.globalconfig`, `severity = default`, `NoWarn` in `*.props`/`*.targets` [BackendAnalyzerGateIsConfiguredTests.cs:1633-1719]
 - [x] [Review][Patch] Workflow guard accepts `continue-on-error: true`, `|| true`, trailing `# comment` and `if: false` on the format/build steps [BackendAnalyzerGateIsConfiguredTests.cs:1664-1681; .github/workflows/pr-review.yml:43-53]
@@ -268,10 +269,10 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 ### Completion Notes List
 
 - Analyzer gate: AnalysisMode Recommended + AnalysisModeSecurity All in Directory.Build.props; root .editorconfig (CA1848/CA1716 off globally, CA1707/CA1816 off for tests, migrations generated_code, CA1711 suffixes, CA1822 api_surface), each lowering commented.
-- Decisions: `CA1873` suppressed per member with justified `SuppressMessage` (boxing/property reads on always-enabled levels). Program.cs top-level logging moved to `AiPlausibilityBackendConfiguration.LogSelection` because attributes cannot sit on top-level statements. `CA1001` suppressed on `HouseholdRecomputeLock.Entry`, `CA2100` on the two `SharedDatabaseServers.ExecuteAsync`. `EveHomeXlsxParser.FirstCellText` now uses `Cells[0]`: an empty row throws ArgumentOutOfRangeException instead of InvalidOperationException (both unhandled).
+- Decisions (superseded by code review: CA1873 is now `severity = none` in `.editorconfig`, member suppressions removed): `CA1873` suppressed per member with justified `SuppressMessage` (boxing/property reads on always-enabled levels). Program.cs top-level logging moved to `AiPlausibilityBackendConfiguration.LogSelection` because attributes cannot sit on top-level statements. `CA1001` suppressed on `HouseholdRecomputeLock.Entry`, `CA2100` on the two `SharedDatabaseServers.ExecuteAsync`. `EveHomeXlsxParser.FirstCellText` now uses `Cells[0]`: an empty row throws ArgumentOutOfRangeException instead of InvalidOperationException (both unhandled).
 - Guard scans skip `Migrations` folders for the pragma rule (EF-generated files carry `#pragma warning disable 612, 618`) and limit the NoWarn scan to src/tests plus Directory.Build.props (`spikes/` is outside the solution). Comment stripper extracted to `CSharpSource`.
 - CI-only warnings-as-errors; `app-deploy.yml` and Dockerfile untouched: main is reached only through a PR that passed this gate, and a new-SDK warning must not block a hotfix deploy; analyzers do not change published IL.
-- Open: Task 8.2 (push branch, confirm `build-test-lint` runs the new step, prove the gate bites with a throwaway commit) needs a push and was not done without the user's approval.
+- Task 8.2 partly closed: PR #158 shows the CI build step fails on a CA1305 violation. Still open: prove the `dotnet format --verify-no-changes` step fails on a mis-indented line, and record the run URL.
 
 ### File List
 
@@ -286,3 +287,4 @@ Claude Sonnet 5.5 (claude-sonnet-5-5)
 ### Change Log
 
 - 2026-10-31: Backend analyzer and format gate added; findings fixed or justified; exhaustive-deps fixed without behaviour change.
+- 2026-10-31: Code review applied; CA1873 now lowered in `.editorconfig` (member-level suppressions removed); guard hardened. CI build-step gate proven on throwaway PR #158.
