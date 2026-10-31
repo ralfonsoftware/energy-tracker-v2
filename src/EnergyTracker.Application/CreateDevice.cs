@@ -4,7 +4,7 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>Creates a Device on a Power Point in the caller's own Household (AC #1, #4).</summary>
-public class CreateDevice(ITaggingScaffoldRepository repository)
+public class CreateDevice(ITaggingScaffoldRepository repository, TimeProvider timeProvider)
 {
     public async Task<Device> ExecuteAsync(Guid householdId, Guid powerPointId, string name, CancellationToken cancellationToken)
     {
@@ -30,7 +30,7 @@ public class CreateDevice(ITaggingScaffoldRepository repository)
             HouseholdId = householdId,
             PowerPointId = powerPointId,
             Name = validatedName,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
             ArchivedAt = null,
         };
 

@@ -19,7 +19,7 @@ public class ListOpenHouseholdInvitesTests
         _repository.ListOpenInvitesAsync(householdId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns([older, newer]);
 
-        var invites = await new ListOpenHouseholdInvites(_repository).ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+        var invites = await new ListOpenHouseholdInvites(_repository, TimeProvider.System).ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
         invites.Select(i => i.Id).ShouldBe([newer.Id, older.Id]);
         await _repository.Received(1).ListOpenInvitesAsync(

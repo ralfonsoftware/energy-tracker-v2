@@ -190,9 +190,10 @@ Conventions: append new sections at the end, chronological (see `project-context
   summary: `HouseholdRecomputeLock`'s in-process locking correctness rests entirely on `infra/modules/container-app.bicep`'s `maxReplicas = 1`, documented only in a source comment — no test or startup assertion fails loudly if that value is ever changed to allow horizontal scaling, which would silently reintroduce the exact race this story fixes.
   evidence: Same "documented but not guarded" pattern already accepted for other infra/code couplings in this codebase (e.g. the OTel/Application-Insights dual-logging constraint in project-context.md). A guard would most naturally live as an integration/smoke check against the deployed Bicep output rather than unit-testable C#, which is why round 4 didn't add one inline. Raised by adversarial review, round 4.
 
-- [open] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
+- [closed] source_spec: `_bmad-artifacts/implementation/spec-status-recompute-serialization-perf.md`
   summary: `HouseholdRecomputeLock`'s internal `Releaser.DisposeAsync` double-dispose guard (`Interlocked.Exchange`) has no test calling `DisposeAsync` twice to prove it actually prevents a double-release.
   evidence: Low-risk — the guard is a standard, well-understood idiom, and `await using` in every real call site only ever disposes once. Worth a quick test if this type is ever reused outside its current single call site. Raised by adversarial review, round 4.
+  resolution: Closed by Story 11.17 (`11-17-timeprovider-recompute-lock-eviction.md`): `HouseholdRecomputeLockTests` now disposes a handle twice and proves a third caller is not let in early.
 
 
 ## Deferred from: code review of story-3-5-dual-entry-points-multi-file-import-queuing (2026-08-27)
@@ -593,3 +594,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] The rejected-readings card follows only changes made in its own tab: `QUEUE_CHANGED_EVENT` is a `window` event, so a discard or resend in a second tab leaves a stale row, and acting on it hits `resendRejectedReading`'s `missing` outcome, where the dialog closes without telling the member their correction was dropped. Deferred because AC #10 and Q8 chose the same-window event; revisit with a `BroadcastChannel` bridge (and a notice for `missing`) if multi-tab use shows up. [web/src/lib/offline-queue.ts, web/src/components/meter-reading/resend-rejected-reading-dialog.tsx]
 - [open] A deterministic 5xx on one payload keeps the entry pending and `flushQueue` re-posts it on every flush forever (one request per reconnect per poisoned entry). Pre-existing behaviour, same family as the "no cap or expiry" item above. [web/src/lib/meter-reading-sync.ts]
+
+## Deferred from: code review of 11-17-timeprovider-recompute-lock-eviction (2026-10-31)
+
+- [open] Several operations read the clock more than once (`ProcessSmartPlugImport` CreatedAtUtc/CompletedAtUtc, `CreateMeterReading` three reads, `BackgroundJobLifecycle.TryStartAsync` staleBefore vs `NewToken`, upload registry sweep vs lookup, invite endpoint vs use case). Read counts were kept identical on purpose (AC2 behaviour-neutral); capture one `now` per operation in a later change. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs, src/EnergyTracker.Application/CreateMeterReading.cs, src/EnergyTracker.Infrastructure/Adapters/BackgroundJobLifecycle.cs]
+- [open] `ManualTimeProvider` overrides only `GetUtcNow` (not `GetTimestamp`/`CreateTimer`), so `Task.Delay(..., provider)`/`CancelAfter` would use real time, and its `DateTimeOffset` field is not tear-safe across threads (e.g. `WebApplicationFactory` host threads). [tests/Shared/ManualTimeProvider.cs]
+- [open] `HouseholdRecomputeLock` tests still use real 50/100 ms acquisition timeouts and a 60 s churn timeout; no test covers a waiter's timeout racing the holder's release. The timeout stays `CancelAfter` per Story 11.17 Dev Notes. [tests/EnergyTracker.Infrastructure.Tests/HouseholdRecomputeLockTests.cs]
+- [open] `NoDirectClockReadsTests` does not cover `Stopwatch`, `Environment.TickCount`, `using static System.DateTime` or alias forms. Outside the AC3 token list. [tests/EnergyTracker.Architecture.Tests/NoDirectClockReadsTests.cs]
+- [open] The job ownership token is the clock truncated to whole milliseconds with no uniqueness guard, so a frozen test clock gives two owners the same token and fencing fails silently. Same token shape as before Story 11.17. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobLifecycle.cs]

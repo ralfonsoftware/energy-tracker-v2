@@ -16,7 +16,8 @@ public class ProcessSmartPlugImport(
     ITaggingScaffoldRepository taggingScaffoldRepository,
     ISmartPlugImportRepository smartPlugImportRepository,
     CompleteSmartPlugImportProcessing completeSmartPlugImportProcessing,
-    ILogger<ProcessSmartPlugImport> logger)
+    ILogger<ProcessSmartPlugImport> logger,
+    TimeProvider timeProvider)
 {
     public async Task ExecuteAsync(
         Guid householdId, Guid backgroundJobId, ProcessSmartPlugImportPayload payload, CancellationToken cancellationToken)
@@ -127,8 +128,8 @@ public class ProcessSmartPlugImport(
                 OriginalFileName = payload.OriginalFileName,
                 Status = matchedPowerPoint is not null ? SmartPlugImportStatus.Completed : SmartPlugImportStatus.AwaitingPowerPointMapping,
                 DeviceTag = deviceTag,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-                CompletedAtUtc = DateTimeOffset.UtcNow,
+                CreatedAtUtc = timeProvider.GetUtcNow(),
+                CompletedAtUtc = timeProvider.GetUtcNow(),
             };
 
             await smartPlugImportRepository.AddAsync(import, readings, cancellationToken, boundaryCorrection);
@@ -262,8 +263,8 @@ public class ProcessSmartPlugImport(
             OriginalFileName = payload.OriginalFileName,
             Status = SmartPlugImportStatus.Failed,
             DeviceTag = string.Empty,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
-            CompletedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
+            CompletedAtUtc = timeProvider.GetUtcNow(),
         };
 
         await smartPlugImportRepository.AddAsync(failedImport, [], cancellationToken);
@@ -274,7 +275,7 @@ public class ProcessSmartPlugImport(
         SmartPlugVendorFormat vendor, string deviceTag, SmartPlugReadingCorrection? boundaryCorrection,
         CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var import = new SmartPlugImport
         {
             Id = payload.SmartPlugImportId,
@@ -299,7 +300,7 @@ public class ProcessSmartPlugImport(
         Guid householdId, Guid backgroundJobId, ProcessSmartPlugImportPayload payload,
         SmartPlugVendorFormat vendor, string deviceTag, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var import = new SmartPlugImport
         {
             Id = payload.SmartPlugImportId,

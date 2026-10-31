@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-10-28
+# last_updated: 2026-10-31
 # Dated change history prior to 2026-09-23 archived to sprint-status-history.md, as are done action items (removed 2026-10-02) (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-10-28
+last_updated: 2026-10-31
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -155,7 +155,7 @@ development_status:
   11-14-restore-id-collisions-active-job-guard: done
   11-15-trending-threshold-scaled-to-elapsed: done
   11-16-offline-queue-rejected-readings-attention: done
-  11-17-timeprovider-recompute-lock-eviction: backlog
+  11-17-timeprovider-recompute-lock-eviction: done
   11-18-backend-analyzer-format-gate: backlog
   11-19-structural-cleanup: backlog
   epic-11-retrospective: optional

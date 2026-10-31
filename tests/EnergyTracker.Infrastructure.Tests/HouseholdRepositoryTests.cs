@@ -43,7 +43,7 @@ public abstract class HouseholdRepositoryTestsBase
         await using var dbContext = await OpenMigratedDbContextAsync(TestContext.Current.CancellationToken);
         dbContext.Households.Add(NewHousehold(householdId));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
 
         var updated = await repository.UpdateAiPlausibilityEnabledAsync(householdId, true, 0, TestContext.Current.CancellationToken);
 
@@ -63,7 +63,7 @@ public abstract class HouseholdRepositoryTestsBase
         await using var dbContext = await OpenMigratedDbContextAsync(TestContext.Current.CancellationToken);
         dbContext.Households.Add(NewHousehold(householdId));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
         await repository.UpdateAiPlausibilityEnabledAsync(householdId, true, 0, TestContext.Current.CancellationToken);
 
         var updated = await repository.UpdateAiPlausibilityEnabledAsync(householdId, false, 1, TestContext.Current.CancellationToken);
@@ -84,7 +84,7 @@ public abstract class HouseholdRepositoryTestsBase
         await using var dbContext = await OpenMigratedDbContextAsync(TestContext.Current.CancellationToken);
         dbContext.Households.Add(NewHousehold(householdId));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
         await repository.UpdateAiPlausibilityEnabledAsync(householdId, true, 0, TestContext.Current.CancellationToken);
 
         // dbContext's own tracked instance now sits at Version 1 — a stale caller who still thinks
@@ -103,7 +103,7 @@ public abstract class HouseholdRepositoryTestsBase
         household.YearlyBaselineKwh = 3500m;
         dbContext.Households.Add(household);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
 
         var updated = await repository.UpdateLocaleAsync(householdId, "de-DE", TestContext.Current.CancellationToken);
 
@@ -122,7 +122,7 @@ public abstract class HouseholdRepositoryTestsBase
         await using var dbContext = await OpenMigratedDbContextAsync(TestContext.Current.CancellationToken);
         dbContext.Households.Add(NewHousehold(householdId));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
 
         var updated = await repository.UpdateLocaleAsync(householdId, "en-US", TestContext.Current.CancellationToken);
 

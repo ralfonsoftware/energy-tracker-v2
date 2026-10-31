@@ -55,6 +55,7 @@ public class InProcessJobStartupSweepTests : IAsyncLifetime
         services.AddScoped<JobHouseholdContext>();
         services.AddScoped<ICurrentHouseholdAccessor, CachingJobContextAccessor>();
         services.AddSingleton(JobLifecycleTimings.Default);
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IBackgroundJobLifecycle, BackgroundJobLifecycle>();
         configure?.Invoke(services);
         return services.BuildServiceProvider();
@@ -156,7 +157,7 @@ public class InProcessJobStartupSweepTests : IAsyncLifetime
                     return throwing;
                 }
 
-                return new BackgroundJobLifecycle(sp.GetRequiredService<EnergyTrackerDbContext>(), JobLifecycleTimings.Default);
+                return new BackgroundJobLifecycle(sp.GetRequiredService<EnergyTrackerDbContext>(), JobLifecycleTimings.Default, TimeProvider.System);
             });
         });
         using (var migrate = provider.CreateScope())

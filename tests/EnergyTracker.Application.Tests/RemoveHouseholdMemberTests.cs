@@ -10,7 +10,7 @@ public class RemoveHouseholdMemberTests
     private readonly IHouseholdRepository _repository = Substitute.For<IHouseholdRepository>();
     private readonly CapturingLogger<RemoveHouseholdMember> _logger = new();
 
-    private RemoveHouseholdMember Sut() => new(_repository, _logger);
+    private RemoveHouseholdMember Sut() => new(_repository, _logger, TimeProvider.System);
 
     [Fact]
     public async Task Surfaces_a_member_that_is_not_in_the_callers_Household_as_not_found()

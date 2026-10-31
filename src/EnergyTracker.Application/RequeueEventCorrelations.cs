@@ -10,7 +10,8 @@ public class RequeueEventCorrelations(
     IEventRepository eventRepository,
     IMeterReadingRepository readingRepository,
     IBackgroundJobQueue jobQueue,
-    ILogger<RequeueEventCorrelations> logger)
+    ILogger<RequeueEventCorrelations> logger,
+    TimeProvider timeProvider)
 {
     // Same clock-skew allowance as CreateEvent/CreateMeterReading: an Event may be stamped slightly ahead of the server clock.
     private static readonly TimeSpan MaxFutureClockSkew = TimeSpan.FromMinutes(5);
@@ -24,7 +25,7 @@ public class RequeueEventCorrelations(
         ExecuteAsync(
             householdId,
             timestamp - WindowedDeviationCalculator.WindowRadius,
-            DateTimeOffset.UtcNow + MaxFutureClockSkew,
+            timeProvider.GetUtcNow() + MaxFutureClockSkew,
             cancellationToken);
 
     /// <summary>Same as <see cref="ExecuteFromAsync(Guid, DateTimeOffset, CancellationToken)"/>, keyed by the triggering reading's id; the lookup is guarded like the rest of the requeue (AC #9).</summary>

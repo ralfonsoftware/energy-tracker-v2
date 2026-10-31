@@ -9,7 +9,7 @@ public class GetTariffCheckReminderTests
 {
     private readonly ITariffRepository _tariffRepository = Substitute.For<ITariffRepository>();
 
-    private GetTariffCheckReminder Sut() => new(_tariffRepository);
+    private GetTariffCheckReminder Sut() => new(_tariffRepository, TimeProvider.System);
 
     private static Tariff CurrentTariff(Guid householdId, DateTimeOffset contractStartDate, int contractPeriodMonths) => new()
     {

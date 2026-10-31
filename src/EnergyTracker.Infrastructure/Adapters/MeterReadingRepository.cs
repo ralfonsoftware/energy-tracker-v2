@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EnergyTracker.Infrastructure.Adapters;
 
-public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterReadingRepository
+public class MeterReadingRepository(EnergyTrackerDbContext dbContext, TimeProvider timeProvider) : IMeterReadingRepository
 {
     public Task<MeterReading?> FindByIdempotencyKeyAsync(Guid idempotencyKey, CancellationToken cancellationToken) =>
         dbContext.MeterReadings.SingleOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey, cancellationToken);
@@ -22,7 +22,7 @@ public class MeterReadingRepository(EnergyTrackerDbContext dbContext) : IMeterRe
         {
             Id = Guid.NewGuid(),
             HouseholdId = householdId,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
         };
 
         await dbContext.MainMeters.AddAsync(mainMeter, cancellationToken);

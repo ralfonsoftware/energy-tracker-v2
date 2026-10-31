@@ -56,7 +56,7 @@ public abstract class MeterReadingRepositoryTestsBase
         dbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
         dbContext.MainMeters.Add(new MainMeter { Id = mainMeterId, HouseholdId = householdId, CreatedAtUtc = DateTimeOffset.UtcNow });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 400, mustIncludeReadingId: null, TestContext.Current.CancellationToken);
 
@@ -75,7 +75,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var latestReading = NewReading(householdId, mainMeterId, 200m, latest);
         dbContext.MeterReadings.AddRange(withinWindow, beyondWindow, latestReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: null, TestContext.Current.CancellationToken);
 
@@ -101,7 +101,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var latestReading = NewReading(householdId, mainMeterId, 2000m, latest);
         dbContext.MeterReadings.AddRange(anchor, withinWindowOfAnchor, beyondWindowOfAnchor, latestReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: anchor.Id, TestContext.Current.CancellationToken);
 
@@ -125,7 +125,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var latestReading = NewReading(householdId, mainMeterId, 2000m, latest);
         dbContext.MeterReadings.AddRange(anchor, withinWindowOfAnchor, latestReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: anchor.Id, TestContext.Current.CancellationToken);
 
@@ -155,7 +155,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var oneTickBeforeBoundary = NewReading(householdId, mainMeterId, 0m, persistedLatestTimestamp.AddDays(-30).AddTicks(-1));
         dbContext.MeterReadings.AddRange(atBoundary, oneTickBeforeBoundary);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: null, TestContext.Current.CancellationToken);
 
@@ -182,7 +182,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var latestReading = NewReading(householdId, mainMeterId, 200m, latest);
         dbContext.MeterReadings.AddRange(withinWindow, beyondWindow, latestReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         // mustIncludeReadingId points at the MainMeter's own latest reading — the anchor and the
         // base-window reading are identical, so Min(latest, mustInclude) == latest either way.
@@ -203,7 +203,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var beyondWindow = NewReading(householdId, mainMeterId, 0m, latest.AddDays(-40));
         dbContext.MeterReadings.AddRange(latestReading, withinWindow, beyondWindow);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: Guid.NewGuid(), TestContext.Current.CancellationToken);
 
@@ -222,7 +222,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 30, mustIncludeReadingId: null, TestContext.Current.CancellationToken);
 
@@ -247,7 +247,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var afterWindow = NewReading(householdId, mainMeterId, 500m, windowEnd + TimeSpan.FromDays(1));
         dbContext.MeterReadings.AddRange(beforeWindow, atWindowStart, insideWindow, atWindowEnd, afterWindow);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetInWindowByMainMeterAsync(mainMeterId, windowStart, windowEnd, TestContext.Current.CancellationToken);
 
@@ -260,7 +260,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var mainMeterId = await SeedHouseholdAndMainMeterAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetInWindowByMainMeterAsync(
             mainMeterId, DateTimeOffset.UtcNow.AddDays(-7), DateTimeOffset.UtcNow.AddDays(7), TestContext.Current.CancellationToken);
@@ -286,7 +286,7 @@ public abstract class MeterReadingRepositoryTestsBase
         var now = DateTimeOffset.UtcNow;
         dbContext.MeterReadings.Add(NewReading(otherHouseholdId, otherMainMeterId, 999m, now));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var result = await repository.GetInWindowByMainMeterAsync(
             mainMeterId, now.AddDays(-7), now.AddDays(7), TestContext.Current.CancellationToken);
@@ -352,7 +352,7 @@ public class PostgresMeterReadingRepositoryTests : MeterReadingRepositoryTestsBa
         var latest = NewReading(householdId, mainMeterId, 700m, anchorTimestamp.AddDays(420));
         dbContext.MeterReadings.AddRange(tooOldEvenUnbounded, olderHistory, anchor, trigger, afterTrigger, latest);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new MeterReadingRepository(dbContext);
+        var repository = new MeterReadingRepository(dbContext, TimeProvider.System);
 
         var boundedFetch = await repository.GetRecentByMainMeterAsync(mainMeterId, windowDays: 400, mustIncludeReadingId: anchor.Id, TestContext.Current.CancellationToken);
         var boundedIncluded = PatternDetectiveCalculator.ExcludeFromOpenPrompt(boundedFetch, trigger.Id);

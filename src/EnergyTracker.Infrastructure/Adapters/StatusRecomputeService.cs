@@ -9,7 +9,8 @@ public class StatusRecomputeService(
     GetCurrentStatus getCurrentStatus,
     EnergyTrackerDbContext dbContext,
     IHouseholdRecomputeLock recomputeLock,
-    ILogger<StatusRecomputeService> logger) : IStatusRecomputeService
+    ILogger<StatusRecomputeService> logger,
+    TimeProvider timeProvider) : IStatusRecomputeService
 {
     public async Task RecomputeAsync(Guid householdId, CancellationToken cancellationToken)
     {
@@ -63,7 +64,7 @@ public class StatusRecomputeService(
                         PaceToDateKwh = result.PaceToDateKwh,
                         BaselineToDateKwh = result.BaselineToDateKwh,
                         IsLowConfidence = result.IsLowConfidence,
-                        ComputedAtUtc = DateTimeOffset.UtcNow,
+                        ComputedAtUtc = timeProvider.GetUtcNow(),
                     },
                     cancellationToken);
 

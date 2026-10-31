@@ -70,7 +70,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         var (householdA, membersA) = await SeedHouseholdAsync(2);
         var (_, membersB) = await SeedHouseholdAsync(1);
         await using var dbContext = OpenFreshDbContext();
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
 
         var own = await repository.FindMemberInHouseholdAsync(householdA.Id, membersA[0].Id, TestContext.Current.CancellationToken);
         var foreign = await repository.FindMemberInHouseholdAsync(householdA.Id, membersB[0].Id, TestContext.Current.CancellationToken);
@@ -94,7 +94,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
 
         await using (var dbContext = OpenFreshDbContext())
         {
-            await new HouseholdRepository(dbContext).RemoveMemberAsync(household.Id, members[1].Id, removedAt, TestContext.Current.CancellationToken);
+            await new HouseholdRepository(dbContext, TimeProvider.System).RemoveMemberAsync(household.Id, members[1].Id, removedAt, TestContext.Current.CancellationToken);
         }
 
         await using var verify = OpenFreshDbContext();
@@ -127,7 +127,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await using var dbContext = OpenFreshDbContext();
 
         await Should.ThrowAsync<HouseholdMemberNotFoundException>(() =>
-            new HouseholdRepository(dbContext).RemoveMemberAsync(household.Id, otherMembers[0].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+            new HouseholdRepository(dbContext, TimeProvider.System).RemoveMemberAsync(household.Id, otherMembers[0].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
 
         await using var verify = OpenFreshDbContext();
         (await verify.HouseholdMembers.CountAsync(m => m.Id == otherMembers[0].Id, TestContext.Current.CancellationToken)).ShouldBe(1);
@@ -143,7 +143,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await using var dbContext = OpenFreshDbContext();
 
         await Should.ThrowAsync<LastHouseholdMemberException>(() =>
-            new HouseholdRepository(dbContext).RemoveMemberAsync(household.Id, members[0].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+            new HouseholdRepository(dbContext, TimeProvider.System).RemoveMemberAsync(household.Id, members[0].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
 
         await using var verify = OpenFreshDbContext();
         (await verify.HouseholdMembers.CountAsync(m => m.HouseholdId == household.Id, TestContext.Current.CancellationToken)).ShouldBe(1);
@@ -169,7 +169,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await AddAsync(job);
         await using (var dbContext = OpenFreshDbContext())
         {
-            await new HouseholdRepository(dbContext).RemoveMemberAsync(household.Id, members[1].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+            await new HouseholdRepository(dbContext, TimeProvider.System).RemoveMemberAsync(household.Id, members[1].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
         }
 
         await using var verify = OpenFreshDbContext();
@@ -187,10 +187,10 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await using var context1 = OpenFreshDbContext();
         await using var context2 = OpenFreshDbContext();
         await context1.Households.SingleAsync(h => h.Id == household.Id, TestContext.Current.CancellationToken);
-        await new HouseholdRepository(context2).RemoveMemberAsync(household.Id, members[1].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        await new HouseholdRepository(context2, TimeProvider.System).RemoveMemberAsync(household.Id, members[1].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
 
         await Should.ThrowAsync<HouseholdConcurrencyConflictException>(() =>
-            new HouseholdRepository(context1).RemoveMemberAsync(household.Id, members[2].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+            new HouseholdRepository(context1, TimeProvider.System).RemoveMemberAsync(household.Id, members[2].Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
 
         await using var verify = OpenFreshDbContext();
         var remaining = await verify.HouseholdMembers.Where(m => m.HouseholdId == household.Id).Select(m => m.Id).ToListAsync(TestContext.Current.CancellationToken);
@@ -213,7 +213,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
                 await gate.Task;
                 try
                 {
-                    await new HouseholdRepository(context).RemoveMemberAsync(household.Id, target, DateTimeOffset.UtcNow, CancellationToken.None);
+                    await new HouseholdRepository(context, TimeProvider.System).RemoveMemberAsync(household.Id, target, DateTimeOffset.UtcNow, CancellationToken.None);
                     return null;
                 }
                 catch (Exception ex)
@@ -247,7 +247,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
 
         await using (var dbContext = OpenFreshDbContext())
         {
-            await new HouseholdRepository(dbContext).RevokeInviteAsync(household.Id, invite.Id, revokedAt, TestContext.Current.CancellationToken);
+            await new HouseholdRepository(dbContext, TimeProvider.System).RevokeInviteAsync(household.Id, invite.Id, revokedAt, TestContext.Current.CancellationToken);
         }
 
         await using var verify = OpenFreshDbContext();
@@ -272,17 +272,17 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         {
             await using var dbContext = OpenFreshDbContext();
             await Should.ThrowAsync<HouseholdInviteNotOpenException>(() =>
-                new HouseholdRepository(dbContext).RevokeInviteAsync(household.Id, inviteId, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+                new HouseholdRepository(dbContext, TimeProvider.System).RevokeInviteAsync(household.Id, inviteId, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
         }
 
         await using (var dbContext = OpenFreshDbContext())
         {
-            await new HouseholdRepository(dbContext).RevokeInviteAsync(household.Id, open.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+            await new HouseholdRepository(dbContext, TimeProvider.System).RevokeInviteAsync(household.Id, open.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
         }
 
         await using var again = OpenFreshDbContext();
         await Should.ThrowAsync<HouseholdInviteNotOpenException>(() =>
-            new HouseholdRepository(again).RevokeInviteAsync(household.Id, open.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+            new HouseholdRepository(again, TimeProvider.System).RevokeInviteAsync(household.Id, open.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
 
         await using var verify = OpenFreshDbContext();
         var untouched = await verify.HouseholdInvites.SingleAsync(i => i.Id == foreign.Id, TestContext.Current.CancellationToken);
@@ -301,10 +301,10 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await using var acceptContext = OpenFreshDbContext();
         await revokeContext.HouseholdInvites.SingleAsync(i => i.Id == invite.Id, TestContext.Current.CancellationToken);
         var toAccept = await acceptContext.HouseholdInvites.SingleAsync(i => i.Id == invite.Id, TestContext.Current.CancellationToken);
-        await new HouseholdRepository(acceptContext).AcceptInviteAsync(toAccept, NewMember(household.Id), TestContext.Current.CancellationToken);
+        await new HouseholdRepository(acceptContext, TimeProvider.System).AcceptInviteAsync(toAccept, NewMember(household.Id), TestContext.Current.CancellationToken);
 
         await Should.ThrowAsync<HouseholdInviteNotOpenException>(() =>
-            new HouseholdRepository(revokeContext).RevokeInviteAsync(household.Id, invite.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
+            new HouseholdRepository(revokeContext, TimeProvider.System).RevokeInviteAsync(household.Id, invite.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
     }
 
     // And the other order: the revoke committed first, so the accept (holding the invite it loaded earlier) loses.
@@ -317,10 +317,10 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await using var acceptContext = OpenFreshDbContext();
         await using var revokeContext = OpenFreshDbContext();
         var toAccept = await acceptContext.HouseholdInvites.SingleAsync(i => i.Id == invite.Id, TestContext.Current.CancellationToken);
-        await new HouseholdRepository(revokeContext).RevokeInviteAsync(household.Id, invite.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        await new HouseholdRepository(revokeContext, TimeProvider.System).RevokeInviteAsync(household.Id, invite.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
 
         await Should.ThrowAsync<HouseholdInviteExpiredOrConsumedException>(() =>
-            new HouseholdRepository(acceptContext).AcceptInviteAsync(toAccept, NewMember(household.Id), TestContext.Current.CancellationToken));
+            new HouseholdRepository(acceptContext, TimeProvider.System).AcceptInviteAsync(toAccept, NewMember(household.Id), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -332,7 +332,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await AddAsync(open, NewInvite(household.Id, consumedAtUtc: Now), NewInvite(household.Id, expiresAtUtc: Now.AddDays(-1)), NewInvite(otherHousehold.Id));
         await using var dbContext = OpenFreshDbContext();
 
-        var invites = await new HouseholdRepository(dbContext).ListOpenInvitesAsync(household.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        var invites = await new HouseholdRepository(dbContext, TimeProvider.System).ListOpenInvitesAsync(household.Id, DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
 
         invites.Select(i => i.Id).ShouldBe([open.Id]);
     }
@@ -344,7 +344,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await SeedHouseholdAsync(2);
         await using var dbContext = OpenFreshDbContext();
 
-        var listed = await new HouseholdRepository(dbContext).ListMembersAsync(household.Id, TestContext.Current.CancellationToken);
+        var listed = await new HouseholdRepository(dbContext, TimeProvider.System).ListMembersAsync(household.Id, TestContext.Current.CancellationToken);
 
         listed.Select(m => m.Id).OrderBy(id => id).ShouldBe(members.Select(m => m.Id).OrderBy(id => id));
     }
@@ -358,7 +358,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await AddAsync(invite);
         await using var dbContext = OpenFreshDbContext();
 
-        var found = await new HouseholdRepository(dbContext).FindInviteByTokenAsync(token, TestContext.Current.CancellationToken);
+        var found = await new HouseholdRepository(dbContext, TimeProvider.System).FindInviteByTokenAsync(token, TestContext.Current.CancellationToken);
 
         found.ShouldNotBeNull().Id.ShouldBe(invite.Id);
         found.Token.ShouldBeNull();
@@ -373,7 +373,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await AddAsync(invite);
         await using var dbContext = OpenFreshDbContext();
 
-        var found = await new HouseholdRepository(dbContext).FindInviteByTokenAsync(legacyToken, TestContext.Current.CancellationToken);
+        var found = await new HouseholdRepository(dbContext, TimeProvider.System).FindInviteByTokenAsync(legacyToken, TestContext.Current.CancellationToken);
 
         found.ShouldNotBeNull().Id.ShouldBe(invite.Id);
     }
@@ -388,7 +388,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
         await AddAsync(hashRow, legacyRow);
         await using var dbContext = OpenFreshDbContext();
 
-        var found = await new HouseholdRepository(dbContext).FindInviteByTokenAsync(token, TestContext.Current.CancellationToken);
+        var found = await new HouseholdRepository(dbContext, TimeProvider.System).FindInviteByTokenAsync(token, TestContext.Current.CancellationToken);
 
         found.ShouldNotBeNull().Id.ShouldBe(hashRow.Id);
     }
@@ -398,7 +398,7 @@ public abstract class HouseholdMembershipRepositoryTestsBase
     {
         await SeedHouseholdAsync(1);
         await using var dbContext = OpenFreshDbContext();
-        var repository = new HouseholdRepository(dbContext);
+        var repository = new HouseholdRepository(dbContext, TimeProvider.System);
 
         (await repository.FindInviteByTokenAsync(InviteToken.Generate(), TestContext.Current.CancellationToken)).ShouldBeNull();
         (await repository.FindInviteByTokenAsync(new string('a', InviteToken.MaxLength + 1), TestContext.Current.CancellationToken)).ShouldBeNull();

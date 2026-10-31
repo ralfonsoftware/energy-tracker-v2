@@ -23,7 +23,7 @@ public class ArchiveRoomTests
     {
         var room = MakeRoom();
         _repository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new ArchiveRoom(_repository);
+        var sut = new ArchiveRoom(_repository, TimeProvider.System);
 
         var before = DateTimeOffset.UtcNow;
         var result = await sut.ExecuteAsync(room.Id, TestContext.Current.CancellationToken);
@@ -40,7 +40,7 @@ public class ArchiveRoomTests
         var archivedAt = DateTimeOffset.UtcNow.AddDays(-1);
         var room = MakeRoom(archivedAt);
         _repository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new ArchiveRoom(_repository);
+        var sut = new ArchiveRoom(_repository, TimeProvider.System);
 
         var result = await sut.ExecuteAsync(room.Id, TestContext.Current.CancellationToken);
 
@@ -53,7 +53,7 @@ public class ArchiveRoomTests
     {
         var roomId = Guid.NewGuid();
         _repository.FindRoomAsync(roomId, Arg.Any<CancellationToken>()).Returns((Room?)null);
-        var sut = new ArchiveRoom(_repository);
+        var sut = new ArchiveRoom(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<TaggingScaffoldNotFoundException>(
             () => sut.ExecuteAsync(roomId, TestContext.Current.CancellationToken));
@@ -64,7 +64,7 @@ public class ArchiveRoomTests
     {
         var room = MakeRoom();
         _repository.FindRoomAsync(room.Id, Arg.Any<CancellationToken>()).Returns(room);
-        var sut = new ArchiveRoom(_repository);
+        var sut = new ArchiveRoom(_repository, TimeProvider.System);
 
         await sut.ExecuteAsync(room.Id, TestContext.Current.CancellationToken);
 

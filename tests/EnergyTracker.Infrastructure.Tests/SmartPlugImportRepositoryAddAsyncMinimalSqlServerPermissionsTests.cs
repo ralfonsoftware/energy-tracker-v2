@@ -101,7 +101,7 @@ public class SmartPlugImportRepositoryAddAsyncMinimalSqlServerPermissionsTests :
         }
 
         await using var dbContext = OpenDbContextAsRuntimeLogin(householdId);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var import = new SmartPlugImport
         {
             Id = Guid.NewGuid(),

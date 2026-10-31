@@ -20,7 +20,8 @@ public class GetCurrentStatus(
     IHouseholdRepository householdRepository,
     IMeterReadingRepository readingRepository,
     IMeterRegressionPromptRepository regressionPromptRepository,
-    ISmartPlugCoverageSignal smartPlugCoverageSignal)
+    ISmartPlugCoverageSignal smartPlugCoverageSignal,
+    TimeProvider timeProvider)
 {
     // PatternDetectiveCalculator.ComputePaceToDate only ever windows the trailing 365 days from
     // the last included reading (see its own doc comment) — 400 gives that a 35-day margin so an
@@ -88,7 +89,7 @@ public class GetCurrentStatus(
 
         // AC #3: "unusually long gap since the last reading" — measured from the most recent
         // *included* reading to now, not a gap between two readings within the walked sequence.
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var lastReading = includedReadings[^1];
         var daysSinceLastReading = (now - lastReading.ReadingTimestamp).TotalDays;
         var isLowConfidence = daysSinceLastReading > household.LowConfidenceGapDays;

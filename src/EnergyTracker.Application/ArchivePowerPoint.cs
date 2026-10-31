@@ -7,7 +7,7 @@ namespace EnergyTracker.Application;
 /// Soft-deletes a Power Point (AC #3). Idempotent — archiving an already-archived Power Point is
 /// a no-op. Does not cascade-archive its Devices, matching ArchiveRoom's reasoning.
 /// </summary>
-public class ArchivePowerPoint(ITaggingScaffoldRepository repository)
+public class ArchivePowerPoint(ITaggingScaffoldRepository repository, TimeProvider timeProvider)
 {
     public async Task<PowerPoint> ExecuteAsync(Guid powerPointId, CancellationToken cancellationToken)
     {
@@ -21,7 +21,7 @@ public class ArchivePowerPoint(ITaggingScaffoldRepository repository)
 
         // See ArchiveRoom's identical truncation for why: keeps this call's in-memory
         // ArchivedAt byte-identical to what a later re-read from Postgres returns.
-        var archivedAt = DateTimeOffset.UtcNow;
+        var archivedAt = timeProvider.GetUtcNow();
         powerPoint.ArchivedAt = archivedAt.AddTicks(-(archivedAt.Ticks % TimeSpan.TicksPerMicrosecond));
         await repository.UpdatePowerPointAsync(powerPoint, cancellationToken);
 

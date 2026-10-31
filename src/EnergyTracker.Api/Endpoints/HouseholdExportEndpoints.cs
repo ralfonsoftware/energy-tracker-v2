@@ -54,7 +54,7 @@ public static class HouseholdExportEndpoints
             var stopwatch = Stopwatch.StartNew();
             var export = await exportHouseholdData.ExecuteAsync(householdId, cancellationToken);
 
-            // Derived from the export's own ExportedAtUtc, not a fresh DateTimeOffset.UtcNow call —
+            // Derived from the export's own ExportedAtUtc, not a fresh clock read —
             // keeps the downloaded filename's date and the document's own exportedAtUtc field from
             // disagreeing if the request happens to straddle a UTC-midnight boundary.
             var fileName = $"energy-tracker-export-{export.ExportedAtUtc:yyyy-MM-dd}.json";

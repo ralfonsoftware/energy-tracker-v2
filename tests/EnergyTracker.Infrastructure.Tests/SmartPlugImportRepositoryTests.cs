@@ -120,7 +120,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var result = await repository.FindLatestReadingWatermarkByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
 
@@ -143,7 +143,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, import.Id, powerPointId, older),
             newerReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var result = await repository.FindLatestReadingWatermarkByPowerPointAsync(powerPointId, TestContext.Current.CancellationToken);
 
@@ -172,7 +172,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugReadings.Add(reading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         dbContext.ChangeTracker.Clear();
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var correctionBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var correctionImport = MakeImport(householdId, correctionBackgroundJobId);
         var correction = new SmartPlugReadingCorrection(householdId, reading.Id, 0.75m, "0.5", "0.75");
@@ -208,7 +208,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var import = MakeImport(householdId, backgroundJobId);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var correction = new SmartPlugReadingCorrection(householdId, Guid.NewGuid(), 0.75m, "0.5", "0.75");
 
         await repository.AddAsync(import, [], TestContext.Current.CancellationToken, correction);
@@ -237,7 +237,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugReadings.Add(
             MakeReading(householdId, existingImport.Id, powerPointId, new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var newImport = MakeImport(householdId, newBackgroundJobId);
@@ -285,7 +285,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart.AddDays(1)));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -330,7 +330,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, kwhValue: 0.9m));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -372,7 +372,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, intervalEnd: collidingIntervalStart.AddHours(1)));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -412,7 +412,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             MakeReading(householdId, awaitingImport.Id, powerPointId: null, collidingIntervalStart, deviceName: "New Smart Plug"));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -448,7 +448,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         // A large Eve Home export's set-based mapping UPDATE reliably exceeded the ADO.NET
         // default 30s command timeout against Basic-tier Azure SQL in production, surfacing as an
@@ -519,7 +519,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugReadings.AddRange(noConflictReadings.Concat(exactDuplicateReadings).Concat(divergentReadings));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -576,7 +576,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugReadings.AddRange(readings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         // First call: no pre-existing collisions, takes the fast ExecuteUpdateAsync path and
         // correctly attaches every reading to the target Power Point.
@@ -625,7 +625,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var logger = Substitute.For<ILogger<SmartPlugImportRepository>>();
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), logger);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), logger);
         awaitingImport.Status = SmartPlugImportStatus.Completed;
         awaitingImport.CompletedAtUtc = DateTimeOffset.UtcNow;
 
@@ -655,7 +655,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var import = MakeImport(householdId, backgroundJobId);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.AddAsync(import, [], TestContext.Current.CancellationToken);
 
@@ -705,7 +705,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             IntervalStart = DateTimeOffset.UtcNow, IntervalEnd = DateTimeOffset.UtcNow, KwhValue = 0.5m,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -732,7 +732,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Failed, SmartPlugImportStatus.Failed,
             jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-31), TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -764,7 +764,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -783,7 +783,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.AwaitingPowerPointMapping,
             jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-31), TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -809,7 +809,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         };
         dbContext.BackgroundJobs.AddRange(queuedJob, processingJob);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -834,7 +834,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -864,7 +864,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         import.CompletedAtUtc = DateTimeOffset.UtcNow;
         dbContext.SmartPlugImports.Add(import);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -882,7 +882,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.Completed,
             jobCompletedAtUtc: DateTimeOffset.UtcNow.AddDays(-1), TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -935,7 +935,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             importIdsOldestFirst.Add(import.Id);
         }
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var cutoffUtc = DateTimeOffset.UtcNow.AddDays(-30);
 
         await repository.SweepExpiredAsync(householdId, cutoffUtc, TestContext.Current.CancellationToken);
@@ -993,7 +993,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
 
         var interceptor = new CapturingCommandTextInterceptor();
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -1054,7 +1054,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // command, so it doesn't add to this count.
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -1111,7 +1111,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             importIds.Add(import.Id);
         }
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -1151,7 +1151,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         lockAcquiredByHolder.ShouldBeTrue();
 
         await using var pollingDbContext = await OpenMigratedDbContextAsync(_container, householdId, TestContext.Current.CancellationToken);
-        var pollingRepository = new SmartPlugImportRepository(pollingDbContext, new AuditCorrectionRecorder(pollingDbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var pollingRepository = new SmartPlugImportRepository(pollingDbContext, new AuditCorrectionRecorder(pollingDbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await pollingRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -1186,7 +1186,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1207,7 +1207,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             Status = BackgroundJobStatus.Processing, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1224,7 +1224,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         var (jobId, importId) = await SeedJobAndImportAsync(
             dbContext, householdId, BackgroundJobStatus.Completed, SmartPlugImportStatus.AwaitingPowerPointMapping,
             jobCompletedAtUtc: DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1249,7 +1249,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             IntervalStart = DateTimeOffset.UtcNow, IntervalEnd = DateTimeOffset.UtcNow, KwhValue = 0.5m,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1277,7 +1277,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             Status = BackgroundJobStatus.Failed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1309,7 +1309,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             CreatedAtUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1333,7 +1333,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-31), CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -1354,7 +1354,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1), CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 
@@ -1377,7 +1377,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             Status = BackgroundJobStatus.Queued, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = null,
         });
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1436,7 +1436,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             readingIds.Add(reading.Id);
         }
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1535,7 +1535,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // independent of which chunk an import lands in. Total: 5 + 122 = 127, every time.
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1602,7 +1602,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // unbounded SetNull cascade over all 20,001 rows.
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1657,7 +1657,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // BackgroundJobs delete = 4. Two detach UPDATEs (an off-by-one) would show up as 5.
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: int.MaxValue);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1692,7 +1692,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
             jobIds.Add(job.Id);
         }
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -1813,7 +1813,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
 
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 202);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var exception = await Should.ThrowAsync<InvalidOperationException>(
             () => repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken));
@@ -1885,7 +1885,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // delete = 62 commands, letting the whole first chunk finish before chunk 2 is blocked.
         var interceptor = new FailAfterCommandCountInterceptor(allowedCommandCount: 62);
         await using var dbContext = OpenDbContextWithInterceptor(_container, householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await Should.ThrowAsync<InvalidOperationException>(
             () => repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken));
@@ -1916,7 +1916,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         // unrelated Guid whose only job is to violate the FK.
         await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         // Mirrors BackgroundJobProcessor.ProcessAsync's own shape: it fetches a BackgroundJob
         // entity on this same scoped DbContext and only mutates it in its OWN catch block, AFTER
@@ -1998,7 +1998,7 @@ public class SmartPlugImportRepositoryTests : IAsyncLifetime
         dbContext.SmartPlugReadings.Add(existingReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         dbContext.ChangeTracker.Clear();
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var newImport = MakeImport(householdId, backgroundJobId);
         var correction = new SmartPlugReadingCorrection(householdId, existingReading.Id, 0.75m, "0.5", "0.75");

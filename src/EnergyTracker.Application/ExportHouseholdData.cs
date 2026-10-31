@@ -4,7 +4,7 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>Builds the caller's Household's full "v2" export document — a raw copy of every in-scope entity, zero derivation/recomputation (AC #1, #2, #3, #4; AD-14). Streamed: <see cref="HouseholdExportStream"/>'s collections are lazily mapped per-item from the reader's own paged reads, so the caller (HouseholdExportEndpoints) can write each row as it arrives instead of buffering the whole export (spec-household-export-oom-fix.md).</summary>
-public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibilityBackendOptions aiPlausibilityBackendOptions)
+public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibilityBackendOptions aiPlausibilityBackendOptions, TimeProvider timeProvider)
 {
     public const string FormatVersion = "v2";
 
@@ -14,7 +14,7 @@ public class ExportHouseholdData(IHouseholdExportReader exportReader, AiPlausibi
 
         return new HouseholdExportStream(
             FormatVersion: FormatVersion,
-            ExportedAtUtc: DateTimeOffset.UtcNow,
+            ExportedAtUtc: timeProvider.GetUtcNow(),
             Household: ToDto(data.Household),
             HouseholdMembers: MapAsync(data.HouseholdMembers, ToDto),
             MainMeter: data.MainMeter is { } mainMeter ? ToDto(mainMeter) : null,

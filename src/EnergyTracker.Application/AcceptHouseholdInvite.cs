@@ -8,7 +8,7 @@ namespace EnergyTracker.Application;
 /// as a full, equal-access member (AC #1, #2). Plain class with a constructor-injected
 /// repository port, matching CreateHousehold's shape.
 /// </summary>
-public class AcceptHouseholdInvite(IHouseholdRepository repository)
+public class AcceptHouseholdInvite(IHouseholdRepository repository, TimeProvider timeProvider)
 {
     public async Task<Household> ExecuteAsync(
         string token,
@@ -26,7 +26,7 @@ public class AcceptHouseholdInvite(IHouseholdRepository repository)
         var invite = await repository.FindInviteByTokenAsync(token, cancellationToken)
             ?? throw new HouseholdInviteNotFoundException();
 
-        if (invite.ConsumedAtUtc is not null || invite.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+        if (invite.ConsumedAtUtc is not null || invite.ExpiresAtUtc <= timeProvider.GetUtcNow())
         {
             throw new HouseholdInviteExpiredOrConsumedException();
         }
@@ -46,7 +46,7 @@ public class AcceptHouseholdInvite(IHouseholdRepository repository)
             ExternalIssuer = externalIssuer,
             ExternalSubjectId = externalSubjectId,
             DisplayName = displayName,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
         };
 
         return await repository.AcceptInviteAsync(invite, newMember, cancellationToken);

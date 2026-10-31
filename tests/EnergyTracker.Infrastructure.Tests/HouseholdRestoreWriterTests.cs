@@ -323,7 +323,7 @@ public abstract class HouseholdRestoreWriterTestsBase
     // way a member's download would be, so the test covers the whole path and not a hand-built graph.
     private static async Task<string> ExportToFileAsync(EnergyTrackerDbContext dbContext, Guid householdId, CancellationToken cancellationToken)
     {
-        var stream = await new ExportHouseholdData(new HouseholdExportReader(dbContext), new AiPlausibilityBackendOptions(false, null, "")).ExecuteAsync(householdId, cancellationToken);
+        var stream = await new ExportHouseholdData(new HouseholdExportReader(dbContext), new AiPlausibilityBackendOptions(false, null, ""), TimeProvider.System).ExecuteAsync(householdId, cancellationToken);
 
         async Task<List<T>> Drain<T>(IAsyncEnumerable<T> source)
         {

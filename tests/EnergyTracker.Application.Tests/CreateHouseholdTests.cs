@@ -20,7 +20,7 @@ public class CreateHouseholdTests
     [InlineData("en-US", "USD")]
     public async Task Creates_household_and_creator_member_for_a_supported_locale(string locale, string currency)
     {
-        var sut = new CreateHousehold(_repository);
+        var sut = new CreateHousehold(_repository, TimeProvider.System);
 
         var household = await sut.ExecuteAsync("https://issuer.example", "subject-1", locale, currency, "Sam", TestContext.Current.CancellationToken);
 
@@ -41,7 +41,7 @@ public class CreateHouseholdTests
     [Fact]
     public async Task Creates_the_creator_member_with_no_DisplayName_when_the_OIDC_principal_carries_no_name_claim()
     {
-        var sut = new CreateHousehold(_repository);
+        var sut = new CreateHousehold(_repository, TimeProvider.System);
 
         var household = await sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", "EUR", null, TestContext.Current.CancellationToken);
 
@@ -57,7 +57,7 @@ public class CreateHouseholdTests
     [InlineData("de")]
     public async Task Rejects_a_locale_outside_the_launch_set_instead_of_defaulting(string locale)
     {
-        var sut = new CreateHousehold(_repository);
+        var sut = new CreateHousehold(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<HouseholdValidationException>(() =>
             sut.ExecuteAsync("https://issuer.example", "subject-1", locale, "EUR", "Sam", TestContext.Current.CancellationToken));
@@ -72,7 +72,7 @@ public class CreateHouseholdTests
     [InlineData("eur")]
     public async Task Rejects_a_currency_that_is_not_a_plausible_ISO_4217_code(string currency)
     {
-        var sut = new CreateHousehold(_repository);
+        var sut = new CreateHousehold(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<HouseholdValidationException>(() =>
             sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", currency, "Sam", TestContext.Current.CancellationToken));
@@ -93,7 +93,7 @@ public class CreateHouseholdTests
                 ExternalSubjectId = "subject-1",
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             });
-        var sut = new CreateHousehold(_repository);
+        var sut = new CreateHousehold(_repository, TimeProvider.System);
 
         var exception = await Should.ThrowAsync<HouseholdAlreadyExistsException>(() =>
             sut.ExecuteAsync("https://issuer.example", "subject-1", "de-DE", "EUR", "Sam", TestContext.Current.CancellationToken));

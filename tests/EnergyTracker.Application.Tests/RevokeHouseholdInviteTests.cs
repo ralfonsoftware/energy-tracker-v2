@@ -15,7 +15,7 @@ public class RevokeHouseholdInviteTests
         var inviteId = Guid.NewGuid();
         var before = DateTimeOffset.UtcNow;
 
-        await new RevokeHouseholdInvite(_repository).ExecuteAsync(householdId, inviteId, TestContext.Current.CancellationToken);
+        await new RevokeHouseholdInvite(_repository, TimeProvider.System).ExecuteAsync(householdId, inviteId, TestContext.Current.CancellationToken);
 
         await _repository.Received(1).RevokeInviteAsync(
             householdId,
@@ -33,6 +33,6 @@ public class RevokeHouseholdInviteTests
             .Returns(Task.FromException(new HouseholdInviteNotOpenException()));
 
         await Should.ThrowAsync<HouseholdInviteNotOpenException>(() =>
-            new RevokeHouseholdInvite(_repository).ExecuteAsync(householdId, inviteId, TestContext.Current.CancellationToken));
+            new RevokeHouseholdInvite(_repository, TimeProvider.System).ExecuteAsync(householdId, inviteId, TestContext.Current.CancellationToken));
     }
 }

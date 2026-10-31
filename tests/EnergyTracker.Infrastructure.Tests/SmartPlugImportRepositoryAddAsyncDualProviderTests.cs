@@ -120,7 +120,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var existingReading = MakeReading(householdId, existingImport.Id, powerPointId, collidingIntervalStart, kwhValue: 0.1m);
         dbContext.SmartPlugReadings.Add(existingReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var newImport = MakeImport(householdId, newBackgroundJobId);
@@ -154,7 +154,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var existingReading = MakeReading(householdId, existingImport.Id, powerPointId: null, collidingIntervalStart, kwhValue: 0.1m);
         dbContext.SmartPlugReadings.Add(existingReading);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var newImport = MakeImport(householdId, newBackgroundJobId, deviceTag: "Unknown Plug");
@@ -186,7 +186,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var import = MakeImport(householdId, backgroundJobId, deviceTag: "Unknown Plug");
         var rowCount = AwaitingMappingUpsertChunkSize + 250;
@@ -215,7 +215,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         dbContext.SmartPlugImports.Add(mappedImport);
         dbContext.SmartPlugReadings.Add(MakeReading(householdId, mappedImport.Id, powerPointId, sharedIntervalStart, kwhValue: 0.4m));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var newBackgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var newImport = MakeImport(householdId, newBackgroundJobId, deviceTag: "Unknown Plug");
@@ -246,7 +246,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var import = MakeImport(householdId, backgroundJobId);
         var readings = Enumerable.Range(0, 200)
@@ -278,7 +278,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var import = MakeImport(householdId, backgroundJobId, deviceTag: "Unknown Plug");
         var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -340,7 +340,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var importId = Guid.NewGuid();
         var import = new SmartPlugImport
@@ -401,7 +401,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         var powerPointId = await SeedPowerPointAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var backgroundJobId = await SeedBackgroundJobAsync(dbContext, householdId, TestContext.Current.CancellationToken);
         var import = MakeImport(householdId, backgroundJobId);
         var sharedIntervalStart = new DateTimeOffset(2026, 11, 1, 2, 30, 0, TimeSpan.Zero);
@@ -432,7 +432,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
         await SeedPowerPointAsync(dbContext, householdB, TestContext.Current.CancellationToken);
         var backgroundJobIdA = await SeedBackgroundJobAsync(dbContext, householdA, TestContext.Current.CancellationToken);
         var backgroundJobIdB = await SeedBackgroundJobAsync(dbContext, householdB, TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
         var sharedIntervalStart = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
 
         var importB = MakeImport(householdB, backgroundJobIdB, deviceTag: "Unknown Plug");
@@ -472,7 +472,7 @@ public abstract class SmartPlugImportRepositoryAddAsyncDualProviderTestsBase
     private static readonly DateTimeOffset PlugPeriodStart = new(2026, 4, 1, 0, 0, 0, TimeSpan.Zero);
 
     private static SmartPlugImportRepository NewRepository(EnergyTrackerDbContext dbContext) =>
-        new(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        new(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
     private static List<SmartPlugReading> MakePlugReadings(
         Guid householdId, Guid importId, string deviceName, decimal firstKwhValue, int count = 3) =>

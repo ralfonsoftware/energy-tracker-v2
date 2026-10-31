@@ -8,7 +8,8 @@ namespace EnergyTracker.Application;
 public class EditTariff(
     ITariffRepository tariffRepository,
     IAuditCorrectionRecorder auditCorrectionRecorder,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider)
 {
     public async Task<Tariff> ExecuteAsync(
         Guid householdId,
@@ -106,7 +107,7 @@ public class EditTariff(
         // locked entry, or locking-then-unlocking across two requests) before touching price
         // fields. Locked if EITHER the entry's current date or its requested new date is already
         // <= now — closing both directions of that bypass.
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var wasLocked = tariff.ContractStartDate <= now;
         var willBeLocked = changedContractStartDate ? contractStartDate!.Value <= now : wasLocked;
         var isLocked = wasLocked || willBeLocked;

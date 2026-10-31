@@ -11,7 +11,7 @@ public class ExportHouseholdDataTests
     private readonly IHouseholdExportReader _reader = Substitute.For<IHouseholdExportReader>();
 
     private ExportHouseholdData Sut(AiPlausibilityBackendOptions? backendOptions = null) =>
-        new(_reader, backendOptions ?? new AiPlausibilityBackendOptions(Configured: false, Label: null, Model: "default"));
+        new(_reader, backendOptions ?? new AiPlausibilityBackendOptions(Configured: false, Label: null, Model: "default"), TimeProvider.System);
 
     private static Household NewHousehold(Guid householdId) => new()
     {

@@ -15,7 +15,7 @@ public class ResolveMeterRegressionPromptTests
 
     private RequeueEventCorrelations Requeue() => new(
         _householdRepository, _eventRepository, _readingRepository, _jobQueue,
-        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>());
+        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>(), TimeProvider.System);
 
     private static MeterRegressionPrompt NewOpenPrompt(Guid householdId, Guid mainMeterId) => new()
     {
@@ -29,7 +29,7 @@ public class ResolveMeterRegressionPromptTests
         ResolvedAtUtc = null,
     };
 
-    private ResolveMeterRegressionPrompt Sut() => new(_repository, Requeue());
+    private ResolveMeterRegressionPrompt Sut() => new(_repository, Requeue(), TimeProvider.System);
 
     [Fact]
     public async Task Reset_resolves_cleanly_with_no_capacity_involved()

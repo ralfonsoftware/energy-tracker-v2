@@ -37,7 +37,7 @@ public class CorrelateEventTests
         return @event;
     }
 
-    private CorrelateEvent Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository, _eventRepository, _aiPlausibilityClient, _logger);
+    private CorrelateEvent Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository, _eventRepository, _aiPlausibilityClient, _logger, TimeProvider.System);
 
     private static readonly DateTimeOffset OccurredAt = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 

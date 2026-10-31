@@ -8,7 +8,7 @@ namespace EnergyTracker.Application;
 /// Plain class with a constructor-injected repository port — no CQRS/mediator library exists
 /// in this repo yet and one use case doesn't warrant introducing one.
 /// </summary>
-public class CreateHousehold(IHouseholdRepository repository)
+public class CreateHousehold(IHouseholdRepository repository, TimeProvider timeProvider)
 {
     // Launch Locales only (AD-15/NFR5) — a later Locale is a resource-file addition, not a
     // code change, but until one ships this is the closed, currently-supported set.
@@ -40,7 +40,7 @@ public class CreateHousehold(IHouseholdRepository repository)
             throw new HouseholdAlreadyExistsException(existingMember.HouseholdId);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var household = new Household
         {
             Id = Guid.NewGuid(),

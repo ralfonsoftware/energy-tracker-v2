@@ -44,6 +44,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         services.AddScoped<JobHouseholdContext>();
         services.AddSingleton<ICurrentHouseholdAccessor>(new FixedHouseholdAccessor(householdId));
         services.AddSingleton(timings ?? JobLifecycleTimings.Default);
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IBackgroundJobLifecycle, BackgroundJobLifecycle>();
         // The CleanUpSmartPlugImportJobs use case is the controllable stand-in for "a job that runs":
         // its repository calls are NSubstitute ports the test can block, fail or cancel.
@@ -138,7 +139,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
         var memberId = await SeedHouseholdMemberAsync(provider, householdId, TestContext.Current.CancellationToken);
 
-        var recorder = new BackgroundJobEnqueueRecorder(provider.GetRequiredService<IServiceScopeFactory>());
+        var recorder = new BackgroundJobEnqueueRecorder(provider.GetRequiredService<IServiceScopeFactory>(), TimeProvider.System);
         var jobId = Guid.NewGuid();
         var envelope = new JobEnvelope<string>(
             jobId, householdId, "CustomJobType", "payload", QueuedByHouseholdMemberId: memberId, OriginalFileName: "export.xlsx");
@@ -165,7 +166,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         await MigrateAsync(provider, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(provider, householdId, TestContext.Current.CancellationToken);
 
-        var recorder = new BackgroundJobEnqueueRecorder(provider.GetRequiredService<IServiceScopeFactory>());
+        var recorder = new BackgroundJobEnqueueRecorder(provider.GetRequiredService<IServiceScopeFactory>(), TimeProvider.System);
         var jobId = Guid.NewGuid();
         var envelope = new JobEnvelope<string>(jobId, householdId, "CustomJobType", "payload", QueuedByHouseholdMemberId: null, OriginalFileName: "export.xlsx");
         await recorder.RecordAsync(envelope, TestContext.Current.CancellationToken);
@@ -472,6 +473,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>()).Returns(release.Task);
 
         var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<JobHouseholdContext>();
         services.AddSingleton(lifecycle);
         services.AddSingleton(_smartPlugImportRepository);
@@ -500,6 +502,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
     {
         var services = new ServiceCollection();
         services.AddScoped<JobHouseholdContext>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(lifecycle);
         services.AddSingleton(_smartPlugImportRepository);
         services.AddSingleton(Substitute.For<IBackgroundJobRepository>());

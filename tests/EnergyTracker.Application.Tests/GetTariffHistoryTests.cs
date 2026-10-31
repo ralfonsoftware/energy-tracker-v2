@@ -10,7 +10,7 @@ public class GetTariffHistoryTests
     private readonly ITariffRepository _tariffRepository = Substitute.For<ITariffRepository>();
     private readonly IAuditCorrectionRecorder _auditCorrectionRecorder = Substitute.For<IAuditCorrectionRecorder>();
 
-    private GetTariffHistory Sut() => new(_tariffRepository, _auditCorrectionRecorder);
+    private GetTariffHistory Sut() => new(_tariffRepository, _auditCorrectionRecorder, TimeProvider.System);
 
     private static Tariff NewTariff(Guid householdId, DateTimeOffset contractStartDate, decimal monthlyBaseFee = 10m) => new()
     {

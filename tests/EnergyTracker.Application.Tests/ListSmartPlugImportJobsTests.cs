@@ -22,7 +22,7 @@ public class ListSmartPlugImportJobsTests
             .Returns((IReadOnlyList<SmartPlugImportGap>)[]);
     }
 
-    private ListSmartPlugImportJobs Sut() => new(_backgroundJobRepository, _smartPlugImportRepository, _lifecycle);
+    private ListSmartPlugImportJobs Sut() => new(_backgroundJobRepository, _smartPlugImportRepository, _lifecycle, TimeProvider.System);
 
     private BackgroundJob MakeJob(BackgroundJobStatus status, Guid? queuedByHouseholdMemberId = null, string? errorMessage = null) => new()
     {

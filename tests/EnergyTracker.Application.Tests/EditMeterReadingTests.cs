@@ -17,7 +17,7 @@ public class EditMeterReadingTests
 
     private RequeueEventCorrelations Requeue() => new(
         _householdRepository, _eventRepository, _readingRepository, _jobQueue,
-        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>());
+        Substitute.For<Microsoft.Extensions.Logging.ILogger<RequeueEventCorrelations>>(), TimeProvider.System);
 
     private EditMeterReading Sut()
     {

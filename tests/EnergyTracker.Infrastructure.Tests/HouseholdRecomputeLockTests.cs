@@ -130,4 +130,180 @@ public class HouseholdRecomputeLockTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await using var secondHandle = await sut.AcquireAsync(householdId, deadline.Token);
     }
+
+    [Fact]
+    public async Task Idle_entries_are_evicted_after_many_distinct_households_acquire_and_release()
+    {
+        var sut = new HouseholdRecomputeLock();
+
+        for (var i = 0; i < 1000; i++)
+        {
+            await using var handle = await sut.AcquireAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+        }
+
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task The_entry_exists_while_held_and_is_gone_after_dispose()
+    {
+        var sut = new HouseholdRecomputeLock();
+        var handle = await sut.AcquireAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        sut.TrackedHouseholdCount.ShouldBe(1);
+
+        await handle.DisposeAsync();
+
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_waiting_caller_keeps_the_entry_alive_across_the_holders_release()
+    {
+        var sut = new HouseholdRecomputeLock();
+        var householdId = Guid.NewGuid();
+        var order = new List<string>();
+
+        var holder = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+        var waiterTask = Task.Run(async () =>
+        {
+            await using var handle = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+            lock (order)
+            {
+                order.Add("waiter-acquired");
+            }
+
+            sut.TrackedHouseholdCount.ShouldBe(1);
+        }, TestContext.Current.CancellationToken);
+
+        // Deterministic, no real-time wait: the waiter holds its reference before the holder releases,
+        // so a lock that evicts on release (ignoring waiters) would hand it a fresh entry.
+        SpinWait.SpinUntil(() => sut.ReferencesFor(householdId) == 2, TimeSpan.FromSeconds(10)).ShouldBeTrue();
+        lock (order)
+        {
+            order.Add("holder-released");
+        }
+
+        await holder.DisposeAsync();
+        await waiterTask;
+
+        order.ShouldBe(["holder-released", "waiter-acquired"]);
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_timed_out_waiter_returns_its_reference()
+    {
+        var sut = new HouseholdRecomputeLock(TimeSpan.FromMilliseconds(50));
+        var householdId = Guid.NewGuid();
+        var holder = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+
+        await Should.ThrowAsync<TimeoutException>(
+            () => sut.AcquireAsync(householdId, TestContext.Current.CancellationToken));
+
+        sut.TrackedHouseholdCount.ShouldBe(1);
+
+        await holder.DisposeAsync();
+
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_caller_cancelled_before_the_wait_returns_its_reference()
+    {
+        var sut = new HouseholdRecomputeLock();
+        var householdId = Guid.NewGuid();
+        var holder = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+
+        using var callerCts = new CancellationTokenSource();
+        callerCts.Cancel();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => sut.AcquireAsync(householdId, callerCts.Token));
+
+        sut.TrackedHouseholdCount.ShouldBe(1);
+
+        await holder.DisposeAsync();
+
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_caller_cancelled_mid_wait_returns_its_reference()
+    {
+        var sut = new HouseholdRecomputeLock();
+        var householdId = Guid.NewGuid();
+        var holder = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+
+        using var callerCts = new CancellationTokenSource();
+        var waiter = sut.AcquireAsync(householdId, callerCts.Token);
+        waiter.IsCompleted.ShouldBeFalse();
+
+        await callerCts.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() => waiter);
+        sut.TrackedHouseholdCount.ShouldBe(1);
+
+        await holder.DisposeAsync();
+
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Disposing_a_handle_twice_neither_releases_twice_nor_returns_two_references()
+    {
+        var sut = new HouseholdRecomputeLock(TimeSpan.FromMilliseconds(100));
+        var householdId = Guid.NewGuid();
+
+        var first = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+        await first.DisposeAsync();
+        var second = await sut.AcquireAsync(householdId, TestContext.Current.CancellationToken);
+
+        await first.DisposeAsync();
+
+        sut.TrackedHouseholdCount.ShouldBe(1);
+        // The second handle still holds the lock: a third caller must not get in.
+        await Should.ThrowAsync<TimeoutException>(
+            () => sut.AcquireAsync(householdId, TestContext.Current.CancellationToken));
+
+        await second.DisposeAsync();
+
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Concurrent_churn_on_few_households_never_lets_two_holders_in_and_ends_empty()
+    {
+        var sut = new HouseholdRecomputeLock(TimeSpan.FromSeconds(60));
+        var householdIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var holders = new int[householdIds.Length];
+        var maxHolders = 0;
+
+        var tasks = Enumerable.Range(0, 64).Select(worker => Task.Run(async () =>
+        {
+            for (var i = 0; i < 200; i++)
+            {
+                var index = (worker + i) % householdIds.Length;
+                await using var handle = await sut.AcquireAsync(householdIds[index], TestContext.Current.CancellationToken);
+                var now = Interlocked.Increment(ref holders[index]);
+                InterlockedMax(ref maxHolders, now);
+                await Task.Yield();
+                Interlocked.Decrement(ref holders[index]);
+            }
+        }, TestContext.Current.CancellationToken)).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        maxHolders.ShouldBe(1);
+        sut.TrackedHouseholdCount.ShouldBe(0);
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        int current;
+        while ((current = Volatile.Read(ref target)) < value
+               && Interlocked.CompareExchange(ref target, value, current) != current)
+        {
+        }
+    }
 }

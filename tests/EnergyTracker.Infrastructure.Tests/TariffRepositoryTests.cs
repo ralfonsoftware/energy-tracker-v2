@@ -51,7 +51,7 @@ public abstract class TariffRepositoryTestsBase
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
         var tariff = NewTariff(householdId, 12.50m, 0.3200m, "EUR", DateTimeOffset.UtcNow);
 
         await repository.AddAsync(tariff, TestContext.Current.CancellationToken);
@@ -73,7 +73,7 @@ public abstract class TariffRepositoryTestsBase
         var oldest = NewTariff(householdId, 10m, 0.30m, "EUR", now.AddMonths(-24));
         dbContext.Tariffs.AddRange(newest, middle, oldest);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
 
         var (items, totalCount) = await repository.GetHistoryForHouseholdAsync(householdId, 1, 2, TestContext.Current.CancellationToken);
 
@@ -92,7 +92,7 @@ public abstract class TariffRepositoryTestsBase
         var createdLater = NewTariff(householdId, 15m, 0.35m, "EUR", sharedStartDate, createdAtUtc: DateTimeOffset.UtcNow);
         dbContext.Tariffs.AddRange(createdEarlier, createdLater);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
 
         var (items, _) = await repository.GetHistoryForHouseholdAsync(householdId, 1, 2, TestContext.Current.CancellationToken);
 
@@ -108,7 +108,7 @@ public abstract class TariffRepositoryTestsBase
         var tariff = NewTariff(householdId, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow);
         dbContext.Tariffs.Add(tariff);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
 
         var updated = await repository.UpdateAsync(
             tariff.Id, monthlyBaseFee: 20m, pricePerKwh: null, currency: null, contractStartDate: null, contractPeriodMonths: null,
@@ -129,7 +129,7 @@ public abstract class TariffRepositoryTestsBase
         var tariff = NewTariff(householdId, 12.50m, 0.32m, "EUR", DateTimeOffset.UtcNow);
         dbContext.Tariffs.Add(tariff);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
 
         // A second writer holding a Version that's already been superseded.
         await repository.UpdateAsync(
@@ -176,7 +176,7 @@ public class PostgresTariffRepositoryTests : TariffRepositoryTestsBase, IAsyncLi
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
         var tariff = NewTariff(householdId, 12.50m, 0.3256m, "EUR", DateTimeOffset.UtcNow);
 
         await repository.AddAsync(tariff, TestContext.Current.CancellationToken);
@@ -215,7 +215,7 @@ public class SqlServerTariffRepositoryTests : TariffRepositoryTestsBase, IAsyncL
         var householdId = Guid.NewGuid();
         await using var dbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
         await SeedHouseholdAsync(dbContext, householdId, TestContext.Current.CancellationToken);
-        var repository = new TariffRepository(dbContext);
+        var repository = new TariffRepository(dbContext, TimeProvider.System);
         var tariff = NewTariff(householdId, 12.50m, 0.3256m, "EUR", DateTimeOffset.UtcNow);
 
         await repository.AddAsync(tariff, TestContext.Current.CancellationToken);

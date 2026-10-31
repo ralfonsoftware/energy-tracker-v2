@@ -12,8 +12,14 @@
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- A controllable clock (no FakeTimeProvider package, project rule). -->
+  <ItemGroup>
+    <Compile Include="..\Shared\ManualTimeProvider.cs" Link="ManualTimeProvider.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="EnergyTracker.TestSupport" />
   </ItemGroup>
 
   <ItemGroup>

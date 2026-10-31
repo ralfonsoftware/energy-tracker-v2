@@ -9,7 +9,8 @@ public class CreateMeterReading(
     IMeterReadingRepository repository,
     IMeterRegressionPromptRepository regressionPromptRepository,
     IStatusRecomputeService statusRecomputeService,
-    RequeueEventCorrelations requeueEventCorrelations)
+    RequeueEventCorrelations requeueEventCorrelations,
+    TimeProvider timeProvider)
 {
     // Small clock-skew allowance, not a real "reading from the future" — a client's local clock
     // can legitimately be a few minutes off from the server's.
@@ -43,7 +44,7 @@ public class CreateMeterReading(
 
         MeterReadingValidation.ValidateKwhValue(kwhValue);
 
-        var latestAllowedTimestamp = DateTimeOffset.UtcNow.Add(MaxFutureClockSkew);
+        var latestAllowedTimestamp = timeProvider.GetUtcNow().Add(MaxFutureClockSkew);
         if (readingTimestamp > latestAllowedTimestamp)
         {
             throw new MeterReadingValidationException(
@@ -66,7 +67,7 @@ public class CreateMeterReading(
             KwhValue = kwhValue,
             ReadingTimestamp = readingTimestamp,
             IdempotencyKey = idempotencyKey,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
         };
 
         // Capture the persisted instance, not the local `reading` — a concurrent idempotency-key
@@ -91,7 +92,7 @@ public class CreateMeterReading(
                     MainMeterId = mainMeter.Id,
                     MeterReadingId = persistedReading.Id,
                     PreviousMeterReadingId = preceding.Id,
-                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    CreatedAtUtc = timeProvider.GetUtcNow(),
                     Classification = null,
                     ResolvedAtUtc = null,
                 },

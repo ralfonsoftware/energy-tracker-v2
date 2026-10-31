@@ -4,7 +4,7 @@ using EnergyTracker.Domain;
 namespace EnergyTracker.Application;
 
 /// <summary>Creates a Room for the caller's own Household (AC #1). Rooms have no parent to validate.</summary>
-public class CreateRoom(ITaggingScaffoldRepository repository)
+public class CreateRoom(ITaggingScaffoldRepository repository, TimeProvider timeProvider)
 {
     public async Task<Room> ExecuteAsync(Guid householdId, string name, CancellationToken cancellationToken)
     {
@@ -21,7 +21,7 @@ public class CreateRoom(ITaggingScaffoldRepository repository)
             Id = Guid.NewGuid(),
             HouseholdId = householdId,
             Name = validatedName,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = timeProvider.GetUtcNow(),
             ArchivedAt = null,
         };
 

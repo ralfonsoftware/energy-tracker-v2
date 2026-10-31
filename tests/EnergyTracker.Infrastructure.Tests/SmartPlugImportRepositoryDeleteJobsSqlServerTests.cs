@@ -140,7 +140,7 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
             readingIds.Add(reading.Id);
         }
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -218,7 +218,7 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         // 122, independent of which chunk an import lands in. Total: 5 + 122 = 127.
         var interceptor = new CountingInterceptor();
         await using var dbContext = OpenDbContextWithInterceptor(householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -281,7 +281,7 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         // unbounded SetNull cascade over all 20,001 rows.
         var interceptor = new CountingInterceptor();
         await using var dbContext = OpenDbContextWithInterceptor(householdId, interceptor);
-        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var repository = new SmartPlugImportRepository(dbContext, new AuditCorrectionRecorder(dbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         var deletedCount = await repository.DeleteJobsAsync(householdId, cutoffUtc: null, TestContext.Current.CancellationToken);
 
@@ -349,7 +349,7 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         lockResults.Single().ShouldBeGreaterThanOrEqualTo(0);
 
         await using var pollingDbContext = await OpenMigratedDbContextAsync(householdId, TestContext.Current.CancellationToken);
-        var pollingRepository = new SmartPlugImportRepository(pollingDbContext, new AuditCorrectionRecorder(pollingDbContext), NullLogger<SmartPlugImportRepository>.Instance);
+        var pollingRepository = new SmartPlugImportRepository(pollingDbContext, new AuditCorrectionRecorder(pollingDbContext, TimeProvider.System), NullLogger<SmartPlugImportRepository>.Instance);
 
         await pollingRepository.SweepExpiredAsync(householdId, DateTimeOffset.UtcNow.AddDays(-30), TestContext.Current.CancellationToken);
 

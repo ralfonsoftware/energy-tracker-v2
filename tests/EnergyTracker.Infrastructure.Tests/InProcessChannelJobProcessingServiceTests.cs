@@ -35,6 +35,7 @@ public class InProcessChannelJobProcessingServiceTests : IAsyncLifetime
         services.AddScoped<JobHouseholdContext>();
         services.AddScoped<ICurrentHouseholdAccessor, JobContextAccessor>();
         services.AddSingleton(JobLifecycleTimings.Default);
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IBackgroundJobLifecycle, BackgroundJobLifecycle>();
         return services.BuildServiceProvider();
     }
@@ -79,12 +80,12 @@ public class InProcessChannelJobProcessingServiceTests : IAsyncLifetime
         }
 
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
-        var queue = new InProcessChannelJobQueue(new BackgroundJobEnqueueRecorder(scopeFactory));
+        var queue = new InProcessChannelJobQueue(new BackgroundJobEnqueueRecorder(scopeFactory, TimeProvider.System));
         var service = new InProcessChannelJobProcessingService(
             queue,
             new BackgroundJobProcessor(scopeFactory, JobLifecycleTimings.Default, NullLogger<BackgroundJobProcessor>.Instance),
             new InProcessJobStartupSweep(scopeFactory, NullLogger<InProcessJobStartupSweep>.Instance),
-            NullLogger<InProcessChannelJobProcessingService>.Instance);
+            NullLogger<InProcessChannelJobProcessingService>.Instance, TimeProvider.System);
         await service.StartAsync(ct);
         try
         {
@@ -128,12 +129,12 @@ public class InProcessChannelJobProcessingServiceTests : IAsyncLifetime
         var brokenScopeFactory = Substitute.For<IServiceScopeFactory>();
         brokenScopeFactory.CreateScope().Returns(_ => throw new InvalidOperationException("database unreachable"));
 
-        var queue = new InProcessChannelJobQueue(new BackgroundJobEnqueueRecorder(workingScopeFactory));
+        var queue = new InProcessChannelJobQueue(new BackgroundJobEnqueueRecorder(workingScopeFactory, TimeProvider.System));
         var service = new InProcessChannelJobProcessingService(
             queue,
             new BackgroundJobProcessor(workingScopeFactory, JobLifecycleTimings.Default, NullLogger<BackgroundJobProcessor>.Instance),
             new InProcessJobStartupSweep(brokenScopeFactory, NullLogger<InProcessJobStartupSweep>.Instance),
-            NullLogger<InProcessChannelJobProcessingService>.Instance);
+            NullLogger<InProcessChannelJobProcessingService>.Instance, TimeProvider.System);
         await service.StartAsync(ct);
         try
         {

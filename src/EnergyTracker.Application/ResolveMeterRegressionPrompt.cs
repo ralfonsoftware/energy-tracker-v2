@@ -6,7 +6,8 @@ namespace EnergyTracker.Application;
 /// <summary>Resolves an open MeterRegressionPrompt as reset or rollover for the caller's own Household, enforcing AD-12's one-open-at-a-time ordering (AC #2, #3, #5, #6).</summary>
 public class ResolveMeterRegressionPrompt(
     IMeterRegressionPromptRepository repository,
-    RequeueEventCorrelations requeueEventCorrelations)
+    RequeueEventCorrelations requeueEventCorrelations,
+    TimeProvider timeProvider)
 {
     private const decimal MaxDigitCapacityKwh = 1_000_000_000_000_000m; // 10^15, one order below 10^16 overflow — same bound as CreateMeterReading.MaxKwhValue.
 
@@ -52,7 +53,7 @@ public class ResolveMeterRegressionPrompt(
         }
 
         prompt.Classification = classification;
-        prompt.ResolvedAtUtc = DateTimeOffset.UtcNow;
+        prompt.ResolvedAtUtc = timeProvider.GetUtcNow();
 
         var resolved = await repository.ResolveAsync(prompt, cancellationToken);
         if (!resolved)

@@ -12,7 +12,7 @@ public class GetCurrentStatusTests
     private readonly IMeterRegressionPromptRepository _regressionPromptRepository = Substitute.For<IMeterRegressionPromptRepository>();
     private readonly ISmartPlugCoverageSignal _smartPlugCoverageSignal = Substitute.For<ISmartPlugCoverageSignal>();
 
-    private GetCurrentStatus Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository, _smartPlugCoverageSignal);
+    private GetCurrentStatus Sut() => new(_householdRepository, _readingRepository, _regressionPromptRepository, _smartPlugCoverageSignal, TimeProvider.System);
 
     private static Household NewHousehold(Guid id, decimal? yearlyBaselineKwh, decimal trendingThresholdKwh = 100m, int lowConfidenceGapDays = 45) => new()
     {
@@ -675,5 +675,33 @@ public class GetCurrentStatusTests
         result.BaselineToDateKwh.ShouldBe(1825m);
         await _smartPlugCoverageSignal.DidNotReceive().HasCoverageDuringAsync(
             Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public async Task The_gap_to_the_last_reading_is_measured_against_the_injected_clock_and_flags_only_beyond_LowConfidenceGapDays(
+        int ticksPastTheLimit, bool expectedLowConfidence)
+    {
+        var householdId = Guid.NewGuid();
+        var mainMeter = NewMainMeter(householdId);
+        var clock = new ManualTimeProvider();
+        var first = clock.GetUtcNow().AddDays(-60);
+        var last = clock.GetUtcNow().AddDays(-50);
+        clock.Set(last.AddDays(45).AddTicks(ticksPastTheLimit));
+        _householdRepository.FindByIdAsync(householdId, Arg.Any<CancellationToken>()).Returns(NewHousehold(householdId, yearlyBaselineKwh: 3650m, lowConfidenceGapDays: 45));
+        _readingRepository.FindMainMeterByHouseholdAsync(householdId, Arg.Any<CancellationToken>()).Returns(mainMeter);
+        _readingRepository.GetRecentByMainMeterAsync(mainMeter.Id, Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(
+        [
+            NewReading(householdId, mainMeter.Id, 1000m, first),
+            NewReading(householdId, mainMeter.Id, 1100m, last),
+        ]);
+        var sut = new GetCurrentStatus(_householdRepository, _readingRepository, _regressionPromptRepository, _smartPlugCoverageSignal, clock);
+
+        var result = await sut.ExecuteAsync(householdId, TestContext.Current.CancellationToken);
+
+        result.ShouldNotBeNull();
+        result.IsLowConfidence.ShouldBe(expectedLowConfidence);
+        result.ElapsedDays.ShouldBe(10, tolerance: 0.01);
     }
 }

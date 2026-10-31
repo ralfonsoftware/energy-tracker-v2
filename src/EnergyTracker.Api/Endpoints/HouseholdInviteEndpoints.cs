@@ -82,6 +82,7 @@ public static class HouseholdInviteEndpoints
         api.MapGet("/household-invites/{token}", async (
             string token,
             IHouseholdRepository repository,
+            TimeProvider timeProvider,
             CancellationToken cancellationToken) =>
         {
             var invite = InviteToken.IsPlausible(token)
@@ -92,7 +93,7 @@ public static class HouseholdInviteEndpoints
                 return Results.NotFound();
             }
 
-            if (invite.ConsumedAtUtc is not null || invite.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+            if (invite.ConsumedAtUtc is not null || invite.ExpiresAtUtc <= timeProvider.GetUtcNow())
             {
                 return Results.Problem(
                     detail: "This invite is no longer valid.",

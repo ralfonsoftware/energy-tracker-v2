@@ -11,7 +11,8 @@ public class CompareTariffTests
         Substitute.For<IHouseholdRepository>(),
         Substitute.For<IMeterReadingRepository>(),
         Substitute.For<IMeterRegressionPromptRepository>(),
-        Substitute.For<ISmartPlugCoverageSignal>());
+        Substitute.For<ISmartPlugCoverageSignal>(),
+        TimeProvider.System);
 
     private readonly ITariffRepository _tariffRepository = Substitute.For<ITariffRepository>();
 
