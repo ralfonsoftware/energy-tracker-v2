@@ -6,40 +6,19 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class StatusEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced
-    // across files (that helper is private to its own class); Status is Household-scoped exactly
-    // like MeterReading.
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapStatusEndpoints(this RouteGroupBuilder api)
     {
+        var household = api.MapGroup(string.Empty).RequireHousehold();
         // Singleton resource, not a collection — /api/status, not plural (consistent with
         // /api/session, /health). Per Consistency Conventions: only the current Status value and
         // its supporting figures — drill-down data (Trend History, FR-8) is always a separate
         // endpoint, never merged in here.
-        api.MapGet("/status", async (
+        household.MapGet("/status", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetCurrentStatus getCurrentStatus,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var result = await getCurrentStatus.ExecuteAsync(householdId, cancellationToken);
             // 200 with a null body when undefined (AC #6) — same "is there one?" shape as
@@ -52,15 +31,12 @@ public static class StatusEndpoints
         // figures behind the headline, never a Meter Reading list (AC #2). Reuses the exact same
         // GetCurrentStatus.ExecuteAsync call as /status above — AD-7's single live-computation
         // seam, not a second calculation path.
-        api.MapGet("/status/detail", async (
+        household.MapGet("/status/detail", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetCurrentStatus getCurrentStatus,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var result = await getCurrentStatus.ExecuteAsync(householdId, cancellationToken);
             return Results.Ok(result is null ? null : ToDetailResponse(result));
@@ -71,15 +47,12 @@ public static class StatusEndpoints
         // live recomputation (AD-7). Unlike /status and /status/detail above, "no history yet" is
         // legitimately an empty array, not an undefined single value, so this always returns 200
         // with a (possibly empty) array, never a null body.
-        api.MapGet("/status/history", async (
+        household.MapGet("/status/history", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetStatusHistory getStatusHistory,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var entries = await getStatusHistory.ExecuteAsync(householdId, cancellationToken);
             return Results.Ok(entries.Select(ToHistoryEntryResponse).ToList());
