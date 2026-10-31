@@ -9,27 +9,32 @@ public class AcceptHouseholdInviteTests
 {
     private readonly IHouseholdRepository _repository = Substitute.For<IHouseholdRepository>();
 
-    private static HouseholdInvite MakeInvite(Guid? householdId = null, DateTimeOffset? expiresAtUtc = null, DateTimeOffset? consumedAtUtc = null) => new()
+    private static (HouseholdInvite Invite, string Token) MakeInvite(Guid? householdId = null, DateTimeOffset? expiresAtUtc = null, DateTimeOffset? consumedAtUtc = null)
     {
-        Id = Guid.NewGuid(),
-        HouseholdId = householdId ?? Guid.NewGuid(),
-        Token = Guid.NewGuid().ToString("N"),
-        CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
-        ExpiresAtUtc = expiresAtUtc ?? DateTimeOffset.UtcNow.AddDays(6),
-        ConsumedAtUtc = consumedAtUtc,
-    };
+        var token = InviteToken.Generate();
+        var invite = new HouseholdInvite
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId ?? Guid.NewGuid(),
+            TokenHash = InviteToken.Hash(token),
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            ExpiresAtUtc = expiresAtUtc ?? DateTimeOffset.UtcNow.AddDays(6),
+            ConsumedAtUtc = consumedAtUtc,
+        };
+        return (invite, token);
+    }
 
     [Fact]
     public async Task Joins_the_invites_Household_and_marks_the_invite_consumed_for_a_new_principal()
     {
-        var invite = MakeInvite();
+        var (invite, token) = MakeInvite();
         var joinedHousehold = new Household { Id = invite.HouseholdId, Locale = "de-DE", Currency = "EUR", CreatedAtUtc = DateTimeOffset.UtcNow };
-        _repository.FindInviteByTokenAsync(invite.Token!, Arg.Any<CancellationToken>()).Returns(invite);
+        _repository.FindInviteByTokenAsync(token, Arg.Any<CancellationToken>()).Returns(invite);
         _repository.FindMemberAsync("https://issuer.example", "subject-1", Arg.Any<CancellationToken>()).Returns((HouseholdMember?)null);
         _repository.AcceptInviteAsync(invite, Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>()).Returns(joinedHousehold);
         var sut = new AcceptHouseholdInvite(_repository, TimeProvider.System);
 
-        var household = await sut.ExecuteAsync(invite.Token!, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken);
+        var household = await sut.ExecuteAsync(token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken);
 
         household.ShouldBe(joinedHousehold);
         await _repository.Received(1).AcceptInviteAsync(
@@ -70,26 +75,26 @@ public class AcceptHouseholdInviteTests
     [Fact]
     public async Task Rejects_an_expired_invite()
     {
-        var invite = MakeInvite(expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
-        _repository.FindInviteByTokenAsync(invite.Token!, Arg.Any<CancellationToken>()).Returns(invite);
+        var (invite, token) = MakeInvite(expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
+        _repository.FindInviteByTokenAsync(token, Arg.Any<CancellationToken>()).Returns(invite);
         var sut = new AcceptHouseholdInvite(_repository, TimeProvider.System);
 
         var exception = await Should.ThrowAsync<HouseholdInviteExpiredOrConsumedException>(() =>
-            sut.ExecuteAsync(invite.Token!, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
-        exception.Message.ShouldNotContain(invite.Token!);
+        exception.Message.ShouldNotContain(token);
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Rejects_an_already_consumed_invite()
     {
-        var invite = MakeInvite(consumedAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
-        _repository.FindInviteByTokenAsync(invite.Token!, Arg.Any<CancellationToken>()).Returns(invite);
+        var (invite, token) = MakeInvite(consumedAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
+        _repository.FindInviteByTokenAsync(token, Arg.Any<CancellationToken>()).Returns(invite);
         var sut = new AcceptHouseholdInvite(_repository, TimeProvider.System);
 
         await Should.ThrowAsync<HouseholdInviteExpiredOrConsumedException>(() =>
-            sut.ExecuteAsync(invite.Token!, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }
@@ -97,9 +102,9 @@ public class AcceptHouseholdInviteTests
     [Fact]
     public async Task Rejects_a_principal_that_already_belongs_to_a_Household()
     {
-        var invite = MakeInvite();
+        var (invite, token) = MakeInvite();
         var existingHouseholdId = Guid.NewGuid();
-        _repository.FindInviteByTokenAsync(invite.Token!, Arg.Any<CancellationToken>()).Returns(invite);
+        _repository.FindInviteByTokenAsync(token, Arg.Any<CancellationToken>()).Returns(invite);
         _repository.FindMemberAsync("https://issuer.example", "subject-1", Arg.Any<CancellationToken>()).Returns(new HouseholdMember
         {
             Id = Guid.NewGuid(),
@@ -111,7 +116,7 @@ public class AcceptHouseholdInviteTests
         var sut = new AcceptHouseholdInvite(_repository, TimeProvider.System);
 
         var exception = await Should.ThrowAsync<HouseholdAlreadyExistsException>(() =>
-            sut.ExecuteAsync(invite.Token!, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
         exception.ExistingHouseholdId.ShouldBe(existingHouseholdId);
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
@@ -121,15 +126,15 @@ public class AcceptHouseholdInviteTests
     public async Task An_invite_is_accepted_one_tick_before_it_expires()
     {
         var clock = new ManualTimeProvider();
-        var invite = MakeInvite(expiresAtUtc: clock.GetUtcNow().AddDays(1));
+        var (invite, token) = MakeInvite(expiresAtUtc: clock.GetUtcNow().AddDays(1));
         clock.Set(invite.ExpiresAtUtc.AddTicks(-1));
         var joinedHousehold = new Household { Id = invite.HouseholdId, Locale = "de-DE", Currency = "EUR", CreatedAtUtc = clock.GetUtcNow() };
-        _repository.FindInviteByTokenAsync(invite.Token!, Arg.Any<CancellationToken>()).Returns(invite);
+        _repository.FindInviteByTokenAsync(token, Arg.Any<CancellationToken>()).Returns(invite);
         _repository.FindMemberAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((HouseholdMember?)null);
         _repository.AcceptInviteAsync(invite, Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>()).Returns(joinedHousehold);
         var sut = new AcceptHouseholdInvite(_repository, clock);
 
-        var household = await sut.ExecuteAsync(invite.Token!, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken);
+        var household = await sut.ExecuteAsync(token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken);
 
         household.ShouldBe(joinedHousehold);
         await _repository.Received(1).AcceptInviteAsync(
@@ -144,13 +149,13 @@ public class AcceptHouseholdInviteTests
     public async Task An_invite_is_expired_at_the_exact_instant_and_after(int ticksAfterExpiry)
     {
         var clock = new ManualTimeProvider();
-        var invite = MakeInvite(expiresAtUtc: clock.GetUtcNow().AddDays(1));
+        var (invite, token) = MakeInvite(expiresAtUtc: clock.GetUtcNow().AddDays(1));
         clock.Set(invite.ExpiresAtUtc.AddTicks(ticksAfterExpiry));
-        _repository.FindInviteByTokenAsync(invite.Token!, Arg.Any<CancellationToken>()).Returns(invite);
+        _repository.FindInviteByTokenAsync(token, Arg.Any<CancellationToken>()).Returns(invite);
         var sut = new AcceptHouseholdInvite(_repository, clock);
 
         await Should.ThrowAsync<HouseholdInviteExpiredOrConsumedException>(() =>
-            sut.ExecuteAsync(invite.Token!, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
+            sut.ExecuteAsync(token, "https://issuer.example", "subject-1", "Mira", TestContext.Current.CancellationToken));
 
         await _repository.DidNotReceive().AcceptInviteAsync(Arg.Any<HouseholdInvite>(), Arg.Any<HouseholdMember>(), Arg.Any<CancellationToken>());
     }

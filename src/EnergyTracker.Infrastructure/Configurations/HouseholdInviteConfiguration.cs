@@ -12,16 +12,8 @@ public class HouseholdInviteConfiguration : IEntityTypeConfiguration<HouseholdIn
 
         builder.HasKey(i => i.Id);
 
-        // Legacy plaintext token (Story 11.9): nullable, never written for new invites. The unique
-        // index stays for the legacy rows; EF's SQL Server provider filters it to NOT NULL itself.
-        builder.Property(i => i.Token)
-            .HasMaxLength(32);
-
-        builder.HasIndex(i => i.Token)
-            .IsUnique();
-
         // Lowercase hex SHA-256 of the token (AD-26). Plain non-unique index: 256 random bits need no
-        // uniqueness constraint, and legacy rows have a NULL hash.
+        // uniqueness constraint.
         builder.Property(i => i.TokenHash)
             .HasMaxLength(64);
 

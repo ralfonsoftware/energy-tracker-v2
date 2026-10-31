@@ -13,7 +13,7 @@ public interface IHouseholdRepository
 
     Task AddInviteAsync(HouseholdInvite invite, CancellationToken cancellationToken);
 
-    /// <summary>Finds an invite by its plaintext token: the SHA-256 hash first, the legacy plaintext column second (AD-26). Null for an unknown or over-long token.</summary>
+    /// <summary>Finds an invite by its plaintext token via the SHA-256 hash (AD-26). Null for an unknown or over-long token.</summary>
     Task<HouseholdInvite?> FindInviteByTokenAsync(string token, CancellationToken cancellationToken);
 
     /// <summary>The one by-id member lookup, scoped to <paramref name="householdId"/> (AD-26, AD-3 exception): null for another Household's member.</summary>

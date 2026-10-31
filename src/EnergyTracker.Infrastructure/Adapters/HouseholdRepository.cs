@@ -56,16 +56,9 @@ public class HouseholdRepository(EnergyTrackerDbContext dbContext, TimeProvider 
             return null;
         }
 
-        // Hash first (every invite created since Story 11.9), legacy plaintext second (invites created
-        // before it, at most InviteLifetime old). TokenHash has a non-unique index, hence FirstOrDefault.
+        // TokenHash has a non-unique index, hence FirstOrDefault.
         var hash = InviteToken.Hash(token);
-        var byHash = await dbContext.HouseholdInvites.FirstOrDefaultAsync(i => i.TokenHash == hash, cancellationToken);
-        if (byHash is not null)
-        {
-            return byHash;
-        }
-
-        return await dbContext.HouseholdInvites.SingleOrDefaultAsync(i => i.Token == token, cancellationToken);
+        return await dbContext.HouseholdInvites.FirstOrDefaultAsync(i => i.TokenHash == hash, cancellationToken);
     }
 
     // AD-26 / AD-3: HouseholdMember has no query filter, so this is THE by-id member lookup and it

@@ -281,10 +281,6 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Token")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
                     b.Property<string>("TokenHash")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
@@ -296,10 +292,6 @@ namespace EnergyTracker.Infrastructure.Migrations.SqlServer.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("HouseholdId");
-
-                    b.HasIndex("Token")
-                        .IsUnique()
-                        .HasFilter("[Token] IS NOT NULL");
 
                     b.HasIndex("TokenHash");
 
