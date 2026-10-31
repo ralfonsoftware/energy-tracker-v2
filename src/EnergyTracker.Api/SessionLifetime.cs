@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -34,7 +33,6 @@ internal static class SessionLifetime
     /// member signs in once after the deploy (AC #9, amended). No lazy stamping, and never
     /// <c>IssuedUtc</c> as a fallback.
     /// </summary>
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     public static async Task ValidateAsync(CookieValidatePrincipalContext context)
     {
         string? rejection = null;

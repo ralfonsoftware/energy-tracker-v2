@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using EnergyTracker.Application;
 using EnergyTracker.Domain;
@@ -57,7 +56,6 @@ public class BackgroundJobProcessor(
         }
     }
 
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     internal async Task ProcessAsync(JobMessage message, CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
@@ -148,7 +146,6 @@ public class BackgroundJobProcessor(
         }
     }
 
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     private async Task ExecuteJobAsync(IServiceProvider services, JobMessage message, CancellationToken cancellationToken)
     {
         switch (message.JobType)

@@ -46,14 +46,17 @@ function fileNameFromUploadInit(init?: RequestInit): string {
 }
 
 describe('SmartPlugImportPage', () => {
+  let initialLanguage = 'en-US'
+
   beforeEach(() => {
+    initialLanguage = i18next.language || 'en-US'
     vi.useFakeTimers({ shouldAdvanceTime: true })
   })
 
   afterEach(async () => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
-    await i18next.changeLanguage('en-US')
+    await i18next.changeLanguage(initialLanguage)
   })
 
   it('renders the dropzone with a hidden, multi-file input by default', () => {

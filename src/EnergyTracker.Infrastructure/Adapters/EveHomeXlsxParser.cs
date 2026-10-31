@@ -390,8 +390,11 @@ public class EveHomeXlsxParser : ISmartPlugParser
         };
     }
 
+    // An empty row still throws InvalidOperationException, as Enumerable.First did before CA1826 asked for the indexer.
     private static string FirstCellText(SheetRow row, IReadOnlyList<string>? sharedStrings) =>
-        CellText(row.Cells[0], sharedStrings);
+        row.Cells.Count == 0
+            ? throw new InvalidOperationException("The row has no cells.")
+            : CellText(row.Cells[0], sharedStrings);
 
     private static string CellText(Cell cell, IReadOnlyList<string>? sharedStrings)
     {

@@ -606,3 +606,18 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: create-story of 11-18-backend-analyzer-format-gate (2026-10-31)
 
 - [open] 26 `oxlint` warnings remain in the frontend (`react(set-state-in-effect)` 17, `react(refs)` 5, `react(only-export-components)` 3, `react(purity)` 1). `npm --prefix web run lint` does not fail on warnings today; a `--deny-warnings` gate would need all of them fixed first. Rules arrived with oxlint 1.75, after the 2026-10-10 audit. [web/src]
+
+## Deferred from: code review of 11-18-backend-analyzer-format-gate (2026-10-31)
+
+- [open] No `.gitattributes`; `end_of_line = lf` makes `dotnet format --verify-no-changes` fail on Windows autocrlf checkouts. [.editorconfig]
+- [open] `CSharpSource.StripComments` gaps (`\u0041` char escapes, `$"""` raw interpolation), `root = true` regex rejects a trailing comment, magic `Count > N` thresholds in the guard. [tests/EnergyTracker.Architecture.Tests/CSharpSource.cs]
+- [open] `WarningsNotAsErrors` (NU1900) vs `WarningsAsErrors` (NU1902-NU1904) interaction under `-p:TreatWarningsAsErrors=true` untested; NU1901 unaddressed. [Directory.Build.props]
+- [open] `global.json` `rollForward: latestFeature` lets a new SDK band add Recommended rules and fail unrelated PRs. [global.json]
+
+## Deferred from: code review of 11-18-backend-analyzer-format-gate, rules lowered in `.editorconfig` (2026-10-31)
+
+- [open] `CA1848` (LoggerMessage source generation) is off for ~60 low-volume `ILogger` call sites; revisit if log volume or allocation pressure becomes a concern. [.editorconfig]
+- [open] `CA1716` (identifier clashes with keywords in other languages) is off because renaming the domain `Event` type is out of proportion while no outside consumer exists. [.editorconfig]
+- [open] `CA1711` allows the `Queue` and `Stream` suffixes (AD-6 port and adapter names, `HouseholdExportStream`). [.editorconfig]
+- [open] `CA1873` (expensive log arguments) is off; revisit if a log argument ever starts to compute something. [.editorconfig]
+- [open] `CA1707` and `CA1816` are off for `tests/**` (Snake_case test names; fixtures without finalizers). [.editorconfig]

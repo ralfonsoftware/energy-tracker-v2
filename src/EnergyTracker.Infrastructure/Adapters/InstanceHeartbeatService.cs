@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
 using Microsoft.Extensions.DependencyInjection;
@@ -94,7 +93,6 @@ public class InstanceHeartbeatService(
         }
     }
 
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     private void OnBeatSucceeded(IReadOnlyList<InstanceOverlapObservation> overlaps)
     {
         if (!_startedLogged)
@@ -124,7 +122,6 @@ public class InstanceHeartbeatService(
         }
     }
 
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     private async Task RemoveOwnRowAsync()
     {
         try

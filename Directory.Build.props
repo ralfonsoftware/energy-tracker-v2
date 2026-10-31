@@ -30,7 +30,7 @@
     rules off, so AnalysisModeSecurity=All raises those to warnings too.
 
     Warnings fail only in CI: pr-review.yml builds with -p:TreatWarningsAsErrors=true and runs
-    `dotnet format` in verify mode (the no-changes flag). TreatWarningsAsErrors is not set here so a new SDK feature band
+    `dotnet format` with the verify-no-changes option. TreatWarningsAsErrors is not set here so a new SDK feature band
     cannot break a deploy or hotfix build. NU1900 (audit could not run) stays a warning even in that
     build, same reason as above. Rules are lowered in .editorconfig only, with a comment (guard:
     BackendAnalyzerGateIsConfiguredTests).

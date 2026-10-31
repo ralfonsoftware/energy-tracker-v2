@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
 using EnergyTracker.Application;
 using EnergyTracker.Application.Ports;
@@ -23,7 +22,6 @@ internal sealed record AiPlausibilityBackendConfigurationResult(bool Configured,
 internal static class AiPlausibilityBackendConfiguration
 {
     // Startup log lines for the selection above. Program.cs calls it once, after the app is built.
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     internal static void LogSelection(ILogger logger, AiPlausibilityBackendConfigurationResult backend)
     {
         logger.LogInformation("AI plausibility backend: {Backend}", backend.Description);

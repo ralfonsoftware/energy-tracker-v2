@@ -276,7 +276,7 @@ dotnet test EnergyTracker.sln
 
 # Before pushing: what CI will check on the backend
 dotnet format EnergyTracker.sln                              # fixes whitespace and fixable analyzer findings
-dotnet build -c Release -p:TreatWarningsAsErrors=true        # fails on any analyzer warning, like pr-review.yml
+dotnet build EnergyTracker.sln --configuration Release -p:TreatWarningsAsErrors=true   # fails on any analyzer warning, like pr-review.yml
 
 # Frontend unit/component tests
 npm --prefix web run test          # single run

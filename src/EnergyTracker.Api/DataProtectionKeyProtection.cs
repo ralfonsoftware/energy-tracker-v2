@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using Azure.Core;
@@ -139,7 +138,6 @@ internal static class DataProtectionKeyProtection
     // the old key ring with IKeyManager.RevokeAllKeys. Idempotent on purpose: it revokes only if a
     // non-revoked key created before the cutoff still exists, so a restart with the setting left in
     // place adds no further revocation row. With the setting absent the database is never touched.
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     public static void ApplyStartupActions(IServiceProvider services, DataProtectionKeyProtectionResult result, ILogger logger)
     {
         if (result.Mode is DataProtectionKeyProtectionMode.AzureKeyVault or DataProtectionKeyProtectionMode.Certificate)

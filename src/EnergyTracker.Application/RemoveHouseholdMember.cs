@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using EnergyTracker.Application.Ports;
 using Microsoft.Extensions.Logging;
 
@@ -10,7 +9,6 @@ namespace EnergyTracker.Application;
 /// </summary>
 public class RemoveHouseholdMember(IHouseholdRepository repository, ILogger<RemoveHouseholdMember> logger, TimeProvider timeProvider)
 {
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     public async Task ExecuteAsync(Guid householdId, Guid actingMemberId, Guid targetMemberId, CancellationToken cancellationToken)
     {
         await repository.RemoveMemberAsync(householdId, targetMemberId, timeProvider.GetUtcNow(), cancellationToken);

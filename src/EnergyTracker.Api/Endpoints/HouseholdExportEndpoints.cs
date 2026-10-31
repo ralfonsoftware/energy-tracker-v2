@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Text.Json;
 using EnergyTracker.Application;
@@ -35,7 +34,6 @@ public static class HouseholdExportEndpoints
         return false;
     }
 
-    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     public static RouteGroupBuilder MapHouseholdExportEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/household-export", async (
