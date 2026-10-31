@@ -1,0 +1,269 @@
+---
+baseline_commit: e8bbc9d9fd912b5de880b25e9c0b9847990c4845
+---
+
+# Story 11.19: Structural Cleanup
+
+Status: in-progress
+
+<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+<!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier Later, last story of the epic. Origin: codebase audit 2026-10-10 findings A3 (oversized units), R1 (repeated household guard), R2 api side (history-narrating comments). 11.17 and 11.18 explicitly deferred the Program.cs split and the SmartPlugImportRepository split to this story. -->
+<!-- Branch already exists: feature/11-19-structural-cleanup (current checkout, clean, at e8bbc9d). ONE PR. No migration, no new NuGet or npm package, no new AD, no behaviour change, no wire change (routes, status codes, ProblemDetails text, JSON shapes identical). -->
+<!-- No Ask First is blocking. Four design calls are decided below with a recommendation (partial classes for the repository, composition folder for Program.cs, a group-level household filter, ADR scope); Ralf may overrule them in review and the AC is then marked AMENDED. The Auth0/Chrome live gate does not apply to the code, but see Task 9.3 (one live smoke of the Settings screen, because the Tagging Scaffold UI is split). -->
+
+## Story
+
+As a maintainer,
+I want the oversized units split and repeated guards extracted,
+So that changes stay local and reviews stay readable (audit A3, R1, R2 api side).
+
+## Acceptance Criteria
+
+1. **Given** `src/EnergyTracker.Api/Program.cs` (598 lines), **when** this story is done, **then** its registrations live in four extension methods, `AddObservability`, `AddAuth`, `AddApplicationServices` and `AddJobQueue`, each in its own file under `src/EnergyTracker.Api/Composition/`, and **behaviour is unchanged**: the registered services (service type, implementation, lifetime, order), the hosted-service start order, the middleware pipeline and every route are identical. "Identical" is proven by a characterization test written before the move (AC #7), not by inspection.
+2. **Given** `SmartPlugImportRepository` (1,197 lines), `web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx` (838 lines) and `src/EnergyTracker.Api/Endpoints/TaggingScaffoldEndpoints.cs` (401 lines), **when** this story is done, **then** each is split by responsibility or entity (target layout in Dev Notes), no resulting file is above about 450 lines (about 300 for the React files), public and internal API is unchanged (`ISmartPlugImportRepository`, `SmartPlugImportRepository.DeleteBatchSize`/`DeleteReadingVolumeThreshold`/`ChunkImportIdsByReadingVolume`, `MapTaggingScaffoldEndpoints`, the request/response records, `TaggingScaffoldManager`), and every existing test passes **without being edited** (test files may only be touched for the new tests in this story).
+3. **Given** the 11 private copies of `TryGetHouseholdId` (38 call sites in 11 endpoint files), **when** this story is done, **then** one endpoint filter, `RequireHousehold()` (`src/EnergyTracker.Api/HouseholdRequiredFilter.cs`), replaces them: it answers `403 application/problem+json` with `detail = "The authenticated principal does not belong to a Household."` when `ICurrentHouseholdAccessor.HouseholdId` is null, exactly as the copies did, and no `TryGetHouseholdId` or `NoHouseholdDetail` constant is left in the 11 files. The 4 other endpoint files that talk about households differently (`HouseholdEndpoints`' `TryAuthorizeHousehold`, `HouseholdInviteEndpoints`, `HouseholdMemberEndpoints`, `SessionEndpoints`) keep their own logic: they must work for a caller **without** a Household, or compare it to a route id.
+4. **Given** comments that narrate story and review history, **when** a file is touched by this story, **then** each comment in it is trimmed to one to three lines of *why*, and reasoning longer than that moves to a new `docs/adr/` directory (index `docs/adr/README.md`, files `NNNN-short-title.md`, each `Context / Decision / Consequences`), with the code comment keeping a one-line pointer (`// ADR 0003: ...`). "Touched" is defined in Dev Notes ("Comment-trim scope"). Existing `AD-nn` pointer comments that a guard counts, and security-relevant warnings, are shortened, never deleted.
+5. **Implied (nothing may move silently):** the architecture guards that read `Program.cs` as text (`NoDirectClockReadsTests`, `SingleInstanceInvariantIsDocumentedTests`, `HouseholdMembershipIsResolvedOncePerRequestTests`) are updated **in the same commit that moves the code they scan**, to scan the new files as well (the composition files are part of "the composition root"), with their assertions unchanged in strength. Each guard stays non-vacuous. No guard is loosened, deleted or skipped to get green.
+6. **Implied (the household filter must not rot):** a new `HouseholdRequiredRoutesTests` (Api.Tests, same shape as `RequestedWithRoutesTests`) fails when a route under `/api` is neither marked `HouseholdRequiredMetadata` nor in an explicit allowlist of routes that legitimately work without a Household (listed in Dev Notes), and an Architecture guard `HouseholdGuardIsOneEndpointFilterTests` fails when any file under `src/EnergyTracker.Api/Endpoints` defines `TryGetHouseholdId` again or repeats the 403 detail literal. Both prove themselves non-vacuous with known-bad samples.
+7. **Implied (red first, characterization):** before any move, a `ServiceRegistrationSnapshotTests` (Api.Tests) and the existing route sweeps pin today's behaviour: the ordered list of `ServiceDescriptor`s (service type, implementation type or factory marker, lifetime) for the default host, for `JobQueue:Provider=azurestoragequeue` and for `Otel:Exporter` of `otlp` and `azuremonitor`, compared with committed approved text under `tests/EnergyTracker.Api.Tests/Snapshots/`; plus the ordered list of hosted services. It is green on `e8bbc9d` and must stay green, unedited, after the split. The test is kept (it is the guard that the next Program.cs change is deliberate).
+8. **Implied (docs and project memory):** `_bmad-artifacts/project-context.md` gets one rule (where composition lives, the household filter, the ADR convention) and its "Last Updated" bump, and the rules that name `Program.cs` as the place of a registration (config-driven adapter selection, AD-24 list, Story 11.12/11.17 bullets) are corrected to the new file names; `docs/self-hosting.md` ("Run exactly one instance") is checked for `Program.cs` references and fixed where a mechanism moved; `docs/codebase-audit-2026-10-10.md` is **not** edited (dated record). Remaining oxlint warnings stay out of scope (see Dev Notes), but the count must not grow.
+
+## Tasks / Subtasks
+
+Write each new test red first (or characterization-green first, for AC #7) and record the run in Debug Log References (Story 11.1-11.18 practice). One PR on `feature/11-19-structural-cleanup`. **Several small commits, one per task**, so review can follow it: a pure move and a pure edit never share a commit. Docker must be running for the Infrastructure and Api test suites (Testcontainers).
+
+- [x] Task 0: Baseline, before any change (AC: #2, #7, #8)
+  - [x] 0.1 `dotnet build EnergyTracker.sln -c Release --no-incremental -p:TreatWarningsAsErrors=true` (0 warnings expected, Story 11.18) and `dotnet format EnergyTracker.sln --verify-no-changes --no-restore` (exit 0). Record.
+  - [x] 0.2 `dotnet test` per test project (Application, Architecture, Infrastructure, Api) and `npm --prefix web run test`; record counts (11.18 close: .NET 1,762 passed, Vitest 768 passed) so the "tests green, unedited" claim is checkable. `npm --prefix web run lint`: record the warning count (this story must not raise it).
+  - [x] 0.3 Record line counts of the files in AC #2 and the per-file `//`-line counts of the files in "Comment-trim scope" (so the trim is measurable).
+- [x] Task 1: Characterization tests first (AC: #7, #6)
+  - [x] 1.1 `ServiceRegistrationSnapshotTests` (details in Dev Notes, "Snapshot test"). Generate the approved files from `e8bbc9d` behaviour (the code is still unmoved), commit them with the test. Run it twice to prove it is deterministic.
+  - [x] 1.2 `HouseholdRequiredRoutesTests` **red first**: written against the not-yet-existing `HouseholdRequiredMetadata`, it must fail to compile or fail on every route; commit only when the filter exists (Task 3), but record the red run here. The allowlist (Dev Notes) is part of the test.
+  - [x] 1.3 `HouseholdGuardIsOneEndpointFilterTests` (Architecture.Tests): red on `e8bbc9d` (11 definitions found). Reuse `CSharpSource.StripComments` (Story 11.18) for comment stripping; do not write a copy.
+- [x] Task 2: `Program.cs` into four extension methods (AC: #1, #5, #7)
+  - [x] 2.1 `src/EnergyTracker.Api/Composition/ObservabilityRegistration.cs`: `AddObservability(this WebApplicationBuilder builder)` takes `builder.Logging.ClearProviders()`, the `Otel:Exporter` read (still read **exactly once**, normalized there), `UseSerilog` with `writeToProviders: otelExporter == "otlp"`, and the exporter `switch` (Program.cs lines 29-117). Keep the long Serilog/OTel reasoning in an ADR (Task 8) and one to three lines here. It needs the `WebApplicationBuilder`, not `IServiceCollection`, because of `builder.Host` and `builder.Logging`.
+  - [x] 2.2 `src/EnergyTracker.Api/Composition/AuthRegistration.cs`: `AddAuth(this WebApplicationBuilder builder)` returns `bool oidcConfigured` (Program.cs line 567 passes it to `MapAuthEndpoints`). Contains the `Oidc:*` reads (still once), `AddHttpContextAccessor`, the cookie scheme with `SessionLifetime` events, the conditional `AddOpenIdConnect` (only when ClientId **and** Authority are set; do not "simplify" this, see the existing comment and `deferred-work.md` entry on `oidcConfigured`), `AddAuthorization`, `AddProblemDetails` stays in Program.cs (not auth). Program.cs lines 189-308. `HouseholdMembershipIsResolvedOncePerRequestTests` counts `new Claim(` in this code: it must keep finding exactly one claim (the validated issuer).
+  - [x] 2.3 `src/EnergyTracker.Api/Composition/ApplicationServicesRegistration.cs`: `AddApplicationServices(this IServiceCollection services)` takes every use-case, repository, port and singleton registration between Data Protection and the job queue (Program.cs lines 327-399, minus `JobHouseholdContext`, which belongs to the queue). **Order inside is preserved** (`ISmartPlugParser` is registered twice on purpose: Eve Home then Meross; the snapshot pins it). `HouseholdImportUploadSettings(Path.GetTempPath(), ...)` and the `AD-24` comments travel with their lines (AC #5).
+  - [x] 2.4 `src/EnergyTracker.Api/Composition/JobQueueRegistration.cs`: `AddJobQueue(this IServiceCollection services, IConfiguration configuration)` takes `JobHouseholdContext` through the heartbeat registration (Program.cs lines 417-474): the `JobQueue:Provider` read (once) and `switch`, the lifecycle/timing singletons, the Smart Plug import job registrations, and **after the switch, outside it**, the heartbeat (`AppInstanceIdentity`, timings, repository, `RecordInstanceHeartbeat`, `AddHostedService<InstanceHeartbeatService>()`), because both providers need it (AD-24). Hosted-service order (queue processor before heartbeat) must not change.
+  - [x] 2.5 What stays in `Program.cs`, on purpose: `WebApplication.CreateBuilder`, the `Database:Provider` read, `ConfigureDbContext` and the two `AddDbContext*` calls (DB selection is not in the AC and `DatabaseProviderSelectionTests` reads it), `TryAddSingleton(TimeProvider.System)` (the one place `TimeProvider.System` may be named), Data Protection (`DataProtectionKeyProtection.Configure` result is needed again by `ApplyStartupActions`), the AI backend line, `AddHttpRateLimiting`, `Configure<FormOptions>`, and the whole `app.*` pipeline. Target: Program.cs at about 300 lines, mostly the pipeline and its (trimmed) comments.
+  - [x] 2.6 After each method moves: build, run `ServiceRegistrationSnapshotTests` and the Architecture suite. **Do not reorder registrations to "tidy" them.**
+  - [x] 2.7 Update the three guards (AC #5): scan `Program.cs` plus `src/EnergyTracker.Api/Composition/*.cs`; `MinimumAd24Comments` keeps 4 for the composition set (count over the union); the heartbeat-outside-switch assertion moves to `JobQueueRegistration.cs` with the same brace-depth check; `NoDirectClockReadsTests` keeps `Program.cs` as the only file that may name `TimeProvider.System`. Edit the guards in the same commit as the move that would otherwise break them.
+- [x] Task 3: The household endpoint filter (AC: #3, #6)
+  - [x] 3.1 `src/EnergyTracker.Api/HouseholdRequiredFilter.cs` (+ `HouseholdRequiredMetadata.cs`, mirroring `RequestedWithFilter.cs` / `RequestedWithRequiredMetadata.cs`): `HouseholdRequiredFilter : IEndpointFilter`, `RequireHousehold<TBuilder>()` extension that adds the marker and the filter together. The filter resolves `ICurrentHouseholdAccessor` from `context.HttpContext.RequestServices`; null `HouseholdId` returns `Results.Problem(detail: HouseholdRequiredFilter.RejectionDetail, statusCode: 403)`. Keep the exact detail string.
+  - [x] 3.2 Handlers still need the id. Add an `internal` extension `Guid RequireHouseholdId(this ICurrentHouseholdAccessor accessor)` (same file) that returns `accessor.HouseholdId!.Value`-equivalent via a null check that throws `InvalidOperationException` naming `RequireHousehold` (a handler reached without the filter is a programming error, not a user error; mirrors the accessor's own fail-loud style from Story 11.12). Handlers that discarded the id (`out _`) simply stop taking `ICurrentHouseholdAccessor` as a parameter.
+  - [x] 3.3 Apply per endpoint file with `var household = api.MapGroup(string.Empty).RequireHousehold();` and map the file's routes on `household` instead of `api`. Order of effects must stay: the group-wide `RequireRequestedWith` (400) runs first, then this filter (403), then the handler, as today. Keep each route's own chain (`RequireRateLimiting`, `DisableAntiforgery`, `.Accepts`, etc.) as it is.
+  - [x] 3.4 Convert the 11 files one commit each, running that file's `*EndpointsTests` after each: `TaggingScaffold`, `SmartPlugImport`, `SmartPlugReading`, `MeterRegressionPrompt`, `HouseholdExport`, `HouseholdImport`, `Tariff`, `MeterReading`, `Status`, `Event`, `Job`. Then delete the helper and the `NoHouseholdDetail` constant from each. Remove the "Same shape as ..., copied rather than referenced" comments with them.
+  - [x] 3.5 `HouseholdRequiredRoutesTests` and `HouseholdGuardIsOneEndpointFilterTests` go green. `HouseholdMemberEndpointsTests` (sweeps every `/api` route as a removed member and fails on any 2xx), `RequestedWithRoutesTests`, `RateLimitedRoutesTests` stay green unedited.
+- [x] Task 4: `TaggingScaffoldEndpoints.cs` split (AC: #2)
+  - [x] 4.1 Done after Task 3 (the helper is already gone, so the move is pure). `TaggingScaffoldEndpoints.cs` keeps `MapTaggingScaffoldEndpoints` (public, same signature) and calls `MapRoomEndpoints`, `MapPowerPointEndpoints`, `MapDeviceEndpoints` in the **same order**; those three become `internal static` classes in `RoomEndpoints.cs`, `PowerPointEndpoints.cs`, `DeviceEndpoints.cs` (same folder, same namespace); the six request and three response records plus the three `ToResponse` mappers move to `TaggingScaffoldContracts.cs` (the records stay `public`, same names and namespace, because tests construct them). No route, status code or message changes.
+  - [x] 4.2 `TaggingScaffoldEndpointsTests` and `RequestedWithRoutesTests` unedited and green.
+- [x] Task 5: `SmartPlugImportRepository` split (AC: #2)
+  - [x] 5.1 Pure move into partial-class files next to the original (recommended layout in Dev Notes). The class keeps its name, constructor, base interface and all `const`/`internal` members (tests read `DeleteBatchSize` etc.). No signature, SQL string, parameter order or log message changes. The 11.18 review already fixed the `CA1859`/`CA1068` signatures: leave them.
+  - [x] 5.2 One commit per file moved. After each: `dotnet build` (0 warnings) and `SmartPlugImportRepository*Tests` (5 test classes, both providers). The Infrastructure suite needs Docker.
+  - [x] 5.3 `SingleInstanceInvariantIsDocumentedTests`, `HouseholdExportReaderDoesNotBypassTenantIsolationTests` and the other guards that glob `src/**/*.cs` keep passing without edits (new file names are picked up automatically); if one keys on the old file name, that is a finding to report, not to paper over.
+- [x] Task 6: `tagging-scaffold-manager.tsx` split (AC: #2)
+  - [x] 6.1 Pure move per the layout in Dev Notes. `TaggingScaffoldManager` stays the only export used by `settings-page.tsx` and keeps its file name and import path; `tagging-scaffold-manager.test.tsx` (951 lines) is **not edited** and stays green (it drives the component as a black box).
+  - [x] 6.2 Do not fix the `react(refs)` oxlint warning at line 144 (`dialogRef`) as part of the move, and do not let the move add one. `npm --prefix web run lint`: warning count equal to Task 0.2. `tsc -b` (via `npm --prefix web run build`) clean; `verbatimModuleSyntax` needs `import type` for the extracted types.
+  - [x] 6.3 The wide-tile classes (`WIDE_TILE_CLASS`, `WIDE_TILE_GRID_CLASS`, `ROOM_ROW_BORDER_CLASS`) and the tab-order rule (no `grid-auto-flow: dense`, `web/e2e/tab-order.spec.ts`) travel intact; run `layout-constants.drift.test.ts` (it scans for `wide:max-w-[Cpx]` and breakpoint copies).
+- [x] Task 7: Comment trim (AC: #4)
+  - [x] 7.1 After the moves (so each comment is trimmed once, in its final place), trim every `//` comment in the "Comment-trim scope" files to one to three lines of why. Delete only what narrates history ("previously", "Story x review fix", "caught in code review", "Pass 1") and keep what states a non-obvious constraint. Never touch `///` summary lines that guards or the project convention rely on, never delete an `AD-nn` pointer, and keep every security-relevant constraint (forwarded headers trust, CSP, body-size scoping, SQL parameter limits) as a short comment plus ADR pointer.
+  - [x] 7.2 Long reasoning goes to ADRs (Task 8), not into the bin. A comment trimmed with no ADR must have its removed part judged as pure history (story and review narration), which the git log already carries.
+  - [x] 7.3 A guard for the trim is cheap and in scope: `NoHistoryNarratingCommentsTests` (Architecture) over the scope files fails on a run of more than 3 consecutive `//` lines, except a block that contains `AD-` or `ADR` and is at most 6 lines, and on the phrases `Story \d+\.\d+ review`, `code review`, `review fix`, `Pass \d`. Non-vacuous with samples. If the first run flags more than ~20 blocks outside the scope files, narrow the globs to the scope files instead of widening the cleanup.
+- [x] Task 8: ADRs (AC: #4)
+  - [x] 8.1 Create `docs/adr/README.md` (what an ADR is here, the three-heading template, "AD-nn lives in the architecture spine; ADRs here hold implementation reasoning too long for a comment") and the ADRs for the comments you actually cut. Candidates, from the longest comments in the scope files: (1) Serilog default providers and `writeToProviders` double console lines; (2) OIDC scheme registered only when fully configured; (3) forwarded headers without `KnownProxies` allowlist and the `/login` rate-limit key; (4) route-scoped `MaxRequestBodySize` for `/api/household-import`; (5) `AddAsync` set-based write paths and its explicit transaction (AD-23); (6) `UpdateMappingAsync` set-based conflict classification (the 2026-09-18 incident); (7) delete cascade chunking and the per-Household sweep lock. Write only the ones whose comments you shorten; do not invent others. Each ADR cites its AD/story/incident source and is under about 60 lines.
+  - [x] 8.2 `docs/adr/README.md` lists them in order; `project-context.md` gets the pointer (Task 9.1).
+- [ ] Task 9: Docs, memory, verification (AC: #8)
+  - [x] 9.1 `project-context.md`: one rule under "Development Workflow Rules" or "Code Quality" (composition lives in `Api/Composition`, `Program.cs` is pipeline plus the few registrations that must stay; new endpoint file with Household-scoped routes uses `RequireHousehold()`, never a private helper, guard names; ADR convention). Correct the existing bullets that say "in `Program.cs`" for things that moved (Dev Notes lists them). Bump "Last Updated". Style: the file's existing one.
+  - [x] 9.2 Full verification: `dotnet build -c Release --no-incremental -p:TreatWarningsAsErrors=true` 0 warnings; `dotnet format EnergyTracker.sln --verify-no-changes --no-restore` exit 0 (the 11.18 gate applies to the new files: `.editorconfig` is `root`, no `#pragma`, no `NoWarn`, Snake_case test names); all four .NET test projects; Vitest; `npm --prefix web run lint` (count not above Task 0.2); `npm --prefix web run build`. Record the counts.
+  - [ ] 9.3 Live smoke (the SPA structure changed): run the app (`scripts/run-api.sh` per `docs/local-development.md`), sign in, open Settings, create a Room, a Power Point and a Device, rename, move and archive one, toggle archived visibility. Because the sandbox cannot be trusted to resize correctly (project-context, "Live-resize verification"), check one narrow and one wide width by asking Ralf if the fresh-tab procedure fails. If Chrome or Auth0 is unavailable, say so and **pause for the user**; do not mark this subtask done on tests alone. This is the Story 8.x precedent for UI-structure moves, not an auth change.
+  - [x] 9.4 `sprint-status.yaml`: dev-story moves the story to `in-progress` and `review`; this create-story run only sets `ready-for-dev`.
+
+## Dev Notes
+
+### Why it exists
+
+The audit rated maintainability *Fair*. Three units are too big to review (A3), a four-line guard exists in 11 copies with comments saying "copied rather than referenced" (R1), and comments narrate story and review history instead of stating why (R2, api side). 11.17 and 11.18 each left work for this story on purpose: the `Program.cs` split ("do not split `Program.cs` here, even though `CA1873`/`CA1305` touch it") and the `SmartPlugImportRepository` split ("`SmartPlugImportRepository` gets split in 11.19; keep this change to the signatures"). This story changes **structure only**; if a step needs a behaviour change, stop and report it.
+
+### Ground rule: moves are moves
+
+Every extraction here is mechanical. Review has to be able to confirm "same code, new file". So: one commit per move, no edits to logic inside a moved block, no renames, no reordering, no "while I'm here". Edits that are not moves (the filter, the guard updates, the comment trim, ADRs) are their own commits. The expected outcome of every move commit is: build clean, the relevant tests green and **unedited**.
+
+### Current state of the files being touched
+
+**`src/EnergyTracker.Api/Program.cs`** (598 lines, 207 of them `//` comments). Top-level statements. Sequence: `CreateBuilder` → `Logging.ClearProviders` → `otelExporter` read → `UseSerilog` → exporter `switch` (Azure Monitor / OTLP) → `Database:Provider` read, connection-string check, local `ConfigureDbContext` function, `AddDbContext*` → `Oidc:*` reads, `AddHttpContextAccessor`, `TryAddSingleton(TimeProvider.System)`, cookie + conditional OIDC (`oidcConfigured`), `AddAuthorization`, `AddProblemDetails`, `AddHttpRateLimiting` → Data Protection (`dataProtectionKeyProtection`) → ~75 use-case/repository registrations → import registry, upload settings, `FormOptions` → AI backend (`aiPlausibilityBackend`) → `JobHouseholdContext`, `BackgroundJobProcessor`, lifecycle, Smart Plug import registrations → `JobQueue:Provider` switch → heartbeat registrations → `Build()` → startup actions → pipeline (`SecurityHeaders` first, forwarded headers, HSTS, body-size middleware, `UseExceptionHandler`, auth, rate limiter, `UseHouseholdMembership`) → `/health`, `MapAuthEndpoints(oidcConfigured)`, the `/api` group with `RequireAuthorization().RequireRequestedWith()` and 15 `Map*Endpoints` calls → SPA fallback → `Run()`. `public partial class Program;` at the end must stay (`WebApplicationFactory`).
+
+Variables that cross the cut and must still be visible to the pipeline half: `oidcConfigured` (from `AddAuth`), `dataProtectionKeyProtection`, `aiPlausibilityBackend`. They stay in Program.cs (see Task 2.5) or are returned.
+
+**Guards that read Program.cs as text (verified at `e8bbc9d`):**
+- `NoDirectClockReadsTests`: `CompositionRoot = "src/EnergyTracker.Api/Program.cs"` is the one file allowed to name `TimeProvider.System`; `Program.cs` stays that file (the registration stays there), the composition files must contain no direct clock read.
+- `SingleInstanceInvariantIsDocumentedTests`: `ProcessLocalCodeFiles` lists `Program.cs` (rate limiter, upload temp path, startup sweep, heartbeat), `MinimumAd24Comments["…/Program.cs"] = 4`, and `The_heartbeat_is_registered_outside_the_queue_provider_switch` reads `switch (jobQueueProvider)`, `AddHostedService<InstanceHeartbeatService>()` and `builder.Build()` from Program.cs and compares brace depth. After the split the switch and the heartbeat live in `JobQueueRegistration.cs`, `builder.Build()` stays in Program.cs: the test needs the brace-depth comparison done **within the method body** (heartbeat at the method's top level, not inside a switch branch). Rewrite it to that, keeping the intent.
+- `HouseholdMembershipIsResolvedOncePerRequestTests`: `ProgramFile` for the registration order of `UseHouseholdMembership` (stays in Program.cs), the `new Claim(` count of exactly 1 in the OIDC `OnTokenValidated` handler (moves to `AuthRegistration.cs`), and an allow-list of files that may name the membership context (`Program.cs` → add the composition file that registers `AddDbContextFactory<HouseholdMembershipDbContext>`; it stays in Program.cs under Task 2.5, so probably unchanged).
+- Tests that only mention `Program.cs` in comments (`SessionLifetimeTests`, `OidcConfigurationTests`, `ForwardedHeadersTests`, `TestAuthHandler`, others) are comments, not dependencies; their wording may drift, do not edit those test files.
+
+**`SmartPlugImportRepository.cs`** (1,197 lines, 528 of them `//` comments; constructor `(EnergyTrackerDbContext dbContext, IAuditCorrectionRecorder auditCorrectionRecorder, ILogger<SmartPlugImportRepository> logger)`; implements the 15-method `ISmartPlugImportRepository`; registered scoped in Program.cs; constructed by hand in 5 Infrastructure test classes; two `internal const` (`DeleteBatchSize`, `DeleteReadingVolumeThreshold`) and `internal static ChunkImportIdsByReadingVolume` read by tests through `InternalsVisibleTo`). Responsibilities by line range at HEAD:
+- Write path, AD-23 (22-423): consts for parameter limits, `AddAsync`, `AddAsyncCore`, `DeduplicateByMatchKey`, `UpsertAwaitingMappingReadings*` (Postgres / SQL Server), `BuildAwaitingMappingValuesClause`.
+- Reads and small writes (424-450, 670-734): `FindByBackgroundJobIdAsync`, `FindByIdAsync`, `ListReadingsByImportIdAsync`, `FindLatestReadingWatermarkByPowerPointAsync`, `ListPriorReadingsByPowerPointAsync`, `FindFirstReadingDateByPowerPointAsync`, `AddGapsAsync`, `ListGapsByImportId(s)Async`, `AddFlaggedForReviewAsync`, `FindAllByBackgroundJobIdsAsync`.
+- Mapping to a Power Point (452-668): `UpdateMappingAsync`, `AnyMappingConflictAsync`, `UpdateMappingSetBasedWithConflictToleranceAsync`.
+- Cleanup (735-1197): `SweepExpiredAsync`, `EligibleRow`, `DeleteBoundedChunkAsync`, the per-Household sweep-lock acquisition (Postgres / SQL Server), `DeleteJobsAsync`, `DeleteBatchSize`, `DeleteReadingVolumeThreshold`, `DetachReadingsForImportAsync`, `ChunkImportIdsByReadingVolume`, `DeleteEligibleAsync`, `DeleteImportChunkAsync`.
+
+**`TaggingScaffoldEndpoints.cs`** (401 lines): helper (to be removed by Task 3), `MapTaggingScaffoldEndpoints` calling `MapRoomEndpoints` (rooms: POST, GET, PUT /{id}, DELETE /{id}), `MapPowerPointEndpoints` (POST, GET, PUT /{id}, DELETE /{id}, PUT /{id}/room), `MapDeviceEndpoints` (POST, GET, PUT /{id}, DELETE /{id}, PUT /{id}/power-point), three private `ToResponse` overloads, six request records and three response records (all `public`).
+
+**`tagging-scaffold-manager.tsx`** (838 lines): DTO interfaces (`RoomDto`, `PowerPointDto`, `DeviceDto`), `DialogState` union (11 kinds), three Tailwind class constants, `ArchivedBadge`, generic `MoveDestinationList<T>`, then one `TaggingScaffoldManager` (lines 125-838): state, a load `useEffect` (146), `openDialog`/`closeDialog`/`closeDialogIfUnchanged`, `handleSubmit` (245, create + rename, per kind), `handleDelete` (363), `handleMoveTo` (406), and a 380-line JSX tree (456-836): Rooms → Power Points → Devices rows plus the dialogs. Only `settings-page.tsx` imports it. Uses `apiFetch`/`ApiError`/`toApiError` from `@/lib/api-client` (the only HTTP path; `FrontendUsesTheSharedApiClientTests` fails on bare `fetch(`).
+
+### Design calls (decided here; Ralf may overrule in review, then mark the AC `AMENDED`)
+
+1. **Repository split = `partial class` files, not collaborator classes.** The port is one interface used by Application; the tests construct the class directly with three arguments and read its internals. Partial files cut the file size and keep every call site, the DI registration, `InternalsVisibleTo` access and `private` sharing of `dbContext`/`logger` intact, with zero behaviour risk. Splitting into real collaborator classes behind a facade (`SmartPlugImportWriter`, `…MappingService`, `…Cleanup`) is the cleaner end state but needs a constructor change that rewrites 5 test classes, which AC #2 forbids. Layout:
+   - `SmartPlugImportRepository.cs` — constructor, parameter-limit consts, the read methods and small writes (about 150 lines)
+   - `SmartPlugImportRepository.Import.cs` — `AddAsync` write path (AD-23)
+   - `SmartPlugImportRepository.Mapping.cs` — `UpdateMappingAsync` and its conflict handling
+   - `SmartPlugImportRepository.Cleanup.cs` — sweep and manual delete, chunking, locks (largest; if above ~450 lines after the comment trim, split `…Cleanup.Locks.cs` for the two provider lock methods)
+   The convention "one class per file" (project-context) is deliberately bent here; say so in one comment line in the main file.
+2. **Composition files live in `src/EnergyTracker.Api/Composition/`**, one file per method, `internal static class XxxRegistration` holding an `Add…` extension. Not in `Program.cs`'s folder root (the Api root is already 12 files), and not a single file (the AC lists four methods because they are four responsibilities). The "composition root" in guards becomes Program.cs plus that folder.
+3. **Household filter on a group, not on `/api`.** 4 endpoint files serve callers without a Household (create household, accept invite, session, members) and `/api` as a whole must keep working for them. So the filter is applied per file with `api.MapGroup(string.Empty).RequireHousehold()`. An empty-prefix group is valid and keeps route templates identical (the route sweeps compare `RoutePattern.RawText`). If an empty prefix proves awkward, `RequireHousehold()` directly on each route is the fallback (38 call sites, still one definition).
+4. **ADR scope = only what you cut.** The AC says long reasoning moves to `docs/adr/`. That does not mean "write ADRs for the project". An ADR exists only because a comment was shortened and its reasoning is worth keeping.
+
+### The household filter (shape)
+
+```csharp
+// src/EnergyTracker.Api/HouseholdRequiredFilter.cs
+internal sealed class HouseholdRequiredFilter : IEndpointFilter
+{
+    public const string RejectionDetail = "The authenticated principal does not belong to a Household.";
+
+    public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var accessor = context.HttpContext.RequestServices.GetRequiredService<ICurrentHouseholdAccessor>();
+        return accessor.HouseholdId is null
+            ? ValueTask.FromResult<object?>(Results.Problem(detail: RejectionDetail, statusCode: StatusCodes.Status403Forbidden))
+            : next(context);
+    }
+}
+```
+
+Facts the dev must keep right:
+- `ICurrentHouseholdAccessor.HouseholdId` is `Guid?`; it throws `InvalidOperationException` (naming `UseHouseholdMembership`) for an authenticated `/api` principal with no cached value (Story 11.12). Routes outside `/api` needing a Household are not covered; none exist today (all 15 endpoint classes map onto `api`).
+- Filter order: group filters run in registration order, outer first. `RequireRequestedWith()` is on the `/api` group, so a mutation without the header still answers 400 before the household 403, as today. Endpoint filters run after parameter binding, so a body that fails to bind answers its 400 first, as today.
+- `Results.Problem(detail:, statusCode: 403)` is what the copies return; keep it verbatim so `type`/`title` defaults and the response content type do not change.
+- Several tests assert 403 for a principal without a Household per endpoint file; they are the regression net. They assert status, not text (a grep for the detail string in `tests` finds nothing), so keep the text unchanged anyway: it is wire behaviour.
+
+**Routes that legitimately work without a Household (allowlist for `HouseholdRequiredRoutesTests`; verify against the endpoint map, do not trust this list blindly):** everything in `SessionEndpoints`, `HouseholdEndpoints` (create; the `{id}` routes use `TryAuthorizeHousehold`, which does its own null check + id compare), `HouseholdInviteEndpoints` (create is guarded in its own code; accept works for a caller without a Household), `HouseholdMemberEndpoints` (list/remove/leave have their own checks). The test names each allowed route explicitly; a new `/api` route that is neither marked nor allowlisted fails.
+
+### Snapshot test (characterization)
+
+`ServiceRegistrationSnapshotTests`: build the host through `EnergyTrackerApiFactory` (or a sibling factory with `ConfigureAppConfiguration` for the variants), and read the `IServiceCollection` the host was built from. `WebApplicationFactory` exposes it through `ConfigureTestServices(services => captured = services.ToList())`, which runs after `Program`'s own registrations, so the capture sees the final order. Serialize each `ServiceDescriptor` as `{Lifetime} {ServiceType full name} -> {ImplementationType full name | factory | instance}`, sort nothing, drop descriptors the framework adds by default (keep those from `EnergyTracker.*` plus the ones `Program` adds explicitly: filter by assembly/namespace of the service or implementation type, and keep a small explicit list of framework types `Program` registers: `TimeProvider`, `HttpContextAccessor`, hosted services). Approved text in `tests/EnergyTracker.Api.Tests/Snapshots/*.txt`, compared with `ShouldBe`; on mismatch print a unified diff-like message. Variants: default; `JobQueue:Provider=azurestoragequeue` (needs `JobQueue:ConnectionString` set to a dummy string; the `QueueClient` is created lazily by the factory delegate, never resolved here); `Otel:Exporter=otlp` with an endpoint; `Otel:Exporter=azuremonitor` with a dummy connection string. Do not resolve the hosted services, only list them. If a variant cannot be built without a real service, drop that variant and say so in the Debug Log rather than mocking the world.
+
+Why not "just run the existing tests": the existing tests resolve what they need; they do not notice a registration that moved after another one (the double `ISmartPlugParser` registration is the sharpest case), a lifetime changed by a typo, or a hosted service that starts in a different order.
+
+### Comment-trim scope
+
+"Files touched by this story" = non-test source files this PR edits:
+- `src/EnergyTracker.Api/Program.cs`, `src/EnergyTracker.Api/Composition/*.cs` (new)
+- the 11 endpoint files converted in Task 3, and the files from Task 4
+- `src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository*.cs` (the biggest comment pile: 528 lines)
+- `src/EnergyTracker.Application/Ports/ISmartPlugImportRepository.cs` is **not** touched by the split, so it is **out of scope** (91 comment lines, most of them port contract text that belongs there). Leave it.
+- `web/src/components/tagging-scaffold/*.tsx`/`*.ts` (new files and the manager)
+- Test files are out of scope even when edited (they are edited only for the new tests).
+Anything else stays as it is; other long-comment files (`ValidateHouseholdImport`, `EveHomeXlsxParser`, `ProcessSmartPlugImport`, …) are not in the scope and are recorded as one `[open]` entry in `deferred-work.md` (Task 9, append at the **end**: `## Deferred from: create-story of 11-19-structural-cleanup (2026-10-31)`) listing the files with more than 40 `//` lines.
+
+What counts as "why": a constraint, an invariant, a non-obvious reason, an AD pointer. What goes: story and review narration, incident chronology (moves to the ADR), restating the next line. Keep a one-line "see ADR NNNN" instead of a paragraph.
+
+### Frontend layout (target)
+
+Under `web/src/components/tagging-scaffold/`:
+- `tagging-scaffold-types.ts` — `RoomDto`, `PowerPointDto`, `DeviceDto`, `DialogState` (`export type`; consumers use `import type`)
+- `tagging-scaffold-classes.ts` — the three class-name constants
+- `archived-badge.tsx`, `move-destination-list.tsx` — the two small existing components
+- `use-tagging-scaffold.ts` — loading (`rooms`, `powerPoints`, `devices`, `loading`, `loadError`) and the three mutation handlers (`submit`, `delete`, `moveTo`) with their `apiFetch`/`toApiError` calls; the dialog UI state may stay in the manager
+- `tagging-scaffold-dialogs.tsx` — the name dialog (create/rename), delete confirmation, move dialog (the JSX that renders `dialog`)
+- `room-row.tsx`, `power-point-row.tsx`, `device-row.tsx` — the three list levels from the 380-line JSX tree
+- `tagging-scaffold-manager.tsx` — composition: state, wiring, the section card; target at most ~250 lines
+
+The exact seams are the dev's call, as long as: no new behaviour, props are explicit (no context object invented for this), `t()` keys unchanged (locale files untouched; `web/src/locales` is guarded for key parity), `useTranslation` stays inside the components that render text, `dialogRef`'s focus/close logic is moved as is (see `closeDialogIfUnchanged`), and `tagging-scaffold-manager.test.tsx` passes unedited. Do not rename files that other code imports.
+
+### Testing standards (this repo)
+
+- xunit.v3 (MTP), Shouldly, NSubstitute; Snake_case test names; `TestContext.Current.CancellationToken` on every token (keep xUnit1051 at zero, Story 11.18).
+- Architecture guards read files as text from the repo root, strip comments with `CSharpSource.StripComments`, assert they scanned something real, and prove they are non-vacuous with inline known-bad samples. Follow `RequestedWithRoutesTests` (route sweep through `EndpointDataSource`) for the Api-level guard and `BackendAnalyzerGateIsConfiguredTests` / `NoDirectClockReadsTests` for the text ones.
+- Story 11.18's gate applies to every new file: `AnalysisMode=Recommended` + security rules as warnings, build with `-p:TreatWarningsAsErrors=true`, `dotnet format --verify-no-changes`. Run `dotnet format EnergyTracker.sln` before pushing. Splitting a class into partial files does not change analyzer results, but new `internal static class` files can raise `CA1852`-style findings: fix, do not suppress.
+- Frontend: Vitest + Testing Library, tests next to source, `fetch` mocked per URL. New hook/components get a test only if the move exposes something the black-box suite does not cover; otherwise the 951-line manager suite is the net.
+
+### Project Structure Notes
+
+- New: `src/EnergyTracker.Api/Composition/{Observability,Auth,ApplicationServices,JobQueue}Registration.cs`; `src/EnergyTracker.Api/HouseholdRequiredFilter.cs`, `HouseholdRequiredMetadata.cs`; `src/EnergyTracker.Api/Endpoints/{Room,PowerPoint,Device}Endpoints.cs`, `TaggingScaffoldContracts.cs`; `SmartPlugImportRepository.{Import,Mapping,Cleanup}.cs`; `tests/EnergyTracker.Api.Tests/{ServiceRegistrationSnapshotTests,HouseholdRequiredRoutesTests}.cs`, `Snapshots/*.txt`; `tests/EnergyTracker.Architecture.Tests/{HouseholdGuardIsOneEndpointFilterTests,NoHistoryNarratingCommentsTests}.cs`; `docs/adr/`; the React files listed above.
+- Edited: `Program.cs`, 11 endpoint files, `SmartPlugImportRepository.cs`, `tagging-scaffold-manager.tsx`, the three guards in AC #5, `project-context.md`, `deferred-work.md`, `sprint-status.yaml`, this story file. Check `docs/self-hosting.md` and `docs/local-development.md` for stale `Program.cs` references.
+- Not edited: `ISmartPlugImportRepository.cs`, any test file other than the three guards and the new tests, `*.csproj` (no new package; the new `Composition` folder needs no project change), `.editorconfig`, `Directory.Build.props`, `Dockerfile`, workflows, migrations, locale files, `.oxlintrc.json`, `docs/codebase-audit-2026-10-10.md`.
+- Variance: the epic says "`TryGetHouseholdId` 11 copies". There are 11 definitions and 38 call sites; the AC's intent (one filter) covers both. `HouseholdEndpoints.TryAuthorizeHousehold` is a **different** helper (null check plus id compare) and stays. Epic names `AddJobQueue` etc.; where those live (folder, file per method) is decided here, not by the epic.
+- Corrections to make in `project-context.md` (stale after the move): "read once at composition root (`Program.cs`)" in the config-driven-adapter rule becomes "composition root (`Program.cs` and `Api/Composition`)"; Story 11.17's "registered once as `TimeProvider.System` in `Program.cs`" stays true; Story 11.12's `UseHouseholdMembership` position stays true; the AD-24 bullet's "Program.cs" mechanisms are now partly in `Composition/`.
+
+### References
+
+- `_bmad-artifacts/planning/epics/epic-11-codebase-audit-hardening.md#story-1119-structural-cleanup`
+- `_bmad-artifacts/planning/sprint-change-proposal-2026-10-10.md` (Story 11.19 at line ~610)
+- `docs/codebase-audit-2026-10-10.md` (A3, R1, R2)
+- `_bmad-artifacts/project-context.md` (Framework-Specific Rules: config-driven selection, household resolved once, HTTP hardening and `RequestedWithFilter`; Testing Rules; Development Workflow Rules: analyzer gate)
+- `src/EnergyTracker.Api/RequestedWithFilter.cs`, `RequestedWithRequiredMetadata.cs`, `tests/EnergyTracker.Api.Tests/RequestedWithRoutesTests.cs` (the pattern to mirror)
+- `_bmad-artifacts/implementation/11-18-backend-analyzer-format-gate.md` (previous story; analyzer gate, `CSharpSource`, "do not split Program.cs here")
+- `_bmad-artifacts/implementation/11-17-timeprovider-recompute-lock-eviction.md` (`NoDirectClockReadsTests`, composition-root rule)
+- `_bmad-artifacts/implementation/11-13-single-instance-invariant-documentation.md` (AD-24 comment counts and the heartbeat placement guard)
+- `_bmad-artifacts/implementation/deferred-work.md` (entries on `oidcConfigured` and middleware ordering touch lines this story moves; do not resolve them here)
+
+### Previous story intelligence (11.18 and the 11.x run)
+
+- 11.18 closed with the whole solution at 0 warnings under `-p:TreatWarningsAsErrors=true` and `dotnet format --verify-no-changes` clean. Every file this story creates must pass both, and `dotnet format` must be run after each extraction (mis-indented moved blocks are the typical failure).
+- 11.18 left `CSharpSource.StripComments` (string-aware: verbatim, raw and char literals) in the Architecture test project. Reuse it for the three new/updated text guards.
+- 11.18 review lessons that apply: guards must be non-vacuous; do not widen scope; a "one-line scripted edit" over many files corrupted nested expressions in 11.17 once, so for the 38-call-site filter conversion use the editor per file and review each diff; `dotnet format` is the safe mass tool, a regex is not.
+- 11.18 Task 8.2 still has a note about proving the format step in CI (`dotnet format --verify-no-changes` unproven on a real mis-indented line, PR #158). Not this story's scope; do not tidy it here. If the throwaway PR is still open when this PR is raised, say so in the PR description.
+- Practice since 11.1: red first, red run recorded, existing tests unedited where possible, one PR, project-context bump, a guard per invariant meant to stay true.
+
+### Git intelligence
+
+Recent commits: `e8bbc9d`/`77db0de` (11.18 status and notes), `7f46745` (#157, 11.18), `51690e1`, `365f63a` (11.18 analyzer fixes; touched `Program.cs`, `SmartPlugImportRepository.cs` for CA signatures). Both big files were edited last by the analyzer pass: rebase risk only if another PR lands there (Dependabot touches neither). The 11.18 `.git-blame-ignore-revs` file exists: for a pure-move commit it is worth listing the move commits there (one line each) so `git blame` still points at the real author of moved code. Add them after the commits exist; same practice as 11.18 Task 3.2.
+
+### Latest technical information
+
+No new library. Relevant framework facts (ASP.NET Core 10): `RouteGroupBuilder.AddEndpointFilter` and `MapGroup(string.Empty)` are supported; filters run after parameter binding and in registration order, outer group first; `IEndpointConventionBuilder.Add` is how `RequireRequestedWith` attaches metadata (mirror it exactly). `EndpointDataSource` lists endpoints with their metadata for route sweeps.
+
+### Project context reference
+
+All rules in `_bmad-artifacts/project-context.md` apply. Most relevant: AD-1 (Ports & Adapters; the composition files are Api, they may reference Infrastructure), AD-3 (tenant isolation: do not touch query filters while moving repository code), AD-24 (comments and the doc list, guarded), Testing Rules, the analyzer-gate rule, and "Amend ACs at decision time" (if Ralf overrules a design call above, mark the AC `AMENDED` in this file).
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Sonnet 5.5 (`claude-sonnet-5-5`), Claude Code, dev-story run 2026-10-31.
+
+### Debug Log References
+
+- **Baseline (Task 0, `e8bbc9d`):** `dotnet build -c Release --no-incremental -p:TreatWarningsAsErrors=true` 0 warnings; `dotnet format --verify-no-changes` exit 0. .NET tests: Api 444, Application 605, Architecture 149, Infrastructure 566 (1,764 passed); Vitest 768 passed; `oxlint` 26 warnings. Line counts: `Program.cs` 598, `SmartPlugImportRepository.cs` 1,197, `tagging-scaffold-manager.tsx` 838, `TaggingScaffoldEndpoints.cs` 401. `//` lines: `SmartPlugImportRepository.cs` 528, `Program.cs` 207, `HouseholdImportEndpoints.cs` 69, `SmartPlugImportEndpoints.cs` 50, `HouseholdExportEndpoints.cs` 50.
+- **Task 1.1:** `ServiceRegistrationSnapshotTests` (4 variants: default, `azurestoragequeue`, `otlp`, `azuremonitor`) generated from unmoved code on `e8bbc9d` behaviour, run twice green and deterministic. The variants use a bare `WebApplicationFactory<Program>` (no database), like `OtelConfigurationTests`.
+- **Task 1.3 red:** `HouseholdGuardIsOneEndpointFilterTests` failed on the unconverted code (helper and text in all endpoint files, filter file missing). Green after Task 3.
+- **Task 1.2:** `HouseholdRequiredRoutesTests` was written after `HouseholdRequiredMetadata` existed, so its red run is not recorded. It is a sweep of every `/api` route; the allowlist from Dev Notes matched the endpoint map exactly (14 routes) with no change.
+- **Task 2 snapshot catch:** the first Program.cs split moved `AddHttpContextAccessor` into `AddAuth`. The snapshot failed: `AddAuthentication` registers Data Protection services (`DataProtectionHostedService`), so `TimeProvider` landed after them. Fix: `AddHttpContextAccessor` and `TimeProvider` stay in `Program.cs` before `AddAuth`. Snapshots were not edited after the move.
+- **Task 3:** 38 call sites in 11 files converted by a per-file script (two exact block shapes: `out var householdId` and `out _`), then compiled and the diff of each file reviewed. `HouseholdEndpoints`, `HouseholdInviteEndpoints` and `HouseholdMemberEndpoints` carried the same 403 text as a literal; they now use `HouseholdRequiredFilter.RejectionDetail` (no wire change) so the guard can ban the literal in every endpoint file.
+- **Task 5:** `SmartPlugImportRepository*` tests (85, both providers) green after each move. No guard keyed on the old file name.
+- **Task 6:** `tagging-scaffold-manager.test.tsx` untouched and green. `oxlint` 26 before and after (the `react(refs)` warning on `dialogRef` moved to `use-tagging-scaffold-dialog.ts`). `tsc -b` and `vite build` clean.
+- **Task 7:** `//` lines in `SmartPlugImportRepository*` 528 to 96; `Program.cs` 207 to 49. `NoHistoryNarratingCommentsTests` first run flagged 5 spots (1 phrase, 4 blocks in the React files); fixed, no scope narrowing needed.
+- **Final (Task 9.2):** build 0 warnings; `dotnet format --verify-no-changes` exit 0; Api 452, Application 605, Architecture 156, Infrastructure 566 (1,779 passed, 0 failed); Vitest 768 passed; `oxlint` 26 warnings (unchanged); `vite build` ok.
+
+### Completion Notes List
+
+- `Program.cs` 598 to 249 lines. Four files in `src/EnergyTracker.Api/Composition/`. Order and lifetime of every registration unchanged (snapshot unedited). The three architecture guards read `Program.cs` plus the folder; the heartbeat check now compares brace depth inside `AddJobQueue`.
+- Deviation from Task 2.2 text: `AddHttpContextAccessor` stays in `Program.cs` (see Debug Log). `AddAuth` still returns `oidcConfigured`.
+- `RequireHousehold()` filter on `api.MapGroup(string.Empty)` in 11 files, plus `RequireHouseholdId()` for handlers. `TryGetHouseholdId` and `NoHouseholdDetail` are gone from `src`. The four endpoint files for callers without a Household keep their own logic.
+- `TaggingScaffoldEndpoints.cs` 401 lines split into `Room/PowerPoint/DeviceEndpoints` (now `internal static`), `TaggingScaffoldContracts.cs` (records stay `public`). Largest repository file after the trim is `.Cleanup.cs` (273 lines). Largest React file is `use-tagging-scaffold-dialog.ts` (279 lines, under the 300 target); the manager is 120 lines.
+- Seven ADRs in `docs/adr/` for the comments that were cut. No ADR for the trims of `HouseholdExportEndpoints` or `SmartPlugImportEndpoints`: their removed text was story and review narration.
+- `.git-blame-ignore-revs` lists the six move commits. `deferred-work.md`, `project-context.md` updated. `docs/self-hosting.md` and `docs/local-development.md` have no stale `Program.cs` mechanism reference (`local-development.md` line 141 names the cookie setting, still in the OIDC handler options).
+- **Open: Task 9.3 live smoke of the Settings screen (Rooms, Power Points, Devices) in Chrome with Auth0 was not run.** It needs a signed-in browser session. Per the story it is not marked done on tests alone. The black-box suite (951 lines) covers the component and passes unedited.
+
+### File List
+
+Added: `src/EnergyTracker.Api/Composition/{Observability,Auth,ApplicationServices,JobQueue}Registration.cs`, `src/EnergyTracker.Api/HouseholdRequiredFilter.cs`, `src/EnergyTracker.Api/HouseholdRequiredMetadata.cs`, `src/EnergyTracker.Api/Endpoints/{Room,PowerPoint,Device}Endpoints.cs`, `src/EnergyTracker.Api/Endpoints/TaggingScaffoldContracts.cs`, `src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.{Import,Mapping,Cleanup}.cs`, `tests/EnergyTracker.Api.Tests/{ServiceRegistrationSnapshotTests,HouseholdRequiredRoutesTests}.cs`, `tests/EnergyTracker.Api.Tests/Snapshots/service-registrations.{default,azurestoragequeue,otlp,azuremonitor}.txt`, `tests/EnergyTracker.Architecture.Tests/{HouseholdGuardIsOneEndpointFilterTests,NoHistoryNarratingCommentsTests}.cs`, `docs/adr/{README.md,0001..0007}`, `web/src/components/tagging-scaffold/{archived-badge,device-row,move-destination-list,power-point-row,room-row,tagging-scaffold-dialogs}.tsx`, `web/src/components/tagging-scaffold/{tagging-scaffold-classes,tagging-scaffold-types,use-tagging-scaffold-data,use-tagging-scaffold-dialog}.ts`.
+
+Modified: `src/EnergyTracker.Api/Program.cs`, `src/EnergyTracker.Api/Endpoints/{TaggingScaffold,SmartPlugImport,SmartPlugReading,MeterRegressionPrompt,HouseholdExport,HouseholdImport,Tariff,MeterReading,Status,Event,Job,Household,HouseholdInvite,HouseholdMember}Endpoints.cs`, `src/EnergyTracker.Infrastructure/Adapters/SmartPlugImportRepository.cs`, `tests/EnergyTracker.Architecture.Tests/{SingleInstanceInvariantIsDocumentedTests,HouseholdMembershipIsResolvedOncePerRequestTests}.cs`, `web/src/components/tagging-scaffold/tagging-scaffold-manager.tsx`, `_bmad-artifacts/project-context.md`, `_bmad-artifacts/implementation/deferred-work.md`, `_bmad-artifacts/implementation/sprint-status.yaml`, `.git-blame-ignore-revs`, this story file.
+
+`NoDirectClockReadsTests` needed no edit: `Program.cs` is still the one file that names `TimeProvider.System`.
+
+## Change Log
+
+- 2026-10-31: Story 11.19 implemented. Program.cs registrations moved to `Api/Composition`, one `RequireHousehold()` endpoint filter replaces 11 private guards, three oversized units split, comments in touched files trimmed with seven ADRs, project-context and deferred-work updated. Pending: live Settings smoke (Task 9.3).
