@@ -6,37 +6,16 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class EventEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced across
-    // files (that helper is private to its own class); an Event is Household-scoped exactly like
-    // MeterReading.
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapEventEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/events", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/events", async (
             CreateEventRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             CreateEvent createEvent,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -58,8 +37,7 @@ public static class EventEndpoints
             }
         });
 
-        api.MapGet("/events", async (
-            ICurrentHouseholdAccessor householdAccessor,
+        household.MapGet("/events", async (
             GetEventHistory getEventHistory,
             CancellationToken cancellationToken,
             int page = 1,
@@ -67,11 +45,6 @@ public static class EventEndpoints
         {
             // Auth gate only — the id itself is discarded because AD-3's query filter does the
             // scoping (see GetEventHistory/IEventRepository).
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 var result = await getEventHistory.ExecuteAsync(page, pageSize, cancellationToken);
