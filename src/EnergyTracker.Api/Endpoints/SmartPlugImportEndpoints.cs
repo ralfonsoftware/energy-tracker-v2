@@ -6,7 +6,6 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class SmartPlugImportEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
     private static readonly string[] AllowedExtensions = [".xlsx", ".csv"];
 
     // Real Eve Home/Meross exports run hundreds of KB (Task 3); 20 MB is generous headroom while
@@ -14,34 +13,16 @@ public static class SmartPlugImportEndpoints
     // background-processing loop.
     private const long MaxFileSizeBytes = 20 * 1024 * 1024;
 
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced
-    // across files (that helper is private to its own class).
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapSmartPlugImportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/smart-plug-imports", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/smart-plug-imports", async (
             IFormFile file,
             ICurrentHouseholdAccessor householdAccessor,
             IBackgroundJobQueue jobQueue,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var extension = Path.GetExtension(file.FileName);
             if (!AllowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
@@ -105,22 +86,16 @@ public static class SmartPlugImportEndpoints
         .DisableAntiforgery()
         .RequireRateLimiting(RateLimitPolicies.Upload);
 
-        api.MapPost("/smart-plug-imports/{id:guid}/power-point-mapping", async (
+        household.MapPost("/smart-plug-imports/{id:guid}/power-point-mapping", async (
             Guid id,
             MapSmartPlugImportRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             MapSmartPlugImportToPowerPoint mapSmartPlugImportToPowerPoint,
             CancellationToken cancellationToken) =>
         {
             // AD-3's query filter alone would already stop a cross-Household id from resolving,
             // but every sibling endpoint (RenamePowerPoint/MovePowerPoint included, the exact
-            // precedent this handler follows) still calls TryGetHouseholdId first so a principal
+            // precedent this handler follows) sits behind RequireHousehold so a principal
             // with no Household gets a 403 rather than a misleading 404.
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
             try
             {
                 await mapSmartPlugImportToPowerPoint.ExecuteAsync(id, request.PowerPointId, cancellationToken);
@@ -144,15 +119,12 @@ public static class SmartPlugImportEndpoints
             }
         });
 
-        api.MapGet("/smart-plug-import-jobs", async (
+        household.MapGet("/smart-plug-import-jobs", async (
             ICurrentHouseholdAccessor householdAccessor,
             ListSmartPlugImportJobs listSmartPlugImportJobs,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var jobs = await listSmartPlugImportJobs.ExecuteAsync(householdId, cancellationToken);
             return Results.Ok(jobs.Select(ToJobHistoryResponse).ToList());
@@ -167,7 +139,7 @@ public static class SmartPlugImportEndpoints
         // Azure Container Apps' ~240s HTTP ingress ceiling even with every DB command individually
         // bounded (CAP-1/CAP-4), so this can no longer execute synchronously inside the request.
         // The client learns completion by polling GET /api/jobs/{id}, exactly like an upload.
-        api.MapDelete("/smart-plug-import-jobs", async (
+        household.MapDelete("/smart-plug-import-jobs", async (
             ICurrentHouseholdAccessor householdAccessor,
             IBackgroundJobQueue jobQueue,
             IBackgroundJobRepository backgroundJobRepository,
@@ -175,10 +147,7 @@ public static class SmartPlugImportEndpoints
             bool deleteAll,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             // Round-3 review fix: without this, a double-click, a second tab, or a false-timeout
             // retry (see the poll-tolerance fix above) would enqueue a second concurrent cleanup —
