@@ -78,7 +78,11 @@ public class InProcessJobStartupSweepTests : IAsyncLifetime
         var dbContext = scope.ServiceProvider.GetRequiredService<EnergyTrackerDbContext>();
         var job = new BackgroundJob
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "UnknownJobType", Status = status, CreatedAtUtc = createdAt,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            JobType = "UnknownJobType",
+            Status = status,
+            CreatedAtUtc = createdAt,
         };
         dbContext.BackgroundJobs.Add(job);
         await dbContext.SaveChangesAsync(ct);

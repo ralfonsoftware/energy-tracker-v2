@@ -121,17 +121,27 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
         {
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CompletedAtUtc = DateTimeOffset.UtcNow,
             };
             dbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: $"Fridge-{i}");
             dbContext.SmartPlugImports.Add(import);
             dbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = import.Id,
+                PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                EstimatedTotalKwh = null,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
             });
             var reading = MakeReading(householdId, import.Id, DateTimeOffset.UtcNow.AddMinutes(-i));
             dbContext.SmartPlugReadings.Add(reading);
@@ -177,17 +187,27 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
             {
                 var job = new BackgroundJob
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                    Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    JobType = "ProcessSmartPlugImport",
+                    Status = BackgroundJobStatus.Completed,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    CompletedAtUtc = DateTimeOffset.UtcNow,
                 };
                 seedDbContext.BackgroundJobs.Add(job);
                 var import = MakeImport(householdId, job.Id, deviceTag);
                 seedDbContext.SmartPlugImports.Add(import);
                 seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
                 {
-                    Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                    Id = Guid.NewGuid(),
+                    HouseholdId = householdId,
+                    SmartPlugImportId = import.Id,
+                    PowerPointId = null,
+                    StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                    EstimatedTotalKwh = null,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
                 });
                 allJobIds.Add(job.Id);
                 for (var i = 0; i < readingCount; i++)
@@ -252,17 +272,27 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
             seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow, CompletedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CompletedAtUtc = DateTimeOffset.UtcNow,
             };
             seedDbContext.BackgroundJobs.Add(job);
             var import = MakeImport(householdId, job.Id, deviceTag: "Huge-import");
             seedDbContext.SmartPlugImports.Add(import);
             seedDbContext.SmartPlugImportGaps.Add(new SmartPlugImportGap
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, SmartPlugImportId = import.Id, PowerPointId = null,
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Treatment = SmartPlugImportGapTreatment.FlaggedForReview, EstimatedTotalKwh = null, CreatedAtUtc = DateTimeOffset.UtcNow,
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                SmartPlugImportId = import.Id,
+                PowerPointId = null,
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EndDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Treatment = SmartPlugImportGapTreatment.FlaggedForReview,
+                EstimatedTotalKwh = null,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
             });
             for (var i = 0; i < readingCount; i++)
             {
@@ -317,8 +347,11 @@ public class SmartPlugImportRepositoryDeleteJobsSqlServerTests : IAsyncLifetime
             seedDbContext.Households.Add(new Household { Id = householdId, Locale = "en-US", Currency = "USD", CreatedAtUtc = DateTimeOffset.UtcNow });
             var job = new BackgroundJob
             {
-                Id = Guid.NewGuid(), HouseholdId = householdId, JobType = "ProcessSmartPlugImport",
-                Status = BackgroundJobStatus.Completed, CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
+                Id = Guid.NewGuid(),
+                HouseholdId = householdId,
+                JobType = "ProcessSmartPlugImport",
+                Status = BackgroundJobStatus.Completed,
+                CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-40),
                 CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-31),
             };
             seedDbContext.BackgroundJobs.Add(job);

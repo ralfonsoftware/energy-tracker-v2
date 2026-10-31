@@ -43,8 +43,14 @@ jobs:
 
       # Release, to match the configuration app-deploy.yml gates and Dockerfile actually publishes
       # — gating on Debug would test a different build than what gets deployed.
+      # Warnings fail the build here only (analyzer gate, Directory.Build.props); NU1900 is exempt there.
       - name: Build .NET solution
-        run: dotnet build EnergyTracker.sln --no-restore --configuration Release
+        run: dotnet build EnergyTracker.sln --no-restore --configuration Release -p:TreatWarningsAsErrors=true
+
+      # Whitespace, style and fixable analyzer drift. Fix locally with `dotnet format EnergyTracker.sln`.
+      # Before the frontend steps on purpose: needs no wwwroot and fails fast.
+      - name: Verify .NET formatting
+        run: dotnet format EnergyTracker.sln --verify-no-changes --no-restore
 
       # node-version must match the Dockerfile's frontend build stage (node:26-alpine) so CI tests
       # and builds on the Node the image builds with. Change both together (Dependabot bumps the
@@ -85,8 +91,7 @@ jobs:
         run: npm --prefix web run test
 
       # AC #2: frontend lint (oxlint) as its own step so a lint failure is individually visible in
-      # the PR checks UI. No backend/.NET lint gate exists yet (no .editorconfig, no analyzers
-      # configured in any .csproj) — deliberately not invented here; see story Dev Notes.
+      # the PR checks UI. The backend counterpart is the build and "Verify .NET formatting" steps above.
       - name: Lint frontend
         run: npm --prefix web run lint
 

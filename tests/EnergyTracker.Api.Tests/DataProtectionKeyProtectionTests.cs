@@ -95,7 +95,7 @@ public class DataProtectionKeyProtectionTests
         var (result, options) = Configure(settings);
 
         result.Mode.ShouldBe(DataProtectionKeyProtectionMode.AzureKeyVault);
-        options.XmlEncryptor.GetType().Name.ShouldContain("KeyVault");
+        options.XmlEncryptor.ShouldNotBeNull().GetType().Name.ShouldContain("KeyVault");
         result.Warnings.ShouldContain(w => w.Contains("certificate", StringComparison.OrdinalIgnoreCase) && w.Contains("ignored", StringComparison.OrdinalIgnoreCase));
     }
 

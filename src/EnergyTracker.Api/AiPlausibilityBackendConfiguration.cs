@@ -21,6 +21,16 @@ internal sealed record AiPlausibilityBackendConfigurationResult(bool Configured,
 // AiConfigurationKeysAreOneSetTests fails when the code and the shipped files stop agreeing on the keys.
 internal static class AiPlausibilityBackendConfiguration
 {
+    // Startup log lines for the selection above. Program.cs calls it once, after the app is built.
+    internal static void LogSelection(ILogger logger, AiPlausibilityBackendConfigurationResult backend)
+    {
+        logger.LogInformation("AI plausibility backend: {Backend}", backend.Description);
+        if (backend.Warning is { } warning)
+        {
+            logger.LogWarning("AI plausibility backend: {Warning}", warning);
+        }
+    }
+
     private const string EndpointSetting = "Ai:Endpoint";
     private const string ApiKeySetting = "Ai:ApiKey";
     private const string ModelSetting = "Ai:Model";

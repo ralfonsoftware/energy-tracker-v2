@@ -74,7 +74,7 @@ public class InstanceHeartbeatServiceTests : IAsyncLifetime
         public Task RunAsync(CancellationToken cancellationToken) => ExecuteAsync(cancellationToken);
     }
 
-    private async Task StartAsync(InstanceHeartbeatService service) =>
+    private static async Task StartAsync(InstanceHeartbeatService service) =>
         await service.StartAsync(TestContext.Current.CancellationToken);
 
     private static AppInstance AliveOther(TimeSpan aliveFor) => new()
@@ -90,7 +90,7 @@ public class InstanceHeartbeatServiceTests : IAsyncLifetime
 
     private int BeatCount() => _repository.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IAppInstanceRepository.BeatAsync));
 
-    private static IEnumerable<(LogLevel Level, string Message)> Logged(ILogger logger) =>
+    private static List<(LogLevel Level, string Message)> Logged(ILogger logger) =>
         logger.ReceivedCalls()
             .Where(c => c.GetMethodInfo().Name == nameof(ILogger.Log))
             .Select(c => ((LogLevel)c.GetArguments()[0]!, c.GetArguments()[2]!.ToString()!))
@@ -161,8 +161,8 @@ public class InstanceHeartbeatServiceTests : IAsyncLifetime
         var returnedPromptly = finished == call;
         gate.Set();
         await cancellation.CancelAsync();
-        await call.WaitAsync(Wait);
-        await loop!.WaitAsync(Wait);
+        await call.WaitAsync(Wait, TestContext.Current.CancellationToken);
+        await loop!.WaitAsync(Wait, TestContext.Current.CancellationToken);
 
         returnedPromptly.ShouldBeTrue("ExecuteAsync ran database work before its first await; the heartbeat must hand control back first (AD-24).");
     }

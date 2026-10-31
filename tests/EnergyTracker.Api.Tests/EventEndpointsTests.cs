@@ -8,6 +8,8 @@ namespace EnergyTracker.Api.Tests;
 
 public class EventEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixture<EnergyTrackerApiFactory>
 {
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
+
     private static async Task<HttpClient> CreateClientWithHouseholdAsync(EnergyTrackerApiFactory factory)
     {
         var client = factory.CreateAuthenticatedClient(Guid.NewGuid().ToString());
@@ -335,7 +337,7 @@ public class EventEndpointsTests(EnergyTrackerApiFactory factory) : IClassFixtur
         item.TryGetProperty("correlationDirection", out var correlationDirectionProperty).ShouldBeTrue();
         correlationDirectionProperty.ValueKind.ShouldBe(JsonValueKind.Null);
 
-        var body = JsonSerializer.Deserialize<EventHistoryPageResponse>(rawJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var body = JsonSerializer.Deserialize<EventHistoryPageResponse>(rawJson, WebOptions);
         body!.Items.Single().CorrelationDirection.ShouldBeNull();
     }
 

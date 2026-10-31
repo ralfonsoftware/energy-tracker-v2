@@ -61,7 +61,7 @@ public class HouseholdMembershipMiddlewareTests
         var resolver = SubstituteResolver();
         resolver.ResolveAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(expected);
 
-        var (http, nextCalls) = await RunAsync(resolver, "/api/status", Authenticated());
+        var (http, nextCalls) = await RunAsync(resolver, "/api/status", Authenticated(), TestContext.Current.CancellationToken);
 
         nextCalls.ShouldBe(1);
         ResolvedHouseholdMembership.TryGet(http, out var stored).ShouldBeTrue();
@@ -75,7 +75,7 @@ public class HouseholdMembershipMiddlewareTests
         var resolver = SubstituteResolver();
         resolver.ResolveAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(ResolvedHouseholdMembership.None);
 
-        var (http, _) = await RunAsync(resolver, "/api/session", Authenticated());
+        var (http, _) = await RunAsync(resolver, "/api/session", Authenticated(), TestContext.Current.CancellationToken);
 
         ResolvedHouseholdMembership.TryGet(http, out var stored).ShouldBeTrue();
         stored.ShouldBe(ResolvedHouseholdMembership.None);
@@ -106,11 +106,11 @@ public class HouseholdMembershipMiddlewareTests
     {
         var resolver = SubstituteResolver();
 
-        var (http, nextCalls) = await RunAsync(resolver, path, Authenticated());
+        var (http, nextCalls) = await RunAsync(resolver, path, Authenticated(), TestContext.Current.CancellationToken);
 
         nextCalls.ShouldBe(1);
         ResolvedHouseholdMembership.TryGet(http, out _).ShouldBeFalse();
-        await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
+        await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -118,11 +118,11 @@ public class HouseholdMembershipMiddlewareTests
     {
         var resolver = SubstituteResolver();
 
-        var (http, nextCalls) = await RunAsync(resolver, "/api/rooms", new ClaimsPrincipal(new ClaimsIdentity()));
+        var (http, nextCalls) = await RunAsync(resolver, "/api/rooms", new ClaimsPrincipal(new ClaimsIdentity()), TestContext.Current.CancellationToken);
 
         nextCalls.ShouldBe(1);
         ResolvedHouseholdMembership.TryGet(http, out _).ShouldBeFalse();
-        await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
+        await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, TestContext.Current.CancellationToken);
     }
 
     [Theory]
@@ -135,7 +135,7 @@ public class HouseholdMembershipMiddlewareTests
         var resolver = SubstituteResolver();
         resolver.ResolveAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(ResolvedHouseholdMembership.None);
 
-        var (http, _) = await RunAsync(resolver, path, Authenticated());
+        var (http, _) = await RunAsync(resolver, path, Authenticated(), TestContext.Current.CancellationToken);
 
         ResolvedHouseholdMembership.TryGet(http, out _).ShouldBeTrue();
     }

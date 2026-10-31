@@ -186,8 +186,13 @@ public class RequeueEventCorrelationsTests
         SeedHousehold(householdId, aiPlausibilityEnabled: true);
         var trigger = new MeterReading
         {
-            Id = Guid.NewGuid(), HouseholdId = householdId, MainMeterId = Guid.NewGuid(), KwhValue = 5m,
-            ReadingTimestamp = From, IdempotencyKey = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow,
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            MainMeterId = Guid.NewGuid(),
+            KwhValue = 5m,
+            ReadingTimestamp = From,
+            IdempotencyKey = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         _readingRepository.FindByIdAsync(trigger.Id, Arg.Any<CancellationToken>()).Returns(trigger);
 
@@ -208,7 +213,7 @@ public class RequeueEventCorrelationsTests
         await Should.NotThrowAsync(() =>
             Sut().ExecuteFromReadingAsync(householdId, Guid.NewGuid(), TestContext.Current.CancellationToken));
 
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
         _logger.ReceivedCalls().ShouldContain(c =>
             c.GetMethodInfo().Name == "Log" && (LogLevel)c.GetArguments()[0]! == LogLevel.Warning);
     }

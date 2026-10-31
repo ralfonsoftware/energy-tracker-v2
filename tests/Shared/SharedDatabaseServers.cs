@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Npgsql;
@@ -148,6 +149,7 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
         }
     }
 
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "The statement is CREATE or DROP DATABASE with a generated GUID-based name; no input reaches it.")]
     private static async Task ExecuteAsync(string connectionString, string sql, CancellationToken cancellationToken)
     {
         await using var connection = new NpgsqlConnection(connectionString);
@@ -205,6 +207,7 @@ public sealed class SqlServerTestDatabase : IAsyncDisposable
         }
     }
 
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "The statement is CREATE or DROP DATABASE with a generated GUID-based name; no input reaches it.")]
     private static async Task ExecuteAsync(string connectionString, string sql, CancellationToken cancellationToken)
     {
         await using var connection = new SqlConnection(connectionString);

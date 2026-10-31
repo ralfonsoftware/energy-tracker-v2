@@ -287,8 +287,17 @@ public class HouseholdRestoreRekeyTests
         var f = NewFixture();
         var empty = f.ToFile() with
         {
-            MainMeter = null, MeterReadings = [], MeterRegressionPrompts = [], Tariffs = [], Events = [], Rooms = [],
-            PowerPoints = [], Devices = [], SmartPlugReadings = [], StatusSnapshots = [], AuditCorrections = [],
+            MainMeter = null,
+            MeterReadings = [],
+            MeterRegressionPrompts = [],
+            Tariffs = [],
+            Events = [],
+            Rooms = [],
+            PowerPoints = [],
+            Devices = [],
+            SmartPlugReadings = [],
+            StatusSnapshots = [],
+            AuditCorrections = [],
         };
 
         Should.NotThrow(() => new HouseholdRestoreRekey(empty, Counter()));

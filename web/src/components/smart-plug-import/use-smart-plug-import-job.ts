@@ -39,6 +39,11 @@ export function useSmartPlugImportJob(file: File): SmartPlugImportJob {
   const [smartPlugImportId, setSmartPlugImportId] = useState<string | null>(null)
   const [deviceTag, setDeviceTag] = useState('')
   const jobIdRef = useRef<string | null>(null)
+  const tRef = useRef(t)
+
+  useEffect(() => {
+    tRef.current = t
+  }, [t])
 
   useEffect(() => {
     // An AbortController (not just a `cancelled` boolean) is required here: React StrictMode's
@@ -60,9 +65,9 @@ export function useSmartPlugImportJob(file: File): SmartPlugImportJob {
           return
         }
         if (err instanceof ApiError && err.status === 400) {
-          setError(t('smartPlugImport.errorUnsupportedType'))
+          setError(tRef.current('smartPlugImport.errorUnsupportedType'))
         } else {
-          setError(t('smartPlugImport.errorGeneric'))
+          setError(tRef.current('smartPlugImport.errorGeneric'))
         }
         setState('failed')
       })
@@ -70,9 +75,9 @@ export function useSmartPlugImportJob(file: File): SmartPlugImportJob {
     return () => {
       controller.abort()
     }
-    // `file` is fixed for the lifetime of one hook instance (one instance per queue item) — this
-    // effect intentionally runs once per mount, not on every render.
-  }, [])
+    // `t` is read through tRef: a language switch changes its identity, and listing it here would abort and
+    // restart the in-flight upload.
+  }, [file])
 
   useEffect(() => {
     if (state !== 'processing' || !jobIdRef.current) {

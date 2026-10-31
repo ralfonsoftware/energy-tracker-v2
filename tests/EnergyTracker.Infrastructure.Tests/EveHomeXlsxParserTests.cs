@@ -334,7 +334,7 @@ public class EveHomeXlsxParserTests
                 var timestamp = newest.AddMinutes(-10 * i);
                 var whValue = 500 + i % 250;
                 sheetData.Append(BuildRow(
-                    rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss"), whValue.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture), whValue.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }
 
             worksheetPart.Worksheet.Save();
@@ -378,7 +378,7 @@ public class EveHomeXlsxParserTests
 
             foreach (var timestamp in timestamps)
             {
-                sheetData.Append(BuildRow(rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss"), "500"));
+                sheetData.Append(BuildRow(rowIndex++, timestamp.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture), "500"));
             }
 
             worksheetPart.Worksheet.Save();
@@ -454,7 +454,7 @@ public class EveHomeXlsxParserTests
     // The sample package with some entries replaced and some added, each written through a streaming writer so a
     // package that inflates to tens of millions of characters costs the test a few KB (never committed as a binary).
     private static MemoryStream BuildPackage(
-        IReadOnlyDictionary<string, Action<Stream>> replaced, params (string Name, Action<Stream> Write)[] added)
+        Dictionary<string, Action<Stream>> replaced, params (string Name, Action<Stream> Write)[] added)
     {
         var result = new MemoryStream();
         using (var source = ZipFile.OpenRead(SampleFilePath))
@@ -518,6 +518,7 @@ public class EveHomeXlsxParserTests
         BuildPackage(new Dictionary<string, Action<Stream>> { [entryName] = to => WriteFiller(to, SstHead, characters, SstTail) });
 
     private const long EightyMillionCharacters = 80_000_000;
+    private static readonly string[] LeadingCells = ["2026-06-20 12:00:00", "500"];
 
     [Theory]
     [InlineData("xl/sharedStrings.xml")]
@@ -635,7 +636,9 @@ public class EveHomeXlsxParserTests
             worksheetPart.Worksheet = new Worksheet(sheetData);
             workbookPart.Workbook.AppendChild(new Sheets()).Append(new Sheet
             {
-                Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Gesamtverbrauch",
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Gesamtverbrauch",
             });
 
             Row SharedRow(uint index, params int[] stringIndexes)
@@ -643,7 +646,7 @@ public class EveHomeXlsxParserTests
                 var row = new Row { RowIndex = index };
                 foreach (var i in stringIndexes)
                 {
-                    row.Append(new Cell { DataType = CellValues.SharedString, CellValue = new CellValue(i.ToString()) });
+                    row.Append(new Cell { DataType = CellValues.SharedString, CellValue = new CellValue(i.ToString(System.Globalization.CultureInfo.InvariantCulture)) });
                 }
 
                 return row;
@@ -742,13 +745,15 @@ public class EveHomeXlsxParserTests
             worksheetPart.Worksheet = new Worksheet(sheetData);
             workbookPart.Workbook.AppendChild(new Sheets()).Append(new Sheet
             {
-                Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Gesamtverbrauch",
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Gesamtverbrauch",
             });
             sheetData.Append(BuildRow(1, "Gerät: Steckdose 1"));
             sheetData.Append(BuildRow(2, "Raum: Zimmer 1"));
             sheetData.Append(BuildRow(3, "Zuhause: Test"));
             sheetData.Append(BuildRow(4, "Datum", "Wh"));
-            sheetData.Append(BuildRow(5, new[] { "2026-06-20 12:00:00", "500" }.Concat(Enumerable.Repeat("0", cellCount - 2)).ToArray()));
+            sheetData.Append(BuildRow(5, LeadingCells.Concat(Enumerable.Repeat("0", cellCount - 2)).ToArray()));
             worksheetPart.Worksheet.Save();
             workbookPart.Workbook.Save();
         }

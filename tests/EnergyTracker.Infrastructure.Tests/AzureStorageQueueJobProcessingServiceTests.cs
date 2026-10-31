@@ -70,7 +70,7 @@ public class AzureStorageQueueJobProcessingServiceTests
 
     private sealed record LogEntry(LogLevel Level, Exception? Exception, string Message, IReadOnlyDictionary<string, object?> Properties);
 
-    private static IReadOnlyList<LogEntry> LogEntries(ILogger logger) =>
+    private static List<LogEntry> LogEntries(ILogger logger) =>
         logger.ReceivedCalls()
             .Where(c => c.GetMethodInfo().Name == nameof(ILogger.Log))
             .Select(c =>
