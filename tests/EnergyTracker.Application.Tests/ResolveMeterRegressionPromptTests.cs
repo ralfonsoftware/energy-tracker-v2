@@ -250,7 +250,7 @@ public class ResolveMeterRegressionPromptTests
         await Should.ThrowAsync<MeterRegressionPromptNotOpenException>(() =>
             Sut().ExecuteAsync(householdId, prompt.Id, MeterRegressionClassification.Reset, null, TestContext.Current.CancellationToken));
 
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -274,6 +274,6 @@ public class ResolveMeterRegressionPromptTests
         await ResolveWithTriggerLookupAsync(() => Task.FromException<MeterReading?>(new InvalidOperationException("db blip")));
         await ResolveWithTriggerLookupAsync(() => Task.FromResult<MeterReading?>(null));
 
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
     }
 }

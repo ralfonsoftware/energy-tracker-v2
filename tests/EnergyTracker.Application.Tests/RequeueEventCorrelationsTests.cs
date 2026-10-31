@@ -213,7 +213,7 @@ public class RequeueEventCorrelationsTests
         await Should.NotThrowAsync(() =>
             Sut().ExecuteFromReadingAsync(householdId, Guid.NewGuid(), TestContext.Current.CancellationToken));
 
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
         _logger.ReceivedCalls().ShouldContain(c =>
             c.GetMethodInfo().Name == "Log" && (LogLevel)c.GetArguments()[0]! == LogLevel.Warning);
     }

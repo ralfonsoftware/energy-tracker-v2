@@ -8,6 +8,8 @@ namespace EnergyTracker.Application.Tests;
 
 public class ExportHouseholdDataTests
 {
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IHouseholdExportReader _reader = Substitute.For<IHouseholdExportReader>();
 
     private ExportHouseholdData Sut(AiPlausibilityBackendOptions? backendOptions = null) =>
@@ -435,7 +437,7 @@ public class ExportHouseholdDataTests
         dto.DisplayName.ShouldBe("Ralf");
         typeof(HouseholdMemberExportDto).GetProperties().Select(p => p.Name).Order().ShouldBe(["DisplayName", "Id"]);
 
-        var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var json = JsonSerializer.Serialize(dto, WebOptions);
         using var document = JsonDocument.Parse(json);
         document.RootElement.EnumerateObject().Select(p => p.Name).Order().ShouldBe(["displayName", "id"]);
         json.ShouldNotContain("sub-secret-1");
@@ -461,7 +463,7 @@ public class ExportHouseholdDataTests
 
         var result = await Sut().ExecuteAsync(householdId, TestContext.Current.CancellationToken);
 
-        var json = JsonSerializer.Serialize((await ToListAsync(result.HouseholdMembers)).Single(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var json = JsonSerializer.Serialize((await ToListAsync(result.HouseholdMembers)).Single(), WebOptions);
         using var document = JsonDocument.Parse(json);
         document.RootElement.GetProperty("displayName").ValueKind.ShouldBe(JsonValueKind.Null);
     }

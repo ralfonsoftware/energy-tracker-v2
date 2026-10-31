@@ -335,7 +335,7 @@ public class EveHomeXlsxParser : ISmartPlugParser
     // so a cell's lookup is O(1): SharedStringTable.ElementAt(i) is O(i), which would make a capped
     // 400,000-row file whose cells point into a large table a CPU bomb. Null when the package has no
     // shared strings part, as before.
-    private static IReadOnlyList<string>? ReadSharedStrings(WorkbookPart workbookPart)
+    private static List<string>? ReadSharedStrings(WorkbookPart workbookPart)
     {
         if (workbookPart.SharedStringTablePart is not { } tablePart)
         {
@@ -391,7 +391,7 @@ public class EveHomeXlsxParser : ISmartPlugParser
     }
 
     private static string FirstCellText(SheetRow row, IReadOnlyList<string>? sharedStrings) =>
-        CellText(row.Cells.First(), sharedStrings);
+        CellText(row.Cells[0], sharedStrings);
 
     private static string CellText(Cell cell, IReadOnlyList<string>? sharedStrings)
     {

@@ -649,7 +649,7 @@ public class ValidateHouseholdImportTests
         Validate(withoutVersion[..^1] + ",\"formatVersion\":\"v2\"}").IsValid.ShouldBeTrue();
     }
 
-    private JsonObjectBuilder DocumentWithEveryReferenceKind(out Guid roomId)
+    private static JsonObjectBuilder DocumentWithEveryReferenceKind(out Guid roomId)
     {
         var mainMeterId = Guid.NewGuid();
         var previousReadingId = Guid.NewGuid();
@@ -877,7 +877,7 @@ public class ValidateHouseholdImportTests
         using var inner = new PatternStream("{\"formatVersion\":\"v2\",\"huge\":\"", (byte)'a', 64L * 1024 * 1024, "\"}");
         using var stream = new CountingStream(inner);
 
-        var result = _sut.Execute(stream);
+        var result = _sut.Execute(stream, TestContext.Current.CancellationToken);
 
         result.IsValid.ShouldBeFalse();
         result.Failures.Count.ShouldBe(1);
@@ -893,7 +893,7 @@ public class ValidateHouseholdImportTests
         var room = new Dictionary<string, object?> { ["id"] = Guid.NewGuid().ToString(), ["name"] = hugeName, ["createdAtUtc"] = "2026-01-05T08:15:00+00:00", ["archivedAt"] = null };
         using var stream = new CountingStream(new MemoryStream(Encoding.UTF8.GetBytes(ValidDocument().With("rooms", new List<object?> { room }).Build())));
 
-        var result = _sut.Execute(stream);
+        var result = _sut.Execute(stream, TestContext.Current.CancellationToken);
 
         result.Failures.Count.ShouldBe(1);
         result.Failures.Single().ShouldContain("larger than 4 MiB");
@@ -972,7 +972,7 @@ public class ValidateHouseholdImportTests
         document.Length.ShouldBeGreaterThan(33L * 1024 * 1024);
         using var stream = new CountingStream(document);
 
-        var result = _sut.Execute(stream);
+        var result = _sut.Execute(stream, TestContext.Current.CancellationToken);
 
         result.Failures.ShouldBeEmpty();
         result.IsValid.ShouldBeTrue();

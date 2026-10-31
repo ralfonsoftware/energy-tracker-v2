@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Shouldly;
 
@@ -42,7 +43,7 @@ public class RateLimitingTests(EnergyTrackerApiFactory factory) : IClassFixture<
         return new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
     }
 
-    private static string UniqueIp() => $"10.{Random.Shared.Next(0, 256)}.{Random.Shared.Next(0, 256)}.{Random.Shared.Next(1, 255)}";
+    private static string UniqueIp() => $"10.{RandomNumberGenerator.GetInt32(0, 256)}.{RandomNumberGenerator.GetInt32(0, 256)}.{RandomNumberGenerator.GetInt32(1, 255)}";
 
     // /login is IP-keyed and the TestServer peer has no IP, so every test sets its own forwarded client IP.
     private static HttpRequestMessage WithClientIp(HttpRequestMessage request, string ip)
@@ -94,7 +95,7 @@ public class RateLimitingTests(EnergyTrackerApiFactory factory) : IClassFixture<
         rejected.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
         rejected.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
         rejected.Headers.Contains("Retry-After").ShouldBeTrue();
-        int.Parse(rejected.Headers.GetValues("Retry-After").Single()).ShouldBeGreaterThan(0);
+        int.Parse(rejected.Headers.GetValues("Retry-After").Single(), System.Globalization.CultureInfo.InvariantCulture).ShouldBeGreaterThan(0);
         var body = await rejected.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         body.GetProperty("status").GetInt32().ShouldBe(429);
         body.GetProperty("detail").GetString().ShouldNotBeNullOrWhiteSpace();

@@ -9,7 +9,7 @@ namespace EnergyTracker.Application.Tests;
 // InProcessChannelJobQueue but silently fails to serialize on AzureStorageQueueJobQueue."
 public class JobEnvelopeTests
 {
-    private record SamplePayload(Guid ReferenceId, string Note);
+    private sealed record SamplePayload(Guid ReferenceId, string Note);
 
     [Fact]
     public void JobEnvelope_with_a_plain_record_payload_round_trips_through_System_Text_Json()

@@ -602,3 +602,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] `HouseholdRecomputeLock` tests still use real 50/100 ms acquisition timeouts and a 60 s churn timeout; no test covers a waiter's timeout racing the holder's release. The timeout stays `CancelAfter` per Story 11.17 Dev Notes. [tests/EnergyTracker.Infrastructure.Tests/HouseholdRecomputeLockTests.cs]
 - [open] `NoDirectClockReadsTests` does not cover `Stopwatch`, `Environment.TickCount`, `using static System.DateTime` or alias forms. Outside the AC3 token list. [tests/EnergyTracker.Architecture.Tests/NoDirectClockReadsTests.cs]
 - [open] The job ownership token is the clock truncated to whole milliseconds with no uniqueness guard, so a frozen test clock gives two owners the same token and fencing fails silently. Same token shape as before Story 11.17. [src/EnergyTracker.Infrastructure/Adapters/BackgroundJobLifecycle.cs]
+
+## Deferred from: create-story of 11-18-backend-analyzer-format-gate (2026-10-31)
+
+- [open] 26 `oxlint` warnings remain in the frontend (`react(set-state-in-effect)` 17, `react(refs)` 5, `react(only-export-components)` 3, `react(purity)` 1). `npm --prefix web run lint` does not fail on warnings today; a `--deny-warnings` gate would need all of them fixed first. Rules arrived with oxlint 1.75, after the 2026-10-10 audit. [web/src]

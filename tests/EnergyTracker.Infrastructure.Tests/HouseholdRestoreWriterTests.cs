@@ -15,6 +15,8 @@ namespace EnergyTracker.Infrastructure.Tests;
 // (project-context.md's Story 5.1 lesson).
 public abstract class HouseholdRestoreWriterTestsBase
 {
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
+
     protected abstract Task<EnergyTrackerDbContext> OpenMigratedDbContextAsync(Guid householdId, CancellationToken cancellationToken);
 
     protected sealed class FixedHouseholdAccessor(Guid householdId) : ICurrentHouseholdAccessor
@@ -354,7 +356,7 @@ public abstract class HouseholdRestoreWriterTestsBase
             await Drain(stream.SmartPlugReadings), await Drain(stream.StatusSnapshots), await Drain(stream.AuditCorrections));
 
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)), cancellationToken);
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(result, WebOptions), cancellationToken);
         return path;
     }
 

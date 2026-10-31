@@ -21,6 +21,7 @@ public partial class BackendAnalyzerGateIsConfiguredTests
     private const string Hash = "#";
     private const string Suppress = "Suppress" + "Message";
     private const string NoWarnTag = "No" + "Warn";
+    private static readonly string[] CodeRoots = ["src", "tests"];
 
     [Fact]
     public void Directory_Build_props_turns_the_analyzers_on()
@@ -63,7 +64,7 @@ public partial class BackendAnalyzerGateIsConfiguredTests
     {
         var root = FindRepoRoot();
         // The solution's projects only: spikes/ holds throwaway projects that are not in EnergyTracker.sln.
-        var files = new[] { "src", "tests" }
+        var files = CodeRoots
             .SelectMany(top => Directory.EnumerateFiles(Path.Combine(root, top), "*.csproj", SearchOption.AllDirectories))
             .Concat([Path.Combine(root, PropsPath)])
             .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
@@ -320,7 +321,7 @@ public partial class BackendAnalyzerGateIsConfiguredTests
     // EF migrations are generated (scripts/add-migration.sh) and carry their own pragmas; .editorconfig marks
     // them generated_code, so the suppression rule does not apply to them.
     private static List<string> CSharpFiles(string root) =>
-        new[] { "src", "tests" }
+        CodeRoots
             .SelectMany(top => Directory.EnumerateFiles(Path.Combine(root, top), "*.cs", SearchOption.AllDirectories))
             .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
             .Where(f => !IsBuildPath(f) && !f.Split('/').Contains("Migrations"))

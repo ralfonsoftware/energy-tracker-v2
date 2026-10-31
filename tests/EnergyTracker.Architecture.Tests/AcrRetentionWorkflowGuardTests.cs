@@ -99,8 +99,8 @@ public class AcrRetentionWorkflowGuardTests
         {
             var ago = AgoValue.Match(sweep);
             var atLeastAnHour = ago.Success && (
-                (ago.Groups["unit"].Value == "h" && int.Parse(ago.Groups["n"].Value) >= 1) ||
-                (ago.Groups["unit"].Value == "d" && int.Parse(ago.Groups["n"].Value) >= 1));
+                (ago.Groups["unit"].Value == "h" && int.Parse(ago.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture) >= 1) ||
+                (ago.Groups["unit"].Value == "d" && int.Parse(ago.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture) >= 1));
             atLeastAnHour.ShouldBeTrue(
                 $"An orphan sweep must skip manifests younger than an hour (a push in flight): {sweep}");
         }

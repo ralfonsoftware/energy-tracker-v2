@@ -38,7 +38,7 @@ public class HouseholdImportEndpointsTests(EnergyTrackerApiFactory factory) : IC
         return content;
     }
 
-    private async Task<JobStatusResponse> PollJobToTerminalAsync(HttpClient client, Guid jobId)
+    private static async Task<JobStatusResponse> PollJobToTerminalAsync(HttpClient client, Guid jobId)
     {
         // InProcessChannelJobProcessingService runs as a real hosted BackgroundService in this
         // test host — genuinely async, so polling (not an artificial delay) is correct here too

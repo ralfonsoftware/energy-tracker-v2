@@ -414,7 +414,7 @@ public class CreateMeterReadingTests
 
         await Sut().ExecuteAsync(householdId, 1m, existing.ReadingTimestamp, existing.IdempotencyKey, TestContext.Current.CancellationToken);
 
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
     }
 
     // Review patch: a reading that opens a regression prompt makes AD-12 exclude everything at or

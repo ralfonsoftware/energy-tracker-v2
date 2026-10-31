@@ -41,7 +41,7 @@ public class SmartPlugImportRepository(
 
         try
         {
-            await AddAsyncCore(import, readings, cancellationToken, boundaryCorrection);
+            await AddAsyncCore(import, readings, boundaryCorrection, cancellationToken);
         }
         catch
         {
@@ -84,8 +84,8 @@ public class SmartPlugImportRepository(
     }
 
     private async Task AddAsyncCore(
-        SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken,
-        SmartPlugReadingCorrection? boundaryCorrection)
+        SmartPlugImport import, IReadOnlyList<SmartPlugReading> readings,
+        SmartPlugReadingCorrection? boundaryCorrection, CancellationToken cancellationToken)
     {
         // spec-db-command-timeout-scope: the app-wide 30s->120s CommandTimeout bump this incident
         // fix originally lived in Program.cs's ConfigureDbContext (SqlServer branch — confirmed live
@@ -241,7 +241,7 @@ public class SmartPlugImportRepository(
     // First-encountered-in-parse-order wins, same discipline as AD-22's own DST-fold handling in
     // ProcessSmartPlugImport and the deleted per-row-fallback's "earlier-processed reading
     // always wins" rule.
-    private IReadOnlyList<SmartPlugReading> DeduplicateByMatchKey(IReadOnlyList<SmartPlugReading> readings, Guid smartPlugImportId)
+    private List<SmartPlugReading> DeduplicateByMatchKey(IReadOnlyList<SmartPlugReading> readings, Guid smartPlugImportId)
     {
         var seenKeys = new HashSet<(Guid? PowerPointId, string? DeviceName, DateTimeOffset IntervalStart)>();
         var deduplicated = new List<SmartPlugReading>(readings.Count);
@@ -288,7 +288,7 @@ public class SmartPlugImportRepository(
     // still one multi-row statement (never a per-row loop) — this preserves the "no partial row
     // survives cancellation" guarantee via the caller's own ambient transaction (AddAsync's
     // BeginTransactionAsync/commit), which spans every chunk, not just one.
-    private async Task UpsertAwaitingMappingReadingsAsync(IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
+    private async Task UpsertAwaitingMappingReadingsAsync(List<SmartPlugReading> readings, CancellationToken cancellationToken)
     {
         // 9 parameters/row. Postgres's hard limit is 65535/statement (headroom to ~7281 rows) —
         // 5000 stays comfortably under it and matches AD-20's own assumed ~5000-row sizing for
@@ -327,7 +327,7 @@ public class SmartPlugImportRepository(
         }
     }
 
-    private Task UpsertAwaitingMappingReadingsPostgresAsync(IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
+    private Task<int> UpsertAwaitingMappingReadingsPostgresAsync(List<SmartPlugReading> readings, CancellationToken cancellationToken)
     {
         var (valuesClause, parameters) = BuildAwaitingMappingValuesClause(readings);
 
@@ -359,7 +359,7 @@ public class SmartPlugImportRepository(
         return dbContext.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken);
     }
 
-    private Task UpsertAwaitingMappingReadingsSqlServerAsync(IReadOnlyList<SmartPlugReading> readings, CancellationToken cancellationToken)
+    private Task<int> UpsertAwaitingMappingReadingsSqlServerAsync(List<SmartPlugReading> readings, CancellationToken cancellationToken)
     {
         var (valuesClause, parameters) = BuildAwaitingMappingValuesClause(readings);
 
@@ -394,7 +394,7 @@ public class SmartPlugImportRepository(
     // Shared by both providers — same column order/values, only the wrapping statement differs.
     // ExecuteSqlRawAsync's own {n} placeholders are rewritten to each provider's native parameter
     // syntax by EF Core itself (never string-concatenated values, AD-2's exception bullet).
-    private static (string ValuesClause, object[] Parameters) BuildAwaitingMappingValuesClause(IReadOnlyList<SmartPlugReading> readings)
+    private static (string ValuesClause, object[] Parameters) BuildAwaitingMappingValuesClause(List<SmartPlugReading> readings)
     {
         // Column order matches both provider statements' "(Id, HouseholdId, SmartPlugImportId,
         // RoomName, PowerPointName, DeviceName, IntervalStart, IntervalEnd, KwhValue)" lists above

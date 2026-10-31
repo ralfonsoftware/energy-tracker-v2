@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using EnergyTracker.Application.Ports;
 
 namespace EnergyTracker.Infrastructure.Adapters;
@@ -91,6 +92,7 @@ public class HouseholdRecomputeLock(TimeSpan? acquisitionTimeout = null) : IHous
         }
     }
 
+    [SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable", Justification = "The semaphore never exposes AvailableWaitHandle, so it holds no unmanaged resource; disposing it on eviction would add a race to the reference-counted lock.")]
     private sealed class Entry
     {
         public readonly SemaphoreSlim Semaphore = new(1, 1);

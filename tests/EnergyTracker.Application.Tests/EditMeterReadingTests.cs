@@ -202,7 +202,7 @@ public class EditMeterReadingTests
 
         await Sut().ExecuteAsync(householdId, reading.Id, 100m, 3, TestContext.Current.CancellationToken);
 
-        await _householdRepository.DidNotReceiveWithAnyArgs().FindByIdAsync(default, default);
-        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, default);
+        await _householdRepository.DidNotReceiveWithAnyArgs().FindByIdAsync(default, TestContext.Current.CancellationToken);
+        await _eventRepository.DidNotReceiveWithAnyArgs().GetByOccurredAtRangeAsync(default, default, TestContext.Current.CancellationToken);
     }
 }

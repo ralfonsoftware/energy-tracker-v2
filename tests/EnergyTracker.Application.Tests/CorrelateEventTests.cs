@@ -79,7 +79,7 @@ public class CorrelateEventTests
         return mainMeter;
     }
 
-    private CorrelateEventPayload Payload(Guid householdId, Guid eventId) =>
+    private static CorrelateEventPayload Payload(Guid householdId, Guid eventId) =>
         new(eventId, householdId, OccurredAt, "gaming session 3h");
 
     [Fact]

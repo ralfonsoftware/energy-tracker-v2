@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SmartPlugImportPage } from './smart-plug-import-page'
 
@@ -49,9 +50,10 @@ describe('SmartPlugImportPage', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
+    await i18next.changeLanguage('en-US')
   })
 
   it('renders the dropzone with a hidden, multi-file input by default', () => {
@@ -206,6 +208,71 @@ describe('SmartPlugImportPage', () => {
     await waitFor(() => expect(screen.getByText('Processing')).toBeInTheDocument())
 
     expect(successfulUploads).toBe(1)
+  })
+
+  describe('switching the language while an upload is in flight', () => {
+    // The upload is held open until the test releases it, so the language can change in between.
+    function holdUploadOpen() {
+      let uploads = 0
+      let release: (response: Response) => void = () => {}
+      let uploadSignal: AbortSignal | null | undefined
+      const fetchMock = vi.fn(withJobHistoryStub((url, init) => {
+        if (url === '/api/smart-plug-imports') {
+          uploads += 1
+          uploadSignal = init?.signal
+          return new Promise<Response>((resolve) => {
+            release = resolve
+          })
+        }
+        return Promise.resolve(
+          jsonResponse({ id: 'job-1', status: 'processing', errorMessage: null, createdAtUtc: '', completedAtUtc: null }),
+        )
+      }))
+      vi.stubGlobal('fetch', fetchMock)
+      return {
+        uploads: () => uploads,
+        signal: () => uploadSignal,
+        release: (response: Response) => release(response),
+      }
+    }
+
+    it('does not start a second upload and does not abort the first', async () => {
+      const upload = holdUploadOpen()
+      render(<SmartPlugImportPage onBack={() => {}} />)
+      await selectFiles(makeFile('export.xlsx'))
+      await waitFor(() => expect(upload.uploads()).toBe(1))
+
+      await act(async () => {
+        await i18next.changeLanguage('de-DE')
+      })
+
+      expect(upload.uploads()).toBe(1)
+      expect(upload.signal()?.aborted).toBe(false)
+
+      await act(async () => {
+        upload.release(jsonResponse({ jobId: 'job-1' }, 202))
+      })
+      await waitFor(() => expect(screen.getByText('Wird verarbeitet')).toBeInTheDocument())
+      expect(upload.uploads()).toBe(1)
+    })
+
+    it('shows an upload failure that arrives after the switch in the new language', async () => {
+      const upload = holdUploadOpen()
+      render(<SmartPlugImportPage onBack={() => {}} />)
+      await selectFiles(makeFile('export.xlsx'))
+      await waitFor(() => expect(upload.uploads()).toBe(1))
+
+      await act(async () => {
+        await i18next.changeLanguage('de-DE')
+      })
+      await act(async () => {
+        upload.release(jsonResponse({ detail: 'boom' }, 500))
+      })
+
+      await waitFor(() =>
+        expect(screen.getByText('Beim Hochladen der Datei ist etwas schiefgelaufen. Bitte versuche es erneut.')).toBeInTheDocument(),
+      )
+    })
   })
 
   it('uploads the selected file immediately and shows Processing while polling', async () => {

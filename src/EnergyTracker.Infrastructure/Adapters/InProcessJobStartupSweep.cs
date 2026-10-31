@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using EnergyTracker.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ namespace EnergyTracker.Infrastructure.Adapters;
 // one in-process instance against one database is unsupported (docs/self-hosting.md).
 public class InProcessJobStartupSweep(IServiceScopeFactory scopeFactory, ILogger<InProcessJobStartupSweep> logger)
 {
+    [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging", Justification = "Reads of already-computed values on an always-enabled log level; the arguments cost nothing to evaluate.")]
     public async Task SweepAsync(DateTimeOffset processStartedAtUtc, CancellationToken cancellationToken)
     {
         // Household has no query filter (AD-3-exempt), so listing ids needs no household context.
