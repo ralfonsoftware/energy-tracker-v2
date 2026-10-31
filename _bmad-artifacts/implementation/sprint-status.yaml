@@ -157,7 +157,7 @@ development_status:
   11-16-offline-queue-rejected-readings-attention: done
   11-17-timeprovider-recompute-lock-eviction: done
   11-18-backend-analyzer-format-gate: done
-  11-19-structural-cleanup: backlog
+  11-19-structural-cleanup: done
   epic-11-retrospective: optional
 
 action_items:

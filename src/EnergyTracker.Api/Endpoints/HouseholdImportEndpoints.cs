@@ -6,45 +6,17 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class HouseholdImportEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Story 7.1's own live-verification export of one real (fairly small) household was already
-    // 32 MB (Task 1) — the 20 MB cap SmartPlugImportEndpoints uses does not transfer here. 250 MB
-    // is generous headroom while still bounding what a single upload can occupy on temp disk.
-    // Kestrel's default MaxRequestBodySize (~28.6 MB) and FormOptions' default
-    // MultipartBodyLengthLimit (128 MB) both sit below this and are raised to match, once, at the
-    // composition root (Program.cs) — an in-handler IHttpMaxRequestBodySizeFeature override would
-    // be too late, since Minimal API's IFormFile model binding reads the whole body before this
-    // endpoint's delegate ever runs.
+    // 250 MB bounds what one upload can occupy on temp disk (a small real export was already 32 MB). The Kestrel body limit is
+    // raised for this route only (Program.cs); the form limit is raised globally. ADR 0004.
     internal const long MaxFileSizeBytes = 250L * 1024 * 1024;
 
-    // Headroom above MaxFileSizeBytes for the Kestrel-level body-size limit (Program.cs), not the
-    // app-level check below — the raw multipart request body (boundaries/headers) is always
-    // somewhat larger than IFormFile.Length alone. Without this margin, an upload at or near
-    // MaxFileSizeBytes gets rejected by Kestrel before this endpoint's delegate ever runs, so the
-    // friendly 400 ProblemDetails response below could rarely fire in practice (Code Review, Story
-    // 7.2 Pass 1).
+    // Headroom for the multipart framing, which makes the raw body larger than IFormFile.Length. ADR 0004.
     internal const long BodySizeHeadroomBytes = 5L * 1024 * 1024;
-
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced across
-    // files (that helper is private to its own class).
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
 
     public static RouteGroupBuilder MapHouseholdImportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/household-import", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/household-import", async (
             IFormFile file,
             ICurrentHouseholdAccessor householdAccessor,
             ValidateHouseholdImport validateHouseholdImport,
@@ -52,10 +24,7 @@ public static class HouseholdImportEndpoints
             HouseholdImportUploadSettings uploadSettings,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             return await ReceiveUploadAsync(
                 file, householdId, validateHouseholdImport, uploadRegistry, uploadSettings, cancellationToken);
@@ -66,7 +35,7 @@ public static class HouseholdImportEndpoints
         .DisableAntiforgery()
         .RequireRateLimiting(RateLimitPolicies.Upload);
 
-        api.MapPost("/household-import/{token:guid}/confirm", async (
+        household.MapPost("/household-import/{token:guid}/confirm", async (
             Guid token,
             ICurrentHouseholdAccessor householdAccessor,
             IHouseholdImportUploadRegistry uploadRegistry,
@@ -75,10 +44,7 @@ public static class HouseholdImportEndpoints
             IBackgroundJobQueue jobQueue,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             // Atomically verifies the token belongs to THIS Household and removes it in one step
             // — a guessed/leaked token from a different Household 404s exactly like an unknown
@@ -91,20 +57,8 @@ public static class HouseholdImportEndpoints
                     statusCode: StatusCodes.Status404NotFound);
             }
 
-            // AD-24: one instance with one worker. Without this, two confirmed restores for the same
-            // Household could run as genuinely concurrent, unguarded delete+insert transactions. A DB
-            // check followed by an enqueue (mirroring AD-12's "at most one open X per Y" precedent), so
-            // it serialises through the single consumer. This check is the friendly fast path (no failed
-            // insert, stale rows failed first); the filtered unique index on BackgroundJobs closes the
-            // remaining race between check and enqueue (Story 11.14, AD-6): the loser's insert is rejected
-            // and answered below exactly like this check. Checked after consuming the token — a token can
-            // only ever be consumed once regardless, so this only rejects a second, genuinely different
-            // upload racing an already-in-flight restore for the same Household, never a retry of the
-            // same token (Code Review, Story 7.2 Pass 1).
-            //
-            // Story 11.2: a restore orphaned by a restart/crash used to hold this 409 forever. Rows
-            // whose heartbeat is older than 5 minutes are failed first (a restore that is still
-            // heartbeating keeps the guard for its whole run).
+            // AD-24: two confirmed restores for one Household must not run concurrently. A DB check then enqueue (AD-12 precedent) is the
+            // fast path; the filtered unique index on BackgroundJobs closes the race (AD-6). Stale rows (heartbeat older than 5 minutes) are failed first.
             await backgroundJobLifecycle.FailStaleAsync(householdId, cancellationToken);
             var restoreJobs = await backgroundJobRepository.ListByJobTypeAsync(householdId, JobTypes.RestoreHouseholdData, cancellationToken);
             if (restoreJobs.Any(j => j.Status is BackgroundJobStatus.Queued or BackgroundJobStatus.Processing))
@@ -126,7 +80,7 @@ public static class HouseholdImportEndpoints
             }
             catch (ActiveJobAlreadyExistsException)
             {
-                // Lost the race the early check cannot see (Story 11.14): the database index rejected the
+                // Lost the race the early check cannot see: the database index rejected the
                 // row before anything was sent, so the consumed upload's file is deleted like on the
                 // early-check path and the answer is the same 409.
                 DeleteTempFile(reference.TempFilePath);
@@ -155,7 +109,7 @@ public static class HouseholdImportEndpoints
         detail: "A restore is already in progress for this Household — wait for it to finish before starting another.",
         statusCode: StatusCodes.Status409Conflict);
 
-    // Every confirm path that does not end in an enqueued job deletes the consumed upload's file (Story 11.10).
+    // Every confirm path that does not end in an enqueued job deletes the consumed upload's file.
     private static void DeleteTempFile(string path)
     {
         if (File.Exists(path))
@@ -164,10 +118,8 @@ public static class HouseholdImportEndpoints
         }
     }
 
-    // Story 11.10 (audit S4): the upload is streamed to its temp file first and validated from there,
-    // so it is never held whole in memory. That makes the file exist before validation, so every exit
-    // that does not end in a successful Register deletes it (a 400, any exception, a cancelled request).
-    // One try/finally owns that rule. Internal so each cleanup path has a test of its own.
+    // Streamed to a temp file and validated from there. The file exists before validation, so every exit that does not
+    // register it deletes it; one try/finally owns that.
     internal static async Task<IResult> ReceiveUploadAsync(
         IFormFile file,
         Guid householdId,
@@ -198,8 +150,8 @@ public static class HouseholdImportEndpoints
                 await source.CopyToAsync(target, cancellationToken);
             }
 
-            // Pure read/parse — no DB write of any kind happens in this phase (AC #2's "never
-            // partially applied" structurally, not by convention).
+            // Pure read/parse — no DB write of any kind happens in this phase (never partially
+            // applied, structurally rather than by convention).
             HouseholdImportValidationResult result;
             await using (var validated = new FileStream(
                 tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.SequentialScan))
@@ -272,9 +224,7 @@ public record HouseholdImportValidationResponse(Guid Token, HouseholdImportSumma
 // only its own files and reach the size check without a 250 MB body. Not a configuration key.
 public record HouseholdImportUploadSettings(string TempDirectory, long MaxFileSizeBytes);
 
-// MeterRegressionPrompts was missing from this record entirely (Code Review, Story 7.2 Pass 1) —
-// eleven of the twelve in-scope entity categories were shown to the user before they confirm
-// "replace all data"; regression prompt count was silently absent.
+// The summary lists every in-scope entity category the user sees before confirming "replace all data".
 public record HouseholdImportSummary(
     int HouseholdMembers,
     bool HasMainMeter,

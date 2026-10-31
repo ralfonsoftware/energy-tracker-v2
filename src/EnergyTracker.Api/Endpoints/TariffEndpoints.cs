@@ -6,37 +6,16 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class TariffEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced
-    // across files (that helper is private to its own class); a Tariff is Household-scoped
-    // exactly like MeterReading, not tenant-root like Household itself.
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapTariffEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/tariffs", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/tariffs", async (
             CreateTariffRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             CreateTariff createTariff,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -51,17 +30,14 @@ public static class TariffEndpoints
             }
         });
 
-        api.MapGet("/tariffs", async (
+        household.MapGet("/tariffs", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetTariffHistory getTariffHistory,
             CancellationToken cancellationToken,
             int page = 1,
             int pageSize = 20) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -74,17 +50,14 @@ public static class TariffEndpoints
             }
         });
 
-        api.MapPut("/tariffs/{id:guid}", async (
+        household.MapPut("/tariffs/{id:guid}", async (
             Guid id,
             EditTariffRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             EditTariff editTariff,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             if (request.Version is null)
             {
@@ -116,20 +89,15 @@ public static class TariffEndpoints
             }
         });
 
-        // Story 5.2 (FR-11): a candidate Tariff comparison — POST because a 4-decimal-place price
-        // body is cleaner than query-string params (matching CreateTariffRequest's convention),
-        // but this performs NO write: FR-11's "scratch/exploratory, never alters the actual
-        // Tariff" is the reason, unlike every other Tariff POST in this file.
-        api.MapPost("/tariffs/compare", async (
+        // FR-11: POST because the 4-decimal price body is cleaner than query parameters, but it performs no write: the comparison
+        // is scratch and never alters the Tariff.
+        household.MapPost("/tariffs/compare", async (
             CompareTariffRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             CompareTariff compareTariff,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -137,7 +105,7 @@ public static class TariffEndpoints
                     householdId, request.CandidateMonthlyBaseFee, request.CandidatePricePerKwh, request.CandidateSwitchingBonus, cancellationToken);
                 // 200 with a null body when undefined — same "is there one?" shape as GET
                 // /api/status (StatusEndpoints.cs's own comment): no pace yet, or no current
-                // Tariff configured yet (AC #3).
+                // Tariff configured yet.
                 return Results.Ok(result is null ? null : ToComparisonResponse(result));
             }
             catch (TariffValidationException ex)
@@ -147,17 +115,14 @@ public static class TariffEndpoints
         });
 
         // Singleton resource, not a collection (consistent with /api/status, /api/session — Consistency
-        // Conventions). 200 with a null body when no current Tariff exists (AC #3) — same "is there
+        // Conventions). 200 with a null body when no current Tariff exists — same "is there
         // one?" shape as GET /api/status and POST /api/tariffs/compare.
-        api.MapGet("/tariff-check", async (
+        household.MapGet("/tariff-check", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetTariffCheckReminder getTariffCheckReminder,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var result = await getTariffCheckReminder.ExecuteAsync(householdId, cancellationToken);
             return Results.Ok(result is null ? null : ToTariffCheckResponse(result));
@@ -239,11 +204,8 @@ public record TariffHistoryItemResponse(
     DateTimeOffset? EffectiveUntil,
     IReadOnlyList<TariffFieldCorrectionResponse> Corrections);
 
-// FieldName is the raw AuditCorrection.FieldName ("MonthlyBaseFee", "PricePerKwh", "Currency",
-// "ContractStartDate", "ContractPeriodMonths") — OldValue/NewValue are the same
-// locale-neutral (InvariantCulture) strings AuditCorrection stores; the frontend parses/formats
-// per field type and the household's own Locale (AD-18), same inversion MeterReadingEndpoints'
-// CorrectedFromKwhValue already does for a single field.
+// FieldName is the raw AuditCorrection.FieldName; OldValue/NewValue are its locale-neutral (InvariantCulture) strings, and the
+// frontend formats them per field type and the Household's Locale (AD-18).
 public record TariffFieldCorrectionResponse(string FieldName, string OldValue, string NewValue, DateTimeOffset CorrectedAtUtc);
 
 public record EditTariffRequest(

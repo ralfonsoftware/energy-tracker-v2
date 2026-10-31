@@ -8,13 +8,10 @@ public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app, bool oidcConfigured)
     {
-        // Issues Results.Challenge for the OIDC scheme, redirecting the browser to the
-        // configured provider (AC #1). Outside /api — this is a full page navigation, not
-        // something the SPA calls via fetch. Without Oidc:Authority/Oidc:ClientId the scheme is
-        // never registered (Program.cs), so challenging it would throw: /login is unusable until
-        // those are set, and says so with a 503 problem document instead of a 500 (Story 11.11,
-        // audit C11). The detail names the settings, never a configured value.
-        // returnUrl (Story 1.8) lets the invited person's very first click — /join/{token} —
+        // Challenges the OIDC scheme, redirecting the browser to the provider. Outside /api: a full page
+        // navigation, not a fetch. Without Oidc:Authority/Oidc:ClientId the scheme is never registered
+        // (Program.cs), so /login answers a 503 problem document instead of a 500. The detail names the
+        // settings, never a configured value. returnUrl lets the invited person's very first click — /join/{token} —
         // survive the OIDC round trip instead of always landing on "/".
         app.MapGet("/login", IResult (string? returnUrl) =>
             oidcConfigured
@@ -26,11 +23,11 @@ public static class AuthEndpoints
                     title: "Sign-in is not configured",
                     detail: "Sign-in is not configured on this server. The operator must set Oidc__Authority, " +
                         "Oidc__ClientId and Oidc__ClientSecret; see docs/self-hosting.md."))
-            // AD-27: per client IP, the one unauthenticated throttled route (audit S3). On both branches,
+            // AD-27: per client IP, the one unauthenticated throttled route. On both branches,
             // so an unconfigured instance cannot be hammered either.
             .RequireRateLimiting(RateLimitPolicies.Login);
 
-        // Story 11.8 (AD-27, audit S9): a POST that needs X-Requested-With, so no other site can log a member
+        // AD-27: a POST that needs X-Requested-With, so no other site can log a member
         // out with an <img src="/logout">. Answers 200 JSON { redirectUrl } rather than a 302: a fetch cannot
         // follow the provider's cross-origin redirect, and a form POST would hit the CSP's form-action. The SPA
         // navigates to redirectUrl. Signs out the cookie scheme, plus the OIDC scheme (provider-side end-session,

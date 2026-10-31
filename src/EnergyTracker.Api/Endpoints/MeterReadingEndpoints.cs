@@ -7,37 +7,16 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class MeterReadingEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
-
-    // Same shape as TaggingScaffoldEndpoints.TryGetHouseholdId — copied rather than referenced
-    // across files (that helper is private to its own class); a MeterReading is Household-scoped
-    // exactly like Room/PowerPoint/Device, not tenant-root like Household itself.
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapMeterReadingEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/meter-readings", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/meter-readings", async (
             CreateMeterReadingRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             CreateMeterReading createMeterReading,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -53,17 +32,14 @@ public static class MeterReadingEndpoints
             }
         });
 
-        api.MapGet("/meter-readings", async (
+        household.MapGet("/meter-readings", async (
             ICurrentHouseholdAccessor householdAccessor,
             GetMeterReadingHistory getMeterReadingHistory,
             CancellationToken cancellationToken,
             int page = 1,
             int pageSize = 20) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {
@@ -76,17 +52,14 @@ public static class MeterReadingEndpoints
             }
         });
 
-        api.MapPut("/meter-readings/{id:guid}", async (
+        household.MapPut("/meter-readings/{id:guid}", async (
             Guid id,
             EditMeterReadingRequest request,
             ICurrentHouseholdAccessor householdAccessor,
             EditMeterReading editMeterReading,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             try
             {

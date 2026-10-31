@@ -6,7 +6,6 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class SmartPlugImportEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
     private static readonly string[] AllowedExtensions = [".xlsx", ".csv"];
 
     // Real Eve Home/Meross exports run hundreds of KB (Task 3); 20 MB is generous headroom while
@@ -14,34 +13,16 @@ public static class SmartPlugImportEndpoints
     // background-processing loop.
     private const long MaxFileSizeBytes = 20 * 1024 * 1024;
 
-    // Same shape as MeterReadingEndpoints.TryGetHouseholdId — copied rather than referenced
-    // across files (that helper is private to its own class).
-    private static bool TryGetHouseholdId(ICurrentHouseholdAccessor householdAccessor, out Guid householdId, out IResult? forbidden)
-    {
-        if (householdAccessor.HouseholdId is { } id)
-        {
-            householdId = id;
-            forbidden = null;
-            return true;
-        }
-
-        householdId = default;
-        forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
-        return false;
-    }
-
     public static RouteGroupBuilder MapSmartPlugImportEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/smart-plug-imports", async (
+        var household = api.MapGroup(string.Empty).RequireHousehold();
+        household.MapPost("/smart-plug-imports", async (
             IFormFile file,
             ICurrentHouseholdAccessor householdAccessor,
             IBackgroundJobQueue jobQueue,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var extension = Path.GetExtension(file.FileName);
             if (!AllowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
@@ -58,12 +39,8 @@ public static class SmartPlugImportEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            // A short-lived temp location the same process's job-processing loop reads back —
-            // API and job worker are one process, one container in both environments (AD-6), so
-            // plain temp-disk storage (rather than a separate blob-storage adapter) is sufficient.
-            // The payload below carries only this path + metadata, never the file bytes
-            // themselves — Azure Storage Queue caps a message at 64 KB.
-            // Process-local on purpose: AD-24 (single instance).
+            // Short-lived temp file the job loop of this same process reads back (AD-6); the queue message carries only the path and
+            // metadata, never the bytes (a message caps at 64 KB). Process-local on purpose: AD-24.
             var tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{extension}");
             await using (var tempFileStream = File.Create(tempFilePath))
             {
@@ -92,35 +69,22 @@ public static class SmartPlugImportEndpoints
                 throw;
             }
 
-            // 202 Accepted — no parsing happens synchronously (AC #1); the client learns
-            // completion by polling GET /api/jobs/{id} (AC #2).
+            // 202 Accepted — no parsing happens synchronously; the client learns
+            // completion by polling GET /api/jobs/{id}.
             return Results.Accepted($"/api/jobs/{jobId}", new SmartPlugImportUploadResponse(jobId));
         })
-        // Minimal APIs attach antiforgery metadata to any IFormFile-binding endpoint by default
-        // (CSRF hardening for form posts) — this app has no app.UseAntiforgery() middleware
-        // (session identity is a cookie the SPA never reads, not a browser form), so the
-        // endpoint would 500 on every request without this. Auth (RequireAuthorization on the
-        // /api group) plus SameSite=Lax already protects the upload the way this app protects
-        // every other write endpoint.
+        // Minimal APIs attach antiforgery metadata to IFormFile endpoints and this app has no UseAntiforgery() middleware, so the
+        // endpoint would 500 without this. Auth and SameSite=Lax protect the upload like every other write.
         .DisableAntiforgery()
         .RequireRateLimiting(RateLimitPolicies.Upload);
 
-        api.MapPost("/smart-plug-imports/{id:guid}/power-point-mapping", async (
+        household.MapPost("/smart-plug-imports/{id:guid}/power-point-mapping", async (
             Guid id,
             MapSmartPlugImportRequest request,
-            ICurrentHouseholdAccessor householdAccessor,
             MapSmartPlugImportToPowerPoint mapSmartPlugImportToPowerPoint,
             CancellationToken cancellationToken) =>
         {
-            // AD-3's query filter alone would already stop a cross-Household id from resolving,
-            // but every sibling endpoint (RenamePowerPoint/MovePowerPoint included, the exact
-            // precedent this handler follows) still calls TryGetHouseholdId first so a principal
-            // with no Household gets a 403 rather than a misleading 404.
-            if (!TryGetHouseholdId(householdAccessor, out _, out var forbidden))
-            {
-                return forbidden;
-            }
-
+            // Behind RequireHousehold like the sibling endpoints, so a principal with no Household gets 403 instead of a misleading 404.
             try
             {
                 await mapSmartPlugImportToPowerPoint.ExecuteAsync(id, request.PowerPointId, cancellationToken);
@@ -144,30 +108,20 @@ public static class SmartPlugImportEndpoints
             }
         });
 
-        api.MapGet("/smart-plug-import-jobs", async (
+        household.MapGet("/smart-plug-import-jobs", async (
             ICurrentHouseholdAccessor householdAccessor,
             ListSmartPlugImportJobs listSmartPlugImportJobs,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
             var jobs = await listSmartPlugImportJobs.ExecuteAsync(householdId, cancellationToken);
             return Results.Ok(jobs.Select(ToJobHistoryResponse).ToList());
         });
 
-        // Story 3.10: manual cleanup — deleteAll=false (default) deletes records older than 30
-        // days, deleteAll=true deletes everything regardless of age. Unlike the GET list's own
-        // lazy sweep, this is eligible across all six states (AC #4), not just the terminal three.
-        //
-        // Story 3.10 incident fix, round 3 (2026-09-12): runs as an async background job (AD-6),
-        // same pattern as the upload endpoint above — a household's total cleanup work can exceed
-        // Azure Container Apps' ~240s HTTP ingress ceiling even with every DB command individually
-        // bounded (CAP-1/CAP-4), so this can no longer execute synchronously inside the request.
-        // The client learns completion by polling GET /api/jobs/{id}, exactly like an upload.
-        api.MapDelete("/smart-plug-import-jobs", async (
+        // Manual cleanup deleteAll=false deletes records older than 30 days, true deletes everything. Eligible in all
+        // six states, unlike the lazy sweep. Runs as an async job (AD-6): a Household's total work can exceed the ~240s ingress limit.
+        household.MapDelete("/smart-plug-import-jobs", async (
             ICurrentHouseholdAccessor householdAccessor,
             IBackgroundJobQueue jobQueue,
             IBackgroundJobRepository backgroundJobRepository,
@@ -175,22 +129,10 @@ public static class SmartPlugImportEndpoints
             bool deleteAll,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetHouseholdId(householdAccessor, out var householdId, out var forbidden))
-            {
-                return forbidden;
-            }
+            var householdId = householdAccessor.RequireHouseholdId();
 
-            // Round-3 review fix: without this, a double-click, a second tab, or a false-timeout
-            // retry (see the poll-tolerance fix above) would enqueue a second concurrent cleanup —
-            // reintroducing exactly the DB contention this three-round incident has been chasing.
-            // Reusing the still-active job is idempotent from the caller's point of view: it's the
-            // same 202+jobId contract either way, and the client polls the same endpoint. This check is
-            // the shortcut; the filtered unique index on BackgroundJobs is the guarantee (Story 11.14,
-            // AD-6): two requests that both pass it cannot both insert, and the loser answers with the
-            // winner's job id below.
-            //
-            // Story 11.2: a cleanup row orphaned by a restart is failed first (stale heartbeat), so
-            // it no longer pins this endpoint to a job that will never finish.
+            // Reuse the active cleanup job instead of enqueueing a second one (double click, second tab, retry). The filtered unique index
+            // on BackgroundJobs is the guarantee (AD-6); the loser answers with the winner's job id. Stale rows are failed first.
             await backgroundJobLifecycle.FailStaleAsync(householdId, cancellationToken);
             var existingCleanupJobs = await backgroundJobRepository.ListByJobTypeAsync(
                 householdId, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken);
@@ -235,11 +177,7 @@ public static class SmartPlugImportEndpoints
         result.DeviceTag,
         result.Gaps.Select(ToGapDto).ToList());
 
-    // camelCase matching System.Text.Json's default naming policy (e.g. NeedsMapping ->
-    // "needsMapping") — deliberately not the ToLowerInvariant() convention this file's sibling
-    // endpoints use for BackgroundJobStatus/SmartPlugImportStatus, since those concatenate into
-    // unreadable all-lowercase strings ("awaitingpowerpointmapping") that this DTO's own six-
-    // state contract (Task 4) spells out in camelCase explicitly.
+    // camelCase to match System.Text.Json's naming policy, not ToLowerInvariant(), which would give "awaitingpowerpointmapping".
     private static string ToStateString(SmartPlugImportJobState state) =>
         char.ToLowerInvariant(state.ToString()[0]) + state.ToString()[1..];
 

@@ -39,7 +39,20 @@ public class SingleInstanceInvariantIsDocumentedTests
         "src/EnergyTracker.Infrastructure/Adapters/InProcessChannelJobQueue.cs",
         "src/EnergyTracker.Api/HttpRateLimiting.cs",
         "src/EnergyTracker.Api/Endpoints/SmartPlugImportEndpoints.cs",
-        "src/EnergyTracker.Api/Program.cs",
+        "src/EnergyTracker.Api/Composition/ApplicationServicesRegistration.cs",
+    ];
+
+    // The composition root registers four mechanisms (Story 11.19). Each needs its own AD-24 comment within
+    // AnchorWindow lines above (or on) the registration code, so one comment cannot stand in for the others.
+    private const string ProgramFile = "src/EnergyTracker.Api/Program.cs";
+    private const int AnchorWindow = 6;
+
+    private static readonly (string Mechanism, string File, string Anchor)[] CompositionAnchors =
+    [
+        ("rate limiter", "src/EnergyTracker.Api/Program.cs", "AddHttpRateLimiting()"),
+        ("upload temp path", "src/EnergyTracker.Api/Composition/ApplicationServicesRegistration.cs", "Path.GetTempPath()"),
+        ("startup sweep", "src/EnergyTracker.Api/Composition/JobQueueRegistration.cs", "AddSingleton<InProcessJobStartupSweep>()"),
+        ("heartbeat", "src/EnergyTracker.Api/Composition/JobQueueRegistration.cs", "AddHostedService<InstanceHeartbeatService>()"),
     ];
 
     // Files that carry one AD-24 comment at a mechanism: the ones above plus the mechanisms whose code
@@ -56,10 +69,9 @@ public class SingleInstanceInvariantIsDocumentedTests
     ];
 
     // A file that holds several mechanisms needs one AD-24 comment per mechanism, not one for the file
-    // (Program.cs: rate limiter, upload temp path, startup sweep and the heartbeat). Other files need one.
+    // (the composition root, counted over its files below). Other files need one.
     private static readonly Dictionary<string, int> MinimumAd24Comments = new()
     {
-        ["src/EnergyTracker.Api/Program.cs"] = 4,
         ["src/EnergyTracker.Infrastructure/Adapters/InProcessChannelJobQueue.cs"] = 2,
         ["src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs"] = 2,
     };
@@ -130,6 +142,23 @@ public class SingleInstanceInvariantIsDocumentedTests
     }
 
     [Fact]
+    public void Each_composition_root_mechanism_has_its_own_AD_24_comment_next_to_its_registration()
+    {
+        foreach (var (mechanism, file, anchor) in CompositionAnchors)
+        {
+            var lines = ReadText(file).Replace("\r\n", "\n").Split('\n');
+            var index = Array.FindIndex(lines, l => l.Contains(anchor, StringComparison.Ordinal) && !l.TrimStart().StartsWith("//", StringComparison.Ordinal));
+            index.ShouldBeGreaterThan(-1, $"{file} no longer contains '{anchor}' ({mechanism}): was it moved? Update this guard with it.");
+            HasAd24CommentNear(lines, index, AnchorWindow)
+                .ShouldBeTrue($"{file}: the {mechanism} registration ('{anchor}') needs an AD-24 comment within {AnchorWindow} lines above it. {FailureHint}");
+        }
+    }
+
+    private static bool HasAd24CommentNear(string[] lines, int index, int window) =>
+        Enumerable.Range(Math.Max(0, index - window), index - Math.Max(0, index - window) + 1)
+            .Any(i => CountAd24Comments(lines[i]) > 0);
+
+    [Fact]
     public void No_comment_still_claims_that_several_replicas_work()
     {
         foreach (var (file, phrase) in RetiredClaims)
@@ -179,21 +208,26 @@ public class SingleInstanceInvariantIsDocumentedTests
     }
 
     // Both queue providers need the heartbeat (an Azure deployment is where a second replica is plausible,
-    // a self-host where a second container is), so it is registered at the top level of Program.cs, not
+    // a self-host where a second container is), so it is registered at the top level of AddJobQueue, not
     // inside a branch of the queue-provider switch.
     [Fact]
     public void The_heartbeat_is_registered_outside_the_queue_provider_switch()
     {
-        const string program = "src/EnergyTracker.Api/Program.cs";
-        var code = CodeOf(program);
+        const string registrationFile = "src/EnergyTracker.Api/Composition/JobQueueRegistration.cs";
+        var code = CodeOf(registrationFile);
         var switchStart = code.IndexOf("switch (jobQueueProvider)", StringComparison.Ordinal);
         var registration = code.IndexOf("AddHostedService<InstanceHeartbeatService>()", StringComparison.Ordinal);
-        var build = code.IndexOf("builder.Build()", StringComparison.Ordinal);
+        var methodEnd = code.LastIndexOf("return services;", StringComparison.Ordinal);
 
-        switchStart.ShouldBeGreaterThan(-1, $"{program} no longer has the queue-provider switch: update this guard with it.");
-        registration.ShouldBeGreaterThan(switchStart, $"{program}: register InstanceHeartbeatService after the queue-provider switch, for both providers (AD-24).");
-        build.ShouldBeGreaterThan(registration);
-        BraceDepthAt(code, registration).ShouldBe(BraceDepthAt(code, build), $"{program}: InstanceHeartbeatService is registered inside a block (a switch branch?); both queue providers need it (AD-24).");
+        switchStart.ShouldBeGreaterThan(-1, $"{registrationFile} no longer has the queue-provider switch: update this guard with it.");
+        registration.ShouldBeGreaterThan(switchStart, $"{registrationFile}: register InstanceHeartbeatService after the queue-provider switch, for both providers (AD-24).");
+        methodEnd.ShouldBeGreaterThan(registration);
+        BraceDepthAt(code, registration).ShouldBe(BraceDepthAt(code, methodEnd), $"{registrationFile}: InstanceHeartbeatService is registered inside a block (a switch branch?); both queue providers need it (AD-24).");
+
+        var program = CodeOf(ProgramFile);
+        var call = program.IndexOf("AddJobQueue(", StringComparison.Ordinal);
+        call.ShouldBeGreaterThan(-1, $"{ProgramFile} no longer calls AddJobQueue: the heartbeat would not be registered (AD-24).");
+        program.IndexOf("builder.Build()", StringComparison.Ordinal).ShouldBeGreaterThan(call);
     }
 
     private static int BraceDepthAt(string code, int index) =>
@@ -211,6 +245,10 @@ public class SingleInstanceInvariantIsDocumentedTests
         var bicep = DescribedParam("@description('One instance only, see AD-24')\n@minValue(1)\nparam maxReplicas int = 1\n", "maxReplicas");
         bicep.Description.ShouldBe("One instance only, see AD-24");
         bicep.Value.ShouldBe("1");
+        string[] near = ["// AD-24: one", "var a = 1;", "var b = 2;", "Register();"];
+        HasAd24CommentNear(near, 3, 3).ShouldBeTrue();
+        HasAd24CommentNear(near, 3, 2).ShouldBeFalse();
+        HasAd24CommentNear(["var s = \"AD-24\";", "Register();"], 1, 3).ShouldBeFalse();
         CountAd24Comments("// AD-24 first\nvar s = \"AD-24 in a string\";\n// no pointer\nvar t = 1; // AD-24 second").ShouldBe(2);
     }
 

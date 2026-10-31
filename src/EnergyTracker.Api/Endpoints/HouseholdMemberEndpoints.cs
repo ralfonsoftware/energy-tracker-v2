@@ -65,7 +65,7 @@ public static class HouseholdMemberEndpoints
 
     internal static IResult NoHousehold() =>
         Results.Problem(
-            detail: "The authenticated principal does not belong to a Household.",
+            detail: HouseholdRequiredFilter.RejectionDetail,
             statusCode: StatusCodes.Status403Forbidden);
 
     private static IResult Problem(string detail, string errorCode, int statusCode) =>

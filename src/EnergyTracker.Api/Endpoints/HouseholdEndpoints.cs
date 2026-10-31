@@ -9,18 +9,15 @@ namespace EnergyTracker.Api.Endpoints;
 
 public static class HouseholdEndpoints
 {
-    private const string NoHouseholdDetail = "The authenticated principal does not belong to a Household.";
     private const string ForeignHouseholdDetail = "The authenticated principal does not belong to this Household.";
 
-    // Household has no AD-3 query filter on itself (it's the tenant root), so every route below
-    // that takes a Household id in the path must check it against the caller's own resolved
-    // HouseholdId explicitly — otherwise any authenticated principal could read or edit any
-    // other Household's Yearly Baseline just by guessing/knowing its id.
+    // Household has no AD-3 query filter on itself (it's the tenant root), so every route taking a Household id
+    // in the path must check it against the caller's resolved HouseholdId, or any principal could edit any Household.
     private static bool TryAuthorizeHousehold(Guid id, ICurrentHouseholdAccessor householdAccessor, out IResult? forbidden)
     {
         if (householdAccessor.HouseholdId is not { } ownHouseholdId)
         {
-            forbidden = Results.Problem(detail: NoHouseholdDetail, statusCode: StatusCodes.Status403Forbidden);
+            forbidden = Results.Problem(detail: HouseholdRequiredFilter.RejectionDetail, statusCode: StatusCodes.Status403Forbidden);
             return false;
         }
 
@@ -42,7 +39,7 @@ public static class HouseholdEndpoints
             CreateHousehold createHousehold,
             CancellationToken cancellationToken) =>
         {
-            // Never a client-supplied identity (AC #2) — the creator is always the authenticated
+            // Never a client-supplied identity — the creator is always the authenticated
             // principal behind the /api group's auth requirement.
             var subjectClaim = user.FindFirst(ClaimTypes.NameIdentifier);
             var issuerClaim = user.FindFirst(HouseholdClaimTypes.ValidatedIssuer);
@@ -53,10 +50,8 @@ public static class HouseholdEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            // Story 3.6/UX-DR21: the OIDC `name` claim, when the provider returns one — nullable,
-            // never fabricated, feeds the household-wide job list's "Queued by" line. See
-            // HouseholdClaimTypes.ResolveDisplayName for why this isn't a plain ClaimTypes.Name
-            // read (review-round-2 patch).
+            // The OIDC `name` claim, when the provider returns one: nullable, never fabricated, feeds the
+            // job list's "Queued by" line. See HouseholdClaimTypes.ResolveDisplayName for why not ClaimTypes.Name.
             var displayName = HouseholdClaimTypes.ResolveDisplayName(user);
 
             try
@@ -121,14 +116,12 @@ public static class HouseholdEndpoints
             }
             catch (HouseholdConcurrencyConflictException ex)
             {
-                // Message only, not the full current server state — matches every existing 409
-                // in this codebase (HouseholdAlreadyExistsException, tagging-scaffold archived-
-                // parent conflicts); the frontend's own refetch covers getting the current state.
+                // Message only, not the full server state, like every other 409 here; the frontend's refetch covers current state.
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
         });
 
-        // Story 8.11: any Household member may change the Household's language (no admin role in
+        // Any Household member may change the Household's language (no admin role in
         // v1). Unlike the routes above this carries no Version — see SetHouseholdLocale.
         api.MapPut("/households/{id}/locale", async (
             Guid id,
@@ -153,7 +146,7 @@ public static class HouseholdEndpoints
             }
         });
 
-        // AC #5: always visible regardless of AiPlausibilityEnabled's value — GET never 404s or
+        // Always visible regardless of AiPlausibilityEnabled's value — GET never 404s or
         // omits the payload just because the toggle is off or the backend is unconfigured.
         api.MapGet("/households/{id}/ai-plausibility", async (
             Guid id,
@@ -208,8 +201,7 @@ public static class HouseholdEndpoints
 public record CreateHouseholdRequest(string Locale, string Currency);
 
 // One response shape for "a Household" everywhere it's returned (create, invite-accept, get,
-// yearly-baseline update) — avoids two near-identical records drifting independently as later
-// stories add fields.
+// yearly-baseline update), so near-identical records cannot drift apart.
 public record HouseholdResponse(Guid Id, string Locale, string Currency, decimal? YearlyBaselineKwh, int Version);
 
 public record SetYearlyBaselineRequest(decimal YearlyBaselineKwh, int Version);

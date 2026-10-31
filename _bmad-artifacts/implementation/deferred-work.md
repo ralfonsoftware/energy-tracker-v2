@@ -621,3 +621,20 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] `CA1711` allows the `Queue` and `Stream` suffixes (AD-6 port and adapter names, `HouseholdExportStream`). [.editorconfig]
 - [open] `CA1873` (expensive log arguments) is off; revisit if a log argument ever starts to compute something. [.editorconfig]
 - [open] `CA1707` and `CA1816` are off for `tests/**` (Snake_case test names; fixtures without finalizers). [.editorconfig]
+
+## Deferred from: create-story of 11-19-structural-cleanup (2026-10-31)
+
+- [open] Comment trim reached only the files Story 11.19 touched. These source files still hold more than 40 `//` lines of story and review narration (count of `//` lines): `ValidateHouseholdImport.cs` 91, `Ports/ISmartPlugImportRepository.cs` 91 (port contract text, mostly worth keeping), `EveHomeXlsxParser.cs` 87, `ProcessSmartPlugImport.cs` 83, `SmartPlugReadingConfiguration.cs` 49, `BackgroundJobProcessor.cs` 49, `HouseholdExportReader.cs` 48, `HouseholdRepository.cs` 47, `WindowedDeviationCalculator.cs` 47, `HouseholdRestoreWriter.cs` 43, `AzureStorageQueueJobQueue.cs` 43, `SmartPlugGapDetector.cs` 41. Extend `NoHistoryNarratingCommentsTests` to each file as it is trimmed.
+- [open] Endpoint files that serve callers without a Household (`AuthEndpoints`, `SessionEndpoints`) were trimmed for narration only in the review pass; their longer why-comments may still deserve a pass. `HouseholdEndpoints`, `HouseholdInviteEndpoints` and `HouseholdMemberEndpoints` are trimmed.
+- [open] `ServiceRegistrationSnapshotTests` pins `OpenTelemetry.*` and `Azure.Monitor.*` descriptors for the two exporter variants. A Dependabot upgrade of those packages can change the approved text without a behaviour change; re-approve with `ENERGYTRACKER_UPDATE_SNAPSHOTS=1` after reviewing the diff.
+
+## Deferred from: code review of 11-19-structural-cleanup (2026-10-31)
+
+- [open] `handleDelete` does not map HTTP 409 to `errorParentArchived`; `handleSubmit` and `handleMoveTo` do. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
+- [open] Closing the tagging dialog while a request is in flight lets `setDialogError` and `setSubmitting(false)` fire into the next dialog; only the success path is guarded. [web/src/components/tagging-scaffold/use-tagging-scaffold-dialog.ts]
+- [open] `use-tagging-scaffold-data` has one `loadError` flag and no retry; one failed GET hides the lists that loaded. [web/src/components/tagging-scaffold/use-tagging-scaffold-data.ts]
+- [open] Endpoint filters run after parameter binding, so a no-Household caller with an invalid body gets 400 before 403. No test asserts the order.
+- [open] An authenticated no-Household caller can stream up to 250 MB to the upload routes before the filter answers 403. [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
+- [open] `oidcConfigured` ignores an empty `Oidc:ClientSecret`; an empty `JobQueue:ConnectionString` with `azurestoragequeue` fails at first resolve, not at startup. [src/EnergyTracker.Api/Composition]
+- [open] The split React files repeat three delete-confirmation dialogs and three row blocks. [web/src/components/tagging-scaffold]
+- [open] Local DB holds smoke-test rows "Smoke Room B" and archived "Smoke PP" from the Story 11.19 live smoke.
