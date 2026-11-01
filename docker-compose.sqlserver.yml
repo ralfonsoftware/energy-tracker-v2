@@ -4,6 +4,8 @@
 #
 # Note: the postgres container from the base file still starts alongside sqlserver here;
 # that's an accepted tradeoff for keeping this an override rather than a duplicated stack.
+# The `migrate` service of the base file migrates that Postgres only. SQL Server is a local-dev variant and
+# is migrated by hand: ./scripts/migrate.sh --provider sqlserver (Story 11.21).
 services:
   api:
     environment:

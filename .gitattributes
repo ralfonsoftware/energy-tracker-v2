@@ -1,0 +1,2 @@
+# Story 11.21: the migrate container runs this script directly; a CRLF shebang makes it fail to start.
+scripts/self-host/*.sh text eol=lf

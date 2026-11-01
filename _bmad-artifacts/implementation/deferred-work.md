@@ -89,7 +89,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 **migrations-deploy (5)**
 
-- Self-hosters may have no documented way to apply EF Core migrations **[promoted: 11.21]** — 10-1 story creation (2026-10-02)
 - Expand/contract rule in `project-context.md` is advisory prose only — 10-1-migration-safety-on-deploy
 - Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name t **[promoted: 11.26]** — 10-1-migration-safety-on-deploy
 - Pending-migrations list in the restore-point block runs once before the retry loop and can read "una — 10-1-migration-safety-on-deploy
@@ -476,12 +475,6 @@ Conventions: append new sections at the end, chronological (see `project-context
   evidence: Review-found. Not scanned: rem/em units, `max-width` queries, `min-[Npx]:` variants, column assertions outside `app-shell.spec.ts`. [web/src/layout-constants.drift.test.ts]
 
 
-## Deferred from: story creation for Epic 10 (10-1-migration-safety-on-deploy, 2026-10-02)
-
-- [promoted: Story 11.21] source_story: `_bmad-artifacts/implementation/10-1-migration-safety-on-deploy.md`
-  summary: Self-hosters may have no documented way to apply EF Core migrations: grep finds no migration step in `docker-compose.yml`, `Dockerfile` or `docs/self-hosting.md`, and the API never calls `Migrate()`/`MigrateAsync()` (only `scripts/migrate.sh` is documented, in `docs/local-development.md`).
-  evidence: Found while grounding story 10.1 (originally the Story 1.1 entry, marked resolved on the strength of `docs/local-development.md:32` alone). Not verified end to end against a fresh self-host install; kept out of 10.1's scope. [docs/self-hosting.md, docker-compose.yml]
-
 
 ## Deferred from: code review of 10-1-migration-safety-on-deploy (2026-10-02)
 
@@ -740,4 +733,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] `HouseholdInvites.TokenHash` is still nullable and non-unique, and `FindInviteByTokenAsync` uses `FirstOrDefault` with no ordering. With `Token` gone, a NULL-hash row is an unfindable orphan. Tighten in its own destructive-class migration: purge NULL-hash rows, then make the column NOT NULL and the index unique. [src/EnergyTracker.Infrastructure/Configurations/HouseholdInviteConfiguration.cs]
 
-- [open] `DropHouseholdInviteTokenColumn` has no in-DB guard against live legacy invites (`TokenHash IS NULL` and unexpired). The 0-row gate query covers production only; the self-host migration path (Story 11.21) should check or document it. [src/EnergyTracker.Infrastructure.Migrations.Postgres/Migrations/20261031173415_DropHouseholdInviteTokenColumn.cs]
+
+## Deferred from: code review of story-11-21-self-host-migration-path (2026-11-01)
+
+- [open] Empty or special-character (`;`, `=`) `POSTGRES_PASSWORD` breaks the unquoted `ConnectionStrings__Default` with a vague auth error; no `${POSTGRES_PASSWORD:?...}` guard. Same pattern in `api` and `migrate`. [docker-compose.yml]
+- [open] On upgrade, `migrate` runs while the old `api` still serves, so a destructive migration hits a live old-version API. Document or enforce stop-then-migrate. [docker-compose.yml, docs/self-hosting.md]
+- [open] Failure line 1 "the api container was not started" is untrue for a manual `docker compose run --rm migrate` while `api` runs. The wording is pinned by the amended AC #2 of Story 11.21. [scripts/self-host/migrate-entrypoint.sh]
+- [open] `ConnectionStrings__Default` is duplicated between `api` and `migrate`; share it through a compose extension field. [docker-compose.yml]
+- [open] No CI job builds or runs the Dockerfile `migrate` target; only the Story 11.21 Task 6 manual run proves it. [Dockerfile]

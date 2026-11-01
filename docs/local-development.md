@@ -29,7 +29,7 @@ cp .env.example .env        # set POSTGRES_PASSWORD to anything for local dev
 dotnet tool restore         # installs dotnet-ef, pinned in .config/dotnet-tools.json
 npm --prefix web install
 docker compose -f docker-compose.yml -f docker-compose.local.yml up postgres -d
-./scripts/migrate.sh        # applies EF Core migrations — the API doesn't do this on startup
+./scripts/migrate.sh        # applies EF Core migrations for the host-run API — the API never migrates itself
 ```
 
 `OIDC_AUTHORITY`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` can stay blank for
@@ -309,9 +309,11 @@ per-test "Run"/"Debug" buttons if you'd rather not use the CLI for e2e tests.
 - **`relation "DataProtectionKeys" does not exist` (or `Households`,
   `HouseholdInvites`) / sign-in fails with a `CryptographicException`**:
   migrations haven't been applied to this Postgres volume yet — the API
-  doesn't run them on startup. Run `./scripts/migrate.sh`. This also happens
-  after `docker compose down -v`, which wipes the volume along with the
-  schema.
+  never runs them. With `docker compose up` the one-shot `migrate` service
+  does it before `api` starts (`docker compose logs migrate` if it failed).
+  For the host-run `dotnet run` flow (`docker-compose.local.yml`,
+  `./scripts/run-api.sh`) run `./scripts/migrate.sh`; the same applies after
+  `docker compose down -v`, which wipes the volume along with the schema.
 - **Sign-in loops or fails with `Correlation failed` in Safari but works in
   Chrome**: see "Testing sign-in in Safari" above — Safari (correctly)
   refuses the OIDC handler's `Secure` cookies over plain HTTP; Chrome

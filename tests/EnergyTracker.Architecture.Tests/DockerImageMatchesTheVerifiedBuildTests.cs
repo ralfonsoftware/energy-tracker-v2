@@ -21,6 +21,15 @@ public class DockerImageMatchesTheVerifiedBuildTests
         COPY global.json Directory.Build.props Directory.Packages.props ./
         COPY src/ ./src/
         RUN dotnet restore src/Api/Api.csproj
+        FROM backend-build AS migrate-build
+        COPY .config ./.config
+        RUN dotnet tool restore
+        RUN RID=linux-x64 && dotnet ef migrations bundle --self-contained -r "$RID" -o /app/efbundle
+        FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS migrate
+        COPY --from=migrate-build /app/efbundle /app/efbundle
+        COPY scripts/self-host/migrate-entrypoint.sh /app/migrate-entrypoint.sh
+        USER $APP_UID
+        ENTRYPOINT ["/app/migrate-entrypoint.sh"]
         FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
         COPY --from=backend-build /app/publish .
         USER $APP_UID
@@ -41,7 +50,7 @@ public class DockerImageMatchesTheVerifiedBuildTests
     {
         var instructions = Instructions(StripComments(ReadDockerfile()));
 
-        instructions.Count(i => i.Keyword == "FROM").ShouldBe(3, "Expected the three stages frontend-build, backend-build and runtime.");
+        instructions.Count(i => i.Keyword == "FROM").ShouldBe(5, "Expected the five stages frontend-build, backend-build, migrate-build, migrate and runtime.");
         var lastFrom = instructions.Last(i => i.Keyword == "FROM");
         lastFrom.Arguments.ShouldContain("mcr.microsoft.com/dotnet/aspnet", Case.Insensitive, "The last stage must be the aspnet runtime stage.");
         instructions.ShouldContain(i => i.Keyword == "ENTRYPOINT", "The runtime stage must have an ENTRYPOINT.");
@@ -163,6 +172,73 @@ public class DockerImageMatchesTheVerifiedBuildTests
         Violations("FROM a AS one\nFROM b AS two\nENTRYPOINT [\"x\"]").ShouldNotBeEmpty("Two stages is not the expected shape.");
     }
 
+    [Fact]
+    public void The_rules_reject_a_migrate_stage_that_ends_the_file()
+    {
+        var runtimeStart = KnownGood.IndexOf("FROM mcr.microsoft.com/dotnet/aspnet", StringComparison.Ordinal);
+        var migrateStart = KnownGood.IndexOf("FROM mcr.microsoft.com/dotnet/runtime-deps", StringComparison.Ordinal);
+        var migrate = KnownGood[migrateStart..runtimeStart];
+        var mutated = KnownGood[..migrateStart] + KnownGood[runtimeStart..] + "\n" + migrate;
+
+        Violations(mutated).ShouldContain(v => v.Contains("last stage", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("USER root")]
+    [InlineData("USER 0")]
+    public void The_rules_reject_a_migrate_stage_that_runs_as_root(string user)
+    {
+        var mutated = KnownGood.Replace(
+            "COPY scripts/self-host/migrate-entrypoint.sh /app/migrate-entrypoint.sh\nUSER $APP_UID",
+            $"COPY scripts/self-host/migrate-entrypoint.sh /app/migrate-entrypoint.sh\n{user}",
+            StringComparison.Ordinal);
+
+        Violations(mutated).ShouldContain(v => v.Contains("migrate stage", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_rules_reject_a_migrate_stage_without_an_ENTRYPOINT()
+    {
+        var mutated = KnownGood.Replace("ENTRYPOINT [\"/app/migrate-entrypoint.sh\"]\n", "", StringComparison.Ordinal);
+
+        Violations(mutated).ShouldContain(v => v.Contains("migrate stage has no ENTRYPOINT", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_rules_reject_a_migrate_stage_that_does_not_copy_the_entrypoint_script()
+    {
+        var mutated = KnownGood.Replace(
+            "COPY scripts/self-host/migrate-entrypoint.sh /app/migrate-entrypoint.sh\n", "", StringComparison.Ordinal);
+
+        Violations(mutated).ShouldContain(v => v.Contains("migrate-entrypoint.sh", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_rules_reject_a_migrate_build_that_does_not_start_from_the_verified_build_stage()
+    {
+        var mutated = KnownGood.Replace("FROM backend-build AS migrate-build", "FROM mcr.microsoft.com/dotnet/sdk:10.0 AS migrate-build", StringComparison.Ordinal);
+
+        Violations(mutated).ShouldContain(v => v.Contains("migrate-build", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_rules_reject_a_migrate_bundle_that_is_not_self_contained()
+    {
+        var mutated = KnownGood.Replace("--self-contained ", "", StringComparison.Ordinal);
+
+        mutated.ShouldNotBe(KnownGood);
+        Violations(mutated).ShouldContain(v => v.Contains("self-contained", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_rules_reject_a_duplicate_stage_name()
+    {
+        var mutated = KnownGood.Replace("AS migrate-build", "AS migrate", StringComparison.Ordinal);
+
+        mutated.ShouldNotBe(KnownGood);
+        Violations(mutated).ShouldNotBeEmpty();
+    }
+
     // ---- the rules ----
 
     // Empty when the Dockerfile text follows every rule; otherwise one sentence per broken rule.
@@ -171,22 +247,75 @@ public class DockerImageMatchesTheVerifiedBuildTests
         var violations = new List<string>();
         var instructions = Instructions(StripComments(dockerfileText));
 
-        var fromIndexes = instructions.Select((instruction, index) => (instruction, index))
-            .Where(x => x.instruction.Keyword == "FROM")
-            .Select(x => x.index)
-            .ToList();
-        if (fromIndexes.Count != 3)
+        var stageList = Stages(instructions);
+        var names = stageList.Select(s => s.Name).ToList();
+        string[] required = ["frontend-build", "backend-build", "migrate-build", "migrate", "runtime"];
+        if (names.Count != required.Length || names.Distinct().Count() != names.Count || required.Any(name => !names.Contains(name)))
         {
-            violations.Add($"Expected exactly three FROM stages (frontend-build, backend-build, runtime), found {fromIndexes.Count}.");
+            violations.Add($"Expected exactly the stages {string.Join(", ", required)}, each once, found {string.Join(", ", names)}.");
             return violations;
         }
 
-        var buildStage = instructions[fromIndexes[1]..fromIndexes[2]];
-        var runtimeStage = instructions[fromIndexes[2]..];
+        var stages = stageList.ToDictionary(s => s.Name, s => s.Instructions);
+        if (names[^1] != "runtime")
+        {
+            violations.Add("The runtime stage must be the last stage: `docker build .` (CI, Azure) builds the last stage, and it must stay the API image.");
+        }
 
-        CheckBuildStage(buildStage, violations);
-        CheckRuntimeStage(runtimeStage, violations);
+        CheckBuildStage(stages["backend-build"], violations);
+        CheckMigrateBuildStage(stages["migrate-build"], violations);
+        CheckMigrateStage(stages["migrate"], violations);
+        CheckNonRootStage(stages["runtime"], "runtime", violations);
         return violations;
+    }
+
+    // Stages by their `AS name`, in file order; each stage list starts with its FROM.
+    private static List<(string Name, List<Instruction> Instructions)> Stages(List<Instruction> instructions)
+    {
+        var stages = new List<(string Name, List<Instruction> Instructions)>();
+        List<Instruction>? current = null;
+        foreach (var instruction in instructions)
+        {
+            if (instruction.Keyword == "FROM")
+            {
+                var name = Regex.Match(instruction.Arguments, @"\sAS\s+(\S+)\s*$", RegexOptions.IgnoreCase);
+                current = [];
+                stages.Add((name.Success ? name.Groups[1].Value : $"unnamed-{stages.Count}", current));
+            }
+
+            current?.Add(instruction);
+        }
+
+        return stages;
+    }
+
+    private static void CheckMigrateBuildStage(List<Instruction> stage, List<string> violations)
+    {
+        if (!stage[0].Arguments.StartsWith("backend-build ", StringComparison.OrdinalIgnoreCase))
+        {
+            violations.Add("The migrate-build stage must start `FROM backend-build`, so the bundle is built from the same pinned SDK and NuGet-audit inputs as the API.");
+        }
+
+        if (!stage.Any(i => i.Keyword == "RUN" && i.Arguments.Contains("dotnet ef migrations bundle", StringComparison.Ordinal)))
+        {
+            violations.Add("The migrate-build stage has no `dotnet ef migrations bundle`.");
+        }
+
+        if (!stage.Any(i => i.Keyword == "RUN" && i.Arguments.Contains("--self-contained", StringComparison.Ordinal)
+            && Regex.IsMatch(i.Arguments, @"\s-r\s+""?\$\{?RID\}?""?")))
+        {
+            violations.Add("The migrate-build bundle must be `--self-contained -r \"$RID\"`: the migrate stage runs on runtime-deps, which has no .NET runtime.");
+        }
+    }
+
+    private static void CheckMigrateStage(List<Instruction> stage, List<string> violations)
+    {
+        CheckNonRootStage(stage, "migrate", violations);
+
+        if (!stage.Any(i => i.Keyword == "COPY" && i.Arguments.Contains("migrate-entrypoint.sh", StringComparison.Ordinal)))
+        {
+            violations.Add("The migrate stage must COPY scripts/self-host/migrate-entrypoint.sh: it prints the failure message and keeps the bundle's exit code.");
+        }
     }
 
     private static void CheckBuildStage(List<Instruction> stage, List<string> violations)
@@ -208,25 +337,25 @@ public class DockerImageMatchesTheVerifiedBuildTests
         }
     }
 
-    private static void CheckRuntimeStage(List<Instruction> stage, List<string> violations)
+    private static void CheckNonRootStage(List<Instruction> stage, string name, List<string> violations)
     {
         var entrypointIndex = stage.FindIndex(i => i.Keyword == "ENTRYPOINT");
         if (entrypointIndex < 0)
         {
-            violations.Add("The runtime stage has no ENTRYPOINT.");
+            violations.Add($"The {name} stage has no ENTRYPOINT.");
             return;
         }
 
         var firstSafeUserIndex = stage.FindIndex(i => i.Keyword == "USER" && IsNonRoot(i.Arguments));
         if (firstSafeUserIndex < 0 || firstSafeUserIndex > entrypointIndex)
         {
-            violations.Add("The runtime stage needs `USER $APP_UID` (or a non-zero numeric id) before ENTRYPOINT.");
+            violations.Add($"The {name} stage needs `USER $APP_UID` (or a non-zero numeric id) before ENTRYPOINT.");
             return;
         }
 
         foreach (var later in stage[(firstSafeUserIndex + 1)..].Where(i => i.Keyword == "USER" && !IsNonRoot(i.Arguments)))
         {
-            violations.Add($"`USER {later.Arguments}` appears after the non-root USER: the container would run as root again.");
+            violations.Add($"`USER {later.Arguments}` appears after the non-root USER in the {name} stage: the container would run as root again.");
         }
 
         // `USER $APP_UID` is only as non-root as the variable: the stage must not redefine it to root (or to
@@ -234,7 +363,7 @@ public class DockerImageMatchesTheVerifiedBuildTests
         foreach (var value in stage.Where(i => i.Keyword is "ENV" or "ARG").SelectMany(AppUidAssignments)
                      .Where(value => !Regex.IsMatch(value, @"^[1-9][0-9]*$")))
         {
-            violations.Add($"The runtime stage sets APP_UID to `{value}`: `USER $APP_UID` would not be a non-root user.");
+            violations.Add($"The {name} stage sets APP_UID to `{value}`: `USER $APP_UID` would not be a non-root user.");
         }
     }
 

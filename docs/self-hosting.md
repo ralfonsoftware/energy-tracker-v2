@@ -155,13 +155,91 @@ docker compose up -d
 ```
 
 The first run builds the container image (compiles the frontend and the
-.NET API, then packages both into one image) and starts two containers:
+.NET API, then packages both into one image) and starts four containers:
 
 - `api` — the Energy Tracker application, listening on port `8080`.
 - `postgres` — the database, used only by `api` and not exposed outside the
   Docker network.
+- `aspire-dashboard` — a local OpenTelemetry viewer, bound to `127.0.0.1`
+  only.
+- `migrate` — a short-lived container that creates or updates the database
+  schema, then exits with code `0`. `api` starts only after it succeeded
+  (see [Database migrations](#database-migrations)).
 
 Subsequent runs reuse the built image and start in a few seconds.
+
+## Database migrations
+
+You run no migration command. `docker compose up -d` starts the one-shot
+`migrate` service, which applies the EF Core migrations to Postgres before
+`api` starts:
+
+- On a new install it creates the whole schema.
+- On every later `docker compose up -d` it applies the migrations that are
+  still missing, and does nothing when the schema is current.
+- `docker compose restart api` does **not** migrate. After you pull a new
+  release, run `docker compose up -d --build`.
+- `docker compose ps -a` shows `migrate` as `Exited (0)` after a good run.
+- To run it by hand: `docker compose run --rm migrate`.
+
+The migrations are compiled into the `migrate` image, so no .NET SDK is
+needed on your machine. Run exactly one app container per database
+([why](#run-exactly-one-instance)); the `migrate` service does not change
+that.
+
+### If a migration fails
+
+`migrate` exits with a non-zero code, `docker compose up` stops, and `api`
+is never started. `docker compose logs migrate` shows these lines after the
+cause:
+
+```text
+migrate: FAILED. The migration did not finish, so the api container was not started.
+migrate: likely cause: database unreachable, POSTGRES_PASSWORD in .env does not match the existing postgres-data volume, or a migration failed.
+migrate: read the cause with: docker compose logs migrate
+migrate: after fixing it, run: docker compose up -d (details: docs/self-hosting.md, 'Database migrations')
+```
+
+Read the lines above them for the cause (for example `password authentication
+failed`), fix it, then run `docker compose up -d` again.
+
+### Back up before you upgrade
+
+A self-hosted install has no automatic restore point (the Azure deployment
+has one; this does not). Back up the database before you pull a new release:
+
+```bash
+docker compose exec -T postgres pg_dump -U energytracker -d energytracker --clean --if-exists > backup.sql
+```
+
+If you changed `POSTGRES_USER` or `POSTGRES_DB` in `.env`, use those values.
+To restore, stop `api` and load the file:
+
+```bash
+docker compose stop api
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U energytracker -d energytracker < backup.sql
+```
+
+The migrations' `Down()` methods are not a rollback path. To go back to an
+older release, restore the backup taken before the upgrade, then start the
+older image.
+
+### Invites created before an upgrade
+
+The release that added `DropHouseholdInviteTokenColumn` removes the old
+plaintext invite `Token` column. An invite link created before invite tokens
+were stored hashed and not yet used or expired stops working: the link
+answers 404, and you create a new invite (invites are valid for 7 days). To
+see whether any such invite exists before you upgrade:
+
+```bash
+docker compose exec postgres psql -U energytracker -d energytracker -c \
+  "SELECT COUNT(*) FROM \"HouseholdInvites\" WHERE \"Token\" IS NOT NULL AND \"ExpiresAtUtc\" > NOW();"
+```
+
+A count of `0` means no invite is affected. The `Token` column does not exist
+after the upgrade, so the query fails with `column "Token" does not exist`
+on an upgraded database; that is expected.
 
 ## 4. Verify it's running
 
@@ -331,7 +409,9 @@ docker compose -f docker-compose.yml -f docker-compose.sqlserver.yml up -d
 
 This requires an `MSSQL_SA_PASSWORD` in your `.env` file (see
 `.env.example`). This is intended for local testing of that provider path,
-not as a second production deployment option.
+not as a second production deployment option. The `migrate` service migrates
+Postgres only; apply the SQL Server migrations by hand with
+`./scripts/migrate.sh --provider sqlserver`.
 
 ## Privacy
 

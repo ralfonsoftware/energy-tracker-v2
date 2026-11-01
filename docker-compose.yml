@@ -31,10 +31,27 @@ services:
       Otel__Exporter: Otlp
       Otel__OtlpEndpoint: "http://aspire-dashboard:18889"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       aspire-dashboard:
         condition: service_started
+
+  # One-shot: applies the Postgres EF Core migrations on every `docker compose up`, then exits 0 (no-op when
+  # the schema is current). `api` waits for it, so a failed migration stops the stack instead of leaving an
+  # API on an empty database (Story 11.21). Azure migrates in CI and never uses this service.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      Database__Provider: Postgres
+      ConnectionStrings__Default: "Host=postgres;Database=${POSTGRES_DB:-energytracker};Username=${POSTGRES_USER:-energytracker};Password=${POSTGRES_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   # Standalone OTLP-receiving dashboard (not the full Aspire app-host/orchestration) — local dev's
   # AD-19 OTel extension target. Unsecured (anonymous access, no login token), so the host ports

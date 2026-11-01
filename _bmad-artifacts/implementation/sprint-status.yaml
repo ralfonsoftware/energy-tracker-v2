@@ -1,5 +1,5 @@
 # generated: 2026-08-09
-# last_updated: 2026-10-31
+# last_updated: 2026-11-01
 # Dated change history prior to 2026-09-23 archived to sprint-status-history.md, as are done action items (removed 2026-10-02) (token optimization; none of it was machine-read by any BMAD skill).
 
 # STATUS DEFINITIONS:
@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-10-31
+last_updated: 2026-11-01
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -159,7 +159,7 @@ development_status:
   11-18-backend-analyzer-format-gate: done
   11-19-structural-cleanup: done
   11-20-drop-plaintext-invite-token-column: done
-  11-21-self-host-migration-path: backlog
+  11-21-self-host-migration-path: review
   11-22-keep-invite-token-out-of-logs: backlog
   11-23-failed-startup-must-exit: backlog
   11-24-migration-timeout-headroom: backlog
