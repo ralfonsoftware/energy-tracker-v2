@@ -25,3 +25,4 @@ Comparing `Otel:Exporter` case insensitively in one place and case sensitively i
 
 - A new exporter has to decide `writeToProviders` explicitly, with the double ingest in mind.
 - `OtelConfigurationTests` pin the casing and the degrade-to-off behaviour.
+- Log levels live in the `Serilog` section of `appsettings*.json`; `Logging:LogLevel` is not read. Request lines are redacted for invite tokens, see [0008](0008-invite-token-redaction-in-logs-and-traces.md).

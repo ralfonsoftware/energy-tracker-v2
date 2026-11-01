@@ -22,6 +22,8 @@ internal static class ObservabilityRegistration
             .ReadFrom.Configuration(context.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
+            // ADR 0008: rewrites invite tokens in every event before any sink, the OTLP log forwarding included.
+            .Enrich.With<InviteTokenRedactingEnricher>()
             .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture),
             // Only the Otlp path forwards Serilog into OTel's log pipeline; Azure Monitor would double-ingest every line. ADR 0001.
             writeToProviders: otelExporter == "otlp");
@@ -34,10 +36,11 @@ internal static class ObservabilityRegistration
                 if (!string.IsNullOrEmpty(azureMonitorConnectionString))
                 {
                     // Traces and metrics only; EF Core and runtime instrumentation are added because the distro does not cover them.
+                    // ADR 0008: AddInviteTokenRedaction chains the distro's default ASP.NET Core instrumentation options, on both branches.
                     builder.Services.AddOpenTelemetry()
                         .ConfigureResource(r => r.AddService("EnergyTracker.Api"))
                         .UseAzureMonitor(o => o.ConnectionString = azureMonitorConnectionString)
-                        .WithTracing(t => t.AddEntityFrameworkCoreInstrumentation())
+                        .WithTracing(t => t.AddEntityFrameworkCoreInstrumentation().AddInviteTokenRedaction())
                         .WithMetrics(m => m.AddRuntimeInstrumentation());
                 }
                 break;
@@ -54,6 +57,7 @@ internal static class ObservabilityRegistration
                             .AddAspNetCoreInstrumentation()
                             .AddHttpClientInstrumentation()
                             .AddEntityFrameworkCoreInstrumentation()
+                            .AddInviteTokenRedaction()
                             .AddOtlpExporter(o => o.Endpoint = otlpEndpointUri))
                         .WithMetrics(m => m
                             .AddAspNetCoreInstrumentation()

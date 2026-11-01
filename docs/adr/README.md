@@ -32,3 +32,4 @@ A record is written only when a comment was shortened and its reasoning is worth
 | [0005](0005-smart-plug-import-write-path.md) | Smart Plug import write path | `SmartPlugImportRepository.Import.cs` |
 | [0006](0006-smart-plug-mapping-conflict-classification.md) | Mapping an import to a Power Point | `SmartPlugImportRepository.Mapping.cs` |
 | [0007](0007-smart-plug-cleanup-chunking-and-sweep-lock.md) | Smart Plug cleanup, chunked deletes and the sweep lock | `SmartPlugImportRepository.Cleanup.cs` |
+| [0008](0008-invite-token-redaction-in-logs-and-traces.md) | Invite tokens are redacted in request logs and server spans | `Api/InviteTokenRedactor.cs`, `Api/Composition/ObservabilityRegistration.cs` |
