@@ -4,7 +4,7 @@ baseline_commit: 4e1c596
 
 # Story 11.21: Self-Host Migration Path
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier "Triage follow-ups", promoted from deferred-work.md (Story 10.1 create-story entry, line ~92 index row and ~482 body). Architecture: AD-13 (one image, compose file is the self-host reference), AD-2 (dual provider, migrations in both projects), AD-24 (one instance per database). This file cites the AD IDs, which satisfies the spec-per-fix gate (project-context.md). -->
@@ -59,13 +59,13 @@ Red first for every behaviour change; record runs in Debug Log References (Story
 - [x] Task 5: Verify and format (AC: all)
   - [x] 5.1 `dotnet format EnergyTracker.sln`, rerun the 1.1 gate, full `dotnet test` per project. Record counts and exact delta (new tests only; none removed).
   - [x] 5.2 `docker build .` (default target) still yields the API image and its size is unchanged within noise; `docker build --target migrate .` succeeds on both `--platform linux/amd64` and `--platform linux/arm64`. Record sizes.
-- [ ] Task 6: End-to-end on the real stack (AC: #1, #2, #4; live gate)
+- [x] Task 6: End-to-end on the real stack (AC: #1, #2, #4; live gate)
   - [x] 6.1 Clean volume: `docker compose down -v`, `docker compose up -d --build`. Record `docker compose logs migrate` (applied migrations), `docker compose ps -a` (`migrate` `Exited (0)`), `SELECT COUNT(*) FROM "__EFMigrationsHistory";` equals the number of Postgres migrations, `curl -i http://localhost:8080/health` is `200`.
   - [x] 6.2 Idempotent: `docker compose up -d` again; `migrate` runs, applies nothing, exits 0, `api` is not recreated unnecessarily. Then `docker compose run --rm migrate` by hand, exit 0.
   - [x] 6.3 Behind schema (AC #4): on a throw-away volume bring the database to an earlier migration (`dotnet ef database update <earlier migration>` against the port published by `docker-compose.local.yml`, or restore a dump taken on an older commit), then `docker compose up -d --build`; confirm it reaches current and earlier rows survive.
   - [x] 6.4 Failure path (AC #2): set a wrong `POSTGRES_PASSWORD` in `.env` for an existing volume, `docker compose up -d`. Confirm the pinned message in `docker compose logs migrate`, `migrate` exit code non-zero, `api` not started (`docker compose ps -a`), and `docker compose up` itself reports the dependency failure. Record exit codes. Restore `.env` afterwards.
-  - [ ] 6.5 Live sign-in on a clean volume (Chrome, test user from `.env`; `docs/local-development.md` "Live browser verification with the test user"): sign in, first household is created, one reading can be entered. This is the "usable database" proof and the gate for review to done. Use a fresh tab group per the Chrome rules in `project-context.md`.
-  - [ ] 6.6 Open one PR against `main`. After merge there is no Azure step; confirm the `app-deploy.yml` run is green and its image is built from the default (`runtime`) target.
+  - [x] 6.5 Live sign-in on a clean volume (Chrome, test user from `.env`; `docs/local-development.md` "Live browser verification with the test user"): sign in, first household is created, one reading can be entered. This is the "usable database" proof and the gate for review to done. Use a fresh tab group per the Chrome rules in `project-context.md`.
+  - [x] 6.6 Open one PR against `main`. After merge there is no Azure step; confirm the `app-deploy.yml` run is green and its image is built from the default (`runtime`) target.
 
 ## Dev Notes
 
@@ -202,7 +202,8 @@ Sonnet 5.5 (claude-sonnet-5-5)
 - 3.4: `docker-compose.sqlserver.yml` left as is, header comment states SQL Server is migrated by hand with `./scripts/migrate.sh --provider sqlserver`. `docker-compose.local.yml` unchanged (used as `up postgres -d`, does not start `migrate`).
 - Docs: new "Database migrations" section (backup/restore, failure message, invite-token note with check query), section 3 lists four services, `docs/local-development.md` and `project-context.md` updated. `scripts/migrate.sh` header still accurate, unchanged.
 - deferred-work.md: removed the `[promoted: 11.21]` index row and body, and the 11.20 `[open]` invite-guard entry.
-- Not done, blocks review->done: 6.5 live first-household sign-in (Claude-in-Chrome extension not connected; also Auth0 password is not typed by the agent) and 6.6 PR/CI. A clean-volume stack is running as compose project `et1121live` on :8080 for that check.
+- 6.5 live check, 2026-11-01: stack rebuilt from merged `main` on a clean volume (compose project `et1121live`): `migrate` `Exited (0)`, `__EFMigrationsHistory` = 34, `/health` 200. Ralf signed in by hand, created the first household and added one reading; Postgres shows 1 household, 1 member, 1 main meter, 1 meter reading.
+- 6.6: PR #164 merged; App Deploy run 41291084024 on `e7cc3c6` green (Backend tests, Frontend tests, Image build); both image builds omit `target:`, so the default `runtime` image ships. Auth0 sign-in on the deployed Azure environment also worked.
 - Cheap CI idea (not done, out of scope): a non-pushing `docker build --target migrate` job in `pr-review.yml`.
 
 ### File List
@@ -223,6 +224,7 @@ Sonnet 5.5 (claude-sonnet-5-5)
 ### Change Log
 
 - 2026-11-01: Story 11.21 implemented (option B): `migrate` service and Dockerfile target, entrypoint script, docs, guards. Live sign-in (6.5) and PR (6.6) pending.
+- 2026-11-01: Code review: 6 patches applied, 5 deferred. PR #164 merged, 6.5 and 6.6 verified, story closed (done).
 
 ### Review Findings
 
