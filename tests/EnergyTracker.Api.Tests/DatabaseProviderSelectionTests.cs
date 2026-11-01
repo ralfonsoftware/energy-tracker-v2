@@ -22,4 +22,17 @@ public class DatabaseProviderSelectionTests
 
         dbContext.Database.ProviderName.ShouldBe(expectedProviderName);
     }
+
+    [Fact]
+    public async Task An_unsupported_provider_stops_the_host_before_it_is_built()
+    {
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Database:Provider", "bogus");
+        });
+
+        var exception = Should.Throw<Exception>(() => factory.CreateClient());
+
+        exception.ToString().ShouldContain("Unsupported Database:Provider 'bogus'");
+    }
 }

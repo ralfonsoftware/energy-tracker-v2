@@ -161,7 +161,7 @@ development_status:
   11-20-drop-plaintext-invite-token-column: done
   11-21-self-host-migration-path: done
   11-22-keep-invite-token-out-of-logs: done
-  11-23-failed-startup-must-exit: backlog
+  11-23-failed-startup-must-exit: review
   11-24-migration-timeout-headroom: backlog
   11-25-restore-memory-and-gc-mode: backlog
   11-26-rollback-runbook-completeness: backlog
