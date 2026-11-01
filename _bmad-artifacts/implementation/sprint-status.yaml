@@ -159,7 +159,7 @@ development_status:
   11-18-backend-analyzer-format-gate: done
   11-19-structural-cleanup: done
   11-20-drop-plaintext-invite-token-column: done
-  11-21-self-host-migration-path: review
+  11-21-self-host-migration-path: done
   11-22-keep-invite-token-out-of-logs: backlog
   11-23-failed-startup-must-exit: backlog
   11-24-migration-timeout-headroom: backlog
