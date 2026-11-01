@@ -28,7 +28,36 @@ RUN dotnet restore src/EnergyTracker.Api/EnergyTracker.Api.csproj
 COPY --from=frontend-build /src/src/EnergyTracker.Api/wwwroot ./src/EnergyTracker.Api/wwwroot
 RUN dotnet publish src/EnergyTracker.Api/EnergyTracker.Api.csproj -c Release -o /app/publish --no-restore
 
-# --- Stage 3: runtime ---
+# --- Stage 3: EF migrations bundle (docker-compose.yml `migrate` service only) ---
+# Self-hosters have no SDK, so the Postgres migrations are compiled into one self-contained executable here
+# and run by the one-shot `migrate` service before `api` starts (Story 11.21). Built per TARGETARCH (BuildKit)
+# because a bundle is per runtime identifier; Azure migrates in CI and never builds this target.
+FROM backend-build AS migrate-build
+ARG TARGETARCH
+COPY .config ./.config
+RUN dotnet tool restore \
+    && dotnet restore src/EnergyTracker.Infrastructure.Migrations.Postgres/EnergyTracker.Infrastructure.Migrations.Postgres.csproj
+RUN case "$TARGETARCH" in \
+        amd64) RID=linux-x64 ;; \
+        arm64) RID=linux-arm64 ;; \
+        *) echo "Unsupported TARGETARCH '$TARGETARCH' for the migrations bundle" >&2; exit 1 ;; \
+    esac \
+    && dotnet ef migrations bundle \
+        --project src/EnergyTracker.Infrastructure.Migrations.Postgres \
+        --startup-project src/EnergyTracker.Infrastructure.Migrations.Postgres \
+        --context EnergyTrackerDbContext \
+        --self-contained -r "$RID" -o /app/efbundle
+
+# --- Stage 4: migrate (run once by docker-compose.yml, not part of the default image) ---
+# Non-root like the runtime stage; the bundle reads ConnectionStrings__Default from the environment.
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS migrate
+WORKDIR /app
+COPY --from=migrate-build /app/efbundle ./efbundle
+COPY scripts/self-host/migrate-entrypoint.sh ./migrate-entrypoint.sh
+USER $APP_UID
+ENTRYPOINT ["/app/migrate-entrypoint.sh"]
+
+# --- Stage 5: runtime (last, so a plain `docker build .` still produces the API image) ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=backend-build /app/publish .
