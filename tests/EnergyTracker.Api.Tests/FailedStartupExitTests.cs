@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Shouldly;
 
 namespace EnergyTracker.Api.Tests;
@@ -11,7 +12,9 @@ namespace EnergyTracker.Api.Tests;
 public class FailedStartupExitTests
 {
     private const string UnreachableDatabase = "Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=1";
+    private const string ListeningMarker = "Now listening";
     private static readonly TimeSpan ExitDeadline = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ListeningGrace = TimeSpan.FromSeconds(2);
 
     [Theory]
     [InlineData("missing-connection-string", "ConnectionStrings__Default")]
@@ -42,11 +45,13 @@ public class FailedStartupExitTests
             ["DataProtection__AllowUnprotectedKeys"] = "true",
         };
 
-        var result = await RunApiAsync(environment, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        // The probe stops on the listening line plus a grace period, not on a fixed window: a slow CI runner may
+        // need longer than a few seconds to start, and a fixed window would then pass or fail for the wrong reason.
+        var result = await RunApiAsync(environment, ExitDeadline, TestContext.Current.CancellationToken, ListeningMarker);
 
+        result.StandardOutput.ShouldContain(ListeningMarker, customMessage: $"The child must have started within {ExitDeadline}, not merely been slow to fail.");
         result.TimedOut.ShouldBeTrue();
         result.ExitCode.ShouldBeNull();
-        result.StandardOutput.ShouldContain("Now listening", customMessage: "The child must have started, not merely been slow to fail.");
     }
 
     private static Dictionary<string, string> ScenarioEnvironment(string scenario)
@@ -83,7 +88,8 @@ public class FailedStartupExitTests
     private static async Task<ChildResult> RunApiAsync(
         IReadOnlyDictionary<string, string> environment,
         TimeSpan deadline,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? stopAfterOutput = null)
     {
         var apiDll = Path.Combine(AppContext.BaseDirectory, "EnergyTracker.Api.dll");
         File.Exists(apiDll).ShouldBeTrue($"{apiDll} must be in the test output; the Api project is referenced.");
@@ -108,32 +114,80 @@ public class FailedStartupExitTests
             startInfo.Environment[key] = value;
         }
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("The dotnet child process did not start.");
+        var standardError = new StringBuilder();
+        var standardOutput = new StringBuilder();
+        var outputSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var process = new Process { StartInfo = startInfo };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is null)
+            {
+                return;
+            }
+
+            lock (standardError)
+            {
+                standardError.AppendLine(e.Data);
+            }
+        };
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is null)
+            {
+                return;
+            }
+
+            lock (standardOutput)
+            {
+                standardOutput.AppendLine(e.Data);
+            }
+
+            if (stopAfterOutput is not null && e.Data.Contains(stopAfterOutput, StringComparison.Ordinal))
+            {
+                outputSeen.TrySetResult();
+            }
+        };
+
+        process.Start().ShouldBeTrue("The dotnet child process did not start.");
         try
         {
-            var standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
-            var standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+            process.BeginErrorReadLine();
+            process.BeginOutputReadLine();
 
-            using var deadlineSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadlineSource.CancelAfter(deadline);
-            try
-            {
-                await process.WaitForExitAsync(deadlineSource.Token);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            var exited = process.WaitForExitAsync(cancellationToken);
+            var deadlineReached = Task.Delay(deadline, cancellationToken);
+            var stop = stopAfterOutput is null
+                ? deadlineReached
+                : Task.WhenAny(
+                    deadlineReached,
+                    outputSeen.Task.ContinueWith(_ => Task.Delay(ListeningGrace, cancellationToken), TaskScheduler.Default).Unwrap());
+
+            var first = await Task.WhenAny(exited, stop);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var timedOut = first != exited;
+            if (timedOut)
             {
                 KillIfRunning(process);
-                await process.WaitForExitAsync(CancellationToken.None);
-                return new ChildResult(null, true, await standardError, await standardOutput);
             }
 
-            return new ChildResult(process.ExitCode, false, await standardError, await standardOutput);
+            // Without a timeout, WaitForExit also waits until both redirected streams reach end of file.
+            process.WaitForExit();
+            return new ChildResult(timedOut ? null : process.ExitCode, timedOut, Text(standardError), Text(standardOutput));
         }
         finally
         {
             // Also covers a cancelled test run: a listening child must not outlive it.
             KillIfRunning(process);
+        }
+    }
+
+    private static string Text(StringBuilder builder)
+    {
+        lock (builder)
+        {
+            return builder.ToString();
         }
     }
 
