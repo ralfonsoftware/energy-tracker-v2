@@ -18,6 +18,14 @@ builder.AddObservability();
 // Database:Provider is read exactly once, here at the composition root (Consistency Conventions) —
 // nothing in Infrastructure re-reads or branches on it independently.
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "Postgres";
+// Checked here, not only inside ConfigureDbContext: that callback runs at the first DbContext resolve, where the
+// hosted services catch the exception and the host would keep running (ADR 0009).
+if (databaseProvider.ToLowerInvariant() is not ("postgres" or "sqlserver"))
+{
+    throw new InvalidOperationException(
+        $"Unsupported Database:Provider '{databaseProvider}'. Expected 'Postgres' or 'SqlServer'.");
+}
+
 // Development only: matches docker-compose.yml and .env.example defaults. Outside Development a missing
 // connection string stops the host instead of using these.
 const string DevelopmentConnectionString = "Host=localhost;Database=energytracker;Username=energytracker;Password=change-me";

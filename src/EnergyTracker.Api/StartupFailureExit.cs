@@ -17,9 +17,16 @@ public static class StartupFailureExit
         {
             // The runtime raises this event before it prints its own text, so the handler prints the exception
             // itself. Console.Error, not Serilog: the logger may be half-built.
-            Console.Error.WriteLine("Unhandled exception. " + e.ExceptionObject);
-            Console.Error.Flush();
-            Environment.Exit(1);
+            try
+            {
+                Console.Error.WriteLine("Unhandled exception. " + e.ExceptionObject);
+                Console.Error.Flush();
+            }
+            finally
+            {
+                // A closed stderr or a throwing ToString() must not bring back the runtime's abort.
+                Environment.Exit(1);
+            }
         };
     }
 }

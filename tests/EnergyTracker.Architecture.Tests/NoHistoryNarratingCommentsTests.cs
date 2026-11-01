@@ -14,6 +14,7 @@ public partial class NoHistoryNarratingCommentsTests
     private static readonly string[] ScopeFiles =
     [
         "src/EnergyTracker.Api/Program.cs",
+        "src/EnergyTracker.Api/StartupFailureExit.cs",
         "src/EnergyTracker.Api/HouseholdRequiredFilter.cs",
         "src/EnergyTracker.Api/Endpoints/TaggingScaffoldEndpoints.cs",
         "src/EnergyTracker.Api/Endpoints/RoomEndpoints.cs",

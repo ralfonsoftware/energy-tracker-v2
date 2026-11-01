@@ -17,6 +17,7 @@ public class FailedStartupExitTests
     [InlineData("missing-connection-string", "ConnectionStrings__Default")]
     [InlineData("data-protection-fail-closed", "DataProtection:AllowUnprotectedKeys")]
     [InlineData("unusable-ai-endpoint", "Ai__Endpoint")]
+    [InlineData("unsupported-database-provider", "Unsupported Database:Provider 'bogus'")]
     public async Task A_host_that_throws_during_startup_exits_with_code_1_and_prints_the_message(string scenario, string expectedInMessage)
     {
         var environment = ScenarioEnvironment(scenario);
@@ -45,6 +46,7 @@ public class FailedStartupExitTests
 
         result.TimedOut.ShouldBeTrue();
         result.ExitCode.ShouldBeNull();
+        result.StandardOutput.ShouldContain("Now listening", customMessage: "The child must have started, not merely been slow to fail.");
     }
 
     private static Dictionary<string, string> ScenarioEnvironment(string scenario)
@@ -67,6 +69,9 @@ public class FailedStartupExitTests
                 break;
             case "unusable-ai-endpoint":
                 environment["Ai__Endpoint"] = "localhost:1234";
+                break;
+            case "unsupported-database-provider":
+                environment["Database__Provider"] = "bogus";
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown scenario.");
@@ -91,6 +96,13 @@ public class FailedStartupExitTests
             WorkingDirectory = AppContext.BaseDirectory,
         };
         startInfo.ArgumentList.Add(apiDll);
+        // The child starts from a copy of this process's environment. A developer's or CI's own settings for the
+        // keys under test would change which throw fires, so only the scenario decides them.
+        foreach (var key in startInfo.Environment.Keys.Where(IsKeyUnderTest).ToList())
+        {
+            startInfo.Environment.Remove(key);
+        }
+
         foreach (var (key, value) in environment)
         {
             startInfo.Environment[key] = value;
@@ -98,23 +110,52 @@ public class FailedStartupExitTests
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("The dotnet child process did not start.");
-        var standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
-        var standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-
-        using var deadlineSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadlineSource.CancelAfter(deadline);
         try
         {
-            await process.WaitForExitAsync(deadlineSource.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(CancellationToken.None);
-            return new ChildResult(null, true, await standardError, await standardOutput);
-        }
+            var standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
+            var standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
 
-        return new ChildResult(process.ExitCode, false, await standardError, await standardOutput);
+            using var deadlineSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadlineSource.CancelAfter(deadline);
+            try
+            {
+                await process.WaitForExitAsync(deadlineSource.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                KillIfRunning(process);
+                await process.WaitForExitAsync(CancellationToken.None);
+                return new ChildResult(null, true, await standardError, await standardOutput);
+            }
+
+            return new ChildResult(process.ExitCode, false, await standardError, await standardOutput);
+        }
+        finally
+        {
+            // Also covers a cancelled test run: a listening child must not outlive it.
+            KillIfRunning(process);
+        }
+    }
+
+    private static bool IsKeyUnderTest(string key) =>
+        key.StartsWith("ConnectionStrings__", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("DataProtection__", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("Database__", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("Ai__", StringComparison.OrdinalIgnoreCase);
+
+    private static void KillIfRunning(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The child exited between the check and the kill.
+        }
     }
 
     private sealed record ChildResult(int? ExitCode, bool TimedOut, string StandardError, string StandardOutput);

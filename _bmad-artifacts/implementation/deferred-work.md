@@ -148,7 +148,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 - After a completed restore the SPA reloads only what holds restored ids **[promoted: Epic 12]** — story-11-14-restore-id-collisions-active-job-guard
 - `DELETE /api/smart-plug-import-jobs` answers `202` with the id of the active cleanup job even when t — story-11-14-restore-id-collisions-active-job-guard
 
-**container-config (6)**
+**container-config (5)**
 
 - S5 leftovers the epic ACs left out **[promoted: Epic 12]** — story-11-11-container-config-correctness
 - S8 (`AllowedHosts: *`) is in no Epic 11 story **[promoted: Epic 12]** — story-11-11-container-config-correctness
@@ -740,3 +740,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: code review of 11-22-keep-invite-token-out-of-logs (2026-11-01)
 
 - [open] Raw invite tokens written before Story 11.22 stay in Log Analytics / App Insights history (tokens live up to 7 days). No purge, and outstanding invites are not revoked at deploy. Ingress/proxy access logs outside the app are not covered either. [docs/adr/0008-invite-token-redaction-in-logs-and-traces.md]
+
+## Deferred from: code review of 11-23-failed-startup-must-exit (2026-11-01)
+
+- [open] A faulted `BackgroundService` stops the host through the default `BackgroundServiceExceptionBehavior.StopHost`, `app.Run()` returns normally and the process exits `0`, so restart policies treat it as a clean stop (verified on net10 with a minimal repro). Today `InstanceHeartbeatService` and both job processors catch their own exceptions by design (AD-6, audit C7). A future hosted service that lets an exception escape would exit `0`. Option: set `Environment.ExitCode = 1` from a hosted-service fault hook, or a guard test. [src/EnergyTracker.Infrastructure/Adapters/]

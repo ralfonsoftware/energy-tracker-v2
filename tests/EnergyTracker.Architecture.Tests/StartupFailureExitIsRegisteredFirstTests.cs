@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Shouldly;
 
 namespace EnergyTracker.Architecture.Tests;
@@ -32,13 +33,47 @@ public class StartupFailureExitIsRegisteredFirstTests
             StartupFailureExit.Register();
             """;
 
-        FirstStatement(bad).ShouldNotBe(Registration);
+        FirstStatement(CSharpSource.StripComments(bad)).ShouldNotBe(Registration);
     }
 
     [Fact]
     public void The_predicate_rejects_a_program_without_the_registration()
     {
-        FirstStatement("using EnergyTracker.Api;\n\nvar builder = WebApplication.CreateBuilder(args);").ShouldNotBe(Registration);
+        FirstStatement(CSharpSource.StripComments("using EnergyTracker.Api;\n\nvar builder = WebApplication.CreateBuilder(args);")).ShouldNotBe(Registration);
+    }
+
+    [Fact]
+    public void The_predicate_rejects_a_using_statement_before_the_registration()
+    {
+        // A using declaration runs code, so it is a statement, not a directive.
+        var bad = """
+            using EnergyTracker.Api;
+
+            using var scope = Something.Throwing();
+            StartupFailureExit.Register();
+            """;
+
+        FirstStatement(CSharpSource.StripComments(bad)).ShouldNotBe(Registration);
+    }
+
+    [Fact]
+    public void The_predicate_rejects_a_statement_sharing_the_line_before_the_registration()
+    {
+        FirstStatement(CSharpSource.StripComments("using EnergyTracker.Api;\nvar x = Throwing(); StartupFailureExit.Register();")).ShouldNotBe(Registration);
+    }
+
+    [Fact]
+    public void The_predicate_skips_every_kind_of_using_directive()
+    {
+        var good = """
+            global using System;
+            using EnergyTracker.Api;
+            using static System.Math;
+            using Alias = System.Text.StringBuilder;
+            StartupFailureExit.Register();
+            """;
+
+        FirstStatement(CSharpSource.StripComments(good)).ShouldBe(Registration);
     }
 
     [Fact]
@@ -49,12 +84,18 @@ public class StartupFailureExitIsRegisteredFirstTests
         FirstStatement(CSharpSource.StripComments(good)).ShouldBe(Registration);
     }
 
+    // A using directive names a namespace or type and ends right there; a using declaration or statement
+    // (`using var x = ...;`, `using (...)`) runs code and therefore counts as the first statement.
+    private static readonly Regex UsingDirective = new(
+        @"^(global\s+)?using\s+(static\s+)?([A-Za-z_][\w]*\s*=\s*)?[A-Za-z_][\w.<>, ]*;$",
+        RegexOptions.CultureInvariant);
+
     private static string FirstStatement(string code)
     {
         return code
             .Split('\n')
             .Select(line => line.Trim())
-            .FirstOrDefault(line => line.Length > 0 && !line.StartsWith("using ", StringComparison.Ordinal))
+            .FirstOrDefault(line => line.Length > 0 && !UsingDirective.IsMatch(line))
             ?? string.Empty;
     }
 

@@ -21,6 +21,9 @@ The hook is on the process, not on a list of throw sites, so a new `throw` needs
 
 ## Consequences
 
-- `FailedStartupExitTests` starts the built API as a child process for three throw sites and asserts exit code `1` and the key name on stderr. Before the change the same process exited `134`.
-- The handler also applies to an unhandled exception after startup: the process exits `1` instead of aborting.
-- The in-process `WebApplicationFactory` tests are unchanged: a startup throw there is caught by the factory and never reaches the handler.
+- `FailedStartupExitTests` starts the built API as a child process for four throw sites and asserts exit code `1` and the key name on stderr. Before the change the same process exited `134`.
+- `Database:Provider` is validated in `Program.cs` right after it is read. Before, the check lived only in the `DbContext` options callback, which runs at the first context resolve; there the hosted services caught the exception and the host kept listening.
+- Confirmed on .NET 10 (`net10.0`, 2026-11-01): the handler runs before the runtime prints its own text, and `Environment.Exit(1)` ends the process within about a second both for a throw out of `app.Run()` (Kestrel bind failure) and for a background-thread throw after startup.
+- The handler also applies to an unhandled exception after startup: the process exits `1` instead of aborting. The runtime's abort path no longer runs, so `createdump` (if crash dumps are enabled) does not write a dump; the stack trace is on stderr instead.
+- A faulted `BackgroundService` is not covered: the host stops, `app.Run()` returns and the process exits `0`. The hosted services catch their own exceptions by design (deferred-work).
+- `WebApplicationFactory<Program>` runs `Program`'s top-level statements in the test process, so the handler is subscribed there too, for the rest of the run. A startup throw there is caught by the factory and never reaches the handler; an unrelated unhandled exception in the test process ends it with exit `1` and the exception on stderr instead of the runtime's abort.
