@@ -4,7 +4,7 @@ baseline_commit: fbdddac
 
 # Story 11.22: Keep the Invite Token Out of Logs
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier "Triage follow-ups", promoted from deferred-work.md on 2026-10-31 (Story 11.9 dev-story entry, AC #11d; index row line ~131, body line ~560). Origin: audit S10 follow-up. Architecture: AD-26 (invite tokens, "no log line may carry the presented token"), AD-19 (structured Serilog logging to stdout, OTel extension, ADR 0001), AD-27 (HTTP hardening). This file cites the AD IDs, which satisfies the spec-per-fix gate (project-context.md). -->
@@ -50,8 +50,8 @@ Red first for every behaviour change; record runs in Debug Log References (Story
   - [x] 2.4 `grep -rn "Request starting\|url\.path\|UseSerilogRequestLogging" src` for any other request-path sink; add none.
 - [x] Task 3: Re-run `ServiceRegistrationSnapshotTests` (expect no change; the enricher is built inline, the processor/hook is not a `ServiceDescriptor`). If a descriptor appears, review the diff and approve with `ENERGYTRACKER_UPDATE_SNAPSHOTS=1` (AC: #5).
 - [x] Task 4: Docs (AC: #7). ADR 0008, `project-context.md`, invariants-rules.md note, delete the two `deferred-work.md` entries, ADR 0001 pointer, `Last Updated` line in `project-context.md`.
-- [ ] Task 5: Verify and PR (AC: all). Verify done; PR not opened (dev-story was not asked to commit or push). `dotnet format EnergyTracker.sln`, rerun the Task 0 gate, full `dotnet test` per project, `web` untouched (A1/A2) so no frontend run needed. Record counts and delta. Open one PR against `main`.
-- [ ] Task 6: Post-deploy check (Ralf, the dev does not run it). After merge and the App Deploy run: create an invite, open `/join/<token>` once, preview and accept with a second account if available, then query Log Analytics (adapt table and column names to the workspace): `ContainerAppConsoleLogs_CL | where TimeGenerated > ago(30m) | where Log_s has "/join/" or Log_s has "household-invites" | project TimeGenerated, Log_s` and `AppRequests | where TimeGenerated > ago(30m) | where Url has "/join/" or Url has "household-invites" | project TimeGenerated, Url, Properties`. Expect the marker, never the token. Record run id and result. Story `done` only after that (the Azure Monitor branch has no automated proof beyond Task 1.5).
+- [x] Task 5: Verify and PR (AC: all). Verify done; PR #166 merged as `b291e04` on 2026-11-01. `dotnet format EnergyTracker.sln`, rerun the Task 0 gate, full `dotnet test` per project, `web` untouched (A1/A2) so no frontend run needed. Record counts and delta. Open one PR against `main`.
+- [x] Task 6: Post-deploy check (Ralf, the dev does not run it). Done 2026-11-01, App Deploy run 41298273241 (`b291e04`, success); result in Completion Notes. After merge and the App Deploy run: create an invite, open `/join/<token>` once, preview and accept with a second account if available, then query Log Analytics (adapt table and column names to the workspace): `ContainerAppConsoleLogs_CL | where TimeGenerated > ago(30m) | where Log_s has "/join/" or Log_s has "household-invites" | project TimeGenerated, Log_s` and `AppRequests | where TimeGenerated > ago(30m) | where Url has "/join/" or Url has "household-invites" | project TimeGenerated, Url, Properties`. Expect the marker, never the token. Record run id and result. Story `done` only after that (the Azure Monitor branch has no automated proof beyond Task 1.5).
 
 ### Review Findings
 
@@ -205,7 +205,8 @@ Sonnet 5.5 (claude-sonnet-5-5)
 - `AddInviteTokenRedaction` sets `AspNetCoreTraceInstrumentationOptions.EnrichWithHttpRequest` via `ConfigureServices` on both the `azuremonitor` and the `otlp` branch. The enrich hook worked on the otlp path in a real host; no processor needed. Azure branch has only the structural guard as automated proof.
 - Behaviour change from AC #8: `Microsoft.AspNetCore.*` categories other than `Hosting.Diagnostics` now log at `Warning` (they ran at `Information` before). Review decision 2026-11-01 (Ralf): `Microsoft.AspNetCore.Authentication` and `Microsoft.AspNetCore.DataProtection` keep `Information`; Authorization, Kestrel, Routing and the rest go to `Warning` (trade-off recorded in ADR 0008). Not run before/after in a live host; the `Serilog` section tests prove the effective levels. EF Core `Information` command lines unchanged.
 - Docs: ADR 0008 plus README row and ADR 0001 line, `project-context.md` invite paragraph and `Last Updated`, AD-26 `[AMENDED 2026-11-01, Story 11.22]` bullet in `invariants-rules.md`, both `deferred-work.md` entries deleted and index count 9 to 8.
-- Not done by the dev: Task 5 PR (not asked to commit or push) and Task 6 (Ralf's post-deploy Log Analytics check; story stays in `review` until it is recorded).
+- Task 5: PR #166 merged as `b291e04`.
+- Task 6 (Ralf, 2026-11-01, after App Deploy run 41298273241 on `b291e04`): created an invite, opened `/join/<token>`, previewed and accepted it, then ran both Log Analytics queries over the last 30 minutes. `ContainerAppConsoleLogs_CL`: `Request starting` / `Request finished` lines for `GET /join/{token}`, `GET /api/household-invites/{token}` and `POST /api/household-invites/{token}/accept` show the marker with method, status and elapsed time; no token. `AppRequests` (Azure Monitor branch): `Url` shows `/join/{token}`, `/api/household-invites/{token}` and `/api/household-invites/{token}/accept`; `Properties` carry no token. Both exporter-side and stdout redaction confirmed live; story done.
 
 ### File List
 
@@ -236,3 +237,5 @@ Sonnet 5.5 (claude-sonnet-5-5)
 ### Change Log
 
 - 2026-11-01: Invite tokens redacted in Serilog events and server-span url tags (A2); `appsettings*.json` moved to the Serilog schema (AC #8); guards, ADR 0008 and project memory updated. Status review.
+- 2026-11-01: Code review: 9 patches applied, 1 deferred, 2 decisions resolved, 12 dismissed. PR #166 merged (`b291e04`).
+- 2026-11-01: Task 6 live Log Analytics check passed (stdout and `AppRequests`, marker only). Status done.
