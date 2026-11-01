@@ -122,13 +122,12 @@ Conventions: append new sections at the end, chronological (see `project-context
 - `maxParallelThreads` is now 8 — spec-ci-pipeline-runtime-speedup
 - Per-test cost left in Infrastructure.Tests — spec-ci-pipeline-runtime-speedup
 
-**auth-members (9)**
+**auth-members (8)**
 
 - HSTS uses the framework defaults **[promoted: Epic 12]** — story-11-7-security-headers-csp-rate-limiting
 - The 90-day cap is on the app's cookie only — story-11-8-auth-hardening-csrf-logout-session-cap
 - `POST /logout` answers 500 when the identity provider's discovery document cannot be fetched **[promoted: 11.29]** — 11-8-auth-hardening-csrf-logout-session-cap
 - After the yearly baseline is re-saved, the AI plausibility form still holds the household's old `Ver` **[promoted: Epic 12]** — 11-8-auth-hardening-csrf-logout-session-cap
-- The invite token appears in request paths **[promoted: 11.22]** — story-11-9-member-removal-revocable-invites
 - Expired and revoked invite rows are never swept **[promoted: Epic 12]** — story-11-9-member-removal-revocable-invites
 - Invite rows carry no creator, so the open-invite list cannot say who invited — story-11-9-member-removal-revocable-invites
 - The `MemberRemoval` budget **[promoted: Epic 12]** — story-11-9-member-removal-revocable-invites
@@ -557,8 +556,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Deferred from: dev-story of story-11-9-member-removal-revocable-invites (2026-10-17)
 
-- [promoted: Story 11.22] The invite token appears in request paths (`/api/household-invites/<token>`, `/api/household-invites/<token>/accept`, `/join/<token>`). Log-level check (AC #11d): the effective logging configuration writes them. Serilog is set up with `ReadFrom.Configuration`, which reads a `Serilog` section; `appsettings.json` has none (only the `Logging:LogLevel` section, which Serilog ignores) and no environment variable sets one, so the minimum level is Serilog's default `Information` with no overrides, and ASP.NET Core's hosting diagnostics ("Request starting ...") write the request path at `Information` to stdout and so into Log Analytics. Azure Monitor traces also carry `url.path`. The token in the URL path is the Story 1.8 design and was not changed here. Options: a `Serilog:MinimumLevel:Override` for `Microsoft.AspNetCore.Hosting.Diagnostics` and a span processor that redacts the invite segment, or moving the token into a fragment or a POST body. [src/EnergyTracker.Api/Program.cs]
-
 - [promoted: Epic 12] Expired and revoked invite rows are never swept (revoke only expires them in place); the table grows by one row per invite ever created. A sweep like `SmartPlugImportRepository.SweepExpiredAsync` would do it. [src/EnergyTracker.Infrastructure/Adapters/HouseholdRepository.cs]
 
 - [open] Invite rows carry no creator, so the open-invite list cannot say who invited. Needs a nullable creator column and a decision about what to show once that member is removed (Q4). [src/EnergyTracker.Domain/HouseholdInvite.cs]
@@ -741,3 +738,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 - [open] Failure line 1 "the api container was not started" is untrue for a manual `docker compose run --rm migrate` while `api` runs. The wording is pinned by the amended AC #2 of Story 11.21. [scripts/self-host/migrate-entrypoint.sh]
 - [open] `ConnectionStrings__Default` is duplicated between `api` and `migrate`; share it through a compose extension field. [docker-compose.yml]
 - [open] No CI job builds or runs the Dockerfile `migrate` target; only the Story 11.21 Task 6 manual run proves it. [Dockerfile]
+
+## Deferred from: code review of 11-22-keep-invite-token-out-of-logs (2026-11-01)
+
+- [open] Raw invite tokens written before Story 11.22 stay in Log Analytics / App Insights history (tokens live up to 7 days). No purge, and outstanding invites are not revoked at deploy. Ingress/proxy access logs outside the app are not covered either. [docs/adr/0008-invite-token-redaction-in-logs-and-traces.md]
