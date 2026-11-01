@@ -154,7 +154,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 - S8 (`AllowedHosts: *`) is in no Epic 11 story **[promoted: Epic 12]** — story-11-11-container-config-correctness
 - `/login` without OIDC is a JSON problem document, not a page in the SPA's voice **[promoted: Epic 12]** — story-11-11-container-config-correctness
 - The Azure `ai-api-key` secret is seeded with the placeholder `unset` **[promoted: 11.30]** — story-11-11-container-config-correctness
-- A host that fails startup **[promoted: 11.23]** — story-11-11-container-config-correctness
 - `oidcConfigured` (Program.cs) checks only `Oidc:ClientId` and `Oidc:Authority`, but the `/login` 503 **[promoted: Epic 12]** — story-11-11-container-config-correctness
 
 **code-quality (21)**
@@ -597,7 +596,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [promoted: Story 11.30] The Azure `ai-api-key` secret is seeded with the placeholder `unset` (a non-empty value is required, D4), so once `Ai__Endpoint` is set without a real key the client sends `Authorization: Bearer unset`. Story 9.2 must supply the secret together with the endpoint, or the Bicep/`OpenAiCompatibleClient` pair must treat the sentinel as "no key". [infra/modules/container-app.bicep]
 
-- [promoted: Story 11.23] A host that fails startup (any `throw` out of `Program.cs`: the new connection-string and `Ai:Endpoint` checks, and the existing Data Protection fail-closed check) prints its `Unhandled exception` message and then does not exit: the container stays `running` with one core at 100% CPU. Found in the Task 9 rehearsal on the OrbStack/arm64 Docker host; reproduced on the unchanged pre-story image (root, `energy-tracker:before`) with the Data Protection throw, so it is not caused by this story, and `DOTNET_gcServer=0` or disabling the crash report does not change it. Effect: the clear message reaches `docker logs`, but nothing exits non-zero, so `restart:` policies and Container Apps' crash-loop detection never see a failed start (the startup/liveness probe still fails). Needs a look at what the runtime does after the unhandled exception (Serilog/OTel flush on a half-built host, or a host-specific createdump spin), and whether it also happens on Azure or a Linux amd64 host. [src/EnergyTracker.Api/Program.cs, Dockerfile]
 
 
 ## Deferred from: code review of story-11-11-container-config-correctness (2026-10-23)

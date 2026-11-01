@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+// ADR 0009
+StartupFailureExit.Register();
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddObservability();

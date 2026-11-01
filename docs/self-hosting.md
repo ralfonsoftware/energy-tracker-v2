@@ -256,6 +256,23 @@ stays accurate even while Postgres is still starting up.
 Then open [http://localhost:8080](http://localhost:8080) in a browser — you
 should see the Energy Tracker application shell load.
 
+### If the API does not start
+
+A failed start is a failed container. When the configuration is unusable (for
+example `ConnectionStrings__Default` is empty, `Ai__Endpoint` is not an http(s)
+URL, or none of the Data Protection options is set), the API prints the reason
+and exits with code `1` within a few seconds. The reason is the last lines of
+the log:
+
+```bash
+docker compose logs --tail 20 api
+docker compose ps -a api   # State "exited", exit code 1
+```
+
+Fix the named setting and run `docker compose up -d` again. The compose file
+sets no `restart:` policy, so a failed start does not loop; add one yourself if
+you want it, and a bad configuration will then restart until you fix it.
+
 ## Put a reverse proxy in front
 
 The quick start above talks to port `8080` directly, which is fine for trying
