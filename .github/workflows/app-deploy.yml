@@ -163,7 +163,9 @@ jobs:
     name: Deploy
     needs: [frontend-tests, backend-tests, image-build]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Covers the preflight cap (25), the migration step cap (60) and the other steps; guarded by
+    # MigrationDeployWorkflowTimeoutGuardTests.
+    timeout-minutes: 120
     # The only job that logs in to Azure. OIDC federated credential, main branch only.
     permissions:
       id-token: write
@@ -291,7 +293,7 @@ jobs:
       # Before the first attempt it writes a "Pre-migration restore point" block to the run
       # summary (Story 10.1; guarded by MigrationDeployWorkflowRestorePointGuardTests).
       - name: Apply pending EF Core migrations
-        timeout-minutes: 20
+        timeout-minutes: 60
         run: |
           dotnet tool restore
 
@@ -314,7 +316,10 @@ jobs:
           # CleanupOrphanedUnmappedSmartPlugReadingDuplicates timed out in production at 179k-row
           # scale even at 300s — its Up() now runs as three separate commands (temp index create,
           # delete, temp index drop), each getting this full budget independently.
-          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=600;"
+          # Now 1800s with timeout-minutes 60 (job cap 120): SmartPlugReadings grew to about 512k
+          # rows and a column rewrite there projects to about 24 min. Planning rule and baseline:
+          # project-context.md, "Migrations" (guarded by MigrationDeployWorkflowTimeoutGuardTests).
+          CONNECTION_STRING="Server=tcp:${SQL_FQDN},1433;Database=energytracker;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Command Timeout=1800;"
 
           # Pre-migration restore point (Story 10.1): Azure SQL already takes automatic backups with
           # point-in-time restore, so the "snapshot" is just a recorded UTC marker plus the exact
@@ -375,13 +380,21 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY" || echo "::warning::Could not write the pre-migration restore point summary"
 
+          EF_UPDATE_OUT="${RUNNER_TEMP:-/tmp}/ef-database-update.out"
           for attempt in 1 2 3 4 5; do
-            if dotnet ef database update \
+            # tee keeps the log live during a long migration; pipefail keeps dotnet ef's exit status.
+            if (set -o pipefail; dotnet ef database update \
               --project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
               --startup-project src/EnergyTracker.Infrastructure.Migrations.SqlServer \
               --context EnergyTrackerDbContext \
-              --connection "$CONNECTION_STRING"; then
+              --connection "$CONNECTION_STRING" 2>&1 | tee "$EF_UPDATE_OUT"); then
               break
+            fi
+            # A command timeout is not a firewall problem: retrying would not fit the step cap and
+            # a cancel mid-rollback leaves the database busy.
+            if grep -qF "Execution Timeout Expired" "$EF_UPDATE_OUT"; then
+              echo "::error::A migration command exceeded the connection string's Command Timeout; not retrying. Batch the change (project-context.md, Migrations)"
+              exit 1
             fi
             if [ "$attempt" -eq 5 ]; then
               echo "::error::Migration failed after 5 attempts — this can happen if Azure SQL firewall propagation (up to 5 minutes) hadn't completed, or the migration itself is broken"
