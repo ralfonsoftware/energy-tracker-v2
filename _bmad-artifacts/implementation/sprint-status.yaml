@@ -162,7 +162,7 @@ development_status:
   11-21-self-host-migration-path: done
   11-22-keep-invite-token-out-of-logs: done
   11-23-failed-startup-must-exit: done
-  11-24-migration-timeout-headroom: review
+  11-24-migration-timeout-headroom: done
   11-25-restore-memory-and-gc-mode: backlog
   11-26-rollback-runbook-completeness: backlog
   11-27-production-verification-carry-overs: backlog
