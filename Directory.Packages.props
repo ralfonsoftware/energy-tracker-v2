@@ -9,19 +9,19 @@
 
   <ItemGroup>
     <!-- EF Core — pinned to one version across every project to avoid transitive version conflicts -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 
     <!-- Auth — Data Protection key persistence, same 10.0.13 line as the rest of EF Core (AD-17) -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.14" />
     <!-- The OIDC handler's Microsoft.IdentityModel.* dependencies are heavy enough that this
          handler ships as a separate NuGet package rather than in the shared framework, unlike
          the cookie handler (which does ship in Microsoft.AspNetCore.App) — verified against
          NuGet at implementation time, not assumed. -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.14" />
 
     <!-- Logging -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
@@ -29,7 +29,7 @@
     <!-- Dependency-free logging abstraction — lets EnergyTracker.Application log a
          swallow-and-continue failure (CompleteSmartPlugImportProcessing) without pulling in
          ASP.NET Core or any concrete logging provider. -->
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
 
     <!-- OTel (AD-19 extension) -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
