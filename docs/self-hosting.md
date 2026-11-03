@@ -187,6 +187,12 @@ needed on your machine. Run exactly one app container per database
 ([why](#run-exactly-one-instance)); the `migrate` service does not change
 that.
 
+Each migration command has Npgsql's default timeout of 30 seconds. That is
+enough for a household-sized database. If a migration on a large database
+fails with a timeout, append `;Command Timeout=300` (seconds) to the end of
+`ConnectionStrings__Default` of the `migrate` service in `docker-compose.yml`
+and run `docker compose up -d` again.
+
 ### If a migration fails
 
 `migrate` exits with a non-zero code, `docker compose up` stops, and `api`

@@ -92,7 +92,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 - Expand/contract rule in `project-context.md` is advisory prose only — 10-1-migration-safety-on-deploy
 - Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name t **[promoted: 11.26]** — 10-1-migration-safety-on-deploy
 - Pending-migrations list in the restore-point block runs once before the retry loop and can read "una — 10-1-migration-safety-on-deploy
-- Deploy N's "Apply pending EF Core migrations" step **[promoted: 11.24]** — story-11-4-unmapped-smart-plug-readings-keyed-by-device
 
 **correlation (1)**
 
@@ -508,10 +507,6 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] If the process dies after a committed import/restore has deleted its temp file but before `TryComplete`, the redelivery ends `Failed` with `upload-missing` instead of recognising the work as done, and the member is told to re-upload. Narrow window; the outcome class existed before 11.3 (generic failure / "upload it again" message). A fix needs a completion marker that survives the file deletion. [src/EnergyTracker.Application/ProcessSmartPlugImport.cs, src/EnergyTracker.Application/RestoreHouseholdData.cs]
 
-
-## Deferred from: code review of story-11-4-unmapped-smart-plug-readings-keyed-by-device (2026-10-11)
-
-- [promoted: Story 11.24] Deploy N's "Apply pending EF Core migrations" step (Story 11.4: SQL Server `ALTER COLUMN` nvarchar(max) to nvarchar(200) plus `CREATE INDEX` on `SmartPlugReadings`) took 8 min 49 s (about 529 s) on Azure SQL Basic (5 DTU) against `Command Timeout=600` (run 38147146530; the step timestamps include the whole migration run). It succeeded, but a future column rewrite on this table could exceed the timeout; raise the timeout or plan such changes differently. [.github/workflows/app-deploy.yml]
 
 
 ## Deferred from: dev-story of story-11-5-ci-identity-split-supply-chain-hygiene (2026-10-11)
