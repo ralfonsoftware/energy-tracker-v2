@@ -6,8 +6,9 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Index
 
-**test-coverage (16)**
+**test-coverage (17)**
 
+- Flaky `InviteTokenIsNotInTracesTests` span test fails the deploy gate — App Deploy run 41708528820 after story 11-24 (2026-11-03)
 - Export stream property names vs HouseholdExportResult, no round-trip test — code review of spec-household-export-oom-fix (2026-09-25)
 - No test distinguishes recompute inside/outside txn — code review of story-4-3-correcting-a-meter-reading (2026-09-10)
 - No middleware-ordering regression test — code review of 1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress (2026-08-14)
@@ -87,7 +88,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - No de-DE test for toggle strings — code review of 1-10-structure-editor-archived-item-visibility-toggle (2026-08-23)
 
-**migrations-deploy (5)**
+**migrations-deploy (3)**
 
 - Expand/contract rule in `project-context.md` is advisory prose only — 10-1-migration-safety-on-deploy
 - Rollback runbook does not verify auditing/firewall/TDE/alerts on the swapped-in database, nor name t **[promoted: 11.26]** — 10-1-migration-safety-on-deploy
@@ -739,3 +740,7 @@ Conventions: append new sections at the end, chronological (see `project-context
 ## Deferred from: code review of 11-23-failed-startup-must-exit (2026-11-01)
 
 - [open] A faulted `BackgroundService` stops the host through the default `BackgroundServiceExceptionBehavior.StopHost`, `app.Run()` returns normally and the process exits `0`, so restart policies treat it as a clean stop (verified on net10 with a minimal repro). Today `InstanceHeartbeatService` and both job processors catch their own exceptions by design (AD-6, audit C7). A future hosted service that lets an exception escape would exit `0`. Option: set `Environment.ExitCode = 1` from a hosted-service fault hook, or a guard test. [src/EnergyTracker.Infrastructure/Adapters/]
+
+## Deferred from: App Deploy run 41708528820 after merge of story 11-24-migration-timeout-headroom (2026-11-03)
+
+- [open] `InviteTokenIsNotInTracesTests.Spans_show_the_marker_in_url_path_and_query_and_keep_the_route` is order-dependent: in the full Api.Tests run no captured `/login` server span has a `url.query` starting with `?returnUrl=`; it passes when run alone and also failed on `main` (noted in PR #168). It failed the "Backend tests" job of run 41708528820, so Deploy was skipped and the run needed a re-run of the failed jobs. Likely cause to check first: the test's span capture (ActivityListener or exporter) also sees, or misses, activities from parallel test hosts. [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs]
