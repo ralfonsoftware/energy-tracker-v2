@@ -170,11 +170,12 @@ file through a bounded buffer (see "The two-phase flow").
   per id), not by file size: about 4 MB for the 121,000-reading file above,
   and about 30 MB at the 250 MB cap (roughly 950,000 items of about 275
   bytes). Accepted and recorded in `deferred-work.md`.
-- **The restore job still materializes the whole object graph.** It now
+- **The restore job still materializes the whole object graph.** It
   deserializes from the file stream (`JsonSerializer.DeserializeAsync`), not
-  from a string, which roughly halves its transient peak, but the restore
-  writer takes the whole `HouseholdRestoreData`, so the peak is not bounded. A
-  fully streaming restore is out of scope.
+  from a string, but the restore writer takes the whole `HouseholdRestoreData`,
+  so the peak grows with the file. A fully streaming restore is out of scope;
+  Story 11.25 lowered the peak and refuses a file the server cannot hold
+  before anything is deleted (see "Memory under a 1 GiB container").
 - **One upload briefly uses twice its size on disk:** the framework spools
   the multipart file to its own temp file before the endpoint copies it into
   the import's temp file (deferred).
@@ -206,7 +207,75 @@ show up as RSS. The validator allocates 128 MiB over the run, all short-lived
 same machine (Server GC, one heap, a 768 MiB heap limit, as a 1 GiB / 0.5 vCPU
 container configures it) the validate growth is **54.6 MiB**, and under
 Workstation GC it is **21.6 MiB**. The restore peak stays high on purpose (the
-graph is materialized); on a 1 GiB container it is the next memory risk.
+graph is materialized); Story 11.25 measured it under a real 1 GiB limit below.
+
+**Measured again under the container's real limit (Story 11.25, 2026-11-05).**
+The shipped image (`docker build .`) ran with `--memory=1g --memory-swap=1g
+--cpus=0.5` (the Container Apps default size; `memory.max` read back as
+1073741824), `ASPNETCORE_ENVIRONMENT=Production`, Postgres 18, on an Apple M2
+Max under OrbStack (arm64; the Azure target is amd64, so the absolute numbers
+are indicative). Peak is `VmHWM` of the API process, idle RSS is about 170 MiB.
+One fresh container per run, one authenticated warm-up request, upload and
+confirm from the signed-in Chrome tab. No run was OOM-killed (`OOMKilled`
+false, exit code 0) and every restore job ended `completed`. Median of three
+runs, range in brackets, MiB:
+
+| Export | GC setting | Validate: peak RSS | Restore: peak RSS | Restore: time |
+|---|---|---|---|---|
+| 33,297,302 bytes (31.75 MiB), 121,000 readings | Server GC (SDK default) | 208 (203-214) | 333 (327-334) | 23-30 s |
+| 137,375,117 bytes (131 MiB), 502,881 readings (a real household export) | Server GC (SDK default) | 236 (234-236) | 677 (676-712) | 46-52 s |
+| same 131 MiB export | Workstation, non-concurrent | 246 (246-264) | 677 (670-694) | 45-46 s |
+| same 131 MiB export | Server GC, `GCHeapCount=1`, `GCConserveMemory=7` | 233 (227-234) | 535 (531-546) | 50-51 s |
+| same 131 MiB export | **Shipped:** those GC settings from `runtimeconfig.json` (no env override) plus the lower-peak restore | 231 (228-237) | **418 (416-421)** | 48-53 s |
+| 31.75 MiB reference export | **Shipped** | 207 | 251 | 29 s |
+
+The 1250 MiB of Story 11.10 came from a 12-core host with no limit. Under the
+limit the runtime sees one processor and a heap limit of 75 % of the container
+(768 MiB), so the same reference file peaks at about a quarter of that figure.
+The restore still holds the export twice (the deserialized graph and the
+entities built from it), which is why the peak grows with the file: about 4
+MiB of peak per MiB of export on top of the idle 170 MiB. The 131 MiB export
+sits at about 70 % of the container on the default setting.
+
+### Memory under a 1 GiB container (Story 11.25)
+
+**What ships.** The GC mode is Server GC with one heap
+(`System.GC.HeapCount` 1) and `System.GC.ConserveMemory` 7, set in
+`EnergyTracker.Api.csproj` (`ServerGarbageCollector` plus two
+`RuntimeHostConfigurationOption` items) and pinned by `ApiGcModeIsSetTests`.
+On the 131 MiB export it lowered the restore peak from 677 to 535 MiB;
+Workstation GC did not help (677 MiB). The restore also hands each export
+record over as soon as its entity exists and shares the repeated room, outlet
+and device names between readings, which brings the peak to 418 MiB. The
+validate phase is unchanged within noise (231 against 236 MiB).
+
+**What a restore needs.** About 170 MiB when idle plus about 1.9 MiB per MiB
+of export file (the 131 MiB real household export; 2.6 for the generated
+32 MiB file, where the idle part weighs more). Measured on 2026-11-05, arm64,
+Postgres 18, see the table above.
+
+**What happens when a file is too large.** `RestoreHouseholdData` compares the
+file's size with `RestoreMemoryBudget` before it reads the file or deletes
+anything: (memory the runtime reports as available, minus 170 MiB) divided by
+3.0, a deliberately cautious factor. In a 1 GiB container the runtime reports
+its 768 MiB heap limit as available, so the budget is about 199 MiB. A larger
+file ends the job `Failed` with the code `restore-too-large`, which the client
+shows as a sentence asking the person running the server for more memory. The
+Household's data stays as it was. Checked live on 2026-11-05 with a generated
+235 MiB export (900,000 readings): the job failed after under a second, the
+121,200 readings already stored were still there, the process kept running,
+and the temp file was gone. A restore that outgrows the heap anyway (a file
+whose shape costs more than the factor assumes) raises `OutOfMemoryException`
+inside the job, which ends `Failed` with the generic message; if the restore
+writer had started, its one transaction rolls back.
+
+**A different size.** The budget follows the memory the runtime reports, so a
+bigger container admits bigger files without a change, and a smaller one
+refuses earlier. Self-hosted containers have no limit unless the operator sets
+one (`mem_limit` in `docker-compose.yml`); without one the budget is based on
+the host's memory. An operator can override the GC settings with
+`DOTNET_gcServer`, `DOTNET_GCHeapCount` and `DOTNET_GCConserveMemory`;
+environment variables win over `runtimeconfig.json`.
 
 The deterministic guard in CI is not a memory reading: a test validates a
 33 MB document through a stream that records every read and asserts that no

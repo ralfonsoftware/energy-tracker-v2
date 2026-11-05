@@ -274,7 +274,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         var tempFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
         await File.WriteAllTextAsync(tempFilePath, json, TestContext.Current.CancellationToken);
 
-        await new RestoreHouseholdData(new HouseholdRestoreWriter(dbContext)).ExecuteAsync(
+        await new RestoreHouseholdData(new HouseholdRestoreWriter(dbContext), RestoreMemoryBudget.Unbounded).ExecuteAsync(
             householdId, new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
 
         var membersAfter = await ReadMembersAsync(dbContext, TestContext.Current.CancellationToken);
@@ -494,7 +494,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         var graphABefore = await ReadGraphAsync(contextA, ct);
         var file = await ExportToFileAsync(contextA, householdA, ct);
 
-        await new RestoreHouseholdData(new HouseholdRestoreWriter(contextB))
+        await new RestoreHouseholdData(new HouseholdRestoreWriter(contextB), RestoreMemoryBudget.Unbounded)
             .ExecuteAsync(householdB, new RestoreHouseholdDataPayload(file, "export.json"), ct);
 
         var graphB = await ReadGraphAsync(contextB, ct);
@@ -530,7 +530,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         var file = await ExportToFileAsync(contextA, householdA, ct);
         var copy = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
         File.Copy(file, copy);
-        var restore = new RestoreHouseholdData(new HouseholdRestoreWriter(contextB));
+        var restore = new RestoreHouseholdData(new HouseholdRestoreWriter(contextB), RestoreMemoryBudget.Unbounded);
 
         await restore.ExecuteAsync(householdB, new RestoreHouseholdDataPayload(file, "export.json"), ct);
         var first = await ReadGraphAsync(contextB, ct);
@@ -556,7 +556,7 @@ public abstract class HouseholdRestoreWriterTestsBase
         var before = await ReadGraphAsync(dbContext, ct);
         var file = await ExportToFileAsync(dbContext, householdId, ct);
 
-        await new RestoreHouseholdData(new HouseholdRestoreWriter(dbContext))
+        await new RestoreHouseholdData(new HouseholdRestoreWriter(dbContext), RestoreMemoryBudget.Unbounded)
             .ExecuteAsync(householdId, new RestoreHouseholdDataPayload(file, "export.json"), ct);
 
         var after = await ReadGraphAsync(dbContext, ct);

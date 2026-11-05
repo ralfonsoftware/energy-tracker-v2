@@ -53,6 +53,7 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         services.AddScoped<CleanUpSmartPlugImportJobs>();
         // RestoreHouseholdData is the cheapest real use case to register for the missing-payload tests.
         services.AddSingleton(_restoreWriter);
+        services.AddSingleton(RestoreMemoryBudget.Unbounded);
         services.AddScoped<RestoreHouseholdData>();
         return services.BuildServiceProvider();
     }
@@ -764,6 +765,50 @@ public class BackgroundJobProcessorTests : IAsyncLifetime
         persisted.ErrorMessage.ShouldBe(JobFailureCodes.SpreadsheetTooLarge);
         persisted.ErrorMessage.ShouldBe("spreadsheet-too-large");
         persisted.CompletedAtUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_maps_RestoreTooLargeException_to_the_stable_code_by_type_never_its_message_text()
+    {
+        // Story 11.25, AD-6: a restore refused for size ends Failed with a code the client translates; the
+        // English text (byte counts) must never reach ErrorMessage.
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new RestoreTooLargeException("export of 137375117 bytes exceeds the 90000000 byte budget")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBe(JobFailureCodes.RestoreTooLarge);
+        persisted.ErrorMessage.ShouldBe("restore-too-large");
+    }
+
+    [Fact]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2201:Do not raise reserved exception types", Justification = "The test needs the exact type the runtime raises when a heap limit is hit.")]
+    public async Task ProcessAsync_ends_a_job_that_runs_out_of_memory_Failed_with_a_null_message()
+    {
+        // Story 11.25 AC #3: a heap limit raises OutOfMemoryException inside the job; it is a generic failure,
+        // so the job reaches Failed (freeing the active-restore index) and never forwards .Message.
+        var ct = TestContext.Current.CancellationToken;
+        var householdId = Guid.NewGuid();
+        await using var provider = BuildServices(householdId);
+        await MigrateAsync(provider, ct);
+        await SeedHouseholdAsync(provider, householdId, ct);
+        var jobId = await SeedJobAsync(provider, householdId, BackgroundJobStatus.Queued, JobTypes.CleanUpSmartPlugImportJobs, cancellationToken: ct);
+        _smartPlugImportRepository.DeleteJobsAsync(householdId, Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ThrowAfterYieldAsync(() => new OutOfMemoryException("Array dimensions exceeded supported range.")));
+
+        await NewProcessor(provider).ProcessAsync(new JobMessage(jobId, householdId, JobTypes.CleanUpSmartPlugImportJobs, CleanUpPayload), ct);
+
+        var persisted = (await LoadAsync(provider, jobId, ct)).ShouldNotBeNull();
+        persisted.Status.ShouldBe(BackgroundJobStatus.Failed);
+        persisted.ErrorMessage.ShouldBeNull();
     }
 
     [Fact]

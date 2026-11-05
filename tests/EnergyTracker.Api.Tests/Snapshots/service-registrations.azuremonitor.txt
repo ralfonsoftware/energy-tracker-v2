@@ -115,6 +115,7 @@ Singleton EnergyTracker.Application.Ports.IHouseholdImportUploadRegistry -> Ener
 Singleton EnergyTracker.Api.Endpoints.HouseholdImportUploadSettings -> instance EnergyTracker.Api.Endpoints.HouseholdImportUploadSettings
 Scoped EnergyTracker.Application.ValidateHouseholdImport -> EnergyTracker.Application.ValidateHouseholdImport
 Scoped EnergyTracker.Application.Ports.IHouseholdRestoreWriter -> EnergyTracker.Infrastructure.Adapters.HouseholdRestoreWriter
+Singleton EnergyTracker.Application.RestoreMemoryBudget -> factory
 Scoped EnergyTracker.Application.RestoreHouseholdData -> EnergyTracker.Application.RestoreHouseholdData
 Singleton EnergyTracker.Application.AiPlausibilityBackendOptions -> instance EnergyTracker.Application.AiPlausibilityBackendOptions
 Singleton EnergyTracker.Application.Ports.IAiPlausibilityClient -> EnergyTracker.Infrastructure.Adapters.NoOpAiPlausibilityClient

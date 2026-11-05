@@ -8,7 +8,7 @@ public class RestoreHouseholdDataTests
 {
     private readonly IHouseholdRestoreWriter _writer = Substitute.For<IHouseholdRestoreWriter>();
 
-    private RestoreHouseholdData Sut() => new(_writer);
+    private RestoreHouseholdData Sut(RestoreMemoryBudget? budget = null) => new(_writer, budget ?? RestoreMemoryBudget.Unbounded);
 
     private static string WriteTempFile(string json)
     {
@@ -288,5 +288,74 @@ public class RestoreHouseholdDataTests
 
         captured!.MeterRegressionPrompts.Single().Classification.ShouldBe(Domain.MeterRegressionClassification.Rollover);
         captured.StatusSnapshots.Single().Status.ShouldBe(Domain.Status.Trending);
+    }
+    [Fact]
+    public async Task Refuses_a_file_over_the_memory_budget_before_the_writer_runs_and_still_deletes_the_temp_file()
+    {
+        // Story 11.25, AD-6: the refusal comes before RestoreAsync, whose first act is deleting the
+        // Household's data, so a file this server cannot hold costs the tenant nothing.
+        var tempFilePath = WriteTempFile(ValidJson(Guid.NewGuid()));
+        var fileBytes = new FileInfo(tempFilePath).Length;
+
+        var act = () => Sut(new RestoreMemoryBudget(fileBytes - 1)).ExecuteAsync(
+            Guid.NewGuid(), new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
+
+        await Should.ThrowAsync<RestoreTooLargeException>(act);
+        await _writer.DidNotReceive().RestoreAsync(Arg.Any<HouseholdRestoreData>(), Arg.Any<CancellationToken>());
+        File.Exists(tempFilePath).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Restores_a_file_exactly_as_large_as_the_memory_budget()
+    {
+        var tempFilePath = WriteTempFile(ValidJson(Guid.NewGuid()));
+        var fileBytes = new FileInfo(tempFilePath).Length;
+
+        await Sut(new RestoreMemoryBudget(fileBytes)).ExecuteAsync(
+            Guid.NewGuid(), new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
+
+        await _writer.Received(1).RestoreAsync(Arg.Any<HouseholdRestoreData>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Shares_one_string_instance_between_smart_plug_readings_that_name_the_same_room_outlet_and_device()
+    {
+        // Story 11.25: every reading's names are separate strings after deserialization; hundreds of thousands
+        // of identical copies are most of the entity graph, so equal names must end up as one instance.
+        var currentHouseholdId = Guid.NewGuid();
+        var powerPointId = Guid.NewGuid();
+        var json =
+            $$"""
+            {
+              "formatVersion": "v2",
+              "exportedAtUtc": "2026-09-22T10:00:00+00:00",
+              "household": {
+                "id": "{{Guid.NewGuid()}}", "createdAtUtc": "2026-01-05T08:00:00+00:00", "locale": "de-DE", "currency": "EUR",
+                "yearlyBaselineKwh": null, "trendingThresholdKwh": 100.0, "lowConfidenceGapDays": 45, "tariffCheckCadenceMonths": 3,
+                "aiPlausibilityEnabled": false, "aiPlausibilityBackendConfigured": false, "aiPlausibilityBackendLabel": null
+              },
+              "householdMembers": [], "mainMeter": null, "meterReadings": [], "meterRegressionPrompts": [], "tariffs": [],
+              "events": [], "rooms": [], "powerPoints": [], "devices": [],
+              "smartPlugReadings": [
+                { "id": "{{Guid.NewGuid()}}", "powerPointId": "{{powerPointId}}", "roomName": "Kitchen", "powerPointName": "Outlet",
+                  "deviceName": "Kettle", "intervalStart": "2026-09-01T00:00:00+00:00", "intervalEnd": "2026-09-01T00:15:00+00:00", "kwhValue": 0.5 },
+                { "id": "{{Guid.NewGuid()}}", "powerPointId": "{{powerPointId}}", "roomName": "Kitchen", "powerPointName": "Outlet",
+                  "deviceName": "Kettle", "intervalStart": "2026-09-01T00:15:00+00:00", "intervalEnd": "2026-09-01T00:30:00+00:00", "kwhValue": 0.4 }
+              ],
+              "statusSnapshots": [], "auditCorrections": []
+            }
+            """;
+        var tempFilePath = WriteTempFile(json);
+        HouseholdRestoreData? captured = null;
+        _writer.RestoreAsync(Arg.Do<HouseholdRestoreData>(d => captured = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        await Sut().ExecuteAsync(currentHouseholdId, new RestoreHouseholdDataPayload(tempFilePath, "export.json"), TestContext.Current.CancellationToken);
+
+        var readings = captured!.SmartPlugReadings;
+        readings.Count.ShouldBe(2);
+        ReferenceEquals(readings[0].RoomName, readings[1].RoomName).ShouldBeTrue();
+        ReferenceEquals(readings[0].PowerPointName, readings[1].PowerPointName).ShouldBeTrue();
+        ReferenceEquals(readings[0].DeviceName, readings[1].DeviceName).ShouldBeTrue();
+        readings[1].KwhValue.ShouldBe(0.4m);
     }
 }

@@ -16,4 +16,7 @@ public static class JobFailureCodes
 
     // Story 11.10: a spreadsheet decompresses past the parser's size or row limits (audit S4).
     public const string SpreadsheetTooLarge = "spreadsheet-too-large";
+
+    // Story 11.25: a restore file is too large for the memory this server has (AD-24, audit S4).
+    public const string RestoreTooLarge = "restore-too-large";
 }

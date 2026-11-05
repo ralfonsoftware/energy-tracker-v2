@@ -136,10 +136,8 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - The duplicate-id and reference id sets in `ValidateHouseholdImport` still grow with the file by item — story-11-10-upload-hardening
 - The framework buffers the multipart file to its own temp file before the endpoint copies it, so one — story-11-10-upload-hardening
-- The restore job still materializes the whole object graph; only the string is gone **[promoted: 11.25]** — story-11-10-upload-hardening
 - Orphaned temp files from a process that died between validate and confirm — story-11-10-upload-hardening
 - The Meross CSV parser has no row cap — story-11-10-upload-hardening
-- The API runs Server GC (`System.GC.Server` **[promoted: 11.25]** — story-11-10-upload-hardening
 - The XLSX shared-strings list holds every item as a string, so a hostile table just under the 64 mill — 11-10-upload-hardening
 - `EveHomeXlsxParser.ReadDeviceTag` reads two cells but loads the whole shared-strings table — 11-10-upload-hardening
 - A single worksheet cell is still loaded whole — 11-10-upload-hardening
@@ -564,13 +562,11 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] The framework buffers the multipart file to its own temp file before the endpoint copies it, so one upload briefly uses twice its size on disk. A `MultipartReader`-based endpoint would stream straight into the one file; not done because it replaces `IFormFile` binding and its antiforgery wiring (entry 7.2b). [src/EnergyTracker.Api/Endpoints/HouseholdImportEndpoints.cs]
 
-- [promoted: Story 11.25] The restore job still materializes the whole object graph; only the string is gone. Measured peak RSS of the restore phase for the 31.75 MiB test export: 1250 MiB after, 2133 MiB before (Apple M2 Max, Server GC, no container limit), which is above the 1 GiB container on its own. A streaming restore needs `HouseholdRestoreData` to stop being one object. [src/EnergyTracker.Application/RestoreHouseholdData.cs, docs/data-import-restore.md]
 
 - [open] Orphaned temp files from a process that died between validate and confirm (the registry is gone with it) are never swept; the existing AD-24 / C3 item. The local temp directory already held many stale `*.json` files from before this story when it was measured. [src/EnergyTracker.Infrastructure/Adapters/MemoryHouseholdImportUploadRegistry.cs]
 
 - [open] The Meross CSV parser has no row cap (out of scope: the story covers XLSX). [src/EnergyTracker.Infrastructure/Adapters/MerossCsvParser.cs]
 
-- [promoted: Story 11.25] The API runs Server GC (`System.GC.Server: true`), whose gen0 budget scales with core count; on a 12-core host the same validation showed 109.7 MiB RSS growth against 21.6 MiB under Workstation GC and 54.6 MiB with a container-like heap limit. Decide the GC mode and `GCHeapCount`/`GCConserveMemory` for the 0.5 vCPU container with Story 11.11 (container config). [src/EnergyTracker.Api/EnergyTracker.Api.csproj, Dockerfile]
 
 
 ## Deferred from: code review of 11-10-upload-hardening (2026-10-21)

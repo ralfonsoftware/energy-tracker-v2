@@ -21,6 +21,10 @@ describe('translateJobError', () => {
       'spreadsheet-too-large',
       'This spreadsheet is too large to import. Please export a shorter period from the app that created the file and upload it again.',
     ],
+    [
+      'restore-too-large',
+      "This backup is too large for this server's memory, so nothing was changed. Please ask the person running this server to give it more memory, then upload the file again.",
+    ],
   ])('renders the en-US sentence for the code %s', (code, sentence) => {
     expect(translateJobError(i18n.t, code, fallback)).toBe(sentence)
   })
@@ -40,6 +44,18 @@ describe('translateJobError', () => {
     expect(translateJobError(i18n.t, 'spreadsheet-too-large', fallback)).toBe(
       'Diese Tabelle ist zu groß, um sie zu importieren. Bitte exportiere in der App, mit der die Datei erstellt wurde, einen kürzeren Zeitraum und lade sie erneut hoch.',
     )
+  })
+
+  it('renders the de-DE sentence for restore-too-large when the language is German', async () => {
+    await i18n.changeLanguage('de-DE')
+
+    expect(translateJobError(i18n.t, 'restore-too-large', fallback)).toBe(
+      'Diese Sicherung ist für den Arbeitsspeicher dieses Servers zu groß, daher wurde nichts geändert. Bitte frage die Person, die diesen Server betreibt, ob sie ihm mehr Arbeitsspeicher geben kann, und lade die Datei dann erneut hoch.',
+    )
+  })
+
+  it('shows a number-free sentence for restore-too-large, so the limits can change without a copy change', () => {
+    expect(translateJobError(i18n.t, 'restore-too-large', fallback)).not.toMatch(/\d/)
   })
 
   it('shows a number-free sentence for spreadsheet-too-large, so the limits can change without a copy change', () => {

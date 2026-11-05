@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using EnergyTracker.Application.Ports;
 using EnergyTracker.Domain;
@@ -9,7 +10,7 @@ namespace EnergyTracker.Application;
 public record RestoreHouseholdDataPayload(string TempFilePath, string OriginalFileName);
 
 /// <summary>Wholesale-replaces the current Household's data with a previously-validated v2 export file (AC #1, #4, #5, #6) — a restore/migration, never a partial-merge edit; assigns new ids and remaps references so a file can never collide with another Household (audit C10); never calls IAuditCorrectionRecorder (AD-11's explicit carve-out); never writes HouseholdMember rows, so a file can neither grant nor revoke access (AD-25).</summary>
-public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
+public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter, RestoreMemoryBudget memoryBudget)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -25,6 +26,16 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
             if (!File.Exists(payload.TempFilePath))
             {
                 throw new UploadMissingException($"The uploaded file '{payload.OriginalFileName}' no longer exists on the server.");
+            }
+
+            // Story 11.25 (AD-24): the object graph below costs two to three times the file's size in memory
+            // (RestoreMemoryBudget), and RestoreAsync starts by deleting the Household's data. A file this
+            // process cannot hold therefore ends here, before anything is deleted, with a stable code.
+            var fileBytes = new FileInfo(payload.TempFilePath).Length;
+            if (fileBytes > memoryBudget.MaxExportBytes)
+            {
+                throw new RestoreTooLargeException(
+                    $"The uploaded file '{payload.OriginalFileName}' is {fileBytes} bytes, above the {memoryBudget.MaxExportBytes} bytes this server can restore.");
             }
 
             // Story 11.10 (audit S4): deserialized from the file stream, never from a string (which would
@@ -51,11 +62,13 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
     }
 
     // Story 11.14 (audit C10): every entity gets a new id and every reference follows its target before an
-    // entity is built, so ToEntity below only copies (it never decides an id). One category at a time:
-    // the DTO lists are materialized already, so no second copy of any list is made.
+    // entity is built, so ToEntity below only copies (it never decides an id). One category at a time, and
+    // each DTO is dropped as soon as its entity exists (Story 11.25), so the DTO list and the entity list
+    // are never both complete: the smart plug list holds nearly all of a large export.
     private static HouseholdRestoreData ToRestoreData(Guid householdId, HouseholdExportResult importData)
     {
         var rekey = new HouseholdRestoreRekey(importData);
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
         return new(
             householdId,
             new HouseholdSettingsPatch(
@@ -67,17 +80,43 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
                 importData.Household.TariffCheckCadenceMonths,
                 importData.Household.AiPlausibilityEnabled),
             importData.MainMeter is { } mainMeter ? ToEntity(rekey.Rekey(mainMeter), householdId) : null,
-            importData.Rooms.Select(r => ToEntity(rekey.Rekey(r), householdId)).ToList(),
-            importData.PowerPoints.Select(p => ToEntity(rekey.Rekey(p), householdId)).ToList(),
-            importData.Devices.Select(d => ToEntity(rekey.Rekey(d), householdId)).ToList(),
-            importData.MeterReadings.Select(r => ToEntity(rekey.Rekey(r), householdId)).ToList(),
-            importData.MeterRegressionPrompts.Select(p => ToEntity(rekey.Rekey(p), householdId)).ToList(),
-            importData.Tariffs.Select(t => ToEntity(rekey.Rekey(t), householdId)).ToList(),
-            importData.Events.Select(e => ToEntity(rekey.Rekey(e), householdId)).ToList(),
-            importData.SmartPlugReadings.Select(r => ToEntity(rekey.Rekey(r), householdId)).ToList(),
-            importData.StatusSnapshots.Select(s => ToEntity(rekey.Rekey(s), householdId)).ToList(),
-            importData.AuditCorrections.Select(c => ToEntity(rekey.Rekey(c), householdId)).ToList());
+            ConvertAndRelease(importData.Rooms, r => ToEntity(rekey.Rekey(r), householdId)),
+            ConvertAndRelease(importData.PowerPoints, p => ToEntity(rekey.Rekey(p), householdId)),
+            ConvertAndRelease(importData.Devices, d => ToEntity(rekey.Rekey(d), householdId)),
+            ConvertAndRelease(importData.MeterReadings, r => ToEntity(rekey.Rekey(r), householdId)),
+            ConvertAndRelease(importData.MeterRegressionPrompts, p => ToEntity(rekey.Rekey(p), householdId)),
+            ConvertAndRelease(importData.Tariffs, t => ToEntity(rekey.Rekey(t), householdId)),
+            ConvertAndRelease(importData.Events, e => ToEntity(rekey.Rekey(e), householdId)),
+            ConvertAndRelease(importData.SmartPlugReadings, r => ToEntity(rekey.Rekey(r), householdId, names)),
+            ConvertAndRelease(importData.StatusSnapshots, s => ToEntity(rekey.Rekey(s), householdId)),
+            ConvertAndRelease(importData.AuditCorrections, c => ToEntity(rekey.Rekey(c), householdId)));
     }
+
+    // A List<T> (what the deserializer produces) is emptied in place as it is read, so each DTO becomes
+    // garbage before the next entity is built; any other list is only enumerated.
+    private static List<TEntity> ConvertAndRelease<TDto, TEntity>(IReadOnlyList<TDto> source, Func<TDto, TEntity> convert)
+        where TDto : class
+    {
+        var result = new List<TEntity>(source.Count);
+        if (source is List<TDto> list)
+        {
+            var items = CollectionsMarshal.AsSpan(list);
+            for (var i = 0; i < items.Length; i++)
+            {
+                result.Add(convert(items[i]));
+                items[i] = null!;
+            }
+        }
+        else
+        {
+            result.AddRange(source.Select(convert));
+        }
+
+        return result;
+    }
+
+    private static string Share(Dictionary<string, string> names, string value) =>
+        names.TryGetValue(value, out var shared) ? shared : names[value] = value;
 
     private static MainMeter ToEntity(MainMeterExportDto dto, Guid householdId) => new()
     {
@@ -173,15 +212,17 @@ public class RestoreHouseholdData(IHouseholdRestoreWriter restoreWriter)
 
     // SmartPlugImportId is always null on insert — the field isn't in the export at all
     // (SmartPlugImport stays out of scope, unchanged from Story 7.1).
-    private static SmartPlugReading ToEntity(SmartPlugReadingExportDto dto, Guid householdId) => new()
+    // Names repeat on every reading of a device (the same three strings 500,000 times), so equal names
+    // share one instance instead of one copy per row.
+    private static SmartPlugReading ToEntity(SmartPlugReadingExportDto dto, Guid householdId, Dictionary<string, string> names) => new()
     {
         Id = dto.Id,
         HouseholdId = householdId,
         SmartPlugImportId = null,
         PowerPointId = dto.PowerPointId,
-        RoomName = dto.RoomName,
-        PowerPointName = dto.PowerPointName,
-        DeviceName = dto.DeviceName,
+        RoomName = Share(names, dto.RoomName),
+        PowerPointName = Share(names, dto.PowerPointName),
+        DeviceName = Share(names, dto.DeviceName),
         IntervalStart = dto.IntervalStart,
         IntervalEnd = dto.IntervalEnd,
         KwhValue = dto.KwhValue,
