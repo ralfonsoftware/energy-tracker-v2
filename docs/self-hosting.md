@@ -415,6 +415,18 @@ to be started again; your stored data is not affected. Run exactly one app
 container per database ([why](#run-exactly-one-instance)): the startup recovery
 assumes it is the only instance and would fail a second instance's running jobs.
 
+## Memory and large restores
+
+A restore holds the whole backup in memory while it runs: about 170 MiB for the
+API plus about two to three times the size of the backup file. The API reads
+the memory limit of its container and refuses a backup that cannot fit, before
+it deletes anything (the restore shows "too large for this server's memory").
+To restore a larger backup, raise the container's limit (`mem_limit` on the
+`api` service in `docker-compose.yml`). Set a limit on small hosts: without one
+the API counts the host's whole memory, including what Postgres uses, so it can
+accept a backup that does not fit and the kernel can kill it during the restore.
+See `docs/data-import-restore.md`, "Memory under a 1 GiB container".
+
 ## Running on modest hardware
 
 This is the same Compose file and container image used for local

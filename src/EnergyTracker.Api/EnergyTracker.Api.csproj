@@ -26,7 +26,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The container has 0.5 vCPU and 1 GiB. At one processor the runtime falls back to Workstation GC, and a
+         conserve level of 7 peaked about 20 % lower than the default on a large restore; at two or more CPUs this
+         is Server GC with one heap (docs/data-import-restore.md). The next two items carry the other two settings,
+         which have no MSBuild property. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="1" />
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Lets AuthEndpointsTests unit-test IsSafeLocalReturnUrl directly — the open-redirect

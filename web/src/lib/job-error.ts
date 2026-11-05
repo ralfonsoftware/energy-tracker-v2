@@ -10,6 +10,7 @@ const CODE_KEYS: Record<string, string> = {
   'upload-missing': 'jobError.uploadMissing',
   'device-tag-too-long': 'jobError.deviceTagTooLong',
   'spreadsheet-too-large': 'jobError.spreadsheetTooLarge',
+  'restore-too-large': 'jobError.restoreTooLarge',
 }
 
 export function translateJobError(t: TFunction, errorMessage: string | null | undefined, fallback: string): string {
