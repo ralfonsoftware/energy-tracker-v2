@@ -422,8 +422,10 @@ API plus about two to three times the size of the backup file. The API reads
 the memory limit of its container and refuses a backup that cannot fit, before
 it deletes anything (the restore shows "too large for this server's memory").
 To restore a larger backup, raise the container's limit (`mem_limit` on the
-`api` service in `docker-compose.yml`); without a limit the API uses the host's
-memory. See `docs/data-import-restore.md`, "Memory under a 1 GiB container".
+`api` service in `docker-compose.yml`). Set a limit on small hosts: without one
+the API counts the host's whole memory, including what Postgres uses, so it can
+accept a backup that does not fit and the kernel can kill it during the restore.
+See `docs/data-import-restore.md`, "Memory under a 1 GiB container".
 
 ## Running on modest hardware
 

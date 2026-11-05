@@ -81,7 +81,7 @@ internal static class ApplicationServicesRegistration
         services.AddSingleton(new HouseholdImportUploadSettings(Path.GetTempPath(), HouseholdImportEndpoints.MaxFileSizeBytes));
         services.AddScoped<ValidateHouseholdImport>();
         services.AddScoped<IHouseholdRestoreWriter, HouseholdRestoreWriter>();
-        // The runtime reports the container limit as the available memory (physical memory when there is none).
+        // The runtime reports the heap limit, 75 % of a container limit, as available (physical memory without a limit).
         services.AddSingleton(_ => RestoreMemoryBudget.FromAvailableMemory(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes));
         services.AddScoped<RestoreHouseholdData>();
 

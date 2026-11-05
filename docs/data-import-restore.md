@@ -127,7 +127,8 @@ does not transfer here — a full household export (Story 7.1's own
 live-verification export of one real, fairly small household was already
 32 MB) can run much larger once Smart Plug Reading history accumulates
 over years. 250 MB is generous headroom while still bounding what a single
-upload can occupy on temp disk.
+upload can occupy on temp disk. The restore has its own, lower limit in a
+1 GiB container: about 199 MiB, see "Memory under a 1 GiB container".
 
 Two framework defaults sit below this and are raised to match, at the
 composition root (`Program.cs`):
@@ -204,8 +205,9 @@ The validate figures above are for the host's default **Server GC**, whose
 gen0 budget scales with core count; this 12-core Mac lets short-lived garbage
 show up as RSS. The validator allocates 128 MiB over the run, all short-lived
 (about 1 MiB live afterwards). With the container's settings emulated on the
-same machine (Server GC, one heap, a 768 MiB heap limit, as a 1 GiB / 0.5 vCPU
-container configures it) the validate growth is **54.6 MiB**, and under
+same machine (Server GC, one heap, a 768 MiB heap limit, which is what Story
+11.10 assumed a 1 GiB / 0.5 vCPU container runs; Story 11.25 found it runs
+Workstation GC) the validate growth is **54.6 MiB**, and under
 Workstation GC it is **21.6 MiB**. The restore peak stays high on purpose (the
 graph is materialized); Story 11.25 measured it under a real 1 GiB limit below.
 
@@ -218,7 +220,9 @@ are indicative). Peak is `VmHWM` of the API process, idle RSS is about 170 MiB.
 One fresh container per run, one authenticated warm-up request, upload and
 confirm from the signed-in Chrome tab. No run was OOM-killed (`OOMKilled`
 false, exit code 0) and every restore job ended `completed`. Median of three
-runs, range in brackets, MiB:
+runs, range in brackets, MiB, unless the row says otherwise. The GC column
+names what was configured, not what ran: at this CPU limit the runtime used
+Workstation GC on every row (see "What ships" below).
 
 | Export | GC setting | Validate: peak RSS | Restore: peak RSS | Restore: time |
 |---|---|---|---|---|
@@ -226,40 +230,58 @@ runs, range in brackets, MiB:
 | 137,375,117 bytes (131 MiB), 502,881 readings (a real household export) | Server GC (SDK default) | 236 (234-236) | 677 (676-712) | 46-52 s |
 | same 131 MiB export | Workstation, non-concurrent | 246 (246-264) | 677 (670-694) | 45-46 s |
 | same 131 MiB export | Server GC, `GCHeapCount=1`, `GCConserveMemory=7` | 233 (227-234) | 535 (531-546) | 50-51 s |
-| same 131 MiB export | **Shipped:** those GC settings from `runtimeconfig.json` (no env override) plus the lower-peak restore | 231 (228-237) | **418 (416-421)** | 48-53 s |
-| 31.75 MiB reference export | **Shipped** | 207 | 251 | 29 s |
+| same 131 MiB export | **Shipped:** those GC settings from `runtimeconfig.json` (no env override) plus the lower-peak restore (four runs) | 231 (228-237) | **418 (416-421)** | 48-53 s |
+| 31.75 MiB reference export | **Shipped** (one value recorded, no range) | 207 | 251 | 29 s |
+| 178,162,540 bytes (169.9 MiB), 648,000 readings (generated) | **Shipped** | 237 (227-240) | **650 (638-665)** | 65-91 s |
+
+The 169.9 MiB row is from the review re-run (2026-11-05): same limits and
+image, upload through a local same-origin proxy from the signed-in tab. Its
+cgroup `memory.peak`, which also counts page cache such as the temp file, was
+647 MiB (581-649) after the restore and 576 MiB (520-604) after validate. The
+last log line of every run was the job's status update, and no run was
+OOM-killed. Validate took 14 s (11-18) against 14 s (11-20) with
+`DOTNET_GCConserveMemory=0` on the same file (247 MiB peak RSS), so the conserve
+level does not slow it beyond noise. Between 170 MiB and the 199 MiB budget
+nothing was measured.
 
 The 1250 MiB of Story 11.10 came from a 12-core host with no limit. Under the
 limit the runtime sees one processor and a heap limit of 75 % of the container
 (768 MiB), so the same reference file peaks at about a quarter of that figure.
-The restore still holds the export twice (the deserialized graph and the
-entities built from it), which is why the peak grows with the file: about 4
-MiB of peak per MiB of export on top of the idle 170 MiB. The 131 MiB export
-sits at about 70 % of the container on the default setting.
+Before this story the restore held the export twice (the deserialized graph
+and the entities built from it), so on the default setting the peak grew by
+about 4 MiB per MiB of export on top of the idle 170 MiB, and the 131 MiB
+export sat at about 70 % of the container. The shipped figures are below.
 
 ### Memory under a 1 GiB container (Story 11.25)
 
-**What ships.** The GC mode is Server GC with one heap
-(`System.GC.HeapCount` 1) and `System.GC.ConserveMemory` 7, set in
-`EnergyTracker.Api.csproj` (`ServerGarbageCollector` plus two
-`RuntimeHostConfigurationOption` items) and pinned by `ApiGcModeIsSetTests`.
-On the 131 MiB export it lowered the restore peak from 677 to 535 MiB;
-Workstation GC did not help (677 MiB). The restore also hands each export
+**What ships.** `EnergyTracker.Api.csproj` requests Server GC with one heap
+(`System.GC.HeapCount` 1) and `System.GC.ConserveMemory` 7
+(`ServerGarbageCollection` plus two `RuntimeHostConfigurationOption` items),
+pinned by `ApiGcModeIsSetTests`. What runs depends on the CPU count. With one
+processor, which a limit of 0.5 or 1 vCPU gives, the runtime falls back to
+Workstation GC (`GCSettings.IsServerGC` false, probe of 2026-11-05 under
+`--memory=1g`), so the heap count has no effect and the conserve level does
+the work. That is why asking for Workstation GC changed nothing (677 MiB) and
+conserve level 7 lowered the restore peak on the 131 MiB export from 677 to
+535 MiB. With two or more CPUs the same settings give Server GC with one heap,
+a mode these measurements do not cover. The restore also hands each export
 record over as soon as its entity exists and shares the repeated room, outlet
 and device names between readings, which brings the peak to 418 MiB. The
 validate phase is unchanged within noise (231 against 236 MiB).
 
 **What a restore needs.** About 170 MiB when idle plus about 1.9 MiB per MiB
 of export file (the 131 MiB real household export; 2.6 for the generated
-32 MiB file, where the idle part weighs more). Measured on 2026-11-05, arm64,
-Postgres 18, see the table above.
+32 MiB file, where the idle part weighs more; 2.8 for the generated 170 MiB
+file, 2.9 in its highest run). Measured on 2026-11-05, arm64, Postgres 18, see
+the table above.
 
 **What happens when a file is too large.** `RestoreHouseholdData` compares the
 file's size with `RestoreMemoryBudget` before it reads the file or deletes
 anything: (memory the runtime reports as available, minus 170 MiB) divided by
 3.0, a deliberately cautious factor. In a 1 GiB container the runtime reports
-its 768 MiB heap limit as available, so the budget is about 199 MiB. A larger
-file ends the job `Failed` with the code `restore-too-large`, which the client
+its 768 MiB heap limit as available, so the budget is about 199 MiB (about
+760,000 readings at the density of the real 131 MiB export). A larger file
+ends the job `Failed` with the code `restore-too-large`, which the client
 shows as a sentence asking the person running the server for more memory. The
 Household's data stays as it was. Checked live on 2026-11-05 with a generated
 235 MiB export (900,000 readings): the job failed after under a second, the
@@ -273,9 +295,13 @@ writer had started, its one transaction rolls back.
 bigger container admits bigger files without a change, and a smaller one
 refuses earlier. Self-hosted containers have no limit unless the operator sets
 one (`mem_limit` in `docker-compose.yml`); without one the budget is based on
-the host's memory. An operator can override the GC settings with
+the host's whole memory, shared with Postgres and everything else, so it can
+admit a file that does not fit and the kernel can kill the process. A 1 GiB
+host gets a budget of about 284 MiB, above the 250 MB upload cap, so nothing is
+refused there. An operator can override the GC settings with
 `DOTNET_gcServer`, `DOTNET_GCHeapCount` and `DOTNET_GCConserveMemory`;
-environment variables win over `runtimeconfig.json`.
+environment variables win over `runtimeconfig.json`. These environment values
+are hexadecimal, so `DOTNET_GCHeapCount=c` means 12 heaps and `10` means 16.
 
 The deterministic guard in CI is not a memory reading: a test validates a
 33 MB document through a stream that records every read and asserts that no

@@ -300,6 +300,44 @@ describe('DataImportPanel', () => {
     expect(screen.queryByText('job-interrupted')).not.toBeInTheDocument()
   })
 
+  // Story 11.25 (AC #7).
+  it('renders the translated sentence, not the raw code, for a job that failed as restore-too-large', async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/household-import') {
+        return Promise.resolve(jsonResponse(validationResponseBody))
+      }
+      if (url.endsWith('/confirm')) {
+        return Promise.resolve(jsonResponse({ jobId: 'job-1' }, 202))
+      }
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(jsonResponse({ id: 'job-1', status: 'processing', importStatus: null, errorMessage: null }))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<DataImportPanel />)
+    await selectFile(makeFile())
+    await screen.findByText(/replace all data with this file/i)
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(screen.getByRole('button', { name: 'Replace all data' }))
+    await screen.findByText(/restoring/i)
+
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url === '/api/jobs/job-1') {
+        return Promise.resolve(jsonResponse({ id: 'job-1', status: 'failed', importStatus: null, errorMessage: 'restore-too-large' }))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(await screen.findByText(/too large for this server's memory/)).toBeInTheDocument()
+    expect(screen.queryByText('restore-too-large')).not.toBeInTheDocument()
+  })
+
   // AC #4 (AD-25): after a restore, the file's member display names are listed next to the invite
   // action — a hint about whom to re-invite, never a comparison with current members.
   describe('"People in this backup" panel after a completed restore', () => {
