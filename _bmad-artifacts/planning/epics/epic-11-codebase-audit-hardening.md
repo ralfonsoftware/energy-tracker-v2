@@ -7,7 +7,7 @@ Fixes the findings of the 2026-10-10 codebase audit (`docs/codebase-audit-2026-1
 **FRs covered:** none new. FR-6/FR-30 clarified (C12). Hardens FR-4, FR-22, FR-23, FR-26–FR-28 and FR-33.
 **Architecture:** AD-6, AD-17, AD-20 (amended 2026-10-10); AD-24, AD-25, AD-26, AD-27 (new); AD-3, AD-4, AD-5, AD-7 and AD-18 constrain the implementation.
 
-**Tiers:** Now (11.1–11.6) → Soon (11.7–11.11) → Later (11.12–11.19) → Triage follow-ups (11.20–11.31, promoted from `deferred-work.md` on 2026-10-31).
+**Tiers:** Now (11.1–11.6) → Soon (11.7–11.11) → Later (11.12–11.19) → Triage follow-ups (11.20–11.32, promoted from `deferred-work.md`: 11.20–11.31 on 2026-10-31, 11.32 on 2026-11-05).
 **Dependencies:**
 - 11.3 needs 11.2.
 - 11.6 needs 11.5.
@@ -683,3 +683,23 @@ So that every smart plug write pays for one index less (promoted from `deferred-
 **Given** the check passes,
 **When** this story is done,
 **Then** a contract migration drops the old index for both providers under the expand/contract rule, the migration tests cover it, and the restore point from Story 10.1 is in place for the deploy.
+
+## Story 11.32: Invite Trace Test Isolation
+
+As an operator,
+I want the invite trace test to see only its own spans,
+So that a deploy is not blocked by another test's timing and the test cannot pass without having seen the span it claims to check (promoted from `deferred-work.md`, App Deploy runs 41708528820 and 42103333770).
+
+**Acceptance Criteria:**
+
+**Given** `InviteTokenIsNotInTracesTests` fails only in the full `EnergyTracker.Api.Tests` run,
+**When** this story starts,
+**Then** the cause is shown by a run and recorded, before the test changes.
+
+**Given** the capture counts server spans of any origin,
+**When** this story is done,
+**Then** the wait completes only on this run's four spans, spans from other hosts are ignored, no assertion is loosened, and no retry or sleep is added.
+
+**Given** the fix,
+**When** it ships,
+**Then** at least 10 consecutive full `EnergyTracker.Api.Tests` runs pass and a known-bad variant shows the isolation can fail.

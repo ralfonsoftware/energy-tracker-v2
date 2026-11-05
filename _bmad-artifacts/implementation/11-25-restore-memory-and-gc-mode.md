@@ -4,7 +4,7 @@ baseline_commit: 475176d
 
 # Story 11.25: Restore Memory and GC Mode
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier "Triage follow-ups", promoted from deferred-work.md (Story 11.10 dev-story entries, index rows ~139 and ~142, bodies ~567 and ~573). Origin: Story 11.10 (audit S4) measured the restore job at 1250 MiB peak RSS for the 31.75 MiB test export with no container limit, and the validate phase at 109.7 MiB growth under Server GC against 21.6 MiB under Workstation GC. Architecture: AD-2 (dual-provider persistence, plain portable EF Core in the restore writer), AD-6 (async jobs, stable failure codes in `BackgroundJob.ErrorMessage`), AD-13 (one image for Azure and self-host), AD-24 (one instance, temp-file payloads). This file cites the AD IDs, which satisfies the spec-per-fix gate (project-context.md). -->
@@ -54,7 +54,7 @@ Red first for every behaviour change; record runs in Debug Log References (Story
 - [x] Task 6: Failure code through the client (AC: #7). Only if a new `JobFailureCodes` constant exists: `web/src/lib/job-error.ts` (+ test), every locale catalog the existing codes use (grep `spreadsheet-too-large` in `web/src`), the AD-18 catalog rules (no hard-coded English). `npm --prefix web run lint`, `typecheck`, the Vitest suite, build.
 - [x] Task 7: Docs and project memory (AC: #5, #9). `docs/data-import-restore.md`: the dated rows next to the 11.10 table, a "Memory under a 1 GiB container" subsection (GC mode, factor, what to change for another size), and the corrected sentence "A fully streaming restore is out of scope" if streaming shipped or the new refusal otherwise. `docs/self-hosting.md` one line if a self-host knob exists. `project-context.md` bullet plus `Last Updated`. Delete the two `deferred-work.md` entries. `NoHistoryNarratingCommentsTests` applies to any `src` comment added.
 - [x] Task 8: Verify and PR (AC: all). `dotnet format EnergyTracker.sln`, rerun the Task 0 gate, full `dotnet test` per project, Architecture guard green, `docker build .` succeeds (the Dockerfile is touched only if the GC setting needs `ENV`), `web` suite if Task 6 ran. Record all in the Debug Log.
-- [ ] Task 9: Post-deploy check (Ralf; the dev does not run it; story `done` only after it). After merge, on Azure: `az containerapp show -g <rg> -n <app> --query "properties.template.containers[0].resources"` records the real CPU/memory (Dev Notes "Container size": the Bicep sets none, so the default is assumed until this reads it); the deploy is green and `/health` answers. A restore of a large export on Azure is **not** required; if Ralf wants one, he names the export, and the Container Apps `WorkingSetBytes` metric peak is recorded here. If the real size differs from 0.5 vCPU / 1 GiB, say so and reopen Task 5.
+- [x] Task 9: Post-deploy check (Ralf; the dev does not run it; story `done` only after it). After merge, on Azure: `az containerapp show -g <rg> -n <app> --query "properties.template.containers[0].resources"` records the real CPU/memory (Dev Notes "Container size": the Bicep sets none, so the default is assumed until this reads it); the deploy is green and `/health` answers. A restore of a large export on Azure is **not** required; if Ralf wants one, he names the export, and the Container Apps `WorkingSetBytes` metric peak is recorded here. If the real size differs from 0.5 vCPU / 1 GiB, say so and reopen Task 5. **Done 2026-11-05 (Ralf):** Azure reports `cpu` 0.5, `memory` 1Gi, `ephemeralStorage` 2Gi, so Task 5 stays closed. App Deploy run 42103333770 green on attempt 2 (`2b33ac4`), health ok, production sign-in and entering values work. No large restore on Azure, which is optional.
 
 ### Review Findings
 
@@ -209,7 +209,7 @@ Last commits on `main`: `475176d` 11.24 close docs, `aa84578` 11.24 code, `a297d
 
 **Final measurement, shipped image, no env overrides, 1 GiB / 0.5 vCPU (MiB):** 131 MiB export restore peak 418 (416-421, 4 runs; 677 before the story), validate 231; reference file restore 251, validate 207. No OOM kill. Live refusal check: 170 MiB export under the first budget and 235 MiB export under the final one both ended `Failed` `restore-too-large` in under a second, readings stayed at 121,200, process kept running, temp file removed.
 
-**Open for Ralf:** Task 9 (post-deploy check on Azure: container size, `/health`) and the Auth0/Chrome-free review. A real-Azure restore of a large export is optional. The 131 MiB real export (`sample-data/`, gitignored) was used for measurement and is not part of the change.
+**Closed 2026-11-05:** Task 9 done (see the task). A real-Azure restore of a large export is optional. The 131 MiB real export (`sample-data/`, gitignored) was used for measurement and is not part of the change.
 
 **Notes for review.** Measurements ran on arm64/OrbStack with Postgres 18, not amd64 with Postgres 17. The restore job on the first G2 attempt (budget double-counted) is in the Debug Log. The AC 4 amendment records that the setting lives in `RuntimeHostConfigurationOption` items, not a Dockerfile `ENV`. `docs/self-hosting.md` got a "Memory and large restores" section.
 
@@ -217,6 +217,7 @@ Last commits on `main`: `475176d` 11.24 close docs, `aa84578` 11.24 code, `a297d
 
 - 2026-11-05: Story 11.25 implemented: restore memory measured under the real limit, size refusal before delete, lower restore peak, Server GC with one heap and conserve level 7, `restore-too-large` through the client catalogs, docs and project memory, deferred entries removed.
 - 2026-11-05: Code review: property renamed to `ServerGarbageCollection`, effective GC mode corrected in docs (AC #4 amended), docs and record fixed, panel test added. 170 MiB file re-run (median 650 MiB, 2.8 per MiB of export, 2.9 in the highest run), so the 3.0 factor and 170 MiB idle stay as Ralf's decision of 2026-11-05. Status stays review until Task 9.
+- 2026-11-05: Task 9 done: Azure runs 0.5 vCPU / 1 GiB, deploy green, health ok, production usable. Story done.
 
 ### File List
 
