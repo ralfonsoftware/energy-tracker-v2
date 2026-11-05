@@ -163,13 +163,14 @@ development_status:
   11-22-keep-invite-token-out-of-logs: done
   11-23-failed-startup-must-exit: done
   11-24-migration-timeout-headroom: done
-  11-25-restore-memory-and-gc-mode: review
+  11-25-restore-memory-and-gc-mode: done
   11-26-rollback-runbook-completeness: backlog
   11-27-production-verification-carry-overs: backlog
   11-28-remove-revoked-plaintext-key-rows: backlog
   11-29-local-sign-out-when-idp-down: backlog
   11-30-ai-key-sentinel: backlog
   11-31-drop-redundant-smartplugreadings-householdid-index: backlog
+  11-32-invite-trace-test-isolation: ready-for-dev
   epic-11-retrospective: optional
 
   # Epic 12: not yet defined; holds the 35 "Soon" deferred-work entries (see planning/epics/epic-12-follow-up-hardening.md)
