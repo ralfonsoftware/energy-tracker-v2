@@ -6,9 +6,8 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 ## Index
 
-**test-coverage (17)**
+**test-coverage (16)**
 
-- Flaky `InviteTokenIsNotInTracesTests` span test fails the deploy gate **[promoted: Story 11.32]** — App Deploy run 41708528820 after story 11-24 (2026-11-03)
 - Export stream property names vs HouseholdExportResult, no round-trip test — code review of spec-household-export-oom-fix (2026-09-25)
 - No test distinguishes recompute inside/outside txn — code review of story-4-3-correcting-a-meter-reading (2026-09-10)
 - No middleware-ordering regression test — code review of 1-7-oidc-redirect-uri-scheme-correctness-behind-container-apps-ingress (2026-08-14)
@@ -741,13 +740,13 @@ Conventions: append new sections at the end, chronological (see `project-context
 
 - [open] A faulted `BackgroundService` stops the host through the default `BackgroundServiceExceptionBehavior.StopHost`, `app.Run()` returns normally and the process exits `0`, so restart policies treat it as a clean stop (verified on net10 with a minimal repro). Today `InstanceHeartbeatService` and both job processors catch their own exceptions by design (AD-6, audit C7). A future hosted service that lets an exception escape would exit `0`. Option: set `Environment.ExitCode = 1` from a hosted-service fault hook, or a guard test. [src/EnergyTracker.Infrastructure/Adapters/]
 
-## Deferred from: App Deploy run 41708528820 after merge of story 11-24-migration-timeout-headroom (2026-11-03)
-
-- [promoted: Story 11.32] `InviteTokenIsNotInTracesTests.Spans_show_the_marker_in_url_path_and_query_and_keep_the_route` is order-dependent: in the full Api.Tests run no captured `/login` server span has a `url.query` starting with `?returnUrl=`; it passes when run alone and also failed on `main` (noted in PR #168). It failed the "Backend tests" job of run 41708528820, so Deploy was skipped and the run needed a re-run of the failed jobs; the same happened in run 42103333770 (2026-11-05). Likely cause to check first: the test's span capture (ActivityListener or exporter) also sees, or misses, activities from parallel test hosts. [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs]
-
 ## Deferred from: code review of 11-25-restore-memory-and-gc-mode (2026-11-05)
 
 - [open] A file between the restore budget (about 199 MiB) and the upload cap (250 MB) passes upload and validate, then the job ends `restore-too-large` after confirm. AC #3 allows this and no data is lost, but the tenant sees a valid file first. Fix would check `RestoreMemoryBudget` in the upload step.
 - [open] An export can outgrow the restore budget with no warning at export time; the owner learns during recovery. Real export 131 MiB against about 199 MiB on 1 GiB. Revisit when a real export passes about 170 MiB; the remedy is the next container size (1 vCPU / 2 GiB) or a streaming restore.
 - [open] Every Story 11.25 measurement ran on Postgres on arm64; Azure SQL on the target is unmeasured, and Task 9 does not require a large restore on Azure. Revisit at the first large restore on Azure.
 - [open] `docs/data-import-restore.md` states the `OutOfMemoryException` backstop as fact, but no run exhausted the heap: the test throws a synthetic exception. Rollback and persisting `Failed` under real memory pressure are unproven.
+
+## Deferred from: code review of 11-32-invite-trace-test-isolation (2026-11-06)
+
+- [open] `InviteTokenIsNotInTracesTests` wait completes on any four in-trace server spans (`ExpectedServerSpans`), not on the specific routes. A redirect hop or extra in-trace request could complete it before the `/login` span exports. Option: wait until each expected `url.path` is present. [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs]

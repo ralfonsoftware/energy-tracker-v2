@@ -39,7 +39,7 @@
 
 
 generated: 2026-08-09
-last_updated: 2026-11-05
+last_updated: 2026-11-06
 project: energy-tracker
 project_key: NOKEY
 tracking_system: file-system
@@ -170,7 +170,7 @@ development_status:
   11-29-local-sign-out-when-idp-down: backlog
   11-30-ai-key-sentinel: backlog
   11-31-drop-redundant-smartplugreadings-householdid-index: backlog
-  11-32-invite-trace-test-isolation: ready-for-dev
+  11-32-invite-trace-test-isolation: done
   epic-11-retrospective: optional
 
   # Epic 12: not yet defined; holds the 35 "Soon" deferred-work entries (see planning/epics/epic-12-follow-up-hardening.md)

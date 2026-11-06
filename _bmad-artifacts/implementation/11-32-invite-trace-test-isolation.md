@@ -4,7 +4,7 @@ baseline_commit: 2b33ac48fd681ed62c7bbcd8d28a640de679a239
 
 # Story 11.32: Invite Trace Test Isolation
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic 11 "Codebase audit hardening" (planning/epics/epic-11-codebase-audit-hardening.md), tier "Triage follow-ups", promoted from deferred-work.md on 2026-11-05 (entry from App Deploy run 41708528820, index row in test-coverage). Origin: the test `InviteTokenIsNotInTracesTests.Spans_show_the_marker_in_url_path_and_query_and_keep_the_route` (Story 11.22) failed the "Backend tests" job of App Deploy runs 41708528820 (2026-11-03) and 42103333770 (2026-11-05), so Deploy was skipped until the failed jobs were re-run. Architecture: AD-26 and ADR 0008 (the redaction the test proves). This file satisfies the spec-per-fix gate (project-context.md). -->
@@ -30,16 +30,16 @@ so that a deploy is not blocked by another test's timing and the test cannot pas
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Baseline (AC: all). `dotnet build EnergyTracker.sln -c Release --no-incremental -p:TreatWarningsAsErrors=true`, `dotnet format EnergyTracker.sln --verify-no-changes --no-restore`, `dotnet test --project tests/EnergyTracker.Api.Tests -c Release`. Record counts (Story 11.25 reference: Api 508).
-- [ ] Task 1: Prove the cause (AC: #1). No committed code in this task.
-  - [ ] 1.1 Add a temporary diagnostic to `CapturingExporter` that records, at the moment `allArrived` fires, each server span's `url.path` and `TraceId`.
-  - [ ] 1.2 Loop the full `EnergyTracker.Api.Tests` run until the test fails, or capture foreign spans in a passing run. If it does not fail locally, raise load, for example with CPU pressure from a second parallel run, and say what you used.
-  - [ ] 1.3 Record the result. Remove the diagnostic.
-- [ ] Task 2: Failing test first (AC: #2, #5). Build the known-bad check so the current code fails it for the right reason, and record the red run.
-- [ ] Task 3: Isolate the run (AC: #2, #3, #4, #6). Apply Dev Notes "Fix to try first" in `InviteTokenIsNotInTracesTests.cs` only.
-- [ ] Task 4: Prove stability (AC: #5). Ten consecutive full `EnergyTracker.Api.Tests` runs in `Release`; record the result of each. Any failure sends the story back to Task 1.
-- [ ] Task 5: Records (AC: #7). Update `_bmad-artifacts/project-context.md` with one sentence if the fix adds a rule for capturing spans in a test. Delete the deferred-work entry and index row. Update the Change Log and File List.
-- [ ] Task 6: Full gate. `dotnet build` with warnings as errors, `dotnet format`, all four .NET test projects. Record in Debug Log References.
+- [x] Task 0: Baseline (AC: all). `dotnet build EnergyTracker.sln -c Release --no-incremental -p:TreatWarningsAsErrors=true`, `dotnet format EnergyTracker.sln --verify-no-changes --no-restore`, `dotnet test --project tests/EnergyTracker.Api.Tests -c Release`. Record counts (Story 11.25 reference: Api 508).
+- [x] Task 1: Prove the cause (AC: #1). No committed code in this task.
+  - [x] 1.1 Add a temporary diagnostic to `CapturingExporter` that records, at the moment `allArrived` fires, each server span's `url.path` and `TraceId`.
+  - [x] 1.2 Loop the full `EnergyTracker.Api.Tests` run until the test fails, or capture foreign spans in a passing run. If it does not fail locally, raise load, for example with CPU pressure from a second parallel run, and say what you used.
+  - [x] 1.3 Record the result. Remove the diagnostic.
+- [x] Task 2: Failing test first (AC: #2, #5). Build the known-bad check so the current code fails it for the right reason, and record the red run.
+- [x] Task 3: Isolate the run (AC: #2, #3, #4, #6). Apply Dev Notes "Fix to try first" in `InviteTokenIsNotInTracesTests.cs` only.
+- [x] Task 4: Prove stability (AC: #5). Ten consecutive full `EnergyTracker.Api.Tests` runs in `Release`; record the result of each. Any failure sends the story back to Task 1.
+- [x] Task 5: Records (AC: #7). Update `_bmad-artifacts/project-context.md` with one sentence if the fix adds a rule for capturing spans in a test. Delete the deferred-work entry and index row. Update the Change Log and File List.
+- [x] Task 6: Full gate. `dotnet build` with warnings as errors, `dotnet format`, all four .NET test projects. Record in Debug Log References.
 
 ## Dev Notes
 
@@ -121,14 +121,41 @@ xunit v3 runs test collections in parallel by default, with each class as one co
 
 ### Agent Model Used
 
+claude-sonnet-5-5
+
 ### Debug Log References
+
+- Baseline (Task 0, 2026-11-06): build with warnings as errors 0 warnings/0 errors, `dotnet format --verify-no-changes` clean, Api 508/508.
+- Cause proof (Task 1, AC #1): temporary diagnostic in `CapturingExporter` appended every server span's `url.path@TraceId` to a scratch file when `allArrived` fired. Full `EnergyTracker.Api.Tests` Release loop, run 4 of 8 failed with `InviteTokenIsNotInTracesTests.cs:84` (the `/login` assertion; the 508-line baseline had passed). The dump of that run's exporter: `/health@b55bb90f... | /health@265e54ca... | /api/jobs/5ecc0c2e-...@42a5f894... | /api/households@e936b92f...`, four server spans of four different trace ids from other hosts, no `/join`, no `/api/household-invites`, no `/login`. Hypothesis confirmed; `src/**` not involved. Diagnostic removed (file restored from copy).
+- Red (Task 2): new test `Spans_of_other_traces_are_dropped_and_spans_of_the_own_trace_are_kept` (exporter given four foreign server spans) failed on the unfiltered exporter with "spans of another trace completed the wait."
+- Green (Task 3): exporter keeps and counts only activities with this run's `TraceId`; the run's client sends `traceparent: 00-{traceId}-{spanId}-01` (set in `RunAsync`, not in the shared `CreateClient`). The four-span wait passing in every run shows the server span takes the sent trace id; the fallback (serial collection) was not needed.
+- Stability (Task 4, AC #5): 12 consecutive full `EnergyTracker.Api.Tests` Release runs, all 509/509, 0 failed. Before the fix: 1 failure in 8 runs.
+- Full gate (Task 6): build with `-p:TreatWarningsAsErrors=true` 0 warnings/0 errors; `dotnet format --verify-no-changes` clean; Api 509, Application 612, Architecture 223, Infrastructure 567, all passed.
 
 ### Completion Notes List
 
+- AC #1: cause shown by run (see Debug Log). AC #2: wait and list are limited to this run's trace id. AC #3: no assertion removed or loosened; `No_exported_server_span_carries_the_token` now scans only this run's spans, including `/login`, and its `Count >= 4` check can no longer be met by foreign spans. AC #4: no retry, sleep, longer timeout or skip. AC #5: 12 green runs plus the deterministic foreign-span test as the known-bad check (red on the unfiltered exporter, kept as a test). AC #6: `InviteTokenRequests.cs` untouched. AC #7: deferred-work entry and index row deleted; "next App Deploy runs Backend tests on first attempt" is open until the next deploy, a recurrence reopens the story.
+- `project-context.md`: one sentence added to the Story 11.22 paragraph (span-capturing tests filter on their own trace id).
+
 - Ultimate context engine analysis completed - comprehensive developer guide created
+
+### Review Findings
+
+- [x] [Review][Patch] `deferred-work.md` index still reads `test-coverage (17)`; section now has 16 rows [_bmad-artifacts/implementation/deferred-work.md:9]
+- [x] [Review][Patch] `StartActivity(...)!` in foreign-span test can return null and fail with an NRE; throw a clear error instead [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs:73]
+- [x] [Review][Patch] Foreign-span test covers only the reject path; add one matching-trace span and assert it is enqueued and counts toward the wait [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs:62]
+- [x] [Review][Patch] 10 s `WaitAsync` timeout hides the cause if `traceparent` is not adopted; rethrow with a message naming trace propagation [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs:55]
+- [x] [Review][Defer] Wait completes on any 4 in-trace server spans, not on the 3 routes plus `/login`; a redirect hop could complete it early [tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs:30] — deferred, pre-existing count-based wait; 12 green runs show no extra spans today
 
 ### Change Log
 
 - 2026-11-05: Story created, promoted from deferred-work.md after a second blocked deploy.
+- 2026-11-06: Cause proven by diagnostic run; `CapturingExporter` filters on the run's trace id, client sends `traceparent`; foreign-span test added; deferred-work entry removed; project-context sentence added.
 
 ### File List
+
+- `tests/EnergyTracker.Api.Tests/InviteTokenIsNotInTracesTests.cs` (modified)
+- `_bmad-artifacts/project-context.md` (modified)
+- `_bmad-artifacts/implementation/deferred-work.md` (modified: entry and index row removed)
+- `_bmad-artifacts/implementation/sprint-status.yaml` (modified)
+- `_bmad-artifacts/implementation/11-32-invite-trace-test-isolation.md` (modified)
