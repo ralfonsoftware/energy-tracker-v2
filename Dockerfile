@@ -50,7 +50,7 @@ RUN case "$TARGETARCH" in \
 
 # --- Stage 4: migrate (run once by docker-compose.yml, not part of the default image) ---
 # Non-root like the runtime stage; the bundle reads ConnectionStrings__Default from the environment.
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS migrate
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0 AS migrate
 WORKDIR /app
 COPY --from=migrate-build /app/efbundle ./efbundle
 COPY scripts/self-host/migrate-entrypoint.sh ./migrate-entrypoint.sh
