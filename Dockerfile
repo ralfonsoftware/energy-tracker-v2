@@ -10,7 +10,7 @@ COPY web/ ./web/
 RUN npm --prefix web run build
 
 # --- Stage 2: build and publish the .NET solution ---
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS backend-build
 # No outbound phone-home (NFR12): disable the dotnet CLI's own first-run telemetry ping during build.
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV DOTNET_NOLOGO=1
