@@ -29,7 +29,7 @@
     <!-- Dependency-free logging abstraction — lets EnergyTracker.Application log a
          swallow-and-continue failure (CompleteSmartPlugImportProcessing) without pulling in
          ASP.NET Core or any concrete logging provider. -->
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
 
     <!-- OTel (AD-19 extension) -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
