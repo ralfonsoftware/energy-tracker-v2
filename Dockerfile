@@ -58,7 +58,7 @@ USER $APP_UID
 ENTRYPOINT ["/app/migrate-entrypoint.sh"]
 
 # --- Stage 5: runtime (last, so a plain `docker build .` still produces the API image) ---
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 WORKDIR /app
 COPY --from=backend-build /app/publish .
 # Not root (audit S5). The aspnet image ships the `app` user as APP_UID (1654); a numeric id also lets an
