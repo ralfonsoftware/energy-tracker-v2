@@ -24,7 +24,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.14" />
 
     <!-- Logging -->
-    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="11.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <!-- Dependency-free logging abstraction — lets EnergyTracker.Application log a
          swallow-and-continue failure (CompleteSmartPlugImportProcessing) without pulling in
